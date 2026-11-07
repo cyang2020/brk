@@ -553,8 +553,28 @@ public final class AppStore {
                 spacePanels.export(document, owner: owner, token: token, window: window) { [weak self] outcome in
                     self?.dispatch(.system(.spaceExportFinished(owner, token: token, outcome)))
                 }
-            case .ai(let id, let task, let choice): aiServices.answer(id, task: task, choice: choice, detected: snapshot.settings.max.detected)
+            case .ai(let id, let task, let choice): aiServices.answer(id, task: task, choice: choice, max: snapshot.settings.max)
             case .aiCancel(let id): aiServices.cancel(id)
+            case .aiOpenConversation(let id, let folder, let choice): aiServices.openConversation(id, folder: folder, choice: choice, max: snapshot.settings.max)
+            case .aiTurn(let conversation, let turn, let task): aiServices.turn(conversation: conversation, turn: turn, task: task)
+            case .aiApprove(let conversation, let approval, let option): aiServices.approve(conversation: conversation, approval: approval, option: option)
+            case .aiCloseConversation(let id): aiServices.closeConversation(id)
+            case .aiRefreshAgents: aiServices.refreshAgents(detected: snapshot.settings.max.detected)
+            case .aiChooseFolder(let id):
+                guard let owner = windows[id]?.window, owner.attachedSheet == nil else { continue }
+                let panel = NSOpenPanel()
+                panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false; panel.canCreateDirectories = true
+                panel.message = "Choose the folder this session may work in."
+                panel.prompt = "Work Here"
+                panel.identifier = NSUserInterfaceItemIdentifier("brk-ai-folder")
+                // A test instance answers in its own data folder, without a dialog on the shared screen.
+                if let test = ProcessInfo.processInfo.environment["BRK_TEST_AI_FOLDER"] {
+                    dispatch(.system(.aiFolderChosen(id, test)))
+                    continue
+                }
+                panel.beginSheetModal(for: owner) { [weak self] response in
+                    self?.dispatch(.system(.aiFolderChosen(id, response == .OK ? panel.url?.path : nil)))
+                }
             case .aiRead(let id, let document): aiServices.read(id, document: document)
             case .aiTranslate(let id, let content, let nodes): aiServices.translate(id, content: content, nodes: nodes)
             case .aiWatch(let id, let seconds): aiServices.watch(id, seconds: seconds)

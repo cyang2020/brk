@@ -14,6 +14,11 @@ final class AIServices {
     private var hovers: [WindowID: Task<Void, Never>] = [:]
     private var renames: [DownloadID: Task<Void, Never>] = [:]
     private var stopping = false
+    private var conversations: [AIRequestID: AgentSession] = [:]
+    /// A turn's conversation, while it can still be stopped.
+    private var turns: [AIRequestID: AIRequestID] = [:]
+    private var closing: [Task<Void, Never>] = []
+    private var refreshing: [AIProviderKind: Task<Void, Never>] = [:]
     init(engine: any WebEngine, send: @escaping (SystemEvent) -> Void) { self.engine = engine; self.send = send }
 
     private func start(_ id: AIRequestID, _ operation: @escaping @MainActor () async -> Void) {
@@ -25,11 +30,120 @@ final class AIServices {
             if self?.tasks[id]?.isEmpty == true { self?.tasks[id] = nil }
         }
     }
-    func answer(_ id: AIRequestID, task: AITask, choice: AIProviderChoice, detected: [AIProviderKind]) {
+    func answer(_ id: AIRequestID, task: AITask, choice: AIProviderChoice, max: MaxSnapshot) {
+        // The first turn of a conversation runs in its session; everything else is one prompt in a session of its own.
+        if conversations[id] != nil {
+            turn(conversation: id, turn: id, task: task)
+            return
+        }
+        if let waiting = unavailableConversations.removeValue(forKey: id) {
+            send(.aiResult(id, waiting))
+            return
+        }
         start(id) { [weak self] in
-            let result = await AIProviderSeam.answer(task, choice: choice, detected: detected, onPartial: { [weak self] text in self?.send(.aiPartial(id, text)) })
+            let result = await AIProviderSeam.answer(task, choice: choice, detected: max.detected, active: max.active, options: max.settings.agentOptions ?? [:],
+                                                     onPartial: { [weak self] text in self?.send(.aiPartial(id, text)) })
             guard !Task.isCancelled else { return }
             self?.send(.aiResult(id, result))
+        }
+    }
+
+    /// The session for a conversation. Read-only ones work in an empty folder of their own, deleted when they close; a
+    /// session with tools on works in the folder the user chose and starts at once, so the panel can say which model.
+    func openConversation(_ id: AIRequestID, folder: String?, choice: AIProviderChoice, max: MaxSnapshot) {
+        guard !stopping else { return }
+        let resolved = agent(for: choice, max: max)
+        guard let resolved else {
+            let outcome: AIOutcome = choice.kind.map { AIProviderSeam.mode == .real ? .failed(AgentCopy.missing($0)) : .unavailable } ?? .unavailable
+            if folder == nil { unavailableConversations[id] = outcome }
+            else if case .failed(let message) = outcome { send(.aiConversation(id, .notice(message))) }
+            else { send(.aiConversation(id, .notice("No local AI tool is available. Choose an installed agent in Settings → Max."))) }
+            return
+        }
+        let directory: URL
+        if let folder { directory = URL(fileURLWithPath: folder, isDirectory: true) }
+        else {
+            directory = FileManager.default.temporaryDirectory.appendingPathComponent("brk-ai-" + UUID().uuidString, isDirectory: true)
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        let options = max.settings.agentOptions?[resolved.kind]
+        let spec = AgentSpec(kind: resolved.kind, executable: resolved.executable, model: options?.model, effort: options?.effort, access: folder == nil ? .readOnly : .tools, directory: directory)
+        let session = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(resolved.kind), plain: resolved.plain) { [weak self] in self?.report($0, conversation: id, kind: resolved.kind) }
+        conversations[id] = session
+        if folder != nil { session.begin() }
+    }
+    private var unavailableConversations: [AIRequestID: AIOutcome] = [:]
+
+    /// The executable and how to talk to it for this instance: the fixture stands in for every agent in a test instance.
+    private func agent(for choice: AIProviderChoice, max: MaxSnapshot) -> (kind: AIProviderKind, executable: URL, plain: Bool)? {
+        switch AIProviderSeam.mode {
+        case .none: return nil
+        case .fixture(let fixture, let protocols):
+            guard choice != .off else { return nil }
+            return (choice.kind ?? .claude, fixture, !protocols)
+        case .real:
+            guard let kind = AIProviderSeam.resolve(choice, active: max.active, detected: max.detected), max.detected.contains(kind),
+                  let executable = AIProviderSeam.executable(for: kind) else { return nil }
+            return (kind, executable, false)
+        }
+    }
+
+    func turn(conversation: AIRequestID, turn: AIRequestID, task: AITask) {
+        guard let session = conversations[conversation] else {
+            send(.aiResult(turn, .failed("This conversation has ended. Ask again from the command bar.")))
+            return
+        }
+        turns[turn] = conversation
+        session.send(AIPrompt.text(for: task), turn: turn)
+    }
+
+    func approve(conversation: AIRequestID, approval: String, option: String) {
+        conversations[conversation]?.answer(approval: approval, option: option)
+    }
+
+    func closeConversation(_ id: AIRequestID) {
+        unavailableConversations[id] = nil
+        guard let session = conversations.removeValue(forKey: id) else { return }
+        for (turn, owner) in turns where owner == id { turns[turn] = nil }
+        closing.append(Task { await session.close() })
+        closing.removeAll { $0.isCancelled }
+    }
+
+    private func report(_ output: AgentSession.Output, conversation id: AIRequestID, kind: AIProviderKind) {
+        switch output {
+        case .started(let model, let effort): send(.aiConversation(id, .started(agent: kind, name: kind.displayName, model: model, effort: effort)))
+        case .partial(let turn, let text): send(.aiPartial(turn, text))
+        case .finished(let turn, let outcome):
+            turns[turn] = nil
+            send(.aiResult(turn, outcome))
+        case .step(let step, let turn): send(.aiConversation(id, .step(step, turn: turn)))
+        case .approval(let approval, let turn): send(.aiConversation(id, .approval(approval, turn: turn)))
+        case .approvalClosed(let approval): send(.aiConversation(id, .approvalClosed(approval)))
+        case .notice(let text): send(.aiConversation(id, .notice(text)))
+        }
+    }
+
+    /// Asks each installed agent about itself: signed in or not, version, models and efforts. Nothing goes to a model.
+    func refreshAgents(detected: [AIProviderKind]) {
+        guard !stopping, refreshing.isEmpty else { return }
+        let mode = AIProviderSeam.mode
+        guard mode != .none else { return }
+        for kind in AIProviderKind.allCases {
+            refreshing[kind] = Task { [weak self] in
+                let status: AIAgentStatus
+                switch mode {
+                case .real:
+                    if detected.contains(kind), let executable = AIProviderSeam.executable(for: kind) {
+                        status = await AgentCatalog.status(kind, executable: executable, environment: AgentEnvironment.forAgent(kind))
+                    } else { status = AIAgentStatus(kind: kind, state: .missing) }
+                case .fixture(let fixture, let protocols):
+                    if protocols { status = await AgentCatalog.status(kind, executable: fixture, environment: AgentEnvironment.forAgent(kind)) }
+                    else { status = AIAgentStatus(kind: kind, state: kind == .claude ? .ready : .missing) }
+                case .none: status = AIAgentStatus(kind: kind, state: .missing)
+                }
+                self?.send(.aiAgents([status]))
+                self?.refreshing[kind] = nil
+            }
         }
     }
     func read(_ id: AIRequestID, document: DocumentToken) {
@@ -90,6 +204,8 @@ final class AIServices {
     func cancel(_ id: AIRequestID) {
         for task in tasks[id]?.values ?? [:].values { task.cancel() }
         deadlines.removeValue(forKey: id)?.cancel()
+        // Every finished request comes here too; only a turn that still runs stops.
+        if let conversation = turns.removeValue(forKey: id) { conversations[conversation]?.stop(turn: id) }
     }
     func cancelAll() {
         stopping = true
@@ -97,13 +213,16 @@ final class AIServices {
         for task in deadlines.values { task.cancel() }
         for task in hovers.values { task.cancel() }
         deadlines.removeAll(); hovers.removeAll()
+        for task in refreshing.values { task.cancel() }
+        for id in Array(conversations.keys) { closeConversation(id) }
     }
     func stop() async {
         let running = tasks.values.flatMap { $0.values }
         cancelAll()
         for task in running { await task.value }
+        for task in closing { await task.value }
         for task in Array(renames.values) { await task.value }
-        tasks.removeAll(); renames.removeAll()
+        tasks.removeAll(); renames.removeAll(); closing.removeAll()
     }
     func rename(_ id: DownloadID, path: String, filename: String) {
         guard renames[id] == nil, !stopping else { return }

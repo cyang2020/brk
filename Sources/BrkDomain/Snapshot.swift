@@ -703,6 +703,10 @@ public struct MaxSnapshot: Sendable, Equatable, Codable {
     public var active: AIProviderKind?
     /// The tool's name where Arc says ChatGPT (the Max pane's "… in the Command Bar", the command bar's Ask row).
     public var askProvider: String? = nil
+    /// What each agent said about itself, in `AIProviderKind.allCases` order; only asked for while the card is open.
+    public var agents: [AIAgentStatus] = []
+    /// The Local AI agent card under the note is open.
+    public var agentCardOpen = false
 }
 
 public struct ProfileDeletionRow: Sendable, Equatable, Codable {

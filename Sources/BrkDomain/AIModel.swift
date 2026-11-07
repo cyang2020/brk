@@ -38,6 +38,14 @@ public enum AIIntent: Hashable, Sendable, Codable {
     case previewHover(Bool)
     /// The card's share button: the previewed link's address on the pasteboard.
     case sharePreview
+    /// The panel's input: the next message in the window's conversation.
+    case followUp(String)
+    /// The panel's Stop: the running turn ends and every process it started goes; the conversation stays.
+    case stop
+    /// The panel's Work in a Folder…: Brk asks for a folder. Only this starts a session with tools on.
+    case chooseFolder
+    /// The panel's approval buttons: the answer to a tool approval the agent asked for.
+    case approve(approval: String, option: String)
 }
 public struct AITranslationExclusions: Hashable, Sendable, Codable {
     public var languages: Set<String> = []
@@ -119,6 +127,92 @@ public struct AIAnswerSnapshot: Equatable, Sendable, Codable {
     public var canUndo: Bool = false
     public var language: String? = nil
     public var site: String? = nil
+    /// The conversation shown in the panel; nil for a plain message (a feature that is off, a failure before asking).
+    public var conversation: AIConversationSnapshot? = nil
+}
+
+/// A conversation with a local agent in the Max panel. Session only, one per window. Its id is the first request's.
+public struct AIConversationSnapshot: Equatable, Sendable, Codable {
+    public let id: AIRequestID
+    /// The agent as the app resolved it, its name for the header. Nil until the session started.
+    public var agent: AIProviderKind? = nil
+    public var agentName: String? = nil
+    /// The model the agent says it runs, and the effort asked for. Nil: the agent's default, not told.
+    public var model: String? = nil
+    public var effort: String? = nil
+    /// The folder the user chose for a session with tools on. Nil: tools off, the agent's strictest read-only mode.
+    public var folder: String? = nil
+    public var items: [AIConversationItem] = []
+    /// The session ended for good (another agent chosen, Max off); no more messages.
+    public var ended = false
+    public init(id: AIRequestID, folder: String? = nil) { self.id = id; self.folder = folder }
+}
+public enum AIConversationItem: Equatable, Sendable, Codable {
+    case user(String)
+    case assistant(String)
+    case step(AIAgentStep)
+    case approval(AIAgentApproval)
+    case notice(String)
+}
+/// One thing the agent does (a command, a file edit, a search), as it reports it.
+public struct AIAgentStep: Equatable, Sendable, Codable {
+    public enum State: String, Equatable, Sendable, Codable { case running, done, failed }
+    public let id: String
+    public var title: String
+    public var state: State
+    public init(id: String, title: String, state: State) { self.id = id; self.title = title; self.state = state }
+}
+/// A tool the agent wants to run and may not without the user's answer. `options` come from the agent.
+public struct AIAgentApproval: Equatable, Sendable, Codable {
+    public struct Option: Equatable, Sendable, Codable {
+        public enum Kind: String, Equatable, Sendable, Codable { case allowOnce, allowSession, deny }
+        public let id: String
+        public let title: String
+        public let kind: Kind
+        public init(id: String, title: String, kind: Kind) { self.id = id; self.title = title; self.kind = kind }
+    }
+    public let id: String
+    public let title: String
+    public let detail: String
+    public let options: [Option]
+    /// The option chosen; nil while the agent waits.
+    public var answer: String? = nil
+    public init(id: String, title: String, detail: String, options: [Option]) {
+        self.id = id; self.title = title; self.detail = detail; self.options = options
+    }
+}
+/// What a running session reports (`SystemEvent.aiConversation`). Text arrives as `aiPartial` and `aiResult`.
+public enum AIConversationEvent: Equatable, Sendable, Codable {
+    case started(agent: AIProviderKind, name: String, model: String?, effort: String?)
+    case step(AIAgentStep, turn: AIRequestID)
+    case approval(AIAgentApproval, turn: AIRequestID)
+    /// The agent no longer waits for this approval (the turn ended, or it was answered elsewhere).
+    case approvalClosed(String)
+    case notice(String)
+}
+
+/// What an installed agent says about itself, read without sending the model anything (the Max pane, the panel).
+public struct AIAgentStatus: Hashable, Sendable, Codable {
+    public enum State: Hashable, Sendable, Codable {
+        case missing, checking, ready, notSignedIn
+        case failed(String)
+    }
+    public let kind: AIProviderKind
+    public var state: State
+    public var version: String? = nil
+    public var models: [AIAgentModel] = []
+    public init(kind: AIProviderKind, state: State, version: String? = nil, models: [AIAgentModel] = []) {
+        self.kind = kind; self.state = state; self.version = version; self.models = models
+    }
+}
+public struct AIAgentModel: Hashable, Sendable, Codable {
+    public let id: String
+    public let name: String
+    public let efforts: [String]
+    public let isDefault: Bool
+    public init(id: String, name: String, efforts: [String] = [], isDefault: Bool = false) {
+        self.id = id; self.name = name; self.efforts = efforts; self.isDefault = isDefault
+    }
 }
 
 struct AIRequest: Equatable, Sendable {
@@ -136,7 +230,7 @@ struct AIRequest: Equatable, Sendable {
     var translated: [AITextNode] = []
 }
 enum AIPurpose: Equatable, Sendable {
-    case answer, askPage(String), preview(URL), instant(String), browse(String), translate(String), organize
+    case answer, askPage(String), preview(URL), instant(String), browse(String), translate(String), organize, followUp
 }
 extension AIPurpose {
     /// Purposes that show in their own place (the preview card, the Today row, the URL pill and its popover, the
@@ -144,7 +238,7 @@ extension AIPurpose {
     var inPlace: Bool {
         switch self {
         case .preview, .instant, .translate, .organize: true
-        case .answer, .askPage, .browse: false
+        case .answer, .askPage, .browse, .followUp: false
         }
     }
 }
@@ -168,6 +262,12 @@ struct AISession: Equatable, Sendable {
     var instantRows: [WindowID: [AIInstantRow]] = [:]
     /// The Today tidy in flight, by window: the Tidy button shows it is working.
     var tidying: Set<WindowID> = []
+    /// What each agent said about itself last (`SystemEvent.aiAgents`); only for the Max pane and `.auto`.
+    var agents: [AIProviderKind: AIAgentStatus] = [:]
+    /// The Max pane's Local AI agent card is open.
+    var agentCardOpen = false
+    /// By conversation: how much of the running turn's text rows above its last step already show.
+    var turnText: [AIRequestID: Int] = [:]
 }
 public struct AIGroupPlan: Hashable, Sendable, Codable {
     public let folder: String
@@ -290,6 +390,14 @@ public enum AIValidation {
         let ids = groups.flatMap(\.tabs)
         guard Set(ids).count == ids.count, Set(ids) == Set(eligible.map { $0.id.rawValue }) else { return nil }
         return groups
+    }
+    /// Why this folder cannot be a session's working folder, nil when it can. Home and the disk's root hold everything
+    /// the user has; a coding session gets one project.
+    public static func workingFolderRefusal(_ folder: String, home: String) -> String? {
+        let standard = (folder as NSString).standardizingPath
+        guard standard.hasPrefix("/") else { return "Choose a folder on this Mac." }
+        if standard == "/" || standard == (home as NSString).standardizingPath { return "Choose a project folder, not your home folder or the whole disk." }
+        return nil
     }
     /// Keep the original extension; replies may suggest only a filename stem, never a path.
     public static func filename(_ text: String, original: String) -> String? {

@@ -199,8 +199,9 @@ public enum LinkDestination: Hashable, Sendable, Codable {
     case mostRecentSpace
 }
 
-/// Arc's Max pane, replaced by the user's decision: AI stand-ins run the user's local `claude` or `codex`
-/// command-line tool; no API keys. `provider` picks which; the per-feature switches come with their features.
+/// Arc's Max pane, replaced by the user's decision: AI stand-ins run the user's local coding agent (`claude`, `codex`,
+/// `gemini`, `cursor-agent`, `opencode`); no API keys. `provider` picks which; the per-feature switches come with their
+/// features.
 public struct MaxSettings: Hashable, Sendable, Codable {
     public var provider: AIProviderChoice
     /// Max `renamedPinnedTabs`: rename a tab with a tidier title when it is pinned.
@@ -211,16 +212,34 @@ public struct MaxSettings: Hashable, Sendable, Codable {
     public var translationExclusions: [ProfileID: AITranslationExclusions]? = nil
     /// "Automatically enable future Arc Max features": a feature the user never switched follows this; nil is off.
     public var autoEnableFutureFeatures: Bool? = nil
+    /// The model and effort the user picked per agent; nothing stored means the agent's own default.
+    public var agentOptions: [AIProviderKind: AIAgentOptions]? = nil
 
     public static let `default` = MaxSettings(provider: .auto, renamePinnedTabs: false, tidyTabs: false)
 }
 
-/// Which local command-line tool answers AI requests. `.auto` takes `claude` when it is on PATH, else `codex`,
-/// else behaves as `.off` (`Session.detectedAI` says what was found at launch).
-public enum AIProviderChoice: String, Hashable, Sendable, Codable, CaseIterable { case off, auto, claude, codex }
+/// A model and effort picked in the Max pane. Identifiers as the agent reported them.
+public struct AIAgentOptions: Hashable, Sendable, Codable {
+    public var model: String?
+    public var effort: String?
+    public init(model: String? = nil, effort: String? = nil) { self.model = model; self.effort = effort }
+}
 
-/// A local AI command-line tool the app can run non-interactively.
-public enum AIProviderKind: String, Hashable, Sendable, Codable, CaseIterable { case claude, codex }
+/// Which local agent answers AI requests. `.auto` takes the first of `AIProviderKind.allCases` that is installed and,
+/// once its status is known, signed in; else behaves as `.off` (`Session.detectedAI` says what was found at launch).
+public enum AIProviderChoice: String, Hashable, Sendable, Codable, CaseIterable { case off, auto, claude, codex, gemini, cursor, opencode }
+
+/// A local coding agent the app can run. The raw value is what settings store; `executableNames` is what is looked for.
+public enum AIProviderKind: String, Hashable, Sendable, Codable, CaseIterable {
+    case claude, codex, gemini, cursor, opencode
+    /// The commands that start this agent, first match wins. Cursor installs `cursor-agent` (and an `agent` alias).
+    public var executableNames: [String] {
+        switch self {
+        case .cursor: ["cursor-agent"]
+        default: [rawValue]
+        }
+    }
+}
 
 /// Arc's Advanced pane (anatomy-m 4.2). Switches whose features are later waves are stored now so the pane can
 /// show them; their consumers arrive with the features.

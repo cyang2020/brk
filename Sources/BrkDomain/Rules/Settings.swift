@@ -129,6 +129,23 @@ extension Work {
                     max.provider = .off
                 }
                 if state.doc.settings.max != max { state.doc.settings.max = max }
+            case .agentModel(let agent, let model):
+                var options = state.doc.settings.max.agentOptions ?? [:]
+                var chosen = options[agent] ?? AIAgentOptions()
+                chosen.model = model
+                // An effort the newly chosen model does not offer falls back to the agent's default.
+                if let effort = chosen.effort, let listed = state.session.ai.agents[agent]?.models.first(where: { $0.id == model }), !listed.efforts.contains(effort) { chosen.effort = nil }
+                options[agent] = chosen == AIAgentOptions() ? nil : chosen
+                state.doc.settings.max.agentOptions = options.isEmpty ? nil : options
+            case .agentEffort(let agent, let effort):
+                var options = state.doc.settings.max.agentOptions ?? [:]
+                var chosen = options[agent] ?? AIAgentOptions()
+                chosen.effort = effort
+                options[agent] = chosen == AIAgentOptions() ? nil : chosen
+                state.doc.settings.max.agentOptions = options.isEmpty ? nil : options
+            case .showAgents(let open):
+                state.session.ai.agentCardOpen = open
+                if open { effects.append(.aiRefreshAgents) }
             }
         case .advanced(let setting):
             switch setting {

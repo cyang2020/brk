@@ -34,6 +34,18 @@ public enum Effect: Hashable, Sendable {
     /// `SystemEvent.aiResult(id, outcome)`. `choice` is the Max setting; `detected` what launch found on PATH.
     case ai(AIRequestID, AITask, choice: AIProviderChoice)
     case aiCancel(AIRequestID)
+    /// Keep a session for this conversation: the `.ai` request with the same id is its first turn, and it stays for
+    /// `aiTurn`. `folder` nil: tools off, strictest read-only mode. A folder: tools on, approvals on, chosen by the user.
+    case aiOpenConversation(AIRequestID, folder: String?, choice: AIProviderChoice)
+    /// The next user message in a conversation; it answers as request `turn` (`aiPartial`, `aiResult`).
+    case aiTurn(conversation: AIRequestID, turn: AIRequestID, AITask)
+    case aiApprove(conversation: AIRequestID, approval: String, option: String)
+    /// The conversation is over: its session and every process it started go.
+    case aiCloseConversation(AIRequestID)
+    /// Ask the user for a working folder; the answer is `SystemEvent.aiFolderChosen`.
+    case aiChooseFolder(WindowID)
+    /// Ask every installed agent about itself; the answer is `SystemEvent.aiAgents`. Nothing is sent to a model.
+    case aiRefreshAgents
     case aiRead(AIRequestID, DocumentToken)
     case aiTranslate(AIRequestID, AIPageContent, [AITextNode])
     case aiWatch(AIRequestID, seconds: Int)

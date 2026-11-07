@@ -2,11 +2,9 @@ import BrkBase
 import BrkDomain
 import Foundation
 
-// The AI stand-in seam (user decision: AI features run the user's local `claude` or `codex` command-line tool;
-// no API keys). The domain asks with `Effect.ai(id, task, choice:)`; this file finds the tools, builds the prompt
-// for a task, runs the tool non-interactively, and answers with `SystemEvent.aiResult(id, outcome)`.
-//
-// Owner: wave 2 contract; the Max features of a later wave fill `AIPrompt` per task. Nothing here reads the tree.
+// The AI seam (user decision: AI features run the user's local coding agents; no API keys). The domain asks with
+// `Effect.ai(id, task, choice:)`; this file finds the agents, builds the prompt for a task, and answers with
+// `SystemEvent.aiResult(id, outcome)`. Agents/ holds how each agent is talked to. Nothing here reads the tree.
 
 /// Something that answers a prompt with text.
 @MainActor
@@ -22,49 +20,77 @@ public enum AIProviderSeam {
     /// The usual Homebrew and npm bins, searched after PATH because a GUI app's PATH is short.
     public static var fallbackDirectories: [String] {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return ["/opt/homebrew/bin", "/usr/local/bin", "\(home)/.local/bin", "\(home)/.npm-global/bin", "\(home)/.bun/bin"]
+        return ["/opt/homebrew/bin", "/usr/local/bin", "\(home)/.local/bin", "\(home)/.npm-global/bin", "\(home)/.bun/bin", "\(home)/.opencode/bin", "\(home)/.cursor/bin"]
     }
 
-    /// The tools found on PATH and in `fallbackDirectories`, in `AIProviderKind.allCases` order.
+    /// The agents found on PATH (the login shell's too) and in `fallbackDirectories`, in `AIProviderKind.allCases` order.
     public static func detect(environment: [String: String] = ProcessInfo.processInfo.environment,
                               alsoIn fallback: [String] = fallbackDirectories) -> [AIProviderKind] {
         AIProviderKind.allCases.filter { executable(for: $0, environment: environment, alsoIn: fallback) != nil }
     }
 
-    /// The executable for a tool, or nil when it is not installed.
+    /// The executable for an agent, or nil when it is not installed.
     public static func executable(for kind: AIProviderKind, environment: [String: String] = ProcessInfo.processInfo.environment,
                                   alsoIn fallback: [String] = fallbackDirectories) -> URL? {
-        let path = (environment["PATH"] ?? "").split(separator: ":").map(String.init)
-        let candidates = path + fallback
-        for directory in candidates {
-            let url = URL(fileURLWithPath: directory, isDirectory: true).appendingPathComponent(kind.rawValue)
-            if FileManager.default.isExecutableFile(atPath: url.path) { return url }
+        let path = environment["PATH"].map { _ in AgentEnvironment.searchPath(environment: environment).filter { !fallbackDirectories.contains($0) } } ?? AgentEnvironment.searchPath(environment: environment)
+        for directory in path + fallback {
+            for name in kind.executableNames {
+                let url = URL(fileURLWithPath: directory, isDirectory: true).appendingPathComponent(name)
+                if FileManager.default.isExecutableFile(atPath: url.path) { return url }
+            }
         }
         return nil
     }
 
-    /// The provider a choice resolves to, given what was detected; nil means `.unavailable`.
-    @MainActor
-    public static func provider(for choice: AIProviderChoice, detected: [AIProviderKind]) -> (any AIProvider)? {
-        let fixture = ProcessInfo.processInfo.environment["BRK_AI_FIXTURE_EXECUTABLE"]
-        if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
-            guard choice != .off, let fixture, FileManager.default.isExecutableFile(atPath: fixture) else { return nil }
-            return CLIProvider(kind: .claude, executable: URL(fileURLWithPath: fixture))
-        }
-        let kind: AIProviderKind? = switch choice {
+    /// How this instance reaches agents. A test instance (control socket) runs only its fixture, or real agents when a
+    /// real-agent run says so; the fixture speaks plain text unless the run asks it to speak each agent's protocol.
+    enum Mode: Equatable {
+        case real
+        /// Only the fixture; `protocols` false: prompt on the command line, answer on stdout.
+        case fixture(URL, protocols: Bool)
+        /// A test instance with no fixture: nothing runs.
+        case none
+    }
+    static var mode: Mode {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["BRK_CONTROL_SOCKET"] != nil, environment["BRK_AI_REAL_AGENTS"] != "1" else { return .real }
+        guard let fixture = environment["BRK_AI_FIXTURE_EXECUTABLE"], FileManager.default.isExecutableFile(atPath: fixture) else { return .none }
+        return .fixture(URL(fileURLWithPath: fixture), protocols: environment["BRK_AI_FIXTURE_PROTOCOL"] == "1")
+    }
+
+    /// The agent a choice resolves to; nil means `.unavailable`. `active` is what the domain resolved `.auto` to.
+    static func resolve(_ choice: AIProviderChoice, active: AIProviderKind?, detected: [AIProviderKind]) -> AIProviderKind? {
+        switch choice {
         case .off: nil
-        case .claude: detected.contains(.claude) ? .claude : nil
-        case .codex: detected.contains(.codex) ? .codex : nil
-        case .auto: detected.first
+        case .auto: active ?? detected.first
+        default: choice.kind
         }
-        guard let kind, let executable = executable(for: kind) else { return nil }
-        return CLIProvider(kind: kind, executable: executable)
+    }
+
+    /// A one-prompt provider for a choice, given what was detected; nil means `.unavailable`.
+    @MainActor
+    public static func provider(for choice: AIProviderChoice, detected: [AIProviderKind], active: AIProviderKind? = nil, options: [AIProviderKind: AIAgentOptions] = [:]) -> (any AIProvider)? {
+        switch mode {
+        case .none: return nil
+        case .fixture(let fixture, let protocols):
+            guard choice != .off else { return nil }
+            let kind = choice.kind ?? .claude
+            if !protocols { return CLIProvider(kind: .claude, executable: fixture) }
+            return AgentOneShot(kind: kind, executable: fixture, options: options[kind])
+        case .real:
+            guard let kind = resolve(choice, active: active, detected: detected), detected.contains(kind), let executable = executable(for: kind) else { return nil }
+            return AgentOneShot(kind: kind, executable: executable, options: options[kind])
+        }
     }
 
     /// Runs one request end to end and returns the outcome the reducer applies.
     @MainActor
-    public static func answer(_ task: AITask, choice: AIProviderChoice, detected: [AIProviderKind], onPartial: @escaping @MainActor @Sendable (String) -> Void = { _ in }) async -> AIOutcome {
-        guard let provider = provider(for: choice, detected: detected) else { return .unavailable }
+    public static func answer(_ task: AITask, choice: AIProviderChoice, detected: [AIProviderKind], active: AIProviderKind? = nil, options: [AIProviderKind: AIAgentOptions] = [:],
+                              onPartial: @escaping @MainActor @Sendable (String) -> Void = { _ in }) async -> AIOutcome {
+        guard let provider = provider(for: choice, detected: detected, active: active, options: options) else {
+            if let kind = choice.kind, mode == .real { return .failed(AgentCopy.missing(kind)) }
+            return .unavailable
+        }
         do {
             if case .translate(let target, let content) = task {
                 var translated: [AITextNode] = []
@@ -124,9 +150,12 @@ public enum AIPrompt {
     }
 }
 
-/// One process per request. Both pipes drain while it runs; cancellation and the deadline terminate it.
+/// One process per request, its answer on stdout: the test fixtures, which take a prompt on the command line. Both pipes
+/// drain while it runs; cancellation and the deadline terminate it. Real agents go through `AgentOneShot`.
 @MainActor
 public final class CLIProvider: AIProvider {
+    static func arguments(kind: AIProviderKind, prompt: String) -> [String] { ["-p", prompt] }
+
     public let kind: AIProviderKind
     public let executable: URL
     public var timeout: Duration = .seconds(120)
@@ -141,11 +170,7 @@ public final class CLIProvider: AIProvider {
     }
 
     public func run(_ prompt: String, onPartial: @escaping @MainActor @Sendable (String) -> Void) async throws -> String {
-        let arguments: [String] = switch kind {
-        case .claude: ["-p", prompt, "--output-format", "text", "--tools", "", "--no-session-persistence", "--disable-slash-commands", "--strict-mcp-config", "--setting-sources", ""]
-        case .codex: ["exec", "--skip-git-repo-check", "--ephemeral", "--sandbox", "read-only", "-c", "features.shell_tool=false", "-c", "web_search=\"disabled\"", prompt]
-        }
-        let run = CLIExecution(executable: executable, arguments: arguments, partial: onPartial)
+        let run = CLIExecution(executable: executable, arguments: Self.arguments(kind: kind, prompt: prompt), partial: onPartial)
         let deadline = Task {
             do { try await Task.sleep(for: timeout); run.stop(.timedOut) } catch {}
         }

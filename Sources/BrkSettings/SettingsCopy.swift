@@ -242,7 +242,7 @@ public enum SettingsCopy {
     }
     /// Replaces Arc's "Max features require that we send data to our AI partners." (user decision: local tools).
     public static var maxPrivacy: String {
-        "Max runs claude or codex installed on this Mac with your own signed-in account. The selected tool may send your question and requested page text to its service. No API key is required."
+        "Max runs a coding agent installed on this Mac (claude, codex, gemini, cursor-agent or opencode) with your own signed-in account. The selected agent may send your question and requested page text to its service. No API key is required."
     }
     public static let aiProvider = "AI provider:"
 
@@ -252,17 +252,41 @@ public enum SettingsCopy {
         case .auto: "Automatic"
         case .claude: "claude"
         case .codex: "codex"
+        case .gemini: "gemini"
+        case .cursor: "cursor-agent"
+        case .opencode: "opencode"
         }
     }
 
     public static func detected(_ kinds: [AIProviderKind], active: AIProviderKind?) -> String {
-        let found = kinds.isEmpty ? "No local AI command-line tool found on PATH." : "Found on PATH: \(kinds.map(\.rawValue).joined(separator: ", "))."
-        return active.map { "\(found) Using \($0.rawValue)." } ?? found
+        let found = kinds.isEmpty ? "No local AI command-line tool found on PATH." : "Found on PATH: \(kinds.map(\.executableNames[0]).joined(separator: ", "))."
+        return active.map { "\(found) Using \($0.executableNames[0])." } ?? found
     }
 
     /// One line per tool the app knows how to run.
     public static func toolStatus(_ kind: AIProviderKind, found: Bool) -> String {
-        "\(kind.rawValue): \(found ? "found" : "not found")"
+        "\(kind.executableNames[0]): \(found ? "found" : "not found")"
+    }
+
+    /// An agent's line in the Max pane's Local AI agent card.
+    public static func agentStatus(_ status: AIAgentStatus) -> String {
+        let name = status.kind.displayName + (status.version.map { " " + $0 } ?? "")
+        switch status.state {
+        case .missing: return "\(status.kind.displayName): not installed"
+        case .checking: return "\(name): checking…"
+        case .ready: return "\(name): signed in"
+        case .notSignedIn: return "\(name): not signed in. In Terminal, run \(signInCommand(status.kind))."
+        case .failed(let reason): return "\(name): \(reason)"
+        }
+    }
+    private static func signInCommand(_ kind: AIProviderKind) -> String {
+        switch kind {
+        case .claude: "claude"
+        case .codex: "codex login"
+        case .gemini: "gemini"
+        case .cursor: "cursor-agent login"
+        case .opencode: "opencode auth login"
+        }
     }
 
     public static let maxFeatures = "Features:"
