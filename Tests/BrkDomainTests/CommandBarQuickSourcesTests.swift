@@ -50,6 +50,8 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         let t = d.user(.commandBar(.queryChanged("budget")))
         XCTAssertEqual(local(t), [], "the empty pane's bar")
         XCTAssertFalse(needsRates(d.user(.commandBar(.queryChanged("100 usd in cny")))), "the empty pane's bar")
+        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("10ft in m")))), 1, "still an ordinary search there")
+        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("file budget")))), 1, "still an ordinary search there")
     }
 
     func testAIModeAndSiteSearchAskNothing() {

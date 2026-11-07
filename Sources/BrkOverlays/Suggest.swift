@@ -263,11 +263,12 @@ public enum Suggest {
                    command: .commandBar(.local(.open, path: hit.path)), icon: .file(hit.path))
     }
 
-    /// Tab sends the typed text to the local AI: a text in a new-tab bar with Max's tool on and found, not an address and
-    /// not a site being completed. Nil keeps Tab as it was. Site search's offer and the tool's name go first (the view).
+    /// Tab sends the typed text to the local AI: a text in a new-tab bar with Max's tool on and found, not an address, not a
+    /// site being completed and not a typed mode. Nil keeps Tab as it was. Site search's offer and the tool's name go first
+    /// (the view).
     public static func tabQuestion(_ typed: String, completing: String?, bar: CommandBarSnapshot, resolve: ((String) -> URL?)? = nil) -> String? {
         let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, completing == nil, bar.createsTab, bar.aiMode == nil, bar.askProvider != nil, bar.askAgentFound else { return nil }
+        guard !text.isEmpty, completing == nil, bar.createsTab, bar.aiMode == nil, bar.askProvider != nil, bar.askAgentFound, LocalSources.mode(text) == nil else { return nil }
         let engine = SearchEngine.builtIn(bar.engine.id) ?? bar.engine.template.map {
             SearchEngine(id: bar.engine.id, name: bar.engine.name, keyword: bar.engine.keyword, template: $0, suggestTemplate: nil)
         } ?? .google

@@ -29,6 +29,10 @@ import BrkUIKit
 /// (`.commandBar(.submitSearch)`). Backspace in the empty input or Esc leaves the mode and gives back the engine's
 /// name as typed.
 ///
+/// Brk's own jobs beyond Arc (`Suggest.rank`): quick answers, "file <name>", "emoji <name>", apps and files in the last
+/// rows, Tab to ask the local AI. A file row takes ⌘Return (show in the Finder) and ⌥Return (copy its path), which do
+/// nothing new on any other row.
+///
 /// The view fills `frames.commandBar` (Arc's 338 pt box); the visible card sits at the top of it and is as tall as
 /// its rows, and the empty rest of the box lets clicks through.
 ///

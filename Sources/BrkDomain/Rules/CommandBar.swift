@@ -65,8 +65,11 @@ extension Work {
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             let settings = state.profileSettings(in: window)
             askQuickSources(trimmed, target: target, in: window)
-            // A text the bar answers itself is not a web search: a calculation, a conversion, a file or emoji name.
-            let answeredHere = BrowserCalculator.result(trimmed) != nil || QuickAnswers.leads(trimmed) || (target == .newTab && LocalSources.mode(trimmed) != nil)
+            // A text the bar answers itself is not a web search: a calculation, a conversion, a file or emoji name. A bar
+            // filling an empty pane has none of those but arithmetic.
+            var fillsPane = false
+            if case .fillPane = target { fillsPane = true }
+            let answeredHere = BrowserCalculator.result(trimmed) != nil || (!fillsPane && QuickAnswers.leads(trimmed)) || (target == .newTab && LocalSources.mode(trimmed) != nil)
             guard state.doc.windows[window]?.kind != .incognito, !trimmed.isEmpty, !answeredHere, settings.searchSuggestions, let url = state.searchEngine(in: window).suggestURL(trimmed) else {
                 if state.session.windows[window]!.suggestions != nil { state.session.windows[window]!.suggestions = nil }
                 return

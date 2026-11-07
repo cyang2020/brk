@@ -282,6 +282,12 @@ final class QuickSourceRowsTests: XCTestCase {
         press(#selector(NSResponder.insertTab(_:)), address)
         XCTAssertEqual(sink.sent, [], "an address")
 
+        let mode = view(tabBar(), sink)
+        type("file budget", into: mode)
+        sink.sent.removeAll()
+        press(#selector(NSResponder.insertTab(_:)), mode)
+        XCTAssertEqual(sink.sent, [], "a typed mode")
+
         var editing = tabBar()
         editing.createsTab = false
         let edit = view(editing, sink)
