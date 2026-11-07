@@ -70,8 +70,9 @@ import Foundation
         case .readOnly:
             params["sandbox"] = "read-only"; params["approvalPolicy"] = "never"; params["ephemeral"] = true
         case .tools:
-            // T3 Code's "approval required": commands not known to be safe, and every file change, ask first.
-            params["sandbox"] = "read-only"; params["approvalPolicy"] = "untrusted"
+            // Commands not known to be safe, and every file change, ask first. T3 Code pairs this policy with the
+            // read-only sandbox; told it is read-only, a small model answers that it cannot write and never asks.
+            params["sandbox"] = "workspace-write"; params["approvalPolicy"] = "untrusted"
         }
         let opened: JSONRPCPeer.Reply = { [weak self] result in
             guard let self else { return }

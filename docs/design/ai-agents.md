@@ -64,7 +64,7 @@ A command that double-forked away before Stop and left the process group is the 
 
 **Claude**: `--permission-prompt-tool stdio` sends every tool that needs permission to the host as `can_use_tool`, with the tool's input and `permission_suggestions`. T3 answers `allow` with `updatedInput`, or `deny` with a message; "for the session" adds `updatedPermissions` with `destination: "session"` (`ClaudeAdapterV2.ts`: `permissionResultFromDecision`, `toSessionPermissionUpdates`). Brk leaves out a `setMode` suggestion: for `Write`, Claude suggests switching the whole session to accept edits, which is wider than what the user is looking at.
 
-**Codex**: requests from the server, `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/requestApproval`, and the older `execCommandApproval` and `applyPatchApproval` (`CodexAdapterV2.ts`, around line 5314). The request lists its `availableDecisions`; Brk offers only those. T3's "approval required" mode is `approvalPolicy: "untrusted"` with the read-only sandbox (`codexRuntimeModeTurnDefaults`); Brk's folder sessions use exactly that.
+**Codex**: requests from the server, `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/requestApproval`, and the older `execCommandApproval` and `applyPatchApproval` (`CodexAdapterV2.ts`, around line 5314). The request lists its `availableDecisions`; Brk offers only those. T3's "approval required" mode is `approvalPolicy: "untrusted"` with the read-only sandbox (`codexRuntimeModeTurnDefaults`). Brk's folder sessions keep the policy but use the `workspace-write` sandbox: told it is read-only, `gpt-6-luna` answered that it could not write and never asked, so the approval never appeared. Writes still asked with this sandbox in the real run.
 
 **ACP**: `session/request_permission` with options of kind `allow_once`, `allow_always`, `reject_once`, `reject_always`; the answer selects one by id, or says `cancelled` (`packages/provider-acp/src/server/clientPolicy.ts`, `adapter.ts`).
 
@@ -83,6 +83,8 @@ Anything carrying page or link text runs in a read-only session, in an empty tem
 | OpenCode | ACP mode `plan`. | Not installed. |
 
 On top of that, in read-only sessions Brk answers any approval request itself with no, without showing it, for all agents.
+
+Claude's own settings still apply in a folder session. `--permission-mode default` overrides a `defaultMode: bypassPermissions` in `~/.claude/settings.json`, which this machine has (seen in the real run: `Write` asked), but the allow rules in that file hold, so a command it allows, `python3` here, runs without asking. T3 does the same. Read-only sessions load no settings at all.
 
 A session with tools on starts only from the panel's Work in a Folder…, in the folder the user picks. Brk refuses home and the disk's root, and no page text goes into such a session. No flag that skips approvals is passed anywhere; a unit test checks each agent's arguments.
 
