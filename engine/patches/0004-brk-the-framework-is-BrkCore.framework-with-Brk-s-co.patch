@@ -1,8 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brk Engine <brk-engine@localhost>
 Date: Sat, 7 Nov 2026 22:13:54 +0800
-Subject: [PATCH 04/11] brk: the framework is BrkCore.framework, with Brk's
- code and two C entry points
+Subject: [PATCH] brk: the framework is BrkCore.framework, with Brk's code and
+ two C entry points
 
 ---
  chrome/BUILD.gn                   | 3 ++-

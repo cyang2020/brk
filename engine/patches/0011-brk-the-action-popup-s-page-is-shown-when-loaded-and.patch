@@ -1,8 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brk Engine <brk-engine@localhost>
 Date: Sat, 7 Nov 2026 23:01:53 +0800
-Subject: [PATCH 11/11] brk: the action popup's page is shown when loaded and
- resizes with its content, as in Chrome's bubble
+Subject: [PATCH] brk: the action popup's page is shown when loaded and resizes
+ with its content, as in Chrome's bubble
 
 ---
  brk/browser/brk_extension_action.mm | 29 ++++++++++++++++++++++++++---

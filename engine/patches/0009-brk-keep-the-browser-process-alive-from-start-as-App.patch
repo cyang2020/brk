@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brk Engine <brk-engine@localhost>
 Date: Sat, 7 Nov 2026 22:47:04 +0800
-Subject: [PATCH 09/11] brk: keep the browser process alive from start, as
+Subject: [PATCH] brk: keep the browser process alive from start, as
  AppController does; developer mode for unpacked; pages from the back-forward
  cache are ready
 

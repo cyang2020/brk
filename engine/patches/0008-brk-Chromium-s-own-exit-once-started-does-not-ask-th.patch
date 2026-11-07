@@ -1,8 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brk Engine <brk-engine@localhost>
 Date: Sat, 7 Nov 2026 22:41:59 +0800
-Subject: [PATCH 08/11] brk: Chromium's own exit, once started, does not ask
- the shell to terminate again
+Subject: [PATCH] brk: Chromium's own exit, once started, does not ask the
+ shell to terminate again
 
 ---
  chrome/browser/chrome_browser_application_mac.mm | 10 +++++++++-

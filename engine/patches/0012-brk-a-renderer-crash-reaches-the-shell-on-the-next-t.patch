@@ -1,8 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brk Engine <brk-engine@localhost>
 Date: Sat, 7 Nov 2026 23:39:28 +0800
-Subject: [PATCH 12/12] brk: a renderer crash reaches the shell on the next
- task, as in CEF
+Subject: [PATCH] brk: a renderer crash reaches the shell on the next task, as
+ in CEF
 
 ---
  brk/browser/brk_web_contents.mm | 11 ++++++++++-
