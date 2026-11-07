@@ -497,7 +497,8 @@ final class QuickSourceRowsTests: XCTestCase {
         let sink = Box()
         let local = LocalResults(query: "budget", scope: .files, apps: [], files: [hit("budget.txt")])
         let bar = view(bar(local: local), sink)
-        typeKeys("file ", into: bar)
+        type("file", into: bar)
+        press(#selector(NSResponder.insertTab(_:)), bar)
         type("budget", into: bar)
         XCTAssertEqual(sink.sent.last, .commandBar(.prefixQuery(.files, "budget")))
         sink.sent.removeAll()
@@ -514,13 +515,28 @@ final class QuickSourceRowsTests: XCTestCase {
 
     func testAWholeWordThenSpaceEntersAndThePillShowsIt() {
         let sink = Box(), bar = view(bar(), sink)
-        typeKeys("file ", into: bar)
-        XCTAssertEqual(bar.prefix?.action, .files)
+        typeKeys("emoji ", into: bar)
+        XCTAssertEqual(bar.prefix?.action, .emoji)
         XCTAssertEqual(bar.typed, "")
         XCTAssertEqual(bar.input.stringValue, "")
         let cased = view(self.bar(), sink)
-        typeKeys("FILE ", into: cased)
-        XCTAssertEqual(cased.prefix?.action, .files, "case aside")
+        typeKeys("EMOJI ", into: cased)
+        XCTAssertEqual(cased.prefix?.action, .emoji, "case aside")
+    }
+
+    /// "app store" stays a search: Space leaves these words alone, Tab enters.
+    func testAnEverydayWordStaysPlainOnSpaceAndEntersOnTab() {
+        let sink = Box()
+        for (word, action) in [("file", QuickPrefixAction.files), ("app", .apps), ("window", .window), ("color", .color)] {
+            let plain = view(bar(), sink)
+            typeKeys(word + " store", into: plain)
+            XCTAssertNil(plain.prefix, word)
+            XCTAssertEqual(plain.typed, word + " store")
+            let tabbed = view(bar(), sink)
+            type(word, into: tabbed)
+            press(#selector(NSResponder.insertTab(_:)), tabbed)
+            XCTAssertEqual(tabbed.prefix?.action, action, word)
+        }
     }
 
     func testAWholeWordThenTabEnters() {
@@ -542,23 +558,23 @@ final class QuickSourceRowsTests: XCTestCase {
 
     func testBackspaceAndEscGiveTheWordBackAndSpaceThenStaysASpace() {
         let sink = Box(), bar = view(bar(), sink)
-        typeKeys("file ", into: bar)
+        typeKeys("emoji ", into: bar)
         press(#selector(NSResponder.deleteBackward(_:)), bar)
         XCTAssertNil(bar.prefix)
-        XCTAssertEqual(bar.input.stringValue, "file")
-        XCTAssertEqual(bar.typed, "file")
+        XCTAssertEqual(bar.input.stringValue, "emoji")
+        XCTAssertEqual(bar.typed, "emoji")
         // The word can now be typed as a search.
         typeKeys(" report", into: bar)
         XCTAssertNil(bar.prefix)
-        XCTAssertEqual(bar.typed, "file report")
-        XCTAssertEqual(sink.sent.last, .commandBar(.queryChanged("file report")))
+        XCTAssertEqual(bar.typed, "emoji report")
+        XCTAssertEqual(sink.sent.last, .commandBar(.queryChanged("emoji report")))
         // Typed away, the word works again.
         type("", into: bar)
-        typeKeys("file ", into: bar)
-        XCTAssertEqual(bar.prefix?.action, .files)
+        typeKeys("emoji ", into: bar)
+        XCTAssertEqual(bar.prefix?.action, .emoji)
         press(#selector(NSResponder.cancelOperation(_:)), bar)
         XCTAssertNil(bar.prefix)
-        XCTAssertEqual(bar.input.stringValue, "file")
+        XCTAssertEqual(bar.input.stringValue, "emoji")
         // Esc again closes the bar, as in site search.
         sink.sent.removeAll()
         press(#selector(NSResponder.cancelOperation(_:)), bar)
@@ -581,7 +597,7 @@ final class QuickSourceRowsTests: XCTestCase {
 
     func testBackspaceOnTextInThePillDoesNotLeave() {
         let sink = Box(), bar = view(bar(), sink)
-        typeKeys("file a", into: bar)
+        typeKeys("emoji a", into: bar)
         press(#selector(NSResponder.deleteBackward(_:)), bar)
         XCTAssertNotNil(bar.prefix, "only in the empty input")
     }
