@@ -183,7 +183,12 @@ final class AppUnderTest {
         if let remoteDebuggingPort { environment["BRK_REMOTE_DEBUGGING_PORT"] = String(remoteDebuggingPort) }
         if scenarioID != "ImportSync-Onboarding" { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
         if scenarioID == "I5" { environment["BRK_MAIN_FRAME_TRACE"] = dataDirectory.appendingPathComponent("main-frame-trace.jsonl").path }
-        if scenarioID.hasPrefix("AI") {
+        if scenarioID.hasPrefix("QuickBar") {
+            environment["BRK_LOCAL_SEARCH_FIXTURE"] = QuickBarScenarios.fixtureFolder(self).path
+            if scenarioID == "QuickBar-Spotlight" { environment["BRK_LOCAL_SEARCH_SPOTLIGHT"] = "1" }
+            if scenarioID != "QuickBar-NoRates" { environment["BRK_CURRENCY_RATES_FILE"] = QuickBarScenarios.ratesFile(self).path }
+        }
+        if scenarioID.hasPrefix("AI") || scenarioID == "QuickBar-AskTab" {
             environment["BRK_AI_FIXTURE_EXECUTABLE"] = site.root.deletingLastPathComponent().appendingPathComponent("Fixtures/ai-provider").path
             environment["BRK_AI_FIXTURE_LOG"] = dataDirectory.appendingPathComponent("ai-fixture.jsonl").path
         }

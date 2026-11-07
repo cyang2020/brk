@@ -323,6 +323,17 @@ enum NativeSystemInput {
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript"); p.arguments = ["-e", "tell application \"Finder\" to activate"]
         try? p.run(); p.waitUntilExit()
     }
+    /// Closes the Finder's window showing the folder named `title` through Accessibility, with no Apple Event (those can
+    /// raise the Automation prompt). True when there was one: the proof that a reveal reached the Finder.
+    static func closeFinderWindow(titled title: String) -> Bool {
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        guard let pid = list.first(where: { $0[kCGWindowOwnerName as String] as? String == "Finder" })?[kCGWindowOwnerPID as String] as? Int32 else { return false }
+        let windows = NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? []
+        guard let window = windows.first(where: { NativePickerInput.string($0, kAXTitleAttribute) == title }) else { return false }
+        if let close = NativePickerInput.attribute(window, kAXCloseButtonAttribute) { AXUIElementPerformAction(close as! AXUIElement, kAXPressAction as CFString) }
+        return true
+    }
+
     /// The status item's menu, opened and chosen through Accessibility (`AXExtrasMenuBar`).
     static func chooseStatusMenu(pid: Int32, title: String) throws {
         let app = AXUIElementCreateApplication(pid)
