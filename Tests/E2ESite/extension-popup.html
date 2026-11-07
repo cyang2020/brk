@@ -1,0 +1,9 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Extension popup fixture</title>
+<h1>Extension popup fixture</h1>
+<p id="receipt"></p>
+<script>
+new MutationObserver(() => { document.title = 'receipt:' + document.getElementById('receipt').textContent; })
+  .observe(document.getElementById('receipt'), {childList: true, characterData: true, subtree: true});
+</script>

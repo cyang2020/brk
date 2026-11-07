@@ -1,0 +1,1 @@
+{"manifest_version":3,"name":"Brk activeTab probe","version":"1.0.0","permissions":["activeTab","scripting"],"action":{"default_popup":"probe.html","default_title":"Brk activeTab probe"}}
