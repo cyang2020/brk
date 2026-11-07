@@ -21,10 +21,11 @@ public enum Product {
 
 /// Launch-time switches, read once in main.swift. Every e2e hook is off unless its variable is set.
 public struct LaunchOptions: Sendable, Equatable {
-    public enum EngineKind: String, Sendable { case cef, stub }
+    public enum EngineKind: String, Sendable { case cef, stub, core }
 
     /// `BRK_ENGINE=stub` runs the whole shell without Chromium (placeholder page views), so sidebar, command
-    /// bar and theme work can be run and screenshotted without downloading CEF.
+    /// bar and theme work can be run and screenshotted without downloading CEF. `BRK_ENGINE=core` runs on BrkCore.framework, Brk's own
+    /// Chromium build (engine/), when the bundle has it.
     public var engine: EngineKind
     /// `BRK_CONTROL_SOCKET=/path`: start the control server on this Unix socket.
     public var controlSocket: String?

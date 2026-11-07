@@ -7,12 +7,14 @@ import AppKit
 import BrkApp
 import BrkBase
 import BrkCEF
+import BrkCoreEngine
 import BrkEngine
 
 MainActor.assumeIsolated {
     CrashBacktrace.install()
     let options = LaunchOptions()
     let engine: any WebEngine
+    var coreRuntime: BrkCoreRuntime?
     switch options.engine {
     case .cef:
         do {
@@ -30,10 +32,24 @@ MainActor.assumeIsolated {
         }
     case .stub:
         engine = StubEngine()
+    case .core:
+        do {
+            let runtime = try BrkCoreRuntime(userDataDirectory: Product.dataDirectory().appendingPathComponent("Chromium", isDirectory: true),
+                                             remoteDebuggingPort: options.remoteDebuggingPort)
+            coreRuntime = runtime
+            engine = CoreEngine(runtime: runtime)
+        } catch {
+            FileHandle.standardError.write(Data("\(Product.name): BrkCore could not start (\(error)).\n".utf8))
+            exit(1)
+        }
     }
     let lifecycle = Lifecycle(options: options, engine: engine, engineKind: options.engine.rawValue)
     let app = NSApplication.shared
     app.delegate = lifecycle
     app.setActivationPolicy(.regular)
+    if let coreRuntime {
+        // Chromium's main runs NSApp itself and returns when it has shut down.
+        exit(coreRuntime.run())
+    }
     app.run()
 }

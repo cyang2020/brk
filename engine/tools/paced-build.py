@@ -100,7 +100,9 @@ def main():
             handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
 
     with log_path.open('ab') as out:
-        process = subprocess.Popen(['nice', '-n', str(args.nice)] + command, stdout=out, stderr=subprocess.STDOUT,
+        # --nice is the niceness the tool ends up with, whatever this script inherited.
+        increment = max(0, args.nice - os.nice(0))
+        process = subprocess.Popen(['nice', '-n', str(increment)] + command, stdout=out, stderr=subprocess.STDOUT,
                                    start_new_session=True)
     note(f'started pid {process.pid}: {" ".join(command)}')
 

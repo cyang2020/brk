@@ -42,6 +42,11 @@ let package = Package(
             exclude: ["AudibilityExtension"],
             swiftSettings: strict
         ),
+        // The interface of BrkCore.framework, Brk's own Chromium build (engine/): ObjC protocols only. Nothing to link; the framework is found
+        // at run time, so this package builds and runs on CEF with no Chromium tree present.
+        .target(name: "CBrkCore"),
+        // The engine on BrkCore, picked with BRK_ENGINE=core. Imports no CefKit.
+        .target(name: "BrkCoreEngine", dependencies: ["BrkBase", "BrkEngine", "CBrkCore"], swiftSettings: strict),
         // Themed window background: Metal gradient, procedural textures, crossfade.
         .target(name: "BrkTheme", dependencies: ["BrkBase", "BrkDomain"], swiftSettings: strict),
         // The view contract shared by every UI target: Dispatch, identify(_:), Palette, Copy. No views of its own.
@@ -72,7 +77,7 @@ let package = Package(
         // Composition root: picks the engine, starts CEF before NSApp exists, runs the app.
         .executableTarget(
             name: productName,
-            dependencies: ["BrkBase", "BrkApp", "BrkEngine", "BrkCEF"],
+            dependencies: ["BrkBase", "BrkApp", "BrkEngine", "BrkCEF", "BrkCoreEngine"],
             path: "Sources/Brk",
             swiftSettings: strict
         ),

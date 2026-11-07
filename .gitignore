@@ -9,3 +9,4 @@ dist/
 verify/swift/logs/
 xcuserdata/
 scripts/__pycache__/
+dist-core/

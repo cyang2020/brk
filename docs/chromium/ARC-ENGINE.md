@@ -103,7 +103,9 @@ in `engine/tools/arc-inspect.sh`; its output lands in `~/brk-chromium/arc-notes/
   framework and call `ChromeMain`. Entitlements: GPU and Renderer `allow-jit`, plain helper `disable-library-validation`.
 - [seen] `Libraries/`: `libvk_swiftshader.dylib`, `libvulkan.dylib`, `libaperitif.dylib` (exports `AperitifCheckInitialized`;
   strings: seatbelt sandbox client, `--seatbelt-client=`), and component data for `MEIPreload`,
-  `PrivacySandboxAttestationsPreloaded`, `IwaKeyDistribution`. `kAperitifHelpers` is a string in ArcCore.
+  `PrivacySandboxAttestationsPreloaded`, `IwaKeyDistribution`.
+- [seen, in Chromium's source] The Aperitif helpers are Chromium's, not Arc's: `chrome/BUILD.gn` builds them (`_is_aperitif_helper`,
+  `//content/public/app:aperitif`), behind the feature `kAperitifHelpers`, off by default at 154.
 - [seen] `Resources/`: 234 entries, `chrome_100_percent.pak`, `.lproj` folders, bundled DevTools, `ArcCore.sig`, `arc/`.
 
 ### How an extension popup opens in Arc
@@ -125,3 +127,85 @@ in `engine/tools/arc-inspect.sh`; its output lands in `~/brk-chromium/arc-notes/
   `~/brk-chromium/arc-notes/cef154-codecs.json`): decodes VP8, VP9, AV1, MP3, Opus, FLAC. Does not decode H.264, HEVC, AAC, AC-3.
   Widevine is unavailable (`NotSupportedError`).
 - Arc's set could not be asked: it needs running Arc. `strings` cannot tell, because Chromium's FFmpeg leaves out its logs.
+
+## Part 2: BrkCore design
+
+### Decision: which route
+
+The user asked for the route closest to Arc, so BrkCore follows Arc's shape:
+
+- It builds on Chromium's `chrome/` layer, in one framework file with helpers inside it.
+- Brk's own code is a folder `brk/` in the Chromium tree, carried by a numbered patch series. Chromium's files get as few
+  edits as possible, and no edits to widely included headers, so rebasing to a later Chromium stays small and an edit does
+  not recompile half the tree.
+- Each Brk window has a Chrome `Browser` per profile. That `Browser` has a `BrowserWindow` of Brk's own (`BrkBrowserWindow`)
+  with no Views UI. Pages are `WebContents` in that `Browser`'s `TabStripModel`, and the page's NSView sits directly in
+  Brk's card. No host windows, no moved views.
+
+Why this and not less: a page in a real `Browser` in a real `TabStripModel` is what extension code expects.
+`ExtensionActionViewModel::ExecuteUserAction` reads the active tab from the `Browser`, `ExtensionActionRunner::RunAction`
+grants `activeTab` to it, `chrome.tabs.query({active: true, currentWindow: true})` walks `BrowserList` and `TabStripModel`.
+
+The cheaper route, not taken: build CEF itself from source with a popup patch, as cra does (`scripts/cef-patches/`, seven
+patches). Almost all of `Sources/BrkCEF` would keep working and M3 would be nearly free. It keeps everything this work wants
+to leave: `CefBrowserView` forces `Browser::TYPE_POPUP`, the page stays in a hidden host window with its views moved out,
+extensions see each page as a one-tab popup window, and Chromium's internals stay behind CEF's own API and CEF's patches.
+
+One difference from Arc, on purpose for now: Chrome's Views UI code stays linked. Popups a page opens with window features and
+DevTools windows can stay real Chrome windows. Chrome's dialogs still appear where they find a usable parent; where they need a
+`BrowserView` they do not (see the list at the end). Arc has replaced 46 such entry points; Brk replaces them as they are needed.
+
+### Interface Swift calls
+
+ObjC, as in Arc, but Swift does not link the framework: `main` must build and pass without any Chromium tree. So:
+
+- `Sources/CBrkCore/include/BrkCore.h` is a header-only C module with ObjC **protocols** (`BrkCoreApplication`, `BrkCoreBrowser`,
+  `BrkCoreWebContents`, `BrkCoreExtensionAction`, delegates). Protocols need no symbols at link time.
+- `BrkCore.framework` exports C entry points found by `dlsym`: `BrkCoreApplicationPrepare` (installs Chromium's NSApplication
+  class before anything touches NSApp), `BrkCoreApplicationShared` (returns the object conforming to `BrkCoreApplication`), and
+  `ChromeMain` for the helpers.
+- The same header is copied into the Chromium tree as `brk/public/BrkCore.h` by `engine/apply-patches.sh`. The repo copy is the
+  one to edit.
+
+Calls the first version has, by Arc's model:
+
+| Protocol | Calls |
+| --- | --- |
+| `BrkCoreApplication` | `runWithArguments:` (blocks in Chromium's main loop), `quit`, `profile…`, `createBrowserForProfile:window:delegate:`, version |
+| `BrkCoreBrowser` | `createWebContentsWithURL:delegate:…`, `setActive:`, `setWindow:`, `extensionActions`, `executeExtensionAction:`, close |
+| `BrkCoreWebContents` | `nativeView`, `loadURL:`, back/forward/reload/stop, zoom, focus, `executeJavaScript:completion:`, DevTools-protocol call, MHTML, print to PDF, editing commands, mute, close |
+| delegates | navigation, title, favicon, progress, load failure, renderer gone, closed, pre-page and post-page key events, new contents, extension popup opened, resized, closed |
+
+### How it maps onto `Sources/BrkEngine`
+
+- A new target `BrkCoreEngine` implements `WebEngine`, the same boundary the app already sees; `BrkApp`'s code does not change.
+  Nothing outside the target imports `CBrkCore`.
+- `BRK_ENGINE=core` picks it, in the composition root `Sources/Brk/main.swift`. CEF stays the default. It starts Chromium's main
+  loop, which runs `[NSApp run]` itself, so `Lifecycle.applicationDidFinishLaunching` arrives after the browser process is up and
+  the existing launch order holds.
+- `surface(for:)` returns a `PageSurfaceView` holding the `WebContents` NSView directly. There is nothing to give back at close,
+  which removes the shutdown step that made CEF crash on quit.
+- Engine-neutral helpers (`MainDocumentState`, `DocumentOutputs`, `TransferFiles`, `ReloadSequence`) are used as they are, through
+  file links into the new target, so no other agent's work on `BrkCEF` conflicts with a move today.
+- `scripts/build.sh` and CEF's download are untouched. A separate `engine/assemble-app.sh` makes `dist-core/Brk.app`.
+
+### How extension popups open
+
+1. Site controls call `WebEngine.invokeExtension(id, target)`.
+2. `BrkCoreEngine` makes the page the active tab of its `Browser` (the model reads it there) and calls `executeExtensionAction:`.
+3. BrkCore has an `ExtensionActionViewModel` for that extension with a `BrkExtensionActionDelegate` of its own (this interface is
+   exactly where Chrome's Views bubble plugs in). `ExecuteUserAction` runs `ExtensionActionRunner::RunAction` with
+   `grant_tab_permissions = true`, so `activeTab` is real, then `CreatePopupHost` and `delegate->TriggerPopup(host, …)`.
+4. `TriggerPopup` keeps the `ExtensionViewHost`, gives it a `BrkExtensionView` (the `ExtensionView` interface) for size changes and
+   keys, and tells Swift `didOpenExtensionPopup` with the host's `WebContents` view.
+5. Swift hosts that view in a native panel next to the site controls. Size follows `didResizeExtensionPopup`, limits as in Chrome
+   (25x25 to 800x600). Losing key status or `window.close()` closes it, `didCloseExtensionPopup` reports it.
+
+## Part 3: What could not be determined
+
+- Arc's patch count, and how much of `chrome/` it edited. The binary shows results only.
+- The exact content of `arc::browser::ui::Window`. The strings cover the methods that log; the ones that do work leave no name.
+- Whether Arc makes one `Browser` per window or per Space. `createBrowser:withDelegate:forWindow:` and `ArcBrowser context` fit one per
+  window and profile, which is what BrkCore does.
+- What `PaneHostCompositorOverlayView` and `content_layer_glue_helper.cc` are for. Brk starts without an equivalent.
+- Arc's codec set and whether it ships Widevine: needs running Arc. Not done, as the task forbids driving it.

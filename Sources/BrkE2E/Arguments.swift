@@ -10,7 +10,7 @@ struct RunnerArguments {
     var only: Set<String>?
     var engine: Engine
 
-    enum Engine: String { case cef, stub }
+    enum Engine: String { case cef, stub, core }
 
     struct UsageError: Error, CustomStringConvertible {
         let description: String

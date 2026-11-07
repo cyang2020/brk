@@ -313,7 +313,7 @@ enum PlanScenarios {
         try app.waitUntil("the sidebar width to be 300") { try app.view().sidebar.width == 300 }
         try app.settle()
 
-        let before = RestoreSummary(try app.view(), omitting: app.engine == .cef ? fail.id : nil)
+        let before = RestoreSummary(try app.view(), omitting: app.engine != .stub ? fail.id : nil)
         try expect(before.dock.count == 2, "dock \(before.dock), expected two spaces")
         try expect(before.pinned.map(\.id) == [home.id.rawValue], "pinned \(before.pinned), expected only home")
         try expect(try todayIDs(app.view()).contains(fail.id), "Today \(before.today) lacks the /fail tab")
@@ -323,11 +323,11 @@ enum PlanScenarios {
         try app.restart()
 
         try app.waitUntil("the restored window to equal the one before restart") {
-            let after = RestoreSummary(try app.view(), omitting: app.engine == .cef ? fail.id : nil)
+            let after = RestoreSummary(try app.view(), omitting: app.engine != .stub ? fail.id : nil)
             try expect(after == before, "after restart \(after), before \(before)")
             return true
         }
-        if app.engine == .cef {
+        if app.engine != .stub {
             try expect(try todayIDs(app.view()).contains(fail.id), "failed row was not retained")
             try expect(try tab(fail.id, in: app.view())?.url == nil, "failed request was persisted as a document")
         }

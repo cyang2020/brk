@@ -23,7 +23,8 @@ final class ImportRulesTests: XCTestCase {
         "BrkContent": ["BrkBase", "BrkDomain", "BrkLayout", "BrkTheme", "BrkUIKit", "BrkSidebar", "BrkOverlays", "BrkLibrary", "AppKit", "Foundation", "CoreGraphics"],
         "BrkControl": ["BrkBase", "BrkDomain", "BrkLayout", "Foundation", "CoreGraphics"],
         "BrkApp": ["NaturalLanguage", "PDFKit", "Carbon", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "LocalAuthentication", "Security", "os"],
-        "Brk": ["BrkApp", "BrkBase", "BrkCEF", "BrkEngine", "AppKit", "Foundation"],
+        "Brk": ["BrkApp", "BrkBase", "BrkCEF", "BrkCoreEngine", "BrkEngine", "AppKit", "Foundation"],
+        "BrkCoreEngine": ["PDFKit", "BrkBase", "BrkEngine", "CBrkCore", "AppKit", "Foundation", "os"],
         "BrkE2E": ["PDFKit", "BrkBase", "BrkDomain", "BrkLayout", "BrkControl", "Foundation", "CoreGraphics"],
     ]
 

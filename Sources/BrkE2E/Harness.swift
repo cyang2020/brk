@@ -121,7 +121,7 @@ enum CrashReports {
 /// socket. Nothing here reads the app's windows; the app's files are read only for the final page log, the crash
 /// reports and the stderr log.
 final class AppUnderTest {
-    enum Engine: String { case cef, stub }
+    enum Engine: String { case cef, stub, core }
 
     let executable: URL
     let dataDirectory: URL
@@ -200,6 +200,7 @@ final class AppUnderTest {
             environment["BRK_TEST_NO_GLOBAL_SHORTCUT"] = "1"
         }
         if engine == .stub { environment["BRK_ENGINE"] = "stub" }
+        if engine == .core { environment["BRK_ENGINE"] = "core" }
         let log = dataDirectory.appendingPathComponent("app-\(launches).log")
         logs.append(log)
         let process = AppProcess(executable: executable, environment: environment, log: log)
@@ -545,7 +546,7 @@ final class AppUnderTest {
 
     /// Runs `body` only on the CEF engine; on the stub records `what` as not checked.
     func onCEF(_ what: String, _ body: () throws -> Void) throws {
-        if engine == .cef { try body() } else { note("\(what) not checked on the stub engine") }
+        if engine != .stub { try body() } else { note("\(what) not checked on the stub engine") }
     }
 
     static func describe(_ op: ControlOp) -> String {

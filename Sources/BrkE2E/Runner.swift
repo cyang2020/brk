@@ -72,7 +72,7 @@ final class Runner {
     }
 
     private func run(_ scenario: Scenario, index: Int, server: FixtureServer, scratch: URL, shots: URL, logs: URL) -> E2EResult {
-        let engine: AppUnderTest.Engine = arguments.engine == .stub ? .stub : .cef
+        let engine: AppUnderTest.Engine = arguments.engine == .stub ? .stub : (arguments.engine == .core ? .core : .cef)
         if let owner = scenario.pending {
             return E2EResult(id: scenario.id, title: scenario.title, outcome: .skipped, seconds: 0, message: "pending \(owner) (wave 2)")
         }

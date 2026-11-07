@@ -19,9 +19,10 @@ dcheck_always_on = false
 # One link at a time: a framework link takes several GB.
 concurrent_links = 1
 
-# No NaCl, no remote compile.
-enable_nacl = false
+# No remote compile.
 use_remoteexec = false
+# Plain ninja, so the build tool can be paused alone (engine/tools/paced-build.py).
+use_siso = false
 
 # Same codec set as the CEF 154.0.34 binary Brk ships today, measured with engine/tools/codec-probe.py: VP8, VP9, AV1, MP3,
 # Opus, FLAC decode; H.264, AAC, HEVC and AC-3 do not. Turning them on is the user's decision (licensing).
