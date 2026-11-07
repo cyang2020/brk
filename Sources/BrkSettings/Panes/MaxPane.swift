@@ -8,7 +8,8 @@ import SwiftUI
 /// The Max pane as Arc 1.170 lays it out (P38-b, P38-c, P38-max-on, P38-max-list): the MAX banner, Arc's paragraph,
 /// the Enable Max card, one card row per feature with its picture and switch, the note about what is sent. Max runs
 /// the user's local coding agent. The pane keeps Arc's six rows and Arc's note under them; the note's words "your local
-/// AI tool" open the Local AI agent card under the note (which agent, model, effort), which Arc does not have. Brk's own
+/// AI tool", the Learn more note and the Max panel's Agent… open the Local AI agent card under the note (which agent,
+/// model, effort), which Arc does not have. Brk's own
 /// three AI features (Ask on Page, Browse for Me, Translate Pages) are in Advanced's More Settings…. The pane scrolls.
 struct MaxPane: View {
     let context: PaneContext
@@ -158,7 +159,9 @@ struct MaxPane: View {
     private var footer: some View {
         VStack(spacing: M.footerGap.value) {
             LinkedText(parts: [.text(MaxCopy.footerBefore), .link(MaxCopy.footerTool, id: "agents"), .text(MaxCopy.footerAfter)],
-                       font: .system(size: M.footerSize.value), color: SettingsStyle.secondaryText) { _ in send(.showAgents(!max.agentCardOpen)) }
+                       // The same grey as the sentence: at rest the note is as Arc's, whose words are not a link.
+                       font: .system(size: M.footerSize.value), color: SettingsStyle.secondaryText, linkColor: SettingsStyle.secondaryText) { _ in send(.showAgents(!max.agentCardOpen)) }
+                .help(MaxCopy.chooseAgent)
             LinkedText(parts: [.link(MaxCopy.learnMore, id: "privacy")], font: .system(size: M.footerSize.value), color: SettingsStyle.link, underline: true) { _ in explaining = true }
                 .popover(isPresented: $explaining) {
                     VStack(alignment: .leading, spacing: CardMetrics.controlGap.value) {
@@ -166,6 +169,10 @@ struct MaxPane: View {
                         Text(SettingsCopy.detected(max.detected, active: max.active)).font(SettingsStyle.font).foregroundStyle(SettingsStyle.secondaryText)
                         Text(MaxCopy.whereToChoose).font(SettingsStyle.font).foregroundStyle(SettingsStyle.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
+                        LinkedText(parts: [.link(MaxCopy.chooseAgent, id: "agents")]) { _ in
+                            explaining = false
+                            send(.showAgents(true))
+                        }
                     }
                     .frame(width: M.popoverWidth.value).padding()
                 }
@@ -246,7 +253,8 @@ enum MaxCopy {
     static let effort = "Effort"
     static let agentDefault = "Default"
     static let learnMore = "Learn more about what we send"
-    static var whereToChoose: String { "Choose the agent under this note, and turn \(Product.name)'s Ask on Page, Browse for Me and Translate Pages on or off in Advanced → More Settings…." }
+    static var whereToChoose: String { "Turn \(Product.name)'s Ask on Page, Browse for Me and Translate Pages on or off in Advanced → More Settings…." }
+    static let chooseAgent = "Choose the agent, model and effort"
 
     /// "ChatGPT in the Command Bar" names the local tool (`AppState.askProviderName`: Claude, Codex, Gemini…).
     static func title(_ feature: MaxFeature, provider: String?) -> String {
