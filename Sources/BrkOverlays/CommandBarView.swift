@@ -805,7 +805,9 @@ final class ResultRowView: NSView {
             let pill = CGSize(width: textWidth + 2 * padding, height: isSwitch ? tileSide : o.hintHeight.value)
             hintPill.frame = CGRect(x: right - pill.width, y: ((bounds.height - pill.height) / 2).rounded(), width: pill.width, height: pill.height)
             let textHeight = hint.intrinsicContentSize.height
-            hint.frame = CGRect(x: padding, y: ((pill.height - textHeight) / 2).rounded(), width: textWidth, height: textHeight)
+            // A little room each side of the centred text: exactly the measured width can cut its last letter ("Copy Emoji").
+            let slack = isSwitch ? 0 : o.hintTextSlack.value
+            hint.frame = CGRect(x: padding - slack, y: ((pill.height - textHeight) / 2).rounded(), width: textWidth + 2 * slack, height: textHeight)
             right = hintPill.frame.minX - m.stackSpacing.value
         }
         let x = o.textX.value - o.rowInset.value - 2
