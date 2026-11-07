@@ -218,11 +218,12 @@ def acp():
         elif method == 'session/new' or method == 'session/load':
             os.chdir(params.get('cwd') or os.getcwd())
             put({'jsonrpc': '2.0', 'id': rid, 'result': {'sessionId': session, 'models': {'currentModelId': 'fixture-flash', 'availableModels': [{'modelId': 'fixture-flash', 'name': 'Fixture Flash'}, {'modelId': 'fixture-pro', 'name': 'Fixture Pro'}]},
-                 'modes': {'currentModeId': 'default', 'availableModes': [{'id': 'default', 'name': 'Default'}, {'id': 'plan', 'name': 'Plan'}, {'id': 'ask', 'name': 'Ask'}]}}})
+                 'modes': {'currentModeId': 'default', 'availableModes': [{'id': 'default', 'name': 'Default'}] if os.environ.get('BRK_AI_FIXTURE_ACP_READONLY') == 'absent' else [{'id': 'default', 'name': 'Default'}, {'id': 'plan', 'name': 'Plan'}, {'id': 'ask', 'name': 'Ask'}]}}})
         elif method in ('session/set_mode', 'session/set_model', 'session/set_config_option'):
             if path := os.environ.get('BRK_AI_FIXTURE_LOG'):
                 with open(path, 'a') as f: f.write(json.dumps({'pid': os.getpid(), 'method': method, 'params': params})+'\n')
-            put({'jsonrpc': '2.0', 'id': rid, 'result': {}})
+            if method == 'session/set_mode' and os.environ.get('BRK_AI_FIXTURE_ACP_READONLY') == 'fails': put({'jsonrpc': '2.0', 'id': rid, 'error': {'code': -32603, 'message': 'no such mode'}})
+            else: put({'jsonrpc': '2.0', 'id': rid, 'result': {}})
         elif method == 'session/prompt':
             prompt_id['id'] = rid
             turn(params['prompt'][0]['text'])

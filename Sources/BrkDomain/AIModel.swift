@@ -393,12 +393,13 @@ public enum AIValidation {
         guard Set(ids).count == ids.count, Set(ids) == Set(eligible.map { $0.id.rawValue }) else { return nil }
         return groups
     }
-    /// Why this folder cannot be a session's working folder, nil when it can. Home and the disk's root hold everything
-    /// the user has; a coding session gets one project.
+    /// Why this folder cannot be a session's working folder, nil when it can. Home and every folder above it hold
+    /// everything the user has; a coding session gets one project.
     public static func workingFolderRefusal(_ folder: String, home: String) -> String? {
         let standard = (folder as NSString).standardizingPath
         guard standard.hasPrefix("/") else { return "Choose a folder on this Mac." }
-        if standard == "/" || standard == (home as NSString).standardizingPath { return "Choose a project folder, not your home folder or the whole disk." }
+        let home = (home as NSString).standardizingPath
+        if standard == "/" || standard == home || home.hasPrefix(standard + "/") { return "Choose a project folder, not your home folder or a folder above it." }
         return nil
     }
     /// Keep the original extension; replies may suggest only a filename stem, never a path.

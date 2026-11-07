@@ -145,6 +145,8 @@ final class AIConversationTests: XCTestCase {
         }
         XCTAssertNotNil(AIValidation.workingFolderRefusal("relative/path", home: "/Users/x"))
         XCTAssertNil(AIValidation.workingFolderRefusal("/Users/x/code", home: "/Users/x"))
+        XCTAssertNotNil(AIValidation.workingFolderRefusal("/Users", home: "/Users/x"), "a folder above home holds home")
+        XCTAssertNil(AIValidation.workingFolderRefusal("/Users/xy", home: "/Users/x"), "a neighbour whose name starts the same does not")
     }
 
     func testAFolderSessionHasNoDeadlineButAReadOnlyTurnDoes() throws {

@@ -26,9 +26,10 @@ final class AgentSessionTests: XCTestCase {
         return url
     }
 
-    private func session(_ kind: AIProviderKind, access: AgentAccess = .readOnly, model: String? = nil, directory: URL, log: URL? = nil, child: URL? = nil) -> (AgentSession, Recorder) {
+    private func session(_ kind: AIProviderKind, access: AgentAccess = .readOnly, model: String? = nil, directory: URL, log: URL? = nil, child: URL? = nil, readOnlyMode: String? = nil) -> (AgentSession, Recorder) {
         let recorder = Recorder()
         var environment = ProcessInfo.processInfo.environment
+        if let readOnlyMode { environment["BRK_AI_FIXTURE_ACP_READONLY"] = readOnlyMode }
         if let log { environment["BRK_AI_FIXTURE_LOG"] = log.path }
         if let child { environment["BRK_AI_FIXTURE_CHILD"] = child.path }
         let spec = AgentSpec(kind: kind, executable: fixture, model: model, effort: nil, access: access, directory: directory)
@@ -148,6 +149,21 @@ final class AgentSessionTests: XCTestCase {
             try await wait("\(kind): the end") { recorder.finished[turn] != nil }
             XCTAssertTrue(recorder.approvals.isEmpty, "\(kind) showed an approval")
             XCTAssertFalse(FileManager.default.fileExists(atPath: folder.appendingPathComponent("written.txt").path))
+            await session.close()
+        }
+    }
+
+    func testAReadOnlySessionThatCannotEnterItsReadOnlyModeSendsNothing() async throws {
+        for (kind, readOnlyMode) in [(AIProviderKind.gemini, "absent"), (.gemini, "fails"), (.cursor, "absent"), (.cursor, "fails"), (.opencode, "fails")] {
+            let folder = try directory()
+            let log = folder.appendingPathComponent("log")
+            let (session, recorder) = session(kind, directory: folder, log: log, readOnlyMode: readOnlyMode)
+            let turn = AIRequestID("turn")
+            session.send("the page's text", turn: turn)
+            try await wait("\(kind) \(readOnlyMode): the end") { recorder.finished[turn] != nil }
+            guard case .failed(let message)? = recorder.finished[turn] else { XCTFail("\(kind) \(readOnlyMode) answered"); continue }
+            XCTAssertTrue(message.contains("read-only mode"), message)
+            XCTAssertFalse(entries(log).contains { $0["prompt"] != nil }, "\(kind) \(readOnlyMode) got the text")
             await session.close()
         }
     }

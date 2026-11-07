@@ -17,6 +17,7 @@ import Foundation
     private var peer: JSONRPCPeer?
     private var session: String?
     private var canLoad = false
+    private var isConfigured = false
     private var queued: String?
     private var pendingApprovals: [String: (id: Any, options: [[String: Any]])] = [:]
     private var interrupting = false
@@ -115,7 +116,8 @@ import Foundation
         }
     }
 
-    /// Model, effort and read-only mode, each only if the agent offers it, then the turn that waited for them.
+    /// Model and effort, each only if the agent offers it, then the read-only mode, then the turn that waited for them. A
+    /// read-only session the agent cannot put in that mode sends nothing: its first message can carry page text.
     private func configure(_ body: [String: Any]) {
         guard let session else { events?(.exited("\(spec.kind.displayName) did not start a session.")); return }
         let catalog = ACPCatalog.models(body)
@@ -127,19 +129,30 @@ import Foundation
         if let effort = spec.effort, let option = ACPCatalog.optionID(body, category: "thought_level") {
             peer?.request("session/set_config_option", ["sessionId": session, "configId": option, "value": effort])
         }
-        if spec.access == .readOnly {
-            let wanted = Self.readOnlyMode(spec.kind)
-            let modes = ((body["modes"] as? [String: Any])?["availableModes"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
-            if modes.contains(wanted), (body["modes"] as? [String: Any])?["currentModeId"] as? String != wanted {
-                peer?.request("session/set_mode", ["sessionId": session, "modeId": wanted])
-            }
+        guard spec.access == .readOnly else { configured(); return }
+        let wanted = Self.readOnlyMode(spec.kind)
+        let modes = body["modes"] as? [String: Any]
+        if modes?["currentModeId"] as? String == wanted { configured(); return }
+        guard (modes?["availableModes"] as? [[String: Any]] ?? []).contains(where: { $0["id"] as? String == wanted }) else { refuseWithoutReadOnly(); return }
+        peer?.request("session/set_mode", ["sessionId": session, "modeId": wanted]) { [weak self] result in
+            guard let self else { return }
+            if case .failure = result { self.refuseWithoutReadOnly() } else { self.configured() }
         }
+    }
+
+    private func configured() {
+        isConfigured = true
         events?(.ready(model: modelName, effort: spec.effort))
         if let queued { self.queued = nil; send(queued) }
     }
 
+    private func refuseWithoutReadOnly() {
+        events?(.exited("\(spec.kind.displayName) did not go into its read-only mode, so Brk sent it nothing."))
+        process?.stop()
+    }
+
     func send(_ text: String) {
-        guard let session else { queued = text; return }
+        guard let session, isConfigured else { queued = text; return }
         interrupting = false
         peer?.request("session/prompt", ["sessionId": session, "prompt": [["type": "text", "text": text]]]) { [weak self] result in
             guard let self else { return }
