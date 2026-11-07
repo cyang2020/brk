@@ -430,9 +430,11 @@ enum QuickBarScenarios {
         try preflight(app)
         let root = try make(app, files: ["Documents/zqxquickbar-spot.txt", "zqxquickbar-top.txt", "Library/zqxquickbar-lib.txt", ".hid/zqxquickbar-hid.txt", "Documents/.zqxquickbar-dot.txt"])
         defer { removeFixture(root) }
-        // Wait for the index itself before asking through the bar.
+        // Wait for the index itself before asking through the bar. A long compile elsewhere on the machine can keep the
+        // indexer busy for minutes.
+        try? tool("/usr/bin/mdimport", [root.path])
         var indexed = false
-        for _ in 0..<60 where !indexed {
+        for _ in 0..<480 where !indexed {
             let process = Process(), pipe = Pipe()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
             process.arguments = ["-onlyin", root.path, "-name", "zqxquickbar-spot"]
@@ -444,7 +446,7 @@ enum QuickBarScenarios {
             indexed = found.contains("zqxquickbar-spot.txt")
             if !indexed { app.sleep(0.5) }
         }
-        guard indexed else { throw Skipped(description: "Spotlight did not index the fixture folder within 30 s") }
+        guard indexed else { throw Skipped(description: "Spotlight did not index the fixture folder within 4 minutes") }
         try keepingPasteboard(app) {
             try open(app)
             try type(app, "file zqxquickbar")
