@@ -366,7 +366,7 @@ enum AIRealUIScenarios {
             try open(app, "ai-download.html")
             shot(app, "download-page")
             let card = try visible(app.native(), .card(0)).frame
-            try PhysicalPointer.click(app, at: try screen(app, CGRect(x: card.minX + 120, y: card.minY + 121, width: 1, height: 1)), window: app.window!)
+            try PhysicalPointer.click(app, at: try screen(app, CGRect(x: card.minX + 120, y: card.minY + 134, width: 1, height: 1)), window: app.window!)
             try app.waitUntil("the download renamed", timeout: 120) {
                 let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
                 return names.contains { !$0.hasPrefix("scan_00231") && $0.hasSuffix(".txt") } || toast(app)?.hasPrefix("Tidy Downloads") == true
