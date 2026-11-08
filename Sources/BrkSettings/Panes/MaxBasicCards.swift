@@ -67,6 +67,8 @@ private struct ServiceRows: View {
     let context: PaneContext
     let service: AIService
     @State private var typed = ""
+    /// Bumped by each Save, so the field empties whichever way the key was saved.
+    @State private var saves = 0
     private var snapshot: MaxSnapshot { context.settings.max }
     private var status: AIKeyStatus { snapshot.keys[service] ?? AIKeyStatus(stored: false) }
 
@@ -83,7 +85,7 @@ private struct ServiceRows: View {
                 }
             }
             HStack(spacing: CardMetrics.controlGap.value) {
-                KeyField(field: "key-\(service.rawValue)", placeholder: status.stored ? MaxBasicCopy.keySavedPlaceholder : MaxBasicCopy.keyPlaceholder(service)) { typed = $0 } submit: { save() }
+                KeyField(field: "key-\(service.rawValue)", placeholder: status.stored ? MaxBasicCopy.keySavedPlaceholder : MaxBasicCopy.keyPlaceholder(service), saves: saves) { typed = $0 } submit: { save() }
                 SettingsButton(title: MaxBasicCopy.save, field: "key-save-\(service.rawValue)") { save() }
                 if status.stored {
                     SettingsButton(title: MaxBasicCopy.test, field: "key-test-\(service.rawValue)") { context.dispatch(.settings(.max(.testKey(service)))) }
@@ -100,6 +102,7 @@ private struct ServiceRows: View {
         guard !typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         context.storeKey(service, typed)
         typed = ""
+        saves += 1
     }
 }
 
@@ -108,6 +111,7 @@ private struct ServiceRows: View {
 private struct KeyField: NSViewRepresentable {
     let field: String
     let placeholder: String
+    let saves: Int
     let edit: @MainActor (String) -> Void
     let submit: @MainActor () -> Void
 
@@ -126,6 +130,12 @@ private struct KeyField: NSViewRepresentable {
     func updateNSView(_ textField: NSSecureTextField, context: NSViewRepresentableContext<Self>) {
         context.coordinator.edit = edit
         context.coordinator.submit = submit
+        if context.coordinator.saves != saves {
+            // Saved: the key leaves the field, in the field editor too while it is being typed in.
+            context.coordinator.saves = saves
+            textField.stringValue = ""
+            textField.currentEditor()?.string = ""
+        }
         textField.identify(.settingsField(field))
         textField.placeholderString = placeholder
     }
@@ -137,11 +147,10 @@ private struct KeyField: NSViewRepresentable {
     @MainActor final class Coordinator: NSObject, NSTextFieldDelegate {
         var edit: (@MainActor (String) -> Void)?
         var submit: (@MainActor () -> Void)?
+        var saves = 0
         @objc func submitted(_ sender: NSSecureTextField) {
             edit?(sender.stringValue)
             submit?()
-            sender.stringValue = ""
-            edit?("")
         }
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSSecureTextField else { return }
