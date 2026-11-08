@@ -147,13 +147,15 @@ final class DragController {
             session.target = target(at: root, item: session.item, context: moved)
         }
         guard let latest = self.context else { return true }
+        // Over the Max panel the row follows the pointer, as over the sidebar: the page's card would hide the input.
+        let overPanel = if case .content(.assist(.attach))? = session.target { true } else { false }
         if let card = session.card {
             if session.overContent, let size = sidebar.contentDropCardSize?() { card.fit(size) }
             card.place(at: local, grab: session.cardGrab)
-            card.isHidden = !session.overContent
+            card.isHidden = !session.overContent || overPanel
         }
         // Over the page the card stands for the drag.
-        session.preview.isHidden = session.overContent
+        session.preview.isHidden = session.overContent && !overPanel
         session.preview.place(shape(session.target, item: session.item, context: latest), pointer: local)
         if hapticsEnabled, session.target?.destination != nil, session.target?.destination != previous?.destination { haptic() }
         show(session.target, item: session.item, context: latest)

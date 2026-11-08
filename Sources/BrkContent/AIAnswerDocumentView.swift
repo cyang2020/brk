@@ -103,7 +103,9 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         approvalTitle.maximumNumberOfLines = 2; approvalTitle.lineBreakMode = .byTruncatingTail
         approvalDetail.font = .monospacedSystemFont(ofSize: Metrics.ai.stepFont.value, weight: .regular)
         approvalDetail.textColor = .secondaryLabelColor
-        approvalDetail.maximumNumberOfLines = 4; approvalDetail.lineBreakMode = .byTruncatingTail
+        // A long command (a whole document going to a service) wraps, so more of what would leave shows before Allow.
+        approvalDetail.maximumNumberOfLines = 4; approvalDetail.lineBreakMode = .byCharWrapping
+        approvalDetail.cell?.truncatesLastVisibleLine = true
         for view in [material, heading, question, scroll, close, progress, approvalBack, approvalTitle, approvalDetail, folderStatus, folder, settings, input, send, mentionBack] as [NSView] { addSubview(view) }
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
