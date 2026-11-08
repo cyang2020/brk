@@ -41,9 +41,18 @@ enum AIAgentScenarios {
         return CGPoint(x: facts.windowFrame.minX + frame.midX, y: top + frame.midY)
     }
 
-    /// A real click on a control in the panel, after checking this Brk's window is what is under the pointer.
+    /// A real click on a control in the panel, after checking this Brk's window is what is under the pointer. A control
+    /// that has just appeared can still move while the transcript lays out (an approval card grows to fit its command), so
+    /// the click waits until two reads 0.2 s apart give the same point.
     private static func click(_ app: AppUnderTest, _ view: ViewID) throws {
-        try PhysicalPointer.click(app, at: try screen(app, view), window: app.window!)
+        var point = try screen(app, view)
+        for _ in 0..<15 {
+            Thread.sleep(forTimeInterval: 0.2)
+            let again = try screen(app, view)
+            if again == point { break }
+            point = again
+        }
+        try PhysicalPointer.click(app, at: point, window: app.window!)
     }
 
     private static let codes: [Character: (CGKeyCode, Bool)] = {
