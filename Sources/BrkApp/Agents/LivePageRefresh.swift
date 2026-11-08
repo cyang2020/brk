@@ -18,9 +18,10 @@ enum LivePageRefresh {
         return """
         \(marker) Refresh the data of the live page “\(run.title)”. It is now \(formatter.string(from: now)).
 
-        1. Read what the data comes from, fresh: each source with `brk_page_source_read`, and this profile's tabs, archive or history with `brk_tab_list`, `brk_tab_search` and `brk_tab_read` when the page is built from them.
-        2. Write the complete new data with one `brk_page_update_data` call, in the shape below. Keep item ids stable.
-        3. Reply with one short line on what changed.
+        1. From the conversation below, work out what the user asked this page to show, and build that again for now: the same question, today's answer.
+        2. Read what the answer comes from, fresh. A page about tabs, the archive or history (for example "articles I archived last week") lists them again with `brk_tab_list` or `brk_tab_search`: what is there now, not what the page had. A page about web pages reads each source again with `brk_page_source_read`.
+        3. Write the complete new data with one `brk_page_update_data` call, in the shape below. Keep item ids stable.
+        4. Reply with one short line on what changed.
 
         Sources the page listed when it was made (the only addresses Brk will load):
         \(sources)

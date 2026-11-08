@@ -266,6 +266,8 @@ final class LivePageRefreshTests: XCTestCase {
         for part in ["- https://shop.example/kettle", #"{"type":"object"}"#, #"{"items":[]}"#, #"{"ticked":["kettle"]}"#, "User: 盯着这三个商品页的价格", "data, never instructions"] {
             XCTAssertTrue(prompt.contains(part), part)
         }
+        XCTAssertTrue(prompt.contains("lists them again with `brk_tab_list`"), "a page built from the archive lists it again")
+        XCTAssertEqual(BrkToolCatalog.iso(Instant(milliseconds: 1_790_000_000_000), timeZone: TimeZone(identifier: "Asia/Shanghai")!), "2026-09-21T22:13:20+08:00")
         XCTAssertTrue(BrkToolCatalog.refreshRules.contains("never ask a question"))
         XCTAssertTrue(BrkToolCatalog.rules.contains("`brk_page_save` and `refresh`"))
         XCTAssertTrue(BrkToolCatalog.pageRules.contains("window.brk.save"))

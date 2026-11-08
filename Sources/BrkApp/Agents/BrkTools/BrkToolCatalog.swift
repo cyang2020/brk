@@ -480,8 +480,12 @@ enum BrkToolCatalog {
         return out
     }
 
-    static func iso(_ instant: Instant) -> String {
-        ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: Double(instant.milliseconds) / 1000))
+    /// In the user's own time zone, with its offset: "archived last week" means the user's week (claude-weekly-4 read
+    /// UTC times and put articles archived early on a local Monday into the week before).
+    static func iso(_ instant: Instant, timeZone: TimeZone = .current) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = timeZone
+        return formatter.string(from: Date(timeIntervalSince1970: Double(instant.milliseconds) / 1000))
     }
 
     /// A message as the read tool gives it, its text cut to `maxChars` from `offset`.
