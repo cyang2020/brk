@@ -103,6 +103,12 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var miniPlayers: [MiniPlayerSnapshot] = []
     public var boostEditor: BoostEditor? = nil
     public var ai: AIAnswerSnapshot? = nil
+    /// The conversation tabs the cards show (`PaneContent.conversation`), in pane order.
+    public var conversations: [ConversationCard] = []
+    /// The kept pages the cards show (`PaneContent.aiPage`), in pane order.
+    public var aiPages: [AIPageCard] = []
+    /// A link in an agent's page that asks before it opens.
+    public var pageLinkPrompt: AIPageLinkPrompt? = nil
     /// Arc's 5-Second Preview card under a link Shift was held over (P45-a).
     public var aiPreview: AIPreviewSnapshot? = nil
     /// The capsule naming the link under the pointer (P45-a).
@@ -446,6 +452,10 @@ public enum PaneContent: Sendable, Equatable, Codable {
     case history(PageID)
     /// An Easel's board (`EaselPage`): no browser; the card draws `WindowSnapshot.easels`.
     case easel(PageID, EaselID)
+    /// A conversation's tab (`ConversationPage`): no browser; the card draws `WindowSnapshot.conversations`.
+    case conversation(PageID, AIRequestID)
+    /// A kept page (`AIPageTab`): the card shows `WindowSnapshot.aiPages` in the page sandbox, no profile's browser.
+    case aiPage(PageID, AIPageID)
 }
 
 public enum SpaceDialogSnapshot: Sendable, Equatable, Codable {

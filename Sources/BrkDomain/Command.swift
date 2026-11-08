@@ -659,6 +659,8 @@ public enum SystemEvent: Sendable, Equatable {
     case aiDownloadRenamed(DownloadID, originalPath: String, newPath: String?, error: String?)
     /// A session reported something other than text (its text comes as `aiPartial` and `aiResult`).
     case aiConversation(AIRequestID, AIConversationEvent)
+    /// The saved conversations and pages, read from their files at launch.
+    case conversationsLoaded([StoredConversation], [AIPageRecord])
     /// The app has PATH now: with Max on, it asks the installed agents about themselves (`Effect.aiRefreshAgents`).
     case aiAgentsWanted
     /// What the installed agents said about themselves (`Effect.aiRefreshAgents`).
