@@ -222,12 +222,13 @@ final class BrkToolSocket: @unchecked Sendable {
     }
 }
 
-/// What a tool call returns: a JSON object for the agent, or an error it can act on.
+/// What a tool call returns: a JSON object for the agent, or an error it can act on; a page preview adds its PNG.
 struct BrkToolResult {
     let body: [String: Any]
     let isError: Bool
+    var image: Data? = nil
 
-    static func ok(_ body: [String: Any]) -> BrkToolResult { BrkToolResult(body: body, isError: false) }
+    static func ok(_ body: [String: Any], image: Data? = nil) -> BrkToolResult { BrkToolResult(body: body, isError: false, image: image) }
     static func error(_ message: String) -> BrkToolResult { BrkToolResult(body: ["error": message], isError: true) }
 
     var text: String {
@@ -235,6 +236,8 @@ struct BrkToolResult {
         return String(decoding: data, as: UTF8.self)
     }
     var mcp: [String: Any] {
-        ["content": [["type": "text", "text": text]], "isError": isError]
+        var content: [[String: Any]] = [["type": "text", "text": text]]
+        if let image { content.append(["type": "image", "data": image.base64EncodedString(), "mimeType": "image/png"]) }
+        return ["content": content, "isError": isError]
     }
 }

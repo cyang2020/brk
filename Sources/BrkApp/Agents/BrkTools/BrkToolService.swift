@@ -1,8 +1,17 @@
 import BrkBase
+import BrkContent
 import BrkDomain
 import BrkEngine
 import Foundation
 import os
+
+/// What the page tools need from the app: where a page's HTML is written, how a page is rendered off screen, and how
+/// wide the reply is where the conversation shows now.
+struct BrkPageTools {
+    let write: (String, AIPageID) throws -> URL
+    let preview: @MainActor (_ html: String, _ data: String?, _ width: Int, _ window: WindowID) async -> PagePreview
+    let replyWidth: @MainActor (_ conversation: AIRequestID, _ window: WindowID) -> Int
+}
 
 /// One conversation's tab tools: what its agent may see, what it may change without asking, and the calls in flight.
 ///
@@ -14,6 +23,9 @@ import os
 /// - Once page text is in the conversation (any read, list or search: titles are page text too), opening an address the
 ///   profile has never visited asks: an address can carry what the agent read to a site.
 /// - A page the injection check flags shows a notice, and from then on every tool here asks, every time.
+/// - Reading conversations needs no approval and counts as page text: earlier answers can quote pages.
+/// - Previewing and rendering pages needs no approval: they run in the page sandbox, with no network and no profile.
+///   A page records whether page text had reached the conversation when it was written; its links then ask first.
 @MainActor final class BrkToolService {
     enum Grant: Hashable { case close, layout, site(String) }
 
@@ -26,6 +38,7 @@ import os
     /// Puts an approval in the panel for the running turn; false when no turn runs to show it in.
     private let ask: (AIAgentApproval) -> Bool
     private let notice: (String) -> Void
+    private let pages: BrkPageTools?
     private var socket: BrkToolSocket?
     private lazy var mcp = BrkToolProtocol { [weak self] name, arguments in
         await self?.call(name, arguments) ?? .error("This conversation has ended.")
@@ -33,8 +46,9 @@ import os
 
     /// Tab ids the user gave this conversation (chips, @ picks): readable even when they are another profile's.
     private(set) var given: Set<String> = []
-    private(set) var hasPageText = false
-    private(set) var flagged = false
+    /// The reducer keeps both with the saved conversation, so its pages' links and a later session know.
+    private(set) var hasPageText = false { didSet { if hasPageText != oldValue { send(.aiConversation(conversation, .pageText(flagged: flagged))) } } }
+    private(set) var flagged = false { didSet { if flagged != oldValue { send(.aiConversation(conversation, .pageText(flagged: flagged))) } } }
     private(set) var grants: Set<Grant> = []
     private var checked: [String: PageInjectionVerdict] = [:]
     /// Recent reads, for paging through a text without reading it again; `at` is system uptime.
@@ -48,7 +62,8 @@ import os
     static let actSeconds = 10, readSeconds = 45
 
     init(conversation: AIRequestID, window: WindowID, endpoint: BrkToolEndpoint, state: @escaping () -> AppState?, send: @escaping (SystemEvent) -> Void,
-         engine: any WebEngine, ask: @escaping (AIAgentApproval) -> Bool, notice: @escaping (String) -> Void) {
+         engine: any WebEngine, ask: @escaping (AIAgentApproval) -> Bool, notice: @escaping (String) -> Void, pages: BrkPageTools? = nil,
+         readPages: Bool = false, flagged: Bool = false) {
         self.conversation = conversation
         self.window = window
         self.endpoint = endpoint
@@ -57,6 +72,10 @@ import os
         self.engine = engine
         self.ask = ask
         self.notice = notice
+        self.pages = pages
+        // A saved conversation continued another day keeps what it had read.
+        hasPageText = readPages
+        self.flagged = flagged
     }
 
     func start() throws {
@@ -226,7 +245,99 @@ import os
                                     rememberTitle: "Allow in This Conversation") else { return declined }
             }
             return await act(.split(ids), titles: names)
+        case .conversationList(let cursor, let limit):
+            hasPageText = true
+            let all = now.conversations(of: profile)
+            let page = BrkToolCatalog.page(all, cursor: cursor, limit: limit)
+            var body: [String: Any] = ["conversations": page.items.map { BrkToolCatalog.entry($0, current: conversation) }, "total": all.count]
+            if let next = page.next { body["nextCursor"] = next }
+            return .ok(body)
+        case .conversationSearch(let query, let limit):
+            hasPageText = true
+            return .ok(["query": query, "matches": Self.searchConversations(query, in: now.conversations(of: profile), limit: limit, current: conversation)])
+        case .conversationRead(let id, let after, let limit, let maxChars, let item, let offset):
+            guard let stored = now.savedConversations[id], stored.profile == profile else {
+                return .error("No conversation of this profile has id \(id.rawValue). List or search conversations for current ids.")
+            }
+            hasPageText = true
+            return .ok(Self.read(stored, after: after, limit: limit, maxChars: maxChars, item: item, offset: offset, current: conversation))
+        case .preview(let html, let width, let data):
+            guard let pages else { return .error("Pages cannot be shown in this conversation.") }
+            let preview = await pages.preview(html, data, width ?? pages.replyWidth(conversation, window), window)
+            var body: [String: Any] = ["contentHeight": preview.contentHeight, "width": width ?? pages.replyWidth(conversation, window), "console": preview.console]
+            if preview.png == nil { body["note"] = "No picture could be taken; check `console`." }
+            return .ok(body, image: preview.png)
+        case .render(let html, let title, let height, let data):
+            guard let pages else { return .error("Pages cannot be shown in this conversation.") }
+            let id = AIPageID(UUID().uuidString)
+            let file: URL
+            do { file = try pages.write(html, id) } catch { return .error("Brk could not keep this page (\(error.localizedDescription)).") }
+            let record = AIPageRecord(id: id, title: title, html: file, height: height, data: data, conversation: conversation, profile: profile,
+                                      createdAt: Instant(milliseconds: 0), readPages: hasPageText || flagged)
+            send(.aiConversation(conversation, .page(record)))
+            return .ok(["pageId": id.rawValue, "title": title, "height": height, "shown": true])
+        case .savePage(let page, let title):
+            guard now.savedPages[page]?.conversation == conversation else {
+                return .error("No page of this conversation has id \(page.rawValue). Use the `pageId` from `brk_html_render`.")
+            }
+            return await act(.keepPage(page, title: title, conversation: conversation), titles: [])
         }
+    }
+
+    // MARK: Conversations
+
+    /// Title matches first, then message text, newest first within each; the current conversation last.
+    static func searchConversations(_ query: String, in conversations: [StoredConversation], limit: Int, current: AIRequestID) -> [[String: Any]] {
+        let words = query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !words.isEmpty else { return [] }
+        func all(_ text: String) -> Bool { let lower = text.lowercased(); return words.allSatisfy(lower.contains) }
+        func any(_ text: String) -> Bool { let lower = text.lowercased(); return words.contains(where: lower.contains) }
+        let ordered = conversations.filter { $0.id != current } + conversations.filter { $0.id == current }
+        var out: [[String: Any]] = [], seen = Set<AIRequestID>()
+        func add(_ conversation: StoredConversation, match: String, snippet: String? = nil, position: Int? = nil) {
+            guard out.count < limit, seen.insert(conversation.id).inserted else { return }
+            var entry = BrkToolCatalog.entry(conversation, current: current)
+            entry["match"] = match
+            if let snippet { entry["snippet"] = snippet }
+            if let position { entry["position"] = position }
+            out.append(entry)
+        }
+        for conversation in ordered where all(conversation.title) { add(conversation, match: "title") }
+        // Message text: every word in one message first, then any word, so a question in other words still finds it.
+        for strict in [true, false] {
+            for conversation in ordered.prefix(BrkToolCatalog.Caps.searchConversations) where !seen.contains(conversation.id) {
+                for (position, item) in conversation.messages {
+                    let text: String = switch item {
+                    case .user(let value), .assistant(let value): value
+                    case .page(let page): page.title
+                    default: ""
+                    }
+                    guard strict ? all(text) : any(text) else { continue }
+                    add(conversation, match: strict ? "text" : "some words", snippet: BrkToolCatalog.snippet(text, around: words.filter { text.lowercased().contains($0) }), position: position)
+                    break
+                }
+            }
+        }
+        return out
+    }
+
+    /// One page of a conversation's messages, T3 Code's way: from `after`, at most `limit`, each cut to `maxChars`; a
+    /// cut-off message continues with its `itemId` and `textOffset`.
+    static func read(_ conversation: StoredConversation, after: Int, limit: Int, maxChars: Int, item: String?, offset: Int, current: AIRequestID) -> [String: Any] {
+        var body = BrkToolCatalog.entry(conversation, current: current)
+        let messages = conversation.messages
+        if let item {
+            guard let position = Int(item.dropFirst()), item.hasPrefix("m"), let found = messages.first(where: { $0.position == position }) else {
+                return ["error": "No message \(item) in this conversation."]
+            }
+            body["messages"] = [BrkToolCatalog.message(found.item, position: position, maxChars: maxChars, offset: offset)]
+            return body
+        }
+        let rest = messages.filter { $0.position > after }
+        let shown = rest.prefix(limit)
+        body["messages"] = shown.map { BrkToolCatalog.message($0.item, position: $0.position, maxChars: maxChars, offset: 0) }
+        if rest.count > shown.count, let last = shown.last { body["nextPosition"] = last.position }
+        return body
     }
 
     private var declined: BrkToolResult { .error("The user declined this in Brk. Do not try it another way.") }

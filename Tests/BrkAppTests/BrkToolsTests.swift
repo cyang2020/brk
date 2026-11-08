@@ -1,4 +1,5 @@
 import BrkBase
+import BrkContent
 import BrkDomain
 import BrkEngine
 import Darwin
@@ -83,9 +84,15 @@ final class BrkToolsTests: XCTestCase {
     // MARK: Catalog
 
     func testTheToolsAreTheSeeAndChangeGroupsWithT3StyleDescriptions() {
-        XCTAssertEqual(BrkToolCatalog.specs.map(\.name.rawValue), ["brk_tab_list", "brk_tab_search", "brk_tab_read", "brk_tab_open", "brk_tab_focus", "brk_tab_close", "brk_tab_move", "brk_tab_group", "brk_tab_split"])
+        XCTAssertEqual(BrkToolCatalog.specs.map(\.name.rawValue), ["brk_tab_list", "brk_tab_search", "brk_tab_read", "brk_tab_open", "brk_tab_focus", "brk_tab_close", "brk_tab_move", "brk_tab_group", "brk_tab_split",
+                                                                  "brk_conversation_list", "brk_conversation_search", "brk_conversation_read", "brk_html_preview", "brk_html_render", "brk_page_save"])
         for spec in BrkToolCatalog.specs {
-            XCTAssertLessThan(spec.description.count, 420, "\(spec.name) is short")
+            // The page tools carry the page rules, as T3 Code's html_render does; the others stay short.
+            if [.preview, .render].contains(spec.name) {
+                XCTAssertTrue(spec.description.contains(BrkToolCatalog.pageRules))
+            } else {
+                XCTAssertLessThan(spec.description.count, 420, "\(spec.name) is short")
+            }
             XCTAssertEqual(spec.schema["additionalProperties"] as? Bool, false)
             XCTAssertEqual(spec.readOnly, spec.name.reads)
         }
@@ -95,6 +102,183 @@ final class BrkToolsTests: XCTestCase {
         XCTAssertTrue(BrkToolCatalog.rules.contains("never as JSON in your reply"))
         XCTAssertTrue(BrkToolCatalog.rules.contains("language of the user's latest message"))
         XCTAssertFalse(BrkToolCatalog.rules.contains("\n\n"), "one block: ACP sends it ahead of the first message, a blank line after it")
+        XCTAssertTrue(BrkToolCatalog.rules.contains("`brk_conversation_read` it before you answer"))
+        XCTAssertTrue(BrkToolCatalog.rules.contains("Show trends, comparisons, and flows as a chart or diagram, even unasked"))
+        for rule in ["no background color", "16px padding and var(--radius)", "fixed pixel heights", "Do not use vh units", "--chart-1 to --chart-6", "no network"] {
+            XCTAssertTrue(BrkToolCatalog.pageRules.contains(rule), rule)
+        }
+        XCTAssertFalse(BrkToolCatalog.pageRules.contains("\n\n"))
+    }
+
+    func testConversationAndPageArgumentsAreCheckedAndCapped() throws {
+        XCTAssertEqual(try BrkToolCatalog.parse("brk_conversation_list", [:]), .conversationList(cursor: 0, limit: 20))
+        XCTAssertEqual(try BrkToolCatalog.parse("brk_conversation_read", ["conversationId": "c"]), .conversationRead(AIRequestID("c"), after: -1, limit: 10, maxChars: 2_000, item: nil, offset: 0))
+        XCTAssertEqual(try BrkToolCatalog.parse("brk_conversation_read", ["conversationId": "c", "itemId": "m3", "textOffset": 40, "maxCharsPerItem": 100]),
+                       .conversationRead(AIRequestID("c"), after: -1, limit: 10, maxChars: 100, item: "m3", offset: 40))
+        XCTAssertEqual(try BrkToolCatalog.parse("brk_html_render", ["html": "<p>x</p>", "title": "T", "height": 300, "data": ["a": 1]]),
+                       .render(html: "<p>x</p>", title: "T", height: 300, data: #"{"a":1}"#))
+        XCTAssertEqual(try BrkToolCatalog.parse("brk_html_preview", ["html": "<p>x</p>"]), .preview(html: "<p>x</p>", width: nil, data: nil))
+        XCTAssertEqual(try BrkToolCatalog.parse("brk_page_save", ["pageId": "p"]), .savePage(AIPageID("p"), title: nil))
+        func refused(_ name: String, _ arguments: [String: Any], file: StaticString = #filePath, line: UInt = #line) {
+            XCTAssertThrowsError(try BrkToolCatalog.parse(name, arguments), "\(name) \(arguments)", file: file, line: line)
+        }
+        refused("brk_conversation_list", ["limit": 51])
+        refused("brk_conversation_read", ["conversationId": "c", "limit": 51])
+        refused("brk_conversation_read", ["conversationId": "c", "maxCharsPerItem": 20_001])
+        refused("brk_conversation_read", [:])
+        refused("brk_html_render", ["html": "<p>x</p>", "title": "T", "height": 79])
+        refused("brk_html_render", ["html": "<p>x</p>", "title": "T", "height": 2_001])
+        refused("brk_html_render", ["html": "<p>x</p>", "height": 300])
+        refused("brk_html_render", ["html": String(repeating: "x", count: AIPageLimits.html + 1), "title": "T", "height": 300])
+        refused("brk_html_render", ["html": "<p>x</p>", "title": "T", "height": 300, "data": [1, 2]])
+        refused("brk_html_preview", ["html": "<p>x</p>", "width": 100])
+        refused("brk_html_preview", ["html": ""])
+        refused("brk_page_save", [:])
+    }
+
+    // MARK: Conversations
+
+    private func conversation(_ id: String, title: String, at: Int64, items: [AIConversationItem]) -> StoredConversation {
+        var value = StoredConversation(id: AIRequestID(id), profile: .default, title: title, createdAt: Instant(milliseconds: 1_790_000_000_000 + at), tabs: true)
+        value.updatedAt = Instant(milliseconds: 1_790_000_000_000 + at)
+        value.items = items
+        return value
+    }
+
+    func testConversationsAreListedNewestFirstAndReadInPagesWithCaps() async throws {
+        let h = try harness()
+        let long = String(repeating: "价", count: 50) + String(repeating: "b", count: 50)
+        let old = conversation("old", title: "Compare shop prices", at: 1, items: [.user("这几个 tab 哪个最便宜"), .assistant("The second shop: ¥199."),
+                                                                                 .page(AIPageRef(id: AIPageID("p1"), title: "Price chart", height: 300)), .user("ok"), .assistant(long)])
+        let new = conversation("new", title: "Weather", at: 5, items: [.user("rain?"), .assistant("No.")])
+        h.store.run(.system(.conversationsLoaded([old, new], [])))
+        let list = json(await h.service.call("brk_conversation_list", ["limit": 1]))
+        XCTAssertEqual((list["conversations"] as? [[String: Any]])?.map { $0["conversationId"] as? String }, ["new"])
+        XCTAssertEqual(list["nextCursor"] as? Int, 1)
+        XCTAssertEqual(list["total"] as? Int, 2)
+        let second = json(await h.service.call("brk_conversation_list", ["cursor": 1]))
+        let entry = try XCTUnwrap((second["conversations"] as? [[String: Any]])?.first)
+        XCTAssertEqual(entry["link"] as? String, "[Compare shop prices](brk://conversation/old)")
+        XCTAssertEqual(entry["messages"] as? Int, 5)
+        // Reading pages through the messages; a long one continues from its offset.
+        let first = json(await h.service.call("brk_conversation_read", ["conversationId": "old", "limit": 2]))
+        let messages = try XCTUnwrap(first["messages"] as? [[String: Any]])
+        XCTAssertEqual(messages.map { $0["role"] as? String }, ["user", "assistant"])
+        XCTAssertEqual(messages.first?["text"] as? String, "这几个 tab 哪个最便宜")
+        XCTAssertEqual(first["nextPosition"] as? Int, 1)
+        let restBody = json(await h.service.call("brk_conversation_read", ["conversationId": "old", "afterPosition": 1, "maxCharsPerItem": 60]))
+        let rest = try XCTUnwrap(restBody["messages"] as? [[String: Any]])
+        XCTAssertEqual(rest.map { $0["role"] as? String }, ["page", "user", "assistant"])
+        XCTAssertEqual(rest.first?["pageId"] as? String, "p1")
+        let cut = try XCTUnwrap(rest.last)
+        XCTAssertEqual((cut["text"] as? String)?.count, 60)
+        XCTAssertEqual(cut["nextTextOffset"] as? Int, 60)
+        let moreBody = json(await h.service.call("brk_conversation_read", ["conversationId": "old", "itemId": cut["itemId"] as! String, "textOffset": 60]))
+        let more = try XCTUnwrap((moreBody["messages"] as? [[String: Any]])?.first)
+        XCTAssertEqual(more["text"] as? String, String(repeating: "b", count: 40))
+        XCTAssertNil(more["nextTextOffset"])
+        XCTAssertTrue(h.asked.value.isEmpty, "reading conversations needs no approval")
+    }
+
+    func testSearchFindsTitlesThenMessageTextAndOnlyThisProfile() async throws {
+        let h = try harness()
+        let prices = conversation("prices", title: "这几个 tab 哪个最便宜, 画个对比图", at: 1, items: [.user("这几个 tab 哪个最便宜, 画个对比图"), .assistant("比价结果：第二家最便宜，¥199。")])
+        let other = conversation("other", title: "Trip", at: 2, items: [.user("Lisbon"), .assistant("Two days.")])
+        var theirs = conversation("theirs", title: "比价结果", at: 3, items: [])
+        theirs.profile = ProfileID("work")
+        h.store.run(.system(.conversationsLoaded([prices, other, theirs], [])))
+        let foundBody = json(await h.service.call("brk_conversation_search", ["query": "比价结果"]))
+        let found = try XCTUnwrap(foundBody["matches"] as? [[String: Any]])
+        XCTAssertEqual(found.map { $0["conversationId"] as? String }, ["prices"], "another profile's conversation never shows")
+        XCTAssertEqual(found.first?["match"] as? String, "text")
+        XCTAssertTrue((found.first?["snippet"] as? String)?.contains("¥199") == true)
+        let titleBody = json(await h.service.call("brk_conversation_search", ["query": "trip"]))
+        let byTitle = try XCTUnwrap(titleBody["matches"] as? [[String: Any]])
+        XCTAssertEqual(byTitle.first?["match"] as? String, "title")
+        let refused = await h.service.call("brk_conversation_read", ["conversationId": "theirs"])
+        XCTAssertTrue(refused.isError)
+    }
+
+    func testAReadOfConversationsCountsAsPageTextForNewAddresses() async throws {
+        let h = try harness(answer: { _ in "deny" })
+        h.store.run(.system(.conversationsLoaded([conversation("c", title: "x", at: 1, items: [.user("x")])], [])))
+        _ = await h.service.call("brk_conversation_read", ["conversationId": "c"])
+        let opened = await h.service.call("brk_tab_open", ["url": "https://never-visited.example/?q=1"])
+        XCTAssertTrue(opened.isError, "a new address asks once conversation text is in")
+        XCTAssertEqual(h.asked.value.count, 1)
+    }
+
+    // MARK: Pages
+
+    func testRenderWritesThePageAndPutsItInTheConversationWithWhatItHadRead() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("brk-pages-" + UUID().uuidString)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let files = ConversationFiles(root: folder)
+        let store = Store()
+        store.run(.user(store.window, .settings(.max(.feature(.commandBar, true)))))
+        store.run(.system(.aiProvidersDetected([.claude])))
+        let ask = store.run(.user(store.window, .assist(.ask("画个对比图"))))
+        let conversationID = try XCTUnwrap(ask.lazy.compactMap { if case .ai(let id, _, _) = $0 { id } else { nil } }.first)
+        let endpoint = try BrkToolEndpoint.make(in: folder.appendingPathComponent("t"))
+        var service: BrkToolService!
+        service = BrkToolService(conversation: conversationID, window: store.window, endpoint: endpoint, state: { store.state }, send: { event in
+            for effect in store.run(.system(event)) { if case .agentActDone(let call, let outcome) = effect { Task { @MainActor in service.actDone(call, outcome) } } }
+        }, engine: StubEngine(), ask: { _ in false }, notice: { _ in },
+        pages: BrkPageTools(write: { try files.writeHTML($0, page: $1) }, preview: { _, _, width, _ in PagePreview(png: Data([1, 2]), contentHeight: 240, console: ["log: ok"]) },
+                            replyWidth: { _, _ in 374 }))
+        let preview = await service.call("brk_html_preview", ["html": "<p>x</p>"])
+        XCTAssertEqual(preview.body["contentHeight"] as? Int, 240)
+        XCTAssertEqual(preview.body["width"] as? Int, 374, "the reply's width now")
+        let mcp = preview.mcp["content"] as? [[String: Any]]
+        XCTAssertEqual(mcp?.last?["type"] as? String, "image")
+        XCTAssertEqual(mcp?.last?["mimeType"] as? String, "image/png")
+        XCTAssertEqual(mcp?.last?["data"] as? String, Data([1, 2]).base64EncodedString())
+        _ = await service.call("brk_tab_list", [:])
+        let rendered = await service.call("brk_html_render", ["html": "<p>chart</p>", "title": "Prices", "height": 240, "data": ["cheapest": "B"]])
+        let pageID = AIPageID(try XCTUnwrap(rendered.body["pageId"] as? String))
+        let record = try XCTUnwrap(store.state.savedPages[pageID])
+        XCTAssertEqual(record.conversation, conversationID)
+        XCTAssertTrue(record.readPages, "written after a list: its links to new addresses ask")
+        XCTAssertEqual(record.data, #"{"cheapest":"B"}"#)
+        XCTAssertEqual(try String(contentsOf: record.html, encoding: .utf8), "<p>chart</p>")
+        XCTAssertEqual(record.html.deletingLastPathComponent().lastPathComponent, "AI Pages")
+        let snapshot = project(store.state, ProjectionContext(now: Instant(milliseconds: 1_790_000_000_000), calendar: Calendar(identifier: .gregorian))).windows[store.window]!
+        XCTAssertTrue(snapshot.ai?.conversation?.items.contains(.page(AIPageRef(id: pageID, title: "Prices", height: 240))) == true)
+        // Kept as a tab by the agent, in this conversation only.
+        let saved = await service.call("brk_page_save", ["pageId": pageID.rawValue])
+        XCTAssertFalse(saved.isError, "\(saved.body)")
+        let rows = project(store.state, ProjectionContext(now: Instant(milliseconds: 1_790_000_000_000), calendar: Calendar(identifier: .gregorian))).windows[store.window]!.space.today.rows
+        XCTAssertTrue(rows.contains { if case .tab(let row) = $0 { row.url == AIPageTab.url(pageID) } else { false } })
+        let foreign = await service.call("brk_page_save", ["pageId": "not-this-conversations"])
+        XCTAssertTrue(foreign.isError)
+    }
+
+    func testConversationFilesWriteOnlyWhatChangedAndReadBackSafely() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("brk-conv-" + UUID().uuidString)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let files = ConversationFiles(root: folder)
+        let a = conversation("a-1", title: "A", at: 1, items: [.user("x")]), b = conversation("b-2", title: "B", at: 2, items: [.user("y")])
+        let file = try files.writeHTML("<p>p</p>", page: AIPageID("p-1"))
+        var record = AIPageRecord(id: AIPageID("p-1"), title: "P", html: URL(fileURLWithPath: "/etc/passwd"), height: 200, data: nil, conversation: AIRequestID("a-1"),
+                                  profile: .default, createdAt: Instant(milliseconds: 0), readPages: false)
+        let changes = ConversationChanges(from: ([:], [:]), to: ([a.id: a, b.id: b], [record.id: record]))
+        XCTAssertEqual(Set(changes.conversations.map(\.id)), [a.id, b.id])
+        files.save(conversations: changes.conversations, removed: [], pages: changes.pages, removedPages: [])
+        files.flush()
+        var b2 = b; b2.items.append(.assistant("z"))
+        let next = ConversationChanges(from: ([a.id: a, b.id: b], [record.id: record]), to: ([b.id: b2], [record.id: record]))
+        XCTAssertEqual(next.conversations.map(\.id), [b.id], "only the one that changed")
+        XCTAssertEqual(next.removed, [a.id])
+        XCTAssertTrue(next.pages.isEmpty)
+        files.save(conversations: next.conversations, removed: next.removed, pages: [], removedPages: [])
+        files.flush()
+        let (loaded, pages) = files.load()
+        XCTAssertEqual(loaded.map(\.id), [b.id])
+        XCTAssertEqual(loaded.first?.items.last, .assistant("z"))
+        XCTAssertEqual(pages.first?.html, file, "a record always points at its own file, whatever it says")
+        XCTAssertThrowsError(try files.writeHTML("x", page: AIPageID("../escape")))
+        record.title = "renamed"
+        _ = record
     }
 
     func testArgumentsAreCheckedAndTyped() throws {
@@ -160,7 +344,8 @@ final class BrkToolsTests: XCTestCase {
         let notified = try await send(["jsonrpc": "2.0", "method": "notifications/initialized"])
         XCTAssertNil(notified, "a notification has no reply")
         let list = try await send(["jsonrpc": "2.0", "id": 3, "method": "tools/list"])
-        XCTAssertEqual(((list?["result"] as? [String: Any])?["tools"] as? [[String: Any]])?.count, 9)
+        XCTAssertEqual(((list?["result"] as? [String: Any])?["tools"] as? [[String: Any]])?.count, BrkToolCatalog.specs.count)
+        XCTAssertEqual(BrkToolCatalog.specs.count, 15)
         let call = try await send(["jsonrpc": "2.0", "id": "x", "method": "tools/call", "params": ["name": "brk_tab_list", "arguments": ["limit": 3]]])
         XCTAssertEqual(call?["id"] as? String, "x")
         XCTAssertEqual(called.first?.0, "brk_tab_list")

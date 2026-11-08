@@ -87,6 +87,9 @@ enum AgentCopy {
     /// The Max pane's model or effort changed while a conversation was open.
     static let modelChanged = "Model or effort changed in Settings → Max: this message goes to the new choice."
     static let modelChangedFresh = "Model or effort changed in Settings → Max: this message goes to the new choice, which does not see the earlier messages."
+    static func couldNotContinue(_ kind: AIProviderKind) -> String {
+        "\(kind.displayName) could not continue its own session of this conversation, so this message went to a new one with the conversation so far."
+    }
     static func noAnswer(_ kind: AIProviderKind) -> String {
         "\(kind.displayName) did not start in time. Try it in Terminal, then try again."
     }

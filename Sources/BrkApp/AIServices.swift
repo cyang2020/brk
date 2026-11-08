@@ -28,6 +28,8 @@ final class AIServices {
     private var tabWindows: [AIRequestID: WindowID] = [:]
     /// Chips sent with a message, until the turn that carries them starts.
     private var pendingAttachments: [AIRequestID: [AIAttachment]] = [:]
+    /// Where pages are written and how they are previewed (AppStore sets it).
+    var pageTools: BrkPageTools?
     init(engine: any WebEngine, send: @escaping (SystemEvent) -> Void, state: @escaping () -> AppState? = { nil }) {
         self.engine = engine; self.send = send; self.state = state
         basic.keys.onChange = { [weak self] statuses in self?.send(.aiKeys(statuses, localDecisions: self?.basic.localDecisions?.isAvailable == true)) }
@@ -80,8 +82,17 @@ final class AIServices {
 
     /// A read-only conversation waits for its first request, which says which agent. A session with tools on starts at
     /// once, so the panel can say which model before the first message.
-    func openConversation(_ id: AIRequestID, folder: String?, choice: AIProviderChoice, max: MaxSnapshot, tabs: WindowID? = nil) {
+    func openConversation(_ id: AIRequestID, folder: String?, choice: AIProviderChoice, max: MaxSnapshot, tabs: WindowID? = nil, resume: AIResume? = nil) {
         guard !stopping else { return }
+        if let resume {
+            // A saved conversation shown again: its session is made now, so the turn that follows finds it.
+            guard conversations[id] == nil else { return }
+            if let failure = makeSession(id, folder: folder, choice: choice, max: max, tabs: tabs, resume: resume) {
+                if case .failed(let message) = failure { send(.aiConversation(id, .notice(message))) }
+                else { send(.aiConversation(id, .notice("No local AI tool is available. Choose an installed agent in Settings → Max."))) }
+            }
+            return
+        }
         guard let folder else {
             opening.insert(id)
             if let tabs { tabWindows[id] = tabs }
@@ -98,7 +109,7 @@ final class AIServices {
 
     /// The session for a conversation, or why there can be none. Read-only ones work in an empty folder of their own,
     /// deleted when they close; a session with tools on works in the folder the user chose.
-    private func makeSession(_ id: AIRequestID, folder: String?, choice: AIProviderChoice, max: MaxSnapshot, tabs: WindowID? = nil) -> AIOutcome? {
+    private func makeSession(_ id: AIRequestID, folder: String?, choice: AIProviderChoice, max: MaxSnapshot, tabs: WindowID? = nil, resume: AIResume? = nil) -> AIOutcome? {
         guard let resolved = agent(for: choice, max: max) else {
             return choice.kind.map { AIProviderSeam.mode == .real ? .failed(AgentCopy.missing($0)) : .unavailable } ?? .unavailable
         }
@@ -112,13 +123,17 @@ final class AIServices {
         let access: AgentAccess = folder != nil ? .tools : tabs != nil && !resolved.plain ? .browser : .readOnly
         var spec = AgentSpec(kind: resolved.kind, executable: resolved.executable, model: options?.model, effort: options?.effort, access: access, directory: directory)
         spec.account = AIAccounts.choice(for: resolved.kind)
+        // Read-only sessions keep nothing to continue; the others continue the agent's own session.
+        if access != .readOnly { spec.resume = resume?.session }
         if access == .browser, let window = tabs {
             switch startTools(id, window: window) {
             case .success(let link): spec.tools = link
             case .failure(let error): return .failed(error.message)
             }
         }
-        conversations[id] = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(resolved.kind, account: spec.account), plain: resolved.plain) { [weak self] in self?.report($0, conversation: id, kind: resolved.kind) }
+        let session = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(resolved.kind, account: spec.account), plain: resolved.plain) { [weak self] in self?.report($0, conversation: id, kind: resolved.kind) }
+        session.history = resume?.history
+        conversations[id] = session
         return nil
     }
 
@@ -128,6 +143,7 @@ final class AIServices {
         guard Bundle.main.executableURL != nil else { return .failure(ToolsUnavailable(message: "Brk could not find its own program for the tab tools.")) }
         do {
             let endpoint = try BrkToolEndpoint.make()
+            let saved = state()?.savedConversations[id]
             let service = BrkToolService(conversation: id, window: window, endpoint: endpoint, state: { [weak self] in self?.state() },
                                          send: { [weak self] in self?.send($0) }, engine: engine,
                                          ask: { [weak self] approval in
@@ -135,7 +151,8 @@ final class AIServices {
                                              self.send(.aiConversation(id, .approval(approval, turn: turn)))
                                              return true
                                          },
-                                         notice: { [weak self] in self?.send(.aiConversation(id, .notice($0))) })
+                                         notice: { [weak self] in self?.send(.aiConversation(id, .notice($0))) },
+                                         pages: pageTools, readPages: saved?.readPages ?? false, flagged: saved?.flagged ?? false)
             try service.start()
             toolServices[id] = service
             return .success(Self.link(endpoint))
@@ -249,6 +266,8 @@ final class AIServices {
             turns[turn] = nil
             // What Brk's tools still asked for goes with the turn.
             if let service = toolServices[id] { for approval in service.closeApprovals() { send(.aiConversation(id, .approvalClosed(approval))) } }
+            // The agent's own session id, for the saved conversation to continue another day.
+            send(.aiConversation(id, .resumable(conversations[id]?.resumeID)))
             send(.aiResult(turn, outcome))
         case .step(let step, let turn): send(.aiConversation(id, .step(step, turn: turn)))
         case .approval(let approval, let turn): send(.aiConversation(id, .approval(approval, turn: turn)))
