@@ -71,7 +71,7 @@ public enum ModelCatalog {
         temperature: 1.22,
         knockoutTemperature: 0.93,
         residentMB: 3_200,
-        languages: "English only")
+        languages: jevK5Languages)
 
     public static let jevK5Q8 = LocalModel(
         id: "jevk5-4b-v0.3-q8",
@@ -87,7 +87,11 @@ public enum ModelCatalog {
         temperature: 1.22,
         knockoutTemperature: 0.93,
         residentMB: 4_300,
-        languages: "English only")
+        languages: jevK5Languages)
+
+    /// Its card says English only; on this Mac's 121 labelled tabs, 63 with Chinese titles, Chinese did as well as
+    /// English (placement 58 of 63 against 54 of 58, naming 31 of 31, injection 12 of 12; verify/ai-native/b-local-models).
+    static let jevK5Languages = "English only by its card; measured as good on Chinese tab titles"
 
     public static let all: [LocalModel] = [embeddingGemma2, jevK5Q4, jevK5Q8]
 
