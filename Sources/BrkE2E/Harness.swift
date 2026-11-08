@@ -202,7 +202,13 @@ final class AppUnderTest {
         // A real-agent run is opt-in (`AIRealScenarios`) and spends the user's quota.
         if scenarioID.hasPrefix("AIReal") {
             environment["BRK_AI_REAL_AGENTS"] = "1"
-            if scenarioID.hasPrefix("AIRealUI") || scenarioID.hasPrefix("AIRealTabs") {
+            if scenarioID.hasPrefix("AIRealLocal") {
+                // The downloaded models in this run's data folder; "-none": a Mac where no agent is installed (the
+                // usual install folders are searched too, so PATH alone cannot hide them).
+                try AIRealLocalScenarios.cloneModels(into: dataDirectory)
+                if scenarioID.hasSuffix("-none") { environment["BRK_TEST_AGENT_PATH"] = "" }
+            }
+            if scenarioID.hasPrefix("AIRealUI") || scenarioID.hasPrefix("AIRealTabs") || scenarioID.hasPrefix("AIRealLocal") {
                 // As a GUI app starts: launchd's short PATH, so the agents are found the way a Dock launch finds them;
                 // the folder comes from the real open panel.
                 environment["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
