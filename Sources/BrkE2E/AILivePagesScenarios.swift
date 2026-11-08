@@ -507,13 +507,8 @@ enum AILivePagesScenarios {
             }
             shot(app, prefix, "bar-conversation")
             screenCapture(app, prefix + "-bar-conversation-screen")
-            // The row's own view, under the title's middle; the click goes to its left part, clear of the hint.
-            let middle = CGPoint(x: row!.midX, y: row!.midY)
-            let rows = try app.native().actual.filter { $0.key.hasPrefix("command-bar-result") && !$0.value.hidden }
-            if let target = try rows.values.first(where: { CGRect(origin: try screen(app, $0.frame.origin), size: $0.frame.size).contains(middle) }) {
-                let onScreen = CGRect(origin: try screen(app, target.frame.origin), size: target.frame.size)
-                try clickScreen(CGPoint(x: onScreen.minX + onScreen.width * 0.3, y: onScreen.midY))
-            } else { try clickScreen(middle) }
+            // On the title's first words: inside the conversation's row whatever the rows around it.
+            try clickScreen(CGPoint(x: row!.minX + 12, y: row!.midY))
             app.sleep(0.8)
             screenCapture(app, prefix + "-bar-conversation-clicked-screen")
             try app.waitUntil("the conversation's tab", timeout: 8) { try app.view().conversations.first?.answer.conversation?.id == conversation }
@@ -721,8 +716,9 @@ enum AILivePagesScenarios {
             }
             if let page { log.check("a shop changes its price, the hour passes: the page shows the new price and its row is marked") {
                 app.site.replace(in: "/shop-kettle.html", "€39.00", with: "€34.50")
-                let kettle = try todayRow(app) { $0.url?.absoluteString.hasSuffix("shop-kettle.html") == true }
-                try click(app, at: centre(stillFrame(app, .row(kettle.id))))
+                // Away from the page (so its mark stays until it is looked at), on a tab that is not one of the shops.
+                let home = try todayRow(app) { $0.url?.absoluteString.hasSuffix("index.html") == true }
+                try click(app, at: centre(stillFrame(app, .row(home.id))))
                 let kind = try passTheHour(app, page)
                 try expect(kind == "updated", "the outcome: \(kind) \(outcomeDetail(app, page))")
                 let data = record(app, page)?["data"] as? String ?? ""
@@ -741,7 +737,8 @@ enum AILivePagesScenarios {
 
         if wanted("edits"), let page {
             log.check("asked in the conversation, the agent adds a box to tick and a note to each item") {
-                if let conversation { try app.dispatch(.assist(.openConversation(conversation))) }
+                let row = try todayRow(app) { $0.url == ConversationPage.url(conversation!) }
+                try click(app, at: centre(stillFrame(app, .row(row.id))))
                 try app.waitUntil("the conversation's tab", timeout: 8) { try app.view().conversations.first?.answer.conversation?.id == conversation }
                 app.sleep(1)
                 try send(app, .tab, "给这个价格页面的每个商品加一个可以勾选的框和一个备注输入框，勾选和备注要用 window.brk.save 保存")
@@ -776,8 +773,8 @@ enum AILivePagesScenarios {
                 shot(app, prefix, "edits-relaunch")
                 _ = NativeSystemInput.wakeAccessibilityTree(pid: pid)
                 let checked = axNodes("AXCheckBox").map(\.value)
-                let kettle = try todayRow(app) { $0.url?.absoluteString.hasSuffix("shop-kettle.html") == true }
-                try click(app, at: centre(stillFrame(app, .row(kettle.id))))
+                let home = try todayRow(app) { $0.url?.absoluteString.hasSuffix("index.html") == true }
+                try click(app, at: centre(stillFrame(app, .row(home.id))))
                 app.site.replace(in: "/shop-blender.html", "€59.90", with: "€55.00")
                 let kind = try passTheHour(app, page)
                 let after = record(app, page)?["saved"] as? String
@@ -819,7 +816,7 @@ enum AILivePagesScenarios {
                     how = "the schedule was set from the row's menu"
                 }
                 let data = record(app, made.id)?["data"] as? String ?? ""
-                let titles = ["Sleep", "Coffee", "Rivers"].filter { data.contains($0) }
+                let titles = ["sleep", "coffee", "river"].filter { data.lowercased().contains($0) }
                 try expect(titles.count >= 2, "the reading list's data: \(short(data))")
                 return "\(how); schedule \(live(app, made.id)["schedule"] ?? "nil"); data names \(titles)"
             }

@@ -518,6 +518,9 @@ enum BrkToolCatalog {
         if let split = facts.split { out["splitId"] = split.rawValue }
         if facts.shown { out["shown"] = true }
         if facts.loaded { out["loaded"] = true }
+        // When it was archived or visited: "last week's archived articles" needs it.
+        if facts.place == .archive { out["archivedAt"] = iso(facts.at) }
+        if facts.place == .history { out["visitedAt"] = iso(facts.at) }
         return out
     }
 
