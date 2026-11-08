@@ -993,52 +993,78 @@ final class SplitSegmentView: HoverView {
     }
 }
 
-/// Place New Tabs' suggestion on a row: "→ Move to Recipes" in the accent colour, a small × after it.
+/// Place New Tabs' suggestion on a row: "→ Move to Recipes" in the accent colour, a small × after it. Both parts are
+/// `HoverView`s, so they take the click before the row does.
 @MainActor
 final class SuggestionLine: NSView {
-    private let move = NSButton(title: "", target: nil, action: nil)
-    private let close = NSButton(title: "", target: nil, action: nil)
-    var accept: (() -> Void)?
-    var dismiss: (() -> Void)?
+    private let move = SuggestionPart()
+    private let close = SuggestionPart()
+    var accept: (() -> Void)? { didSet { move.action = accept } }
+    var dismiss: (() -> Void)? { didSet { close.action = dismiss } }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        for button in [move, close] {
-            button.isBordered = false
-            button.target = self
-            addSubview(button)
-        }
-        move.action = #selector(moved)
-        close.action = #selector(closed)
-        move.lineBreakMode = .byTruncatingTail
-        close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Dismiss suggestion")?
-            .withSymbolConfiguration(.init(pointSize: Draw.renameHintFont.value - 2, weight: .semibold))
+        addSubview(move)
+        addSubview(close)
         close.toolTip = "Dismiss suggestion"
     }
     required init?(coder: NSCoder) { fatalError("not used") }
 
+    override var isFlipped: Bool { true }
+
     func render(_ text: String, id: ItemID, palette: Palette) {
-        let color = palette.focusColor
-        move.attributedTitle = NSAttributedString(string: "→ " + text, attributes: [.font: NSFont.systemFont(ofSize: Draw.renameHintFont.value, weight: .medium), .foregroundColor: color])
+        move.label.attributedStringValue = NSAttributedString(string: "→ " + text, attributes: [.font: NSFont.systemFont(ofSize: Draw.renameHintFont.value, weight: .medium), .foregroundColor: palette.focusColor])
         move.toolTip = text
-        close.contentTintColor = palette.ink.secondary
+        close.glyph.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Dismiss suggestion")?
+            .withSymbolConfiguration(.init(pointSize: Draw.renameHintFont.value - 2, weight: .semibold))
+        close.glyph.contentTintColor = palette.ink.secondary
         move.identify(.tabTool("ai-suggestion-" + id.rawValue))
         close.identify(.tabTool("ai-suggestion-dismiss-" + id.rawValue))
+        move.setAccessibilityLabel(text)
+        close.setAccessibilityLabel("Dismiss suggestion")
         needsLayout = true
     }
 
-    override var fittingSize: NSSize { NSSize(width: move.intrinsicContentSize.width + 16, height: max(move.intrinsicContentSize.height, 14)) }
+    override var fittingSize: NSSize { NSSize(width: move.label.intrinsicContentSize.width + 18, height: max(move.label.intrinsicContentSize.height, 14)) }
 
     override func layout() {
         super.layout()
         let closeWidth: CGFloat = 14
-        let width = min(move.intrinsicContentSize.width, bounds.width - closeWidth - 2)
+        let width = min(move.label.intrinsicContentSize.width, bounds.width - closeWidth - 2)
         move.frame = CGRect(x: 0, y: 0, width: max(0, width), height: bounds.height)
         close.frame = CGRect(x: move.frame.maxX + 2, y: 0, width: closeWidth, height: bounds.height)
     }
+}
 
-    @objc private func moved() { accept?() }
-    @objc private func closed() { dismiss?() }
+/// One clickable part of a suggestion: a label or a glyph, acting on mouse up inside it.
+@MainActor
+final class SuggestionPart: HoverView {
+    let label = NSTextField(labelWithString: "")
+    let glyph = NSImageView()
+    var action: (() -> Void)?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        label.lineBreakMode = .byTruncatingTail
+        label.isSelectable = false
+        addSubview(label)
+        addSubview(glyph)
+        setAccessibilityRole(.button)
+    }
+
+    override func layout() {
+        super.layout()
+        label.frame = bounds
+        glyph.frame = bounds
+    }
+
+    override func stateChanged() { alphaValue = isPressed ? 0.6 : 1 }
+    override func mouseDown(with event: NSEvent) { isPressed = true }
+    override func mouseUp(with event: NSEvent) {
+        isPressed = false
+        if bounds.contains(local(event)) { action?() }
+    }
+    override func accessibilityPerformPress() -> Bool { action?(); return true }
 }
 
 /// Arc's Peek marker at the trailing end of the row a Peek was opened from: the peeked page's icon in a

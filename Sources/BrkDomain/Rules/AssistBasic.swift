@@ -415,7 +415,8 @@ public enum AICleanup {
             if parts.path.hasSuffix("/") && parts.path.count > 1 { parts.path.removeLast() }
             return parts.string
         }
-        let today = (tree[space.todayRoot]?.children ?? []).filter { tree[$0]?.kind == .tab }
+        // Today's tabs, groups included; a copy in Pinned is the one that stays.
+        let today = tree.tabs(under: space.todayRoot)
         let pinned = Set(tree.tabs(under: space.pinnedRoot).compactMap { tab($0).flatMap { key($0.url) } })
         var keep: [String: ItemID] = [:]
         for id in today.sorted(by: { (tab($0)?.lastActiveAt ?? Instant(milliseconds: 0)) > (tab($1)?.lastActiveAt ?? Instant(milliseconds: 0)) }) {

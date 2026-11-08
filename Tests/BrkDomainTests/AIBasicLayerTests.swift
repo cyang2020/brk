@@ -397,6 +397,18 @@ final class AIBasicLayerTests: XCTestCase {
         XCTAssertTrue(menu(d, .todayCleanup(d.view.space.id)).isEmpty)
     }
 
+    func testACopyOfATabInAGroupIsADuplicateToo() throws {
+        let d = driver([.tabCleanup])
+        let soup = d.open("https://recipes.example/soup"), stew = d.open("https://recipes.example/stew")
+        let group = try XCTUnwrap(aiGroup(d, named: "Recipes", tabs: [soup, stew]))
+        XCTAssertEqual(d.state.doc.tree[soup]?.parent, group)
+        let copy = d.open("https://recipes.example/soup")
+        let found = d.state.cleanupCandidatesForTest(d.view.space.id, now: d.ctx.now)
+        XCTAssertEqual(found.duplicates.count, 1)
+        XCTAssertTrue([soup, copy].contains(found.duplicates[0]))
+        XCTAssertGreaterThan(d.view.space.today.cleanup, 0)
+    }
+
     // MARK: Usage
 
     func testUsageAddsUpPerFeatureAndStartsAgainEachMonth() {

@@ -369,7 +369,7 @@ enum AIBasicRealUIScenarios {
         } }
 
         if wanted("preview") { log.check("5-Second Previews: Shift held over a link") {
-            _ = try open(app, site.url("basic-bread.html#preview"))
+            _ = try open(app, site.url("basic-lisbon.html"))
             let card = try frame(app, .card(0))
             // The pages' first line is a large link ("Soup"), 40 points in from the corner.
             try PhysicalPointer.move(app, to: CGPoint(x: card.minX + 64, y: card.minY + 58), window: app.window!)
