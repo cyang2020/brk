@@ -80,6 +80,29 @@ public enum QuickPrefixes {
         }
     }
 
+    /// An AI prefix the text names that cannot be used now, why, and the settings pane that changes that: so its word with Tab
+    /// does not silently do nothing. Nil when a prefix works, and where Settings cannot help (a private window has no AI).
+    public static func blocked(for typed: String, in bar: CommandBarSnapshot) -> QuickPrefixBlock? {
+        let needle = fold(typed)
+        guard needle.count >= 2, !needle.contains(where: \.isWhitespace), accepts(bar), !bar.isPrivate,
+              let prefix = all.first(where: { $0.words.contains { fold($0).hasPrefix(needle) } }), !prefix.isActive(in: bar) else { return nil }
+        let noAgent = QuickPrefixBlock(prefix: prefix, reason: "No local AI agent found", pane: .max)
+        switch prefix.action {
+        case .askAgent(let name):
+            guard AIProviderChoice(rawValue: name) != nil else { return nil }
+            if bar.askProvider == nil { return QuickPrefixBlock(prefix: prefix, reason: "\(prefix.title) is off in Max settings", pane: .max) }
+            return QuickPrefixBlock(prefix: prefix, reason: "\(prefix.title) is not installed", pane: .max)
+        case .ask:
+            return bar.askProvider == nil ? QuickPrefixBlock(prefix: prefix, reason: "Ask is off in Max settings", pane: .max) : noAgent
+        case .askPage, .summarize:
+            return bar.askPageOn ? noAgent : QuickPrefixBlock(prefix: prefix, reason: "Ask on Page is off in Advanced settings", pane: .advanced)
+        case .translate:
+            return bar.translationOn ? noAgent : QuickPrefixBlock(prefix: prefix, reason: "Translate Pages is off in Advanced settings", pane: .advanced)
+        case .files, .apps, .emoji, .calculate, .split, .window, .define, .color:
+            return nil
+        }
+    }
+
     /// Only the new-tab bar: not one that fills an empty pane, not AI mode. (Site search has its own pill: no prefix there.)
     private static func accepts(_ bar: CommandBarSnapshot) -> Bool { bar.createsTab && !bar.fillsPane && bar.aiMode == nil }
 
@@ -102,6 +125,13 @@ extension QuickPrefix {
         case .translate: bar.translationOn && bar.askAgentFound
         }
     }
+}
+
+/// An AI prefix that cannot be used now (`QuickPrefixes.blocked`).
+public struct QuickPrefixBlock: Hashable, Sendable {
+    public let prefix: QuickPrefix
+    public let reason: String
+    public let pane: SettingsPane
 }
 
 /// `split left|right|top|bottom <text>`: the side and the rest.

@@ -744,6 +744,35 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertTrue(offered.offerChip.isHidden, "an engine's offer is Arc's words")
     }
 
+    /// With Max off, or the agent missing, an AI prefix's word says why beside the input, and Tab opens the settings that
+    /// change it, instead of doing nothing and leaving the word to run into the next one ("claudehello").
+    func testABlockedAIPrefixSaysWhyAndTabOpensItsSettings() {
+        let sink = Box()
+        var off = bar()
+        off.agentsFound = ["claude"]
+        let bar = view(off, sink)
+        type("claude", into: bar)
+        XCTAssertNil(bar.prefixOffer)
+        XCTAssertEqual(bar.blockedPrefix?.reason, "Claude is off in Max settings")
+        sink.sent.removeAll()
+        press(#selector(NSResponder.insertTab(_:)), bar)
+        XCTAssertEqual(sink.sent, [.settings(.openPane(.max))])
+        XCTAssertNil(bar.prefix)
+
+        var on = off
+        on.askProvider = "Codex"
+        on.askAgentFound = true
+        on.agentsFound = ["codex"]
+        XCTAssertEqual(QuickPrefixes.blocked(for: "cla", in: on)?.reason, "Claude is not installed")
+        XCTAssertEqual(QuickPrefixes.blocked(for: "page", in: on)?.pane, .advanced, "Ask on Page's switch is in Advanced")
+        XCTAssertNil(QuickPrefixes.blocked(for: "gpt", in: on), "it works")
+        XCTAssertNil(QuickPrefixes.blocked(for: "c", in: on), "one letter")
+        XCTAssertNil(QuickPrefixes.blocked(for: "emoji", in: off), "not an AI prefix")
+        var secret = off
+        secret.isPrivate = true
+        XCTAssertNil(QuickPrefixes.blocked(for: "claude", in: secret), "a private window has no AI to turn on")
+    }
+
     /// Part of the tool's name offers the tool's prefix, and Tab enters what is offered.
     func testPartOfTheToolsNameOffersItsPrefixAndTabEntersIt() {
         let sink = Box()

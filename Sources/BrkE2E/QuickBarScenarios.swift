@@ -907,16 +907,26 @@ enum QuickBarScenarios {
         // Gemini and Cursor, where they are on this Mac. Every agent is the same fixture here.
         for (word, question) in [("gemini", "why is rust red?"), ("cursor", "why is ink dark?")] where bar.agentsFound.contains(word) { try asks(word, question) }
 
-        // Max's Ask off: the word stays plain text.
+        // Max's Ask off: the word says why beside the input, and Tab opens the settings that change it, not a prefix.
+        func blocked(_ word: String, _ reason: String, _ pane: SettingsPane) throws {
+            try open(app)
+            try type(app, word)
+            let card = try visible(app.native(), .commandBar).frame
+            try app.waitUntil("\(word): \(reason)") { try SidebarReviewScenarios.texts(app, in: card).contains(reason) }
+            _ = try app.screenshot("blocked-" + word)
+            try press(app, [], .tab)
+            try app.waitUntil("\(word): Settings at \(pane)") { if case .settings(let settings) = try app.send(.settings) { return settings.pane == pane }; return false }
+            try expect(try !pillShown(app), "\(word) entered a mode")
+            try app.dispatch(.settings(.closeWindow))
+            try app.waitUntil("Settings closed") { if case .settings(let settings) = try app.send(.settings) { return settings.pane == nil }; return false }
+            app.sleep(0.3)
+            if try isOpen(app) { try app.dispatch(.commandBar(.dismiss)) }
+        }
         try app.dispatch(.settings(.max(.feature(.commandBar, false))))
-        try open(app)
-        try typeWord(app, "claude", enters: false)
-        try dismiss(app)
+        try blocked("claude", "Claude is off in Max settings", .max)
         try app.dispatch(.settings(.max(.feature(.askPage, false))))
-        try open(app)
-        try typeWord(app, "summarize", enters: false)
-        try dismiss(app)
-        app.passed("claude, gpt, codex, ask and ai each asked with the typed text; page and summarize read the page; gemini and cursor asked where installed; Max off left the words plain")
+        try blocked("summarize", "Ask on Page is off in Advanced settings", .advanced)
+        app.passed("claude, gpt, codex, ask and ai each asked with the typed text; page and summarize read the page; gemini and cursor asked where installed; with a switch off the word said why and Tab opened its settings; Max off left the words plain")
     }
 
     // MARK: Split

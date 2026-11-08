@@ -77,6 +77,8 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     private(set) var offer: SearchEngineCandidate?
     /// The prefix Tab would enter, shown there when no engine is on offer.
     private(set) var prefixOffer: QuickPrefix?
+    /// An AI prefix the text names that cannot work now: its reason there instead, and Tab opens the settings that change it.
+    private(set) var blockedPrefix: QuickPrefixBlock?
     /// The pill before the input: a prefix's, in its colour, or a search engine's, in Arc's grey.
     let sitePill = QuickChip()
     private let leadingIcon = NSImageView()
@@ -294,6 +296,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             // What is on offer beside the input is what Tab does: part of the tool's name offers the tool's own prefix.
             else if let prefixOffer { enter(.prefix(prefixOffer), namedBy: typed) }
             else if Suggest.asksProvider(typed, bar: bar) { dispatch(.assist(.open(.question))) }
+            else if let blockedPrefix { dispatch(.settings(.openPane(blockedPrefix.pane))) }
             else if let question = Suggest.tabQuestion(typed, completing: completion, bar: bar, resolve: resolve) { dispatch(.assist(.ask(question))) }
             return true
         case #selector(NSResponder.deleteBackward(_:)) where pill != nil && input.stringValue.isEmpty:
@@ -451,6 +454,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         results = Suggest.rank(query: typed, bar: bar, appName: Product.name, siteSearch: siteSearch, prefix: prefix, resolve: resolve, completing: completion)
         offer = pill == nil ? Suggest.siteSearchOffer(typed, completing: completion, bar: bar) : nil
         prefixOffer = pill == nil && offer == nil ? QuickPrefixes.offer(for: typed, in: bar) : nil
+        blockedPrefix = pill == nil && offer == nil && prefixOffer == nil ? QuickPrefixes.blocked(for: typed, in: bar) : nil
         highlighted = keepHighlight ? min(highlighted, max(results.count - 1, 0)) : 0
         while rows.count < results.count {
             let index = rows.count
@@ -505,12 +509,12 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         // The accessory at the input row's right: the site-search offer and its Tab key, else ⓘ.
         // An engine's offer is Arc's words; a prefix's is its chip.
         let chipOffer = offer == nil ? prefixOffer : nil
-        let offered = offer.map { "\(OverlayCopy.searchVerb) \($0.name)" } ?? prefixOffer?.title
-        offerLabel.isHidden = offer == nil
+        let offered = offer.map { "\(OverlayCopy.searchVerb) \($0.name)" } ?? prefixOffer?.title ?? blockedPrefix?.reason
+        offerLabel.isHidden = chipOffer != nil || offered == nil
         offerChip.isHidden = chipOffer == nil
         keyCap.isHidden = offered == nil
         info.isHidden = offered != nil || bar?.aiMode != nil || fillsWindow
-        offerLabel.stringValue = offer.map { "\(OverlayCopy.searchVerb) \($0.name)" } ?? ""
+        offerLabel.stringValue = chipOffer == nil ? offered ?? "" : ""
         offerChip.title = chipOffer?.title ?? ""
         if chipOffer != nil { applyPillColors() }
         // A label draws its text 2 in from each side of its frame.
