@@ -10,6 +10,9 @@ import BrkCEF
 import BrkCoreEngine
 import BrkEngine
 
+// An agent's MCP server for Brk's tab tools is this program too (`Brk --brk-tools …`): it pipes and exits, before anything loads.
+BrkToolBridge.runIfAsked()
+
 MainActor.assumeIsolated {
     CrashBacktrace.install()
     let options = LaunchOptions()

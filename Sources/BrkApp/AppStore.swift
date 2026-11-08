@@ -53,7 +53,7 @@ public final class AppStore {
     private lazy var localSearch = LocalSearch.live(send: { [weak self] in self?.dispatch($0) })
     private lazy var barLookups = BarLookups(send: { [weak self] in self?.dispatch($0) })
     private lazy var currencyRates = CurrencyRatesStore.live(dataDirectory: Product.dataDirectory(), clock: clock, send: { [weak self] in self?.dispatch($0) })
-    private lazy var aiServices = AIServices(engine: engine, send: { [weak self] event in self?.dispatch(.system(event)) })
+    private lazy var aiServices = AIServices(engine: engine, send: { [weak self] event in self?.dispatch(.system(event)) }, state: { [weak self] in self?.state })
     private var queue: [Input] = []
     private var dispatching = false
     private(set) var isTerminating = false
@@ -560,7 +560,12 @@ public final class AppStore {
                 }
             case .ai(let id, let task, let choice): aiServices.answer(id, task: task, choice: choice, max: snapshot.settings.max)
             case .aiCancel(let id): aiServices.cancel(id)
-            case .aiOpenConversation(let id, let folder, let choice): aiServices.openConversation(id, folder: folder, choice: choice, max: snapshot.settings.max)
+            case .aiOpenConversation(let id, let folder, let choice, let tabs): aiServices.openConversation(id, folder: folder, choice: choice, max: snapshot.settings.max, tabs: tabs)
+            case .aiAttach(let id, let attachments): aiServices.attach(id, attachments)
+            // A search by meaning for the @ list belongs to the local models; until they run, title and address matches are all.
+            case .aiMentionSearch: break
+            case .agentReadDone(let call, let outcome): aiServices.agentReadDone(call, outcome)
+            case .agentActDone(let call, let outcome): aiServices.agentActDone(call, outcome)
             case .aiTurn(let conversation, let turn, let task): aiServices.turn(conversation: conversation, turn: turn, task: task, max: snapshot.settings.max)
             case .aiApprove(let conversation, let approval, let option): aiServices.approve(conversation: conversation, approval: approval, option: option)
             case .aiCloseConversation(let id): aiServices.closeConversation(id)
