@@ -723,8 +723,9 @@ public struct MaxSnapshot: Sendable, Equatable, Codable {
     public var askProvider: String? = nil
     /// What each agent said about itself, in `AIProviderKind.allCases` order; only asked for while the card is open.
     public var agents: [AIAgentStatus] = []
-    /// The On This Mac card: the local models' downloads and whether this copy can run them.
-    public var localModels = LocalModelsSnapshot()
+    /// The On This Mac card: the local models' downloads and whether this copy can run them. Optional so snapshots
+    /// written before it existed still decode.
+    public var localModels: LocalModelsSnapshot? = nil
 }
 
 public struct ProfileDeletionRow: Sendable, Equatable, Codable {

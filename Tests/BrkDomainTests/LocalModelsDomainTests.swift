@@ -14,7 +14,7 @@ final class LocalModelsDomainTests: XCTestCase {
         let snapshot = LocalModelsSnapshot(rows: [row], indexed: nil)
         d.system(.localModels(snapshot))
         XCTAssertEqual(d.snapshot.settings.max.localModels, snapshot)
-        XCTAssertEqual(d.snapshot.settings.max.localModels.row(.search)?.stage, .downloading(received: 1_000, total: 309_855_456))
+        XCTAssertEqual(d.snapshot.settings.max.localModels?.row(.search)?.stage, .downloading(received: 1_000, total: 309_855_456))
     }
 
     /// The index holds what this lists and nothing else, so clearing history must empty its history part.

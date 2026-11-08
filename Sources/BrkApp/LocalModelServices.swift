@@ -22,7 +22,7 @@ final class LocalModelServices {
     private var pending: Task<Void, Never>?
     private var running: Task<Void, Never>?
     private var again = false
-    private var corpus: () -> [ProfileID: [SearchCorpusItem]] = { [:] }
+    private var corpus: @Sendable () -> [ProfileID: [SearchCorpusItem]] = { [:] }
     private var lastReported: LocalModelsSnapshot?
     private var indexed: [ProfileID: Int] = [:]
     let debounce: Duration
@@ -34,10 +34,10 @@ final class LocalModelServices {
         models.onChange = { [weak self] in self?.report(); self?.scheduleIndexing() }
     }
 
-    static func live(send: @escaping @MainActor (Input) -> Void, options: LaunchOptions = LaunchOptions()) -> LocalModelServices {
-        let environment = ProcessInfo.processInfo.environment
-        let root = environment["BRK_LOCAL_MODELS_ROOT"].map { URL(fileURLWithPath: $0, isDirectory: true) }
-            ?? Product.dataDirectory().appendingPathComponent("Local Models", isDirectory: true)
+    /// The models under `<data folder>/Local Models` (`BRK_LOCAL_MODELS_ROOT` replaces that folder).
+    static func live(root dataFolder: URL, send: @escaping @MainActor (Input) -> Void) -> LocalModelServices {
+        let root = ProcessInfo.processInfo.environment["BRK_LOCAL_MODELS_ROOT"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? dataFolder.appendingPathComponent("Local Models", isDirectory: true)
         return LocalModelServices(models: LocalModels(root: root), send: send)
     }
 
@@ -54,6 +54,13 @@ final class LocalModelServices {
             if let model = ModelCatalog.model(id: id) { models.choose(model) }
         }
         report()
+    }
+
+    /// The card's state at launch, for the store to apply before its first render; later changes go through `report`.
+    func initialSnapshot() -> LocalModelsSnapshot {
+        let snapshot = Self.snapshot(models, indexed: nil)
+        lastReported = snapshot
+        return snapshot
     }
 
     /// Sends the card's state when it changed.
@@ -98,7 +105,7 @@ final class LocalModelServices {
     // MARK: The index
 
     /// The store calls this after every state change; the pass itself runs `debounce` later.
-    func stateChanged(corpus: @escaping () -> [ProfileID: [SearchCorpusItem]]) {
+    func stateChanged(corpus: @escaping @Sendable () -> [ProfileID: [SearchCorpusItem]]) {
         self.corpus = corpus
         scheduleIndexing()
     }
@@ -123,18 +130,19 @@ final class LocalModelServices {
             report()
             return
         }
-        let wanted = corpus()
+        let corpus = corpus
         let embedder = models.embedder
-        let indexes = wanted.keys.sorted().map { ($0, models.index(profile: $0.rawValue)) }
-        models.removeIndexes(except: Set(wanted.keys.map(\.rawValue)))
         running = Task.detached(priority: .utility) { [weak self, log] in
+            // Listing a long history takes a while: off the main thread, from the state value the store handed over.
+            let wanted = corpus()
+            guard let indexes = await self?.indexes(for: Array(wanted.keys)) else { return }
             var counts: [ProfileID: Int] = [:]
             for (profile, index) in indexes {
                 let entries = (wanted[profile] ?? []).map { IndexEntry(kind: Self.kind($0.kind), id: $0.id, title: $0.title, url: $0.url) }
                 do {
                     try await index.reconcile(entries, embedder: embedder)
                 } catch is CancellationError {
-                    return
+                    break
                 } catch {
                     log.error("search index for \(profile.rawValue, privacy: .public): \(String(describing: error), privacy: .public)")
                 }
@@ -142,6 +150,12 @@ final class LocalModelServices {
             }
             await self?.passFinished(counts)
         }
+    }
+
+    /// The profiles' indexes, and every other profile's deleted (a deleted profile, or one with nothing left to find).
+    private func indexes(for profiles: [ProfileID]) -> [(ProfileID, SemanticIndex)] {
+        models.removeIndexes(except: Set(profiles.map(\.rawValue)))
+        return profiles.sorted().map { ($0, models.index(profile: $0.rawValue)) }
     }
 
     private func passFinished(_ counts: [ProfileID: Int]) {
