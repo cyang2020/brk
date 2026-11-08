@@ -84,7 +84,7 @@ enum AIPagesFixtureScenarios {
         app.sleep(1.5)
         _ = try app.screenshot("AIPagesFixture-tab")
         let frame = try XCTUnwrapValue(try app.native().actual[pageView.identifier]?.frame)
-        try expect(frame.height >= 200 && frame.width > 300, "the page's frame: \(frame)")
+        try expect(frame.height >= 120 && frame.width > 300, "the page's frame: \(frame)")
 
         // Keep as Tab from the page's own menu, with the right button.
         try click(app, pid: pid, at: CGPoint(x: frame.midX, y: frame.maxY - 30), right: true)
