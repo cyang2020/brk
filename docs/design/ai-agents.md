@@ -31,7 +31,7 @@ A trap for signed-out checks: Cursor's ACP `authenticate` with `cursor_login` **
 
 **Claude** (`apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts`). T3 uses Anthropic's Agent SDK, which starts `claude -p` with streaming JSON on both pipes. Brk speaks that directly: `-p --input-format stream-json --output-format stream-json --verbose --include-partial-messages`. One process per session; each user message is a JSON line on stdin. Text arrives as `stream_event` with `text_delta`; tool calls as `tool_use` blocks in `assistant` messages; their results as `tool_result` in `user` messages; the turn ends with `result`. `control_request` lines go both ways: `initialize` and `interrupt` from Brk, `can_use_tool` from the agent. The session id is in `system`/`init`, and `--resume` continues it.
 
-**Codex** (`apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts`, `packages/effect-codex-app-server`). `codex app-server`, JSON-RPC on stdio without the `jsonrpc` field. `initialize`, the `initialized` notification, `thread/start`, then `turn/start` per message. Text arrives as `item/agentMessage/delta`, steps as `item/started` and `item/completed`, the end as `turn/completed`. Effort and model go on `turn/start`. T3 sends an `initialize` only once per process because Codex refuses a second. `codex app-server generate-json-schema` prints the protocol of the installed version; Brk's parsers were checked against that and a recorded real turn.
+**Codex** (`apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts`, `packages/effect-codex-app-server`). `codex app-server`, JSON-RPC on stdio without the `jsonrpc` field. `initialize`, the `initialized` notification, `thread/start`, then `turn/start` per message. A thread continued later (`thread/resume`) is given the same sandbox, approval policy and instructions as `thread/start`; left out, it would run on the user's own Codex settings. Text arrives as `item/agentMessage/delta`, steps as `item/started` and `item/completed`, the end as `turn/completed`. Effort and model go on `turn/start`. T3 sends an `initialize` only once per process because Codex refuses a second. `codex app-server generate-json-schema` prints the protocol of the installed version; Brk's parsers were checked against that and a recorded real turn.
 
 **ACP** (`packages/provider-acp/src/server/AcpSessionRuntime.ts`, `packages/effect-acp`). JSON-RPC 2.0 on stdio. `initialize`, `session/new`, `session/prompt` per message whose reply is the end of the turn, `session/update` notifications with `agent_message_chunk`, `tool_call` and `tool_call_update`. T3 declares what the client can do in `initialize`; Brk declares no file or terminal capability, so the agent uses its own tools under its own rules.
 
@@ -117,6 +117,6 @@ The arguments and environment of a key session differ from a subscription sessio
 
 ## What is left out on purpose
 
-- T3 persists threads and can roll them back; Brk's conversations last as long as the panel is open.
+- T3 persists threads and can roll them back. Brk saves conversations and continues them another day (docs/design/ai-conversations.md) but cannot roll them back.
 - T3 lets the user change model inside a conversation; Brk reads the choice from the Max pane when a session starts.
 - T3 shows Codex's reasoning summaries and Claude's thinking; Brk shows the agent's text and steps.

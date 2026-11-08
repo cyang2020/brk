@@ -13,7 +13,8 @@ import Foundation
 /// with Brk's conversation tools. Real clicks and keys through the window server (Chinese by paste); the control socket
 /// only reads state and takes screenshots. Opt-in: BRK_E2E_REAL_PAGES_AGENT=claude|codex, BRK_E2E_REAL_PAGES_MODEL for the
 /// text typed into the model pop-up (spend little: Haiku, GPT-6-Luna), BRK_E2E_REAL_PAGES_PART=chart,keep,relaunch,continue,recall
-/// to pick steps (each needs the ones before it). Results: real-pages-<agent>.txt in the shots folder.
+/// to pick steps (each needs the ones before it), BRK_E2E_REAL_PAGES_KEEP=menu to keep the page through its context menu.
+/// Results: real-pages-<agent>.txt in the shots folder.
 enum AIRealPagesScenarios {
     static var all: [Scenario] {
         guard let name = ProcessInfo.processInfo.environment["BRK_E2E_REAL_PAGES_AGENT"], let choice = AIProviderChoice(rawValue: name), choice.kind != nil else { return [] }
@@ -343,7 +344,9 @@ enum AIRealPagesScenarios {
 
         if wanted("keep"), let page { log.check("Keep as Tab under the page, clicked, opens the page as a tab") {
             let path: String
-            if try reveal(app, .aiControl("keep-" + page.rawValue), in: .aiControl("transcript")) {
+            // BRK_E2E_REAL_PAGES_KEEP=menu takes the page's context menu even when the button is free.
+            let viaMenu = ProcessInfo.processInfo.environment["BRK_E2E_REAL_PAGES_KEEP"] == "menu"
+            if !viaMenu, try reveal(app, .aiControl("keep-" + page.rawValue), in: .aiControl("transcript")) {
                 shot(app, "keep-button")
                 try clickControl(app, "keep-" + page.rawValue)
                 path = "the button under the page"
@@ -354,7 +357,7 @@ enum AIRealPagesScenarios {
                 try click(app, at: point, right: true)
                 shot(app, "keep-menu")
                 try chooseMenu("Keep as Tab")
-                path = "the page's context menu (the button sat under a system dialog)"
+                path = viaMenu ? "the page's context menu (asked for)" : "the page's context menu (the button sat under a system dialog)"
             }
             try app.waitUntil("the page's tab shown", timeout: 8) { try app.view().aiPages.first?.content?.id == page }
             app.sleep(1.5)
