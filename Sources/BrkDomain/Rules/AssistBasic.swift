@@ -239,7 +239,7 @@ extension Work {
             state.session.ai.basic.naming[id] = nil
             state.session.ai.basic.pausedUntil = ctx.now.advanced(by: AINaming.backoff)
             feature = .tabNames
-        case .decide(_, let asked):
+        case .decide(_, let asked, _):
             state.session.ai.basic.placements[id] = nil
             feature = asked
         case .nameFolder:
@@ -305,11 +305,16 @@ extension Work {
         func contents(_ folder: ItemID) -> String {
             state.doc.tree.tabs(under: folder).prefix(6).compactMap { state.displayedTab($0, in: window)?.displayTitle }.joined(separator: "; ")
         }
+        var members: [String: [AITab]] = [:]
         for root in [space.todayRoot, space.pinnedRoot] {
             for id in state.doc.tree[root]?.children ?? [] where options.count < DecisionQuestion.maxChoices - 1 {
                 guard case .folder(let folder)? = state.doc.tree[id]?.body else { continue }
                 let name = unique(folder.title)
                 ask.groups[name] = id
+                members[name] = state.doc.tree.tabs(under: id).prefix(12).compactMap { member in
+                    guard let shown = state.displayedTab(member, in: window), let url = shown.url else { return nil }
+                    return AITab(id: member, title: shown.displayTitle, url: url)
+                }
                 let place = root == space.todayRoot ? "a group in Today" : "a pinned folder"
                 options.append(DecisionOption(name, "\(place); tabs: \(contents(id))"))
             }
@@ -332,7 +337,8 @@ extension Work {
         guard !questions.isEmpty else { return }
         let request = DecisionRequest(state: .object(["title": .string(page.title), "url": .string(page.url.absoluteString)]), questions: questions)
         guard request.problem == nil else { return }
-        let id = requestAI(.decide(request, feature: .tabPlacement), from: window)
+        let hint: AIDecisionHint? = questions["group"] == nil ? nil : .placement(question: "group", subject: AITab(id: tab, title: page.title, url: page.url), members: members, profile: space.profile)
+        let id = requestAI(.decide(request, feature: .tabPlacement, hint: hint), from: window)
         state.session.ai.basic.placements[id] = ask
     }
 
@@ -388,23 +394,21 @@ extension Work {
 
     // MARK: The cleanup list
 
-    /// Slice B's candidates: pairs the address rule did not already settle go out as one yes/no request (at most eight
-    /// pairs); `a` is the copy offered for closing, `b` the tab that stays.
+    /// Slice B's candidates (embeddings at 0.92 or more): each pair the address rule did not already settle is one
+    /// yes/no request (at most eight pairs per event), worded as slice B measured it (JevK5 Q4 28 of 30 with the rule
+    /// first); `a` is the copy offered for closing, `b` the tab that stays.
     mutating func askDuplicates(_ pairs: [AIDuplicatePair]) {
-        guard state.doc.settings.max.enabled(.tabCleanup) else { return }
-        var asked: [String: AIDuplicatePair] = [:], questions: [String: DecisionQuestion] = [:], state: [String: DecisionValue] = [:]
+        guard state.doc.settings.max.enabled(.tabCleanup), state.canAnswerYesNo else { return }
+        var asked = 0
         for pair in pairs where pair.a != pair.b {
-            guard asked.count < 8, let a = self.state.tab(pair.a), let b = self.state.tab(pair.b), !self.state.session.ai.basic.nearDuplicates.contains(pair.a),
+            guard asked < 8, let a = state.tab(pair.a), let b = state.tab(pair.b), !state.session.ai.basic.nearDuplicates.contains(pair.a),
                   let ua = a.url, let ub = b.url, AICleanup.addressKey(ua) != AICleanup.addressKey(ub) else { continue }
-            let key = "pair\(asked.count)"
-            asked[key] = pair
-            questions[key] = .noul("Are tabs \(key).a and \(key).b the same page?", yes: "the same page under another address or title", no: "different pages, even on the same site or topic")
-            state[key] = .object(["a": .object(["title": .string(a.displayTitle), "url": .string(ua.absoluteString)]),
-                                  "b": .object(["title": .string(b.displayTitle), "url": .string(ub.absoluteString)])])
+            let text = "Tab 1: \(a.displayTitle)\nAddress 1: \(ua.absoluteString)\nTab 2: \(b.displayTitle)\nAddress 2: \(ub.absoluteString)"
+            let request = DecisionRequest(state: .string(text), questions: [AICleanup.sameQuestionKey: .noul(AICleanup.sameQuestion)])
+            let id = requestAI(.decide(request, feature: .tabCleanup))
+            state.session.ai.basic.duplicateAsks[id] = [AICleanup.sameQuestionKey: pair]
+            asked += 1
         }
-        guard !questions.isEmpty else { return }
-        let id = requestAI(.decide(DecisionRequest(state: .object(state), questions: questions), feature: .tabCleanup))
-        self.state.session.ai.basic.duplicateAsks[id] = asked
     }
 
     /// The list behind the cleanup button: each tab with its own Close or Archive, then all of a kind at once.
@@ -443,6 +447,9 @@ extension Work {
 /// (the pinned one, or the most recently shown copy, stays). Stale is not shown for half the space's archive time,
 /// at least two hours and at most three days.
 public enum AICleanup {
+    public static let sameQuestionKey = "same_page"
+    /// Slice B's wording (bench/run.py `duplicates`).
+    public static let sameQuestion = "Are these two browser tabs the same web page (the same document or item, perhaps with a different address form), rather than two different pages on the same site or topic?"
     static func candidates(tree: SidebarTree, space: Space, now: Instant, threshold: AutoArchiveThreshold, near: Set<ItemID> = []) -> (duplicates: [ItemID], stale: [ItemID]) {
         func tab(_ id: ItemID) -> Tab? { if case .tab(let value)? = tree[id]?.body { value } else { nil } }
         func key(_ url: URL?) -> String? { url.flatMap(addressKey) }

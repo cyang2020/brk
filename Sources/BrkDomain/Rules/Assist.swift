@@ -551,7 +551,7 @@ extension Work {
             completeAI(id, text: String(text.prefix(60_000)), success: true, answered: true)
         case (.nameTabs, .tabNames(let names)): applyTabNames(id, names)
         case (.nameFolder, .text(let name)): applyFolderName(id, name, in: background)
-        case (.decide(let request, _), .decision(let answers)):
+        case (.decide(let request, _, _), .decision(let answers)):
             guard request.accepts(answers) else { return Self.wrongShape }
             applyDecision(id, answers)
         default: return Self.wrongShape
@@ -736,7 +736,7 @@ extension Work {
             case .renameDownload(let download, _): valid = state.doc.settings.max.enabled(.downloadRename) && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.doc.downloads.contains { $0.id == download && $0.state == .finished && state.doc.profiles[$0.profile] != nil }
             case .nameTabs: valid = state.doc.settings.max.enabled(.tabNames)
             case .nameFolder(let folder, _): valid = state.doc.settings.max.enabled(.folderNames) && state.doc.tree[folder] != nil
-            case .decide(_, let feature): valid = state.doc.settings.max.enabled(feature)
+            case .decide(_, let feature, _): valid = state.doc.settings.max.enabled(feature)
             default: valid = true
             }
             if !valid || providerChanged {

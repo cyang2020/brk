@@ -306,7 +306,7 @@ final class AIBasicLayerTests: XCTestCase {
     private func placementRequest(_ d: Driver, _ tab: ItemID) throws -> (AIRequestID, DecisionRequest) {
         let t = settle(d, tab, title: "Chicken noodle soup recipe")
         let (id, task) = try XCTUnwrap(aiEffects(t).first)
-        guard case .decide(let request, .tabPlacement) = task else { throw XCTSkip("\(task)") }
+        guard case .decide(let request, .tabPlacement, _) = task else { throw XCTSkip("\(task)") }
         return (id, request)
     }
 
@@ -425,21 +425,40 @@ final class AIBasicLayerTests: XCTestCase {
         XCTAssertNil(AICleanup.addressKey(url("file:///tmp/a.html")))
     }
 
-    func testEmbeddingCandidatesAreAskedYesOrNoAndAYesJoinsTheList() throws {
+    func testEmbeddingCandidatesAreAskedYesOrNoOnePairAtATimeAndAYesJoinsTheList() throws {
         let d = driver([.tabCleanup])
+        d.system(.aiProvidersDetected([.claude]))
         let news = d.open("https://news.example/"), front = d.open("https://news.example/news")
         let other = d.open("https://news.example/jobs")
         XCTAssertEqual(d.view.space.today.cleanup, 0, "different addresses: not duplicates by the rule")
         let t = d.system(.aiDuplicateCandidates([AIDuplicatePair(a: front, b: news, similarity: 0.95), AIDuplicatePair(a: other, b: news, similarity: 0.93)]))
-        let (id, task) = try XCTUnwrap(aiEffects(t).first)
-        guard case .decide(let request, .tabCleanup) = task else { return XCTFail("\(task)") }
-        XCTAssertEqual(request.questions.count, 2)
-        XCTAssertTrue(request.questions.values.allSatisfy { if case .noul = $0 { true } else { false } })
-        let key = try XCTUnwrap(request.questions.keys.sorted().first)
-        d.system(.aiResult(id, .reply(.decision(DecisionAnswers(answers: [key: .noul(true, probability: 0.97), "pair1": .noul(false, probability: 0.1)], backend: "jevk5")))))
+        let asked = aiEffects(t)
+        XCTAssertEqual(asked.count, 2, "one request per pair, as slice B measured JevK5")
+        let (id, task) = try XCTUnwrap(asked.first)
+        guard case .decide(let request, .tabCleanup, nil) = task else { return XCTFail("\(task)") }
+        XCTAssertEqual(request.questions, ["same_page": .noul("Are these two browser tabs the same web page (the same document or item, perhaps with a different address form), rather than two different pages on the same site or topic?")])
+        guard case .string(let text) = request.state else { return XCTFail("\(request.state)") }
+        XCTAssertTrue(text.hasPrefix("Tab 1: ") && text.contains("\nAddress 1: https://news.example/news\nTab 2: ") && text.hasSuffix("Address 2: https://news.example/"), text)
+        d.system(.aiResult(id, .reply(.decision(DecisionAnswers(answers: ["same_page": .noul(true, probability: 0.97)], backend: "jevk5")))))
+        d.system(.aiResult(asked[1].0, .reply(.decision(DecisionAnswers(answers: ["same_page": .noul(false, probability: 0.1)], backend: "jevk5")))))
         let found = d.state.cleanupCandidatesForTest(d.view.space.id, now: d.ctx.now)
         XCTAssertEqual(found.duplicates, [front])
         XCTAssertEqual(d.view.space.today.cleanup, 1)
+    }
+
+    func testCandidatesAreNotAskedWhenNothingCanAnswerYesOrNo() {
+        let d = driver([.tabCleanup])
+        let news = d.open("https://news.example/"), front = d.open("https://news.example/news")
+        XCTAssertTrue(aiEffects(d.system(.aiDuplicateCandidates([AIDuplicatePair(a: front, b: news, similarity: 0.95)]))).isEmpty, "no agent, no key, no JevK5")
+        XCTAssertTrue(d.state.duplicateScopes().isEmpty)
+        d.system(.aiKeys([:], localDecisions: true))
+        XCTAssertEqual(aiEffects(d.system(.aiDuplicateCandidates([AIDuplicatePair(a: front, b: news, similarity: 0.95)]))).count, 1, "JevK5 answers without an agent")
+        let scopes = d.state.duplicateScopes()
+        XCTAssertEqual(scopes.count, 1)
+        XCTAssertTrue(Set(scopes[0].entries.map(\.id)).isSuperset(of: [news, front]))
+        XCTAssertTrue(scopes[0].entries.allSatisfy { !$0.pinned })
+        d.user(.settings(.max(.feature(.tabCleanup, false))))
+        XCTAssertTrue(d.state.duplicateScopes().isEmpty, "Suggest Tabs to Close off")
     }
 
     // MARK: Usage

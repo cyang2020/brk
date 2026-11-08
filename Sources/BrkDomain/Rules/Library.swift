@@ -85,7 +85,26 @@ extension Work {
             // History removal does not dispose a live request context or schedule profile-directory deletion.
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
             state.doc.history.removeAll { $0.profile == profile }
+        case .historySearch(let text):
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard case .profile(let profile) = state.libraryContext(in: window), state.searchModelReady,
+                  trimmed.count >= MeaningSearch.minimumLength, trimmed.count <= 200 else {
+                if state.session.windows[window]?.meaning[.history] != nil { state.session.windows[window]?.meaning[.history] = nil }
+                return
+            }
+            if state.session.windows[window]?.meaning[.history]?.text == trimmed { return }
+            effects.append(.searchByMeaning(window, MeaningQuery(text: trimmed, scope: .history, profile: profile)))
         }
+    }
+
+    /// The search model's answer, kept while it still answers what its place asked last (the bar's results also go
+    /// when the bar closes, `Normalize`).
+    mutating func meaningResults(_ window: WindowID, _ results: MeaningResults) {
+        guard state.session.windows[window] != nil, state.doc.windows[window]?.kind != .incognito else { return }
+        if results.scope == .commandBar {
+            guard case .commandBar? = state.session.windows[window]?.overlay else { return }
+        }
+        state.session.windows[window]?.meaning[results.scope] = results
     }
 
     /// A standard window's Today tab that never had an address (its only request became a download) is removed, not
