@@ -830,14 +830,21 @@ enum AILivePagesScenarios {
                 // The articles were archived today, so "last week" holds none of them yet; the list may start empty.
                 return "\(how); schedule \(live(app, made.id)["schedule"] ?? "nil"); data now \(short(record(app, made.id)?["data"] as? String))"
             }
-            if let weekly { log.check("a week later, Monday's refresh lists the articles archived in the week before") {
+            if let weekly { log.check("mid-week a fourth article is archived; Monday's refresh lists what was archived in the week before") {
+                // Three days on, a fourth article is read and archived.
+                moved += 3 * 86_400
+                _ = try app.advanceClock(seconds: 3 * 86_400)
+                try open(app, "article-tea.html")
+                try key(.command, .w)
+                app.sleep(0.8)
                 let home = try todayRow(app) { $0.url?.absoluteString.hasSuffix("index.html") == true }
                 try click(app, at: centre(stillFrame(app, .row(home.id))))
-                let kind = try passTheHour(app, weekly, seconds: 7 * 86_400 + 3 * 3_600, timeout: 300)
+                // Then to the next Monday, past 9:00.
+                let kind = try passTheHour(app, weekly, seconds: 4 * 86_400 + 3 * 3_600, timeout: 300)
                 try expect(kind == "updated", "the outcome: \(kind) \(outcomeDetail(app, weekly))")
                 let data = record(app, weekly)?["data"] as? String ?? ""
-                let titles = ["sleep", "coffee", "river"].filter { data.lowercased().contains($0) }
-                try expect(titles.count == 3, "the reading list's data: \(short(data))")
+                let titles = ["sleep", "coffee", "river", "tea"].filter { data.lowercased().contains($0) }
+                try expect(titles.contains("tea"), "the reading list's data: \(short(data))")
                 try app.waitUntil("the row's mark", timeout: 6) { try pageRow(app, weekly)?.liveMark == .changed }
                 try showPage(app, weekly)
                 shot(app, prefix, "weekly-refreshed")

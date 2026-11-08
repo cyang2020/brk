@@ -48,9 +48,12 @@ import Foundation
         }
     }
 
-    /// Codex 0.164.0's features that add a tool of its own, off in a refresh.
+    /// Codex 0.164.0's features that add a tool of its own, off in a refresh. Code mode stays on: it is how this Codex
+    /// calls any tool, Brk's included (with it off, codex-1's refreshes called nothing: "code-mode host is disabled").
+    /// What is left, asked of the model itself in a probe: apply_patch, clock__curr_time, the three MCP resource tools
+    /// (Brk's server has no resources) and Brk's; apply_patch's writes are refused by the read-only sandbox.
     static let refreshFeaturesOff = ["shell_tool", "unified_exec", "apps", "plugins", "hooks", "multi_agent", "image_generation", "browser_use", "browser_use_external",
-                                     "computer_use", "in_app_browser", "view_image", "skill_search", "skill_mcp_dependency_install", "goals", "tool_suggest", "sleep_tool", "code_mode_host"]
+                                     "computer_use", "in_app_browser", "view_image", "skill_search", "skill_mcp_dependency_install", "goals", "tool_suggest", "sleep_tool"]
 
     /// `{brk={command="…",args=["…"]}}` as TOML.
     static func mcpServer(_ tools: AgentToolsLink) -> String {

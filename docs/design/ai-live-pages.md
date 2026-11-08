@@ -68,7 +68,10 @@ A refresh runs with nobody there to answer an approval, so nothing in it asks; w
   server only, `--permission-mode dontAsk` and `--allowedTools` naming the five tools; Codex runs `app-server` in the
   read-only sandbox with `approval_policy="never"`, `web_search="disabled"`, `mcp_servers` = Brk's only, and its tool
   features off (shell, unified exec, view image, apps, plugins, hooks, helpers, browser and computer use, skill search,
-  image generation, goals, tool suggestions, sleep, code mode);
+  image generation, goals, tool suggestions, sleep). Code mode stays on: it is how Codex 0.164 calls any tool. Asked in a
+  probe, a Codex started this way listed `apply_patch`, `clock__curr_time`, three MCP resource tools (Brk's server offers
+  no resources) and Brk's tools, and its `apply_patch` was refused: "writing is blocked by read-only sandbox; rejected by
+  user approval settings";
 - open, show, close, move, group or split a tab, read a conversation, preview, render, keep or change a page: Brk's
   server lists only the five tools to a refresh and refuses any other name;
 - load an address the page did not list, or one the profile has not visited (an address with something added to it is

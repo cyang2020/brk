@@ -44,6 +44,7 @@ final class LivePageRefreshTests: XCTestCase {
                      "features.browser_use=false", "features.computer_use=false", "features.skill_search=false", "features.image_generation=false"] {
             XCTAssertTrue(arguments.contains(part), part)
         }
+        XCTAssertFalse(arguments.contains("features.code_mode_host=false"), "code mode is how Codex 0.164 calls any tool")
         let thread = CodexBackend.threadRequest(spec(.codex, .refresh))
         XCTAssertEqual(thread.method, "thread/start")
         XCTAssertEqual(thread.params["sandbox"] as? String, "read-only")
