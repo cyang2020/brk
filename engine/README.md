@@ -55,9 +55,10 @@ Total under `~/brk-chromium`: 42 GB. `dist-core/Brk.app`: 891 MB, mostly APFS cl
   than a release build would be. Measure before judging speed from this build.
 - **`concurrent_links = 1`.** A framework link takes several GB.
 - **`use_siso = false`.** Plain ninja, so the build tool can be paused alone.
-- **Codecs: the CEF binary's set.** `proprietary_codecs = false`, `ffmpeg_branding = "Chromium"`. `engine/tools/codec-probe.py` asked the CEF 154.0.34 binary at
-  run time: VP8, VP9, AV1, MP3, Opus and FLAC decode; H.264, HEVC, AAC and AC-3 do not. Turning them on is a decision about licensing: the user's.
-- **Widevine off**, as it is unavailable in the CEF binary too. The user's decision.
+- **Codecs: H.264 and AAC on** (the user's decision, 2026-11-08): `proprietary_codecs = true`, `ffmpeg_branding = "Chrome"`, as Arc and Chrome play them
+  and many sites need them. The CEF 154.0.34 binary Brk ships decodes VP8, VP9, AV1, MP3, Opus and FLAC only (`engine/tools/codec-probe.py`). This build
+  is local and not distributed. **Publishing it would need a licensing check first** (H.264 and AAC are patent-licensed codecs).
+- **Widevine off.** It needs Google's signed component, which a self-built Chromium cannot get. The user's decision.
 - **No Google API keys.** `use_official_google_api_keys = false`, none in the build. Chromium's sign-in and sync do not work without them, which Brk does not use.
 
 ## How the build behaves

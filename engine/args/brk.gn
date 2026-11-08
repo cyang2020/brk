@@ -24,11 +24,11 @@ use_remoteexec = false
 # Plain ninja, so the build tool can be paused alone (engine/tools/paced-build.py).
 use_siso = false
 
-# Same codec set as the CEF 154.0.34 binary Brk ships today, measured with engine/tools/codec-probe.py: VP8, VP9, AV1, MP3,
-# Opus, FLAC decode; H.264, AAC, HEVC and AC-3 do not. Turning them on is the user's decision (licensing).
-proprietary_codecs = false
-ffmpeg_branding = "Chromium"
-# Widevine is unavailable in the CEF binary too. Turning it on is the user's decision.
+# H.264 and AAC, as Arc and Chrome play them; many sites need them (the user's decision, 2026-11-08). This build is local and not
+# distributed: publishing it would need a licensing check first (engine/README.md). Confirm with engine/tools/codec-probe.py.
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"
+# Widevine needs Google's signed component, which a self-built Chromium cannot get (the user's decision: off).
 enable_widevine = false
 
 # No Google API keys of any kind.
