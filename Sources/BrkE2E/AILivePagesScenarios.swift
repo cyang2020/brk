@@ -822,9 +822,11 @@ enum AILivePagesScenarios {
                 return "\(how); schedule \(live(app, made.id)["schedule"] ?? "nil"); data now \(short(record(app, made.id)?["data"] as? String))"
             }
             if let weekly { log.check("mid-week a fourth article is archived; Monday's refresh lists what was archived in the week before") {
-                // Three days on, a fourth article is read and archived.
-                moved += 3 * 86_400
-                _ = try app.advanceClock(seconds: 3 * 86_400)
+                // Three days on. The page was made on a Monday before 9:00, so that morning's slot passed meanwhile and
+                // runs once now (claude-weekly-3 and codex-3 read the list while this run was still going).
+                try lookAway(app)
+                let catchUp = try passTheHour(app, weekly, seconds: 3 * 86_400, timeout: 300)
+                log.write("  the slot missed during the three days ran once: \(catchUp)")
                 try open(app, "article-tea.html")
                 try key(.command, .w)
                 app.sleep(0.8)
