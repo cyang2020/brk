@@ -127,7 +127,8 @@ enum AIRealPagesScenarios {
             let facts = try app.native()
             guard let target = facts.actual[id.identifier]?.frame, let box = facts.actual[container.identifier]?.frame else { throw Check(description: "no \(id.identifier)") }
             let inside = target.minY >= box.minY + 8 && target.maxY <= box.maxY - 8
-            let covered = inside && PhysicalPointer.frontmost(at: try screen(app, centre(target)))?.pid != pid
+            let middle = try screen(app, centre(target))
+            let covered = inside && PhysicalPointer.frontmost(at: middle)?.pid != pid
             if inside, !covered { return }
             // Out of sight: toward it. Covered: move it up past whatever is in front.
             let up = covered || target.minY >= box.minY + 8
