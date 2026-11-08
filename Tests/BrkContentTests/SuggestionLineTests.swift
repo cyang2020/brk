@@ -52,7 +52,7 @@ final class SuggestionLineTests: XCTestCase {
         XCTAssertFalse(line.name.isTruncated, "\(line.name.frame.width) for \(line.name.natural.width)")
         XCTAssertTrue(line.name.label.usesSingleLineMode)
         XCTAssertLessThanOrEqual(line.name.natural.height, line.bounds.height, "one line fits the row's second line")
-        XCTAssertGreaterThanOrEqual(line.name.frame.minX, line.action.frame.maxX)
+        XCTAssertGreaterThanOrEqual(line.name.frame.minX + 2, line.action.frame.maxX - 2, "the texts do not overlap (each label draws 2 points in)")
         XCTAssertGreaterThanOrEqual(line.close.frame.minX, line.name.frame.maxX)
         let drawn = try drawnText(line)
         XCTAssertTrue(drawn.contains("Recipes"), "drawn: \(drawn)")

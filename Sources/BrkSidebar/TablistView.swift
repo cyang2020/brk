@@ -1005,6 +1005,8 @@ final class SuggestionLine: NSView {
     var dismiss: (() -> Void)? { didSet { close.action = dismiss } }
     static let closeWidth: CGFloat = 14
     static let gap: CGFloat = 3
+    /// The labels draw their text 2 points in from each side; this makes the space after "Move to" a word space.
+    static let wordGap: CGFloat = -1
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -1033,15 +1035,15 @@ final class SuggestionLine: NSView {
     }
 
     override var fittingSize: NSSize {
-        NSSize(width: action.natural.width + Self.gap + name.natural.width + Self.gap + Self.closeWidth, height: max(action.natural.height, 14))
+        NSSize(width: action.natural.width + Self.wordGap + name.natural.width + Self.gap + Self.closeWidth, height: max(action.natural.height, 14))
     }
 
     override func layout() {
         super.layout()
         let actionWidth = min(action.natural.width, bounds.width - Self.closeWidth - Self.gap)
         action.frame = CGRect(x: 0, y: 0, width: max(0, actionWidth), height: bounds.height)
-        let room = bounds.width - action.frame.maxX - Self.gap * 2 - Self.closeWidth
-        name.frame = CGRect(x: action.frame.maxX + Self.gap, y: 0, width: max(0, min(name.natural.width, room)), height: bounds.height)
+        let room = bounds.width - action.frame.maxX - Self.wordGap - Self.gap - Self.closeWidth
+        name.frame = CGRect(x: action.frame.maxX + Self.wordGap, y: 0, width: max(0, min(name.natural.width, room)), height: bounds.height)
         close.frame = CGRect(x: name.frame.maxX + Self.gap, y: 0, width: Self.closeWidth, height: bounds.height)
     }
 }

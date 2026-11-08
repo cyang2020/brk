@@ -360,12 +360,18 @@ enum AIBasicRealUIScenarios {
             try expect(try folders(app).contains { $0.title == label.name }, "the suggestion names \(label.name), not a group of this space")
             // What the row draws, read from the screenshot's pixels: the group's name must be on screen.
             let drawn = try readText(shown.url, in: try frame(app, .tabTool("ai-suggestion-line-" + pie.id.rawValue)), app: app, width: shown.width)
-            try expect(drawn.contains(label.name), "the row draws \"\(drawn)\" for \(label.text)")
+            // The whole name, or on a narrow row its start and an ellipsis; "Move to" is never the part cut.
+            let afterAction = drawn.components(separatedBy: label.action).dropFirst().joined(separator: label.action).trimmingCharacters(in: .whitespaces)
+            let shownName = afterAction.components(separatedBy: CharacterSet(charactersIn: "…×xX")).first?.replacingOccurrences(of: "...", with: "").trimmingCharacters(in: .whitespaces) ?? ""
+            let whole = drawn.contains(label.name)
+            try expect(drawn.contains("Move to"), "the row draws \"\(drawn)\"")
+            try expect(whole || (shownName.count >= 4 && label.name.hasPrefix(shownName) && (drawn.contains("…") || drawn.contains("..."))),
+                       "the row draws \"\(drawn)\" for \(label.text)")
             try click(app, .tabTool("ai-suggestion-" + pie.id.rawValue))
             try app.waitUntil("the tab in its group") { try folders(app).contains { $0.children.contains { $0.id == pie.id } } }
             let into = try folders(app).first { $0.children.contains { $0.id == pie.id } }?.title ?? "?"
             shot(app, "placement-moved")
-            return "suggested \"\(label.text)\", drawn as \"\(drawn)\", clicked, now in \"\(into)\""
+            return "suggested \"\(label.text)\", drawn as \"\(drawn)\" (\(whole ? "whole name" : "name cut with an ellipsis")), clicked, now in \"\(into)\""
         } }
 
         if wanted("cleanup") { log.check("Suggest Tabs to Close: a duplicate is listed beside Tidy and closed from the list") {
