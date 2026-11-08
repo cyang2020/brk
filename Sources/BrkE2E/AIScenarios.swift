@@ -351,7 +351,8 @@ enum AIScenarios {
     /// Use Original brings the French back with "Translated back to French! Use ⌘Z to undo."; ⌘Z re-translates;
     /// Never Translate This Site restores the page and holds after a restart without asking the tool.
     private static func translate(_ app: AppUnderTest) throws {
-        try enable(app)
+        // The heading is read back through the tab's title, which Name Tabs would replace with its own name.
+        try enable(app, AIFeature.allCases.filter { !AIFeature.basicLayer.contains($0) })
         let page = try load(app)
         try app.evaluate(page, "window.keptInput=document.querySelector('#field');window.keptButton=document.querySelector('#button');keptInput.value='USER_EDIT';keptButton.click();")
         try app.waitUntil("Translation Available on the pill") { try app.view().urlPill.translation == .available }
