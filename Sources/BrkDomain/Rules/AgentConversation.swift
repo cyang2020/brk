@@ -10,23 +10,35 @@ extension Work {
     static let attachedTabsLimit = 50
 
     mutating func attachToConversation(_ sources: [AIAttachmentSource], in window: WindowID) {
+        // The window's panel takes what is given; with no conversation in it, the conversation tab the window shows does.
+        if state.session.ai.answers[window]?.conversation == nil, let shown = state.conversationCards(in: window).first?.answer.conversation?.id,
+           let host = reviveConversation(shown, in: window) {
+            attachToConversation(sources, at: host, window: window)
+            return
+        }
+        attachToConversation(sources, at: .panel(window), window: window)
+    }
+
+    mutating func attachToConversation(_ sources: [AIAttachmentSource], at host: AIAnswerHost, window: WindowID) {
         guard let profile = state.agentProfile(in: window) else { return }
         let made = sources.flatMap { attachments(for: $0, profile: profile, window: window) }
         guard !made.isEmpty else { return }
-        if var answer = state.session.ai.answers[window], var conversation = answer.conversation, !conversation.ended {
+        if var answer = state.session.ai[host: host], var conversation = answer.conversation, !conversation.ended {
             guard conversation.tabs else {
                 conversation.items.append(.notice("This conversation cannot read tabs. Close it, then drop the tabs again to start one that can."))
                 answer.conversation = conversation
-                state.session.ai.answers[window] = answer
+                state.session.ai[host: host] = answer
                 return
             }
             conversation.attached = Self.merged(conversation.attached, made)
             conversation.mention = nil
             answer.conversation = conversation
-            state.session.ai.answers[window] = answer
+            state.session.ai[host: host] = answer
             return
         }
+        guard case .panel = host else { return }
         // No conversation yet: a new one, waiting for its first message. Its session starts with that message.
+        putAwayPanelConversation(in: window)
         cancelAI(in: window, slot: .panel)
         let id = AIRequestID(ctx.newID())
         var conversation = AIConversationSnapshot(id: id, tabs: true)
@@ -74,35 +86,41 @@ extension Work {
         }
     }
 
-    mutating func detachFromConversation(_ id: String, in window: WindowID) {
-        guard var conversation = state.session.ai.answers[window]?.conversation else { return }
+    mutating func detachFromConversation(_ id: String, at host: AIAnswerHost) {
+        guard var conversation = state.session.ai[host: host]?.conversation else { return }
         conversation.attached.removeAll { $0.id == id }
-        state.session.ai.answers[window]?.conversation = conversation
+        state.session.ai[host: host]?.conversation = conversation
     }
 
-    mutating func mentionChanged(_ query: String?, in window: WindowID) {
-        guard var conversation = state.session.ai.answers[window]?.conversation, conversation.tabs, !conversation.ended else { return }
+    mutating func mentionChanged(_ query: String?, at host: AIAnswerHost, window: WindowID) {
+        guard var conversation = state.session.ai[host: host]?.conversation, conversation.tabs, !conversation.ended else { return }
         guard let query, query.count <= 200, let profile = state.agentProfile(in: window) else {
             conversation.mention = nil
-            state.session.ai.answers[window]?.conversation = conversation
+            state.session.ai[host: host]?.conversation = conversation
             return
         }
         let candidates = state.agentOpenTabs(profile: profile, window: window) + state.agentArchivedTabs(profile: profile) + state.agentHistory(profile: profile)
         let matches = AgentMentions.matches(query, in: candidates, currentSpace: state.doc.windows[window]?.space)
         conversation.mention = AIMentionSnapshot(query: query, matches: matches.map { AIAttachedTab(id: $0.id, title: $0.title, url: $0.url, otherProfile: false) })
-        state.session.ai.answers[window]?.conversation = conversation
+        state.session.ai[host: host]?.conversation = conversation
         effects.append(.aiMentionSearch(window, query))
     }
 
+    /// The live conversation whose @ list a window's search answers: the panel's, else the shown conversation tab's.
+    private func mentionHost(in window: WindowID, query: String) -> AIAnswerHost? {
+        if state.session.ai.answers[window]?.conversation?.mention?.query == query { return .panel(window) }
+        return state.session.ai.tabAnswers.first { state.session.ai.tabWindows[$0.key] == window && $0.value.conversation?.mention?.query == query }.map { .tab($0.key) }
+    }
+
     mutating func aiMentionMatches(_ window: WindowID, query: String, ids: [String]) {
-        guard var conversation = state.session.ai.answers[window]?.conversation, var mention = conversation.mention, mention.query == query,
-              let profile = state.agentProfile(in: window) else { return }
+        guard let host = mentionHost(in: window, query: query), var conversation = state.session.ai[host: host]?.conversation,
+              var mention = conversation.mention, mention.query == query, let profile = state.agentProfile(in: window) else { return }
         for id in ids where mention.matches.count < AgentMentions.limit && !mention.matches.contains(where: { $0.id == id }) {
             guard let facts = state.agentTab(id, window: window), facts.profile == profile else { continue }
             mention.matches.append(AIAttachedTab(id: facts.id, title: facts.title, url: facts.url, otherProfile: false))
         }
         conversation.mention = mention
-        state.session.ai.answers[window]?.conversation = conversation
+        state.session.ai[host: host]?.conversation = conversation
     }
 
     /// A tab link in an answer: shows the tab, or brings it back from the archive, or opens the visit's address again.

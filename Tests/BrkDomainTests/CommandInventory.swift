@@ -25,6 +25,8 @@ enum CommandInventory {
         .assist(.useOriginal), .assist(.languageSettings), .assist(.previewHover(true)), .assist(.sharePreview),
         .assist(.followUp("why")), .assist(.stop), .assist(.chooseFolder), .assist(.approve(approval: "a", option: "b")),
         .assist(.attach([.tab("ghost"), .folder(ItemID("ghost")), .space(SpaceID("ghost"))])), .assist(.detach("ghost")), .assist(.mention("x")), .assist(.openTabLink("ghost")),
+        .assist(.inTab(AIRequestID("ghost"), .followUp("x"))), .assist(.openAsTab), .assist(.openConversation(AIRequestID("ghost"))), .assist(.keepPage(AIPageID("ghost"))),
+        .assist(.pageLink(AIPageID("ghost"), URL(string: "https://ghost.example/")!)), .assist(.answerPageLink(true)),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
         .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
         .capture(.act(.copy)),
@@ -146,7 +148,7 @@ enum CommandInventory {
         .aiPartial(AIRequestID("ghost"), "partial"), .aiPageRead(AIRequestID("ghost"), siteTarget.document.browser.page, nil),
         .aiDeadline(AIRequestID("ghost")), .aiHoverReady(WindowID("ghost"), example, nil), .aiTranslated(AIRequestID("ghost"), false),
         .aiDownloadRenamed(download, originalPath: "/tmp/ghost", newPath: nil, error: nil),
-        .aiConversation(AIRequestID("ghost"), .notice("x")), .aiAgents([]), .aiAgentsWanted, .aiFolderChosen(WindowID("ghost"), nil),
+        .aiConversation(AIRequestID("ghost"), .notice("x")), .conversationsLoaded([], []), .aiAgents([]), .aiAgentsWanted, .aiFolderChosen(WindowID("ghost"), nil),
         .localModels(LocalModelsSnapshot()),
         .agentRead(AgentReadRequest(call: "ghost", window: WindowID("ghost"), tab: "ghost", part: .text)),
         .agentAct(AgentActRequest(call: "ghost", window: WindowID("ghost"), act: .close([ItemID("ghost")]))), .aiMentionMatches(WindowID("ghost"), query: "x", ["ghost"]),
@@ -236,6 +238,12 @@ enum CommandInventory {
             case .detach: "detach"
             case .mention: "mention"
             case .openTabLink: "openTabLink"
+            case .inTab: "inTab"
+            case .openAsTab: "openAsTab"
+            case .openConversation: "openConversation"
+            case .keepPage: "keepPage"
+            case .pageLink: "pageLink"
+            case .answerPageLink: "answerPageLink"
             }
         case .easel(let c):
             switch c {
@@ -597,6 +605,7 @@ enum CommandInventory {
         case .aiTranslated: "aiTranslated"
         case .aiDownloadRenamed: "aiDownloadRenamed"
         case .aiConversation: "aiConversation"
+        case .conversationsLoaded: "conversationsLoaded"
         case .aiAgents: "aiAgents"
         case .aiAgentsWanted: "aiAgentsWanted"
         case .aiFolderChosen: "aiFolderChosen"

@@ -6,13 +6,26 @@ extension Work {
 
     mutating func assist(_ intent: AIIntent, in window: WindowID) {
         switch intent {
-        case .cancel, .stop, .dismiss:
+        case .inTab(let id, let inner):
+            assistInTab(id, inner, in: window)
+            return
+        case .dismiss:
+            // A saved conversation is put away: its row keeps it, and a running turn goes on out of sight.
+            if putAwayPanelConversation(in: window) { return }
             cancelAI(in: window, slot: .panel)
-            if intent == .dismiss { state.session.ai.answers[window] = nil }
+            state.session.ai.answers[window] = nil
+            return
+        case .cancel, .stop:
+            cancelAI(in: window, slot: .panel)
             return
         case .approve(let approval, let option):
-            answerApproval(approval, option: option, in: window)
+            answerApproval(approval, option: option, at: .panel(window))
             return
+        case .openAsTab: openPanelAsTab(in: window); return
+        case .openConversation(let id): openConversationTab(id, in: window); return
+        case .keepPage(let id): _ = keepPage(id, title: nil, in: window, show: true); return
+        case .pageLink(let page, let url): pageLink(page, url, in: window); return
+        case .answerPageLink(let open): answerPageLink(open, in: window); return
         case .undoOrganize: undoAIOrganize(in: window); return
         case .neverTranslateSite, .neverTranslateLanguage:
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
@@ -82,12 +95,12 @@ extension Work {
             askAgent(q, choice: agent, in: window)
         case .followUp(let text):
             guard let q = aiQuestion(text) else { return }
-            followUp(q, in: window)
+            followUp(q, at: .panel(window), window: window)
         case .attach(let sources):
             guard aiEnabled(.commandBar, window) else { return }
             attachToConversation(sources, in: window)
-        case .detach(let id): detachFromConversation(id, in: window)
-        case .mention(let query): mentionChanged(query, in: window)
+        case .detach(let id): detachFromConversation(id, at: .panel(window))
+        case .mention(let query): mentionChanged(query, at: .panel(window), window: window)
         case .openTabLink(let id): openTabLink(id, in: window)
         case .chooseFolder:
             guard aiEnabled(.commandBar, window) else { return }
@@ -141,6 +154,37 @@ extension Work {
         let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return !q.isEmpty && q.count <= 2000 ? q : nil
     }
+
+    /// The controls of a conversation's own tab: the same intents as the panel's, on that conversation. A saved one
+    /// with no live state gets it back first (`reviveConversation`).
+    private mutating func assistInTab(_ id: AIRequestID, _ intent: AIIntent, in window: WindowID) {
+        guard state.doc.windows[window]?.kind == .standard else { return }
+        switch intent {
+        case .followUp(let text):
+            guard let q = aiQuestion(text) else { return }
+            guard state.doc.settings.max.enabled(.commandBar) || state.doc.conversations[id]?.tabs == false else { _ = aiEnabled(.commandBar, window); return }
+            guard let host = reviveConversation(id, in: window) else { return }
+            followUp(q, at: host, window: window)
+        case .stop, .cancel:
+            guard let host = state.session.ai.host(ofConversation: id), let request = state.session.ai[host: host]?.request else { return }
+            completeAI(request, text: Self.cancelled)
+        case .approve(let approval, let option):
+            guard let host = state.session.ai.host(ofConversation: id) else { return }
+            answerApproval(approval, option: option, at: host)
+        case .attach(let sources):
+            guard aiEnabled(.commandBar, window), let host = reviveConversation(id, in: window) else { return }
+            attachToConversation(sources, at: host, window: window)
+        case .detach(let chip):
+            guard let host = state.session.ai.host(ofConversation: id) else { return }
+            detachFromConversation(chip, at: host)
+        case .mention(let query):
+            guard let host = query == nil ? state.session.ai.host(ofConversation: id) : reviveConversation(id, in: window) else { return }
+            mentionChanged(query, at: host, window: window)
+        case .openTabLink, .openConversation, .keepPage, .pageLink, .answerPageLink:
+            assist(intent, in: window)
+        default: break
+        }
+    }
     /// Why Ask in Command Bar cannot run, or nil: the Max switch is off, or the provider is set to off. (Whether a
     /// CLI is on PATH is only known to the app's seam; an answer without one says so, `AIOutcome.unavailable`.)
     private func askBarMissing() -> String? {
@@ -167,6 +211,7 @@ extension Work {
         return true
     }
     private mutating func aiMessage(_ text: String, in window: WindowID) {
+        putAwayPanelConversation(in: window)
         state.session.ai.answerContexts[window] = state.libraryContext(in: window)
         state.session.ai.answers[window] = AIAnswerSnapshot(request: nil, title: "Max", text: text, busy: false, sources: [])
     }
@@ -174,6 +219,7 @@ extension Work {
     /// one tidy); Instant Links searches run side by side, one Today row each. Only the panel's purposes write the
     /// answer panel.
     private mutating func startAI(_ task: AITask, purpose: AIPurpose, title: String, window: WindowID, run: Bool = true, seconds: Int = 120) -> AIRequestID {
+        if !purpose.inPlace { putAwayPanelConversation(in: window) }
         if purpose.slot != .instant { cancelAI(in: window, slot: purpose.slot) }
         let id = AIRequestID(ctx.newID())
         state.session.ai.requests[id] = AIRequest(window: window, context: state.libraryContext(in: window), task: task, purpose: purpose)
@@ -198,31 +244,37 @@ extension Work {
     /// The request becomes the first turn of a conversation: its session stays for follow-ups. With `tabs` it has Brk's
     /// tab tools and the agent's own tools ask every time; without, tools are off (a page question carries page text).
     private mutating func openConversation(_ id: AIRequestID, in window: WindowID, tabs: Bool = false, choice: AIProviderChoice? = nil) {
-        state.session.ai.answers[window]?.conversation = AIConversationSnapshot(id: id, tabs: tabs)
+        var conversation = AIConversationSnapshot(id: id, tabs: tabs)
+        // The question is the transcript's first message, as later ones are; the panel shows it as its title.
+        if let question = state.session.ai.answers[window]?.title { conversation.items = [.user(question)] }
+        state.session.ai.answers[window]?.conversation = conversation
         state.session.ai.turnText[id] = 0
         effects.append(.aiOpenConversation(id, folder: nil, choice: choice ?? state.doc.settings.max.provider, tabs: tabs ? window : nil))
+        saveConversation(id, title: state.session.ai.answers[window]?.title ?? ConversationPage.untitled, in: window)
     }
-    /// The next message in the panel's conversation. One turn at a time: the panel offers Stop while one runs.
-    private mutating func followUp(_ q: String, in window: WindowID) {
-        guard var answer = state.session.ai.answers[window], var conversation = answer.conversation, !conversation.ended, !answer.busy else { return }
+    /// The next message in a conversation, in the panel or its tab. One turn at a time: Stop shows while one runs.
+    private mutating func followUp(_ q: String, at host: AIAnswerHost, window: WindowID) {
+        guard var answer = state.session.ai[host: host], var conversation = answer.conversation, !conversation.ended, !answer.busy else { return }
         if conversation.fresh {
             // The first message of a conversation started by giving it tabs: its session starts now, and this is its
             // first request, as a question from the command bar would be.
             let id = conversation.id
             conversation.fresh = false
+            conversation.items.append(.user(q))
             let attached = takeAttachments(&conversation)
             answer.conversation = conversation
             answer.title = q
             answer.request = id
             answer.busy = true
             answer.text = Self.waiting
-            state.session.ai.answers[window] = answer
+            state.session.ai[host: host] = answer
             state.session.ai.requests[id] = AIRequest(window: window, context: state.libraryContext(in: window), task: .ask(q), purpose: .answer)
             state.session.ai.turnText[id] = 0
             effects.append(.aiOpenConversation(id, folder: nil, choice: state.doc.settings.max.provider, tabs: window))
             if !attached.isEmpty { effects.append(.aiAttach(id, attached)) }
             effects.append(.aiWatch(id, seconds: Self.panelSeconds))
             sendAI(id, task: .ask(q))
+            saveConversation(id, title: q, in: window)
             return
         }
         let turn = AIRequestID(ctx.newID())
@@ -231,20 +283,32 @@ extension Work {
         conversation.items.append(.user(q))
         let attached = conversation.tabs ? takeAttachments(&conversation) : []
         state.session.ai.turnText[conversation.id] = 0
+        if conversation.dormant {
+            // A saved conversation shown again: its session starts now, continuing the agent's own where it kept one.
+            conversation.dormant = false
+            let stored = state.doc.conversations[conversation.id]
+            let choice = stored?.agent.flatMap { AIProviderChoice(rawValue: $0.rawValue) } ?? state.doc.settings.max.provider
+            effects.append(.aiOpenConversation(conversation.id, folder: conversation.folder, choice: choice, tabs: conversation.tabs ? window : nil,
+                                               resume: AIResume(session: stored?.resume, history: stored?.history() ?? "")))
+        }
+        if case .tab(let id) = host { state.session.ai.tabWindows[id] = window }
         answer.conversation = conversation
         answer.request = turn
         answer.busy = true
         answer.text = Self.waiting
-        state.session.ai.answers[window] = answer
+        state.session.ai[host: host] = answer
         if conversation.folder == nil { effects.append(.aiWatch(turn, seconds: Self.panelSeconds)) }
         if !attached.isEmpty { effects.append(.aiAttach(conversation.id, attached)) }
         effects.append(.aiTurn(conversation: conversation.id, turn: turn, .ask(q)))
+        if state.doc.conversations[conversation.id] == nil { saveConversation(conversation.id, title: q, in: window) }
+        else { commitConversation(conversation.id) }
     }
     /// The user chose a folder: a new session with tools on and approvals on, waiting for the first message. Home and
     /// the disk's root are refused; a coding session needs a folder that holds one project.
     mutating func aiFolderChosen(_ folder: String?, in window: WindowID) {
         guard let folder, state.doc.windows[window] != nil, state.doc.windows[window]?.kind != .incognito else { return }
         if let refusal = AIValidation.workingFolderRefusal(folder, home: NSHomeDirectory()) { toast(refusal, in: window); return }
+        putAwayPanelConversation(in: window)
         cancelAI(in: window, slot: .panel)
         let id = AIRequestID(ctx.newID())
         var conversation = AIConversationSnapshot(id: id, folder: folder)
@@ -255,57 +319,74 @@ extension Work {
         state.session.windows[window]?.overlay = nil
         effects.append(.aiOpenConversation(id, folder: folder, choice: state.doc.settings.max.provider))
     }
-    private func conversationWindow(_ id: AIRequestID) -> WindowID? {
-        state.session.ai.answers.first { $0.value.conversation?.id == id }?.key
-    }
     mutating func aiConversation(_ id: AIRequestID, _ event: AIConversationEvent) {
-        guard let window = conversationWindow(id), var conversation = state.session.ai.answers[window]?.conversation else { return }
+        // What outlives the live state: the saved conversation's session id and what it has read.
+        switch event {
+        case .resumable(let session):
+            if state.doc.conversations[id] != nil, state.doc.conversations[id]?.resume != session { state.doc.conversations[id]?.resume = session }
+            return
+        case .pageText(let flagged):
+            guard var stored = state.doc.conversations[id] else { return }
+            let before = stored
+            stored.readPages = true
+            stored.flagged = stored.flagged || flagged
+            if stored != before { state.doc.conversations[id] = stored }
+            return
+        case .page(let record):
+            aiPageRendered(id, record)
+            return
+        default: break
+        }
+        guard let host = state.session.ai.host(ofConversation: id), var conversation = state.session.ai[host: host]?.conversation else { return }
         switch event {
         case .started(let agent, let name, let model, let effort):
             conversation.agent = agent; conversation.agentName = name; conversation.model = model; conversation.effort = effort
         case .step(let step, let turn):
-            guard state.session.ai.answers[window]?.request == turn else { return }
+            guard state.session.ai[host: host]?.request == turn else { return }
             if let index = conversation.items.firstIndex(where: { if case .step(let s) = $0 { s.id == step.id } else { false } }) {
                 conversation.items[index] = .step(step)
             } else {
-                holdTurnText(conversation.id, in: window)
+                holdTurnText(conversation.id, at: host)
                 conversation.items.append(.step(step))
             }
         case .approval(let approval, let turn):
-            guard state.session.ai.answers[window]?.request == turn else { return }
-            holdTurnText(conversation.id, in: window)
+            guard state.session.ai[host: host]?.request == turn else { return }
+            holdTurnText(conversation.id, at: host)
             conversation.items.append(.approval(approval))
         case .approvalClosed(let approval):
             conversation.items = conversation.items.compactMap {
                 if case .approval(let a) = $0, a.id == approval, a.answer == nil { nil } else { $0 }
             }
         case .notice(let text): conversation.items.append(.notice(text))
+        case .resumable, .pageText, .page: break
         }
-        state.session.ai.answers[window]?.conversation = conversation
+        state.session.ai[host: host]?.conversation = conversation
+        if case .started = event { commitConversation(id) }
+        if case .notice = event, state.session.ai[host: host]?.busy == false { commitConversation(id) }
     }
     /// A step or approval follows the text so far: the turn's later text goes into a new row under it.
-    private mutating func holdTurnText(_ id: AIRequestID, in window: WindowID) {
-        guard let answer = state.session.ai.answers[window], answer.busy, case .assistant? = answer.conversation?.items.last,
+    private mutating func holdTurnText(_ id: AIRequestID, at host: AIAnswerHost) {
+        guard let answer = state.session.ai[host: host], answer.busy, case .assistant? = answer.conversation?.items.last,
               answer.request.flatMap({ state.session.pendingAI[$0] }) != nil else { return }
         let shown = answer.text == Self.waiting ? 0 : answer.text.count
         state.session.ai.turnText[id] = shown
     }
-    private mutating func answerApproval(_ approval: String, option: String, in window: WindowID) {
-        guard var conversation = state.session.ai.answers[window]?.conversation, !conversation.ended,
+    private mutating func answerApproval(_ approval: String, option: String, at host: AIAnswerHost) {
+        guard var conversation = state.session.ai[host: host]?.conversation, !conversation.ended,
               let index = conversation.items.firstIndex(where: { if case .approval(let a) = $0 { a.id == approval && a.answer == nil } else { false } }),
               case .approval(var value) = conversation.items[index], value.options.contains(where: { $0.id == option }) else { return }
         value.answer = option
         conversation.items[index] = .approval(value)
-        state.session.ai.answers[window]?.conversation = conversation
+        state.session.ai[host: host]?.conversation = conversation
         effects.append(.aiApprove(conversation: conversation.id, approval: approval, option: option))
     }
     /// The turn's text so far, minus what rows above the last step already show.
-    private mutating func showTurnText(_ text: String, in window: WindowID) {
-        guard var conversation = state.session.ai.answers[window]?.conversation else { return }
+    private mutating func showTurnText(_ text: String, at host: AIAnswerHost) {
+        guard var conversation = state.session.ai[host: host]?.conversation else { return }
         let rest = String(text.dropFirst(state.session.ai.turnText[conversation.id] ?? 0))
         if case .assistant? = conversation.items.last { conversation.items[conversation.items.count - 1] = .assistant(rest) }
         else if !rest.isEmpty { conversation.items.append(.assistant(rest)) }
-        state.session.ai.answers[window]?.conversation = conversation
+        state.session.ai[host: host]?.conversation = conversation
     }
     mutating func aiAgents(_ statuses: [AIAgentStatus]) {
         for status in statuses { state.session.ai.agents[status.kind] = status }
@@ -575,9 +656,9 @@ extension Work {
         switch request.task {
         case .ask, .pageQuestion, .browse:
             // The bar's row shows the finished answer; the answer panel is someone else's.
-            guard !request.purpose.inPlace, state.session.ai.answers[request.window]?.request == id else { return }
-            state.session.ai.answers[request.window]?.text = String(text.prefix(60_000))
-            showTurnText(String(text.prefix(60_000)), in: request.window)
+            guard !request.purpose.inPlace, let host = state.session.ai.host(ofRequest: id) else { return }
+            state.session.ai[host: host]?.text = String(text.prefix(60_000))
+            showTurnText(String(text.prefix(60_000)), at: host)
         default: break
         }
     }
@@ -608,17 +689,18 @@ extension Work {
         state.session.pendingAI[id] = nil
         effects.append(.aiCancel(id))
         if request.purpose.inPlace { finishInPlace(id, request, text: text, success: success); return }
-        guard state.session.ai.answers[request.window]?.request == id else { return }
-        state.session.ai.answers[request.window]?.text = text
-        state.session.ai.answers[request.window]?.busy = false
-        state.session.ai.answers[request.window]?.request = nil
-        guard var conversation = state.session.ai.answers[request.window]?.conversation else { return }
+        guard let host = state.session.ai.host(ofRequest: id) else { return }
+        state.session.ai[host: host]?.text = text
+        state.session.ai[host: host]?.busy = false
+        state.session.ai[host: host]?.request = nil
+        guard var conversation = state.session.ai[host: host]?.conversation else { return }
         // An approval the agent still waits for goes with the turn.
         conversation.items.removeAll { if case .approval(let a) = $0 { a.answer == nil } else { false } }
-        state.session.ai.answers[request.window]?.conversation = conversation
+        state.session.ai[host: host]?.conversation = conversation
         // The answer's text; otherwise what went wrong goes under whatever the agent had written.
-        if answered { showTurnText(text, in: request.window) }
-        else { state.session.ai.answers[request.window]?.conversation?.items.append(.notice(text == Self.cancelled ? "Stopped." : text)) }
+        if answered { showTurnText(text, at: host) }
+        else { state.session.ai[host: host]?.conversation?.items.append(.notice(text == Self.cancelled ? "Stopped." : text)) }
+        commitConversation(conversation.id)
     }
     private mutating func finishInPlace(_ id: AIRequestID, _ request: AIRequest, text: String, success: Bool) {
         let window = request.window
@@ -687,7 +769,12 @@ extension Work {
     }
 
     mutating func cancelAI(in window: WindowID, slot: AIPurpose.Slot) {
-        let ids = state.session.ai.requests.filter { $0.value.window == window && $0.value.purpose.slot == slot }.map(\.key)
+        // A turn of a conversation in its own tab is that tab's, whichever window it was typed in.
+        let ids = state.session.ai.requests.filter { request in
+            guard request.value.window == window, request.value.purpose.slot == slot else { return false }
+            if slot == .panel, case .tab? = state.session.ai.host(ofRequest: request.key) { return false }
+            return true
+        }.map(\.key)
         for id in ids { completeAI(id, text: Self.cancelled) }
     }
     /// Opens a verified Instant Links result as a Today tab under the window's rows (an ephemeral window: in its own
@@ -767,27 +854,25 @@ extension Work {
         for window in Set(state.session.ai.answers.keys).union(state.session.ai.undo.keys).union(state.session.ai.hover.keys).union(state.session.ai.answerContexts.keys)
             .union(state.session.ai.previews.keys).union(state.session.ai.instantRows.keys)
             where state.doc.windows[window] == nil || (state.session.ai.answerContexts[window] != nil && state.session.ai.answerContexts[window] != state.libraryContext(in: window)) {
+            putAwayPanelConversation(in: window)
             state.session.ai.answerContexts[window] = nil
             state.session.ai.answers[window] = nil; state.session.ai.undo[window] = nil; state.session.ai.hover[window] = nil; state.session.ai.hoverDocuments[window] = nil
             state.session.ai.previews[window] = nil; state.session.ai.previewHeld.remove(window); state.session.ai.instantRows[window] = nil
             state.session.ai.tidying.remove(window)
         }
-        // A conversation that left the panel takes its session and every process it started with it. Another agent
-        // chosen ends the one on screen; its transcript stays to read.
-        let shown = Set(state.session.ai.answers.values.compactMap { $0.conversation?.id })
-        for answer in previous.session.ai.answers.values {
-            if let id = answer.conversation?.id, !shown.contains(id) {
-                effects.append(.aiCloseConversation(id)); state.session.ai.turnText[id] = nil
-            }
-        }
+        // Another agent chosen ends the conversations that have a session; their transcripts stay to read, and a saved
+        // one continues with its own agent when it is shown again.
         if providerChanged {
             for (window, answer) in state.session.ai.answers {
-                guard let id = answer.conversation?.id, answer.conversation?.ended == false else { continue }
+                guard let id = answer.conversation?.id, answer.conversation?.ended == false, answer.conversation?.dormant == false else { continue }
                 state.session.ai.answers[window]?.conversation?.ended = true
                 state.session.ai.answers[window]?.conversation?.items.append(.notice("Max's agent changed. Ask again to talk to the new one."))
                 effects.append(.aiCloseConversation(id))
             }
+            for (id, answer) in state.session.ai.tabAnswers where answer.conversation?.dormant == false { state.session.ai.tabAnswers[id] = nil }
         }
+        // A conversation that lost its live state takes its session and every process it started with it.
+        reconcileConversations(from: previous)
         // A translation belongs to one document: a reload or a new page shows the page's own text.
         for (page, translation) in state.session.ai.translations where state.session.live[page]?.document != .ready(translation.document) {
             state.session.ai.translations[page] = nil

@@ -418,7 +418,7 @@ struct StoredDocV3: Codable {
         }
         // An Easel's and the History tab's rows keep their brk:// address: their cards draw the saved board or the
         // profile's visits natively, no page loads it (Arc restores arc://history like any tab).
-        func native(_ url: URL) -> Bool { EaselPage.shows(url) || HistoryPage.shows(url) }
+        func native(_ url: URL) -> Bool { NativePages.shows(url) }
         func opens(_ url: URL?, _ owner: String) -> Bool {
             guard let url, !isOpenableURL(url), !native(url) else { return true }
             repairs.append("\(owner): dropped, its \(url.scheme ?? "schemeless") URL may not open")

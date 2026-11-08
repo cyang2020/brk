@@ -1,0 +1,222 @@
+import BrkBase
+import Foundation
+
+// Conversations as tabs and the pages agents draw in their answers (docs/design/ai-native.md, 对话是 tab, 在回答里显示页面;
+// docs/design/ai-conversations.md). A conversation is saved in `Doc.conversations` once its first message goes out, and
+// its sidebar row is a tab at `ConversationPage.url(id)`: it moves, pins, archives and restores like any tab, has no
+// browser, and its card draws the conversation natively. A page an agent renders is a file written by the app
+// (`AIPageRecord.html`) and an item in the transcript; kept as a tab, its row is a tab at `AIPageTab.url(id)` whose card
+// shows the page in the page sandbox. Both live in files of their own beside state.json (BrkApp/ConversationFiles.swift),
+// so a long transcript is not written again every time a tab title changes.
+
+public enum AIPageTag {}
+/// One page an agent rendered in a conversation.
+public typealias AIPageID = ID<AIPageTag>
+
+/// The address of a conversation's row. A tab at such an address has no browser: its card draws the conversation.
+public enum ConversationPage {
+    public static let host = "conversation"
+
+    public static func url(_ id: AIRequestID) -> URL { URL(string: "brk://\(host)/" + (id.rawValue.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? id.rawValue))! }
+
+    /// The conversation `url` shows, nil for any other address.
+    public static func id(of url: URL?) -> AIRequestID? {
+        guard let url, url.scheme?.lowercased() == "brk", url.host?.lowercased() == host else { return nil }
+        let raw = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !raw.isEmpty, !raw.contains("/"), raw.count <= 100 else { return nil }
+        return AIRequestID(raw.removingPercentEncoding ?? raw)
+    }
+
+    public static func shows(_ url: URL?) -> Bool { id(of: url) != nil }
+
+    /// `[Title](brk://conversation/<id>)`: how the tools and the agent name a conversation; a click opens its tab.
+    public static func markdown(_ id: AIRequestID, title: String) -> String {
+        let shown = String(title.prefix(80)).replacingOccurrences(of: "[", with: "(").replacingOccurrences(of: "]", with: ")")
+            .replacingOccurrences(of: "\n", with: " ")
+        return "[\(shown.isEmpty ? untitled : shown)](\(url(id).absoluteString))"
+    }
+
+    public static let untitled = "New Conversation"
+
+    /// A row's title from the first message: its first line, at most 60 characters.
+    public static func title(from message: String) -> String {
+        let line = message.split(whereSeparator: \.isNewline).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        guard !line.isEmpty else { return untitled }
+        return line.count > 60 ? String(line.prefix(59)) + "…" : line
+    }
+
+    /// The row's icon: two speech bubbles in the Space's foreground grey, drawn by the sidebar's favicon loader like any
+    /// other (an SVG data URL).
+    public static let favicon = URL(string: "data:image/svg+xml;base64," + Data((
+        #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32">"#
+            + ##"<g fill="none" stroke="#5C5C66" stroke-width="1.4" stroke-linejoin="round">"##
+            + #"<path d="M2 3.6c0-.9.7-1.6 1.6-1.6h6.3c.9 0 1.6.7 1.6 1.6v3.8c0 .9-.7 1.6-1.6 1.6H6.1L3.4 11V9H3.6C2.7 9 2 8.3 2 7.4z"/>"#
+            + #"<path d="M13.2 6.2c.5.3.8.8.8 1.4v3.4c0 .9-.7 1.6-1.6 1.6h-.2v2l-2.6-2H7.8c-.6 0-1.1-.3-1.4-.8"/></g></svg>"#
+    ).utf8).base64EncodedString())!
+}
+
+/// The address of a kept page's row. Its card shows the page in the page sandbox.
+public enum AIPageTab {
+    public static let host = "ai-page"
+
+    public static func url(_ id: AIPageID) -> URL { URL(string: "brk://\(host)/" + (id.rawValue.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? id.rawValue))! }
+
+    public static func id(of url: URL?) -> AIPageID? {
+        guard let url, url.scheme?.lowercased() == "brk", url.host?.lowercased() == host else { return nil }
+        let raw = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !raw.isEmpty, !raw.contains("/"), raw.count <= 100 else { return nil }
+        return AIPageID(raw.removingPercentEncoding ?? raw)
+    }
+
+    public static func shows(_ url: URL?) -> Bool { id(of: url) != nil }
+
+    /// A small bar chart in the Space's foreground grey.
+    public static let favicon = URL(string: "data:image/svg+xml;base64," + Data((
+        #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32">"#
+            + ##"<rect x="1.5" y="1.5" width="13" height="13" rx="3" fill="none" stroke="#5C5C66" stroke-width="1.3"/>"##
+            + ##"<g fill="#5C5C66"><rect x="4" y="8" width="2" height="4" rx=".5"/><rect x="7" y="5" width="2" height="7" rx=".5"/><rect x="10" y="9.5" width="2" height="2.5" rx=".5"/></g></svg>"##
+    ).utf8).base64EncodedString())!
+}
+
+/// Brk's own pages that a card draws natively, without a browser: History, Easels, conversations and kept pages.
+public enum NativePages {
+    public static func shows(_ url: URL?) -> Bool {
+        HistoryPage.shows(url) || EaselPage.shows(url) || ConversationPage.shows(url) || AIPageTab.shows(url)
+    }
+}
+
+/// A conversation as it is saved: what the user and the agent said, the pages the agent drew, and what is needed to
+/// continue it another day.
+public struct StoredConversation: Equatable, Sendable, Codable {
+    public let id: AIRequestID
+    public var profile: ProfileID
+    public var title: String
+    public let createdAt: Instant
+    public var updatedAt: Instant
+    public var agent: AIProviderKind?
+    public var agentName: String?
+    public var model: String?
+    public var effort: String?
+    /// A session with tools on in this folder (Work in a Folder…).
+    public var folder: String?
+    /// A browser session with Brk's tab tools.
+    public var tabs: Bool
+    /// The agent's own session this conversation continues: Claude's session id, Codex's thread id, an ACP session.
+    /// Nil when the agent keeps none (read-only sessions keep nothing): the next message then carries the transcript.
+    public var resume: String?
+    /// Page text reached this conversation (a tab read, a search, titles in a message).
+    public var readPages: Bool = false
+    /// The injection check flagged a page this conversation read.
+    public var flagged: Bool = false
+    public var items: [AIConversationItem]
+
+    public init(id: AIRequestID, profile: ProfileID, title: String, createdAt: Instant, tabs: Bool, folder: String? = nil, items: [AIConversationItem] = []) {
+        self.id = id
+        self.profile = profile
+        self.title = title
+        self.createdAt = createdAt
+        updatedAt = createdAt
+        self.tabs = tabs
+        self.folder = folder
+        self.items = items
+    }
+
+    /// What the user and the agent said, in order: the messages the read tool pages through.
+    public var messages: [(position: Int, item: AIConversationItem)] {
+        items.enumerated().compactMap { index, item in
+            switch item {
+            case .user, .assistant, .page: (index, item)
+            case .step, .approval, .notice: nil
+            }
+        }
+    }
+}
+
+/// A page in a transcript: the record's id, and the title and height it shows with.
+public struct AIPageRef: Hashable, Sendable, Codable {
+    public let id: AIPageID
+    public var title: String
+    public var height: Int
+    public init(id: AIPageID, title: String, height: Int) { self.id = id; self.title = title; self.height = height }
+}
+
+/// One rendered page: its HTML (a file the app wrote), the data the agent gave with it and the conversation that made
+/// it. A page kept as a tab keeps all three, so a later step can ask the same conversation to draw it again with new data.
+public struct AIPageRecord: Hashable, Sendable, Codable {
+    public let id: AIPageID
+    public var title: String
+    /// The complete HTML document, in the data folder's `AI Pages`.
+    public var html: URL
+    public var height: Int
+    /// JSON text the agent passed with the page (the page reads it as `window.brk.data`), at most `AIPageLimits.data`.
+    public var data: String?
+    public let conversation: AIRequestID
+    public let profile: ProfileID
+    /// Stamped by the reducer when the page arrives.
+    public var createdAt: Instant
+    /// Page text had reached its conversation when the agent wrote it: an address this page opens that the profile has
+    /// not visited asks first, as `brk_tab_open` does.
+    public let readPages: Bool
+
+    public init(id: AIPageID, title: String, html: URL, height: Int, data: String?, conversation: AIRequestID, profile: ProfileID, createdAt: Instant, readPages: Bool) {
+        self.id = id; self.title = title; self.html = html; self.height = height; self.data = data
+        self.conversation = conversation; self.profile = profile; self.createdAt = createdAt; self.readPages = readPages
+    }
+}
+
+public enum AIPageLimits {
+    /// The HTML of one page, in UTF-8 bytes.
+    public static let html = 400_000
+    /// The page's data, as JSON text.
+    public static let data = 100_000
+    public static let titleMax = 120
+    /// T3's bounds for a rendered page's height.
+    public static let minHeight = 80, maxHeight = 2_000
+    public static func height(_ value: Int) -> Int { min(maxHeight, max(minHeight, value)) }
+}
+
+/// A click on a link in an agent's page that asks first: the page was written after page text reached its
+/// conversation, and the address is new to the profile. The address could carry what the agent read.
+public struct AIPageLinkPrompt: Hashable, Sendable, Codable {
+    public let page: AIPageID
+    public let url: URL
+    public init(page: AIPageID, url: URL) { self.page = page; self.url = url }
+}
+
+/// A rendered page as a view shows it: inline in a transcript, or filling a kept page's card.
+public struct AIPageSnapshot: Hashable, Sendable, Codable {
+    public let id: AIPageID
+    public let title: String
+    public let html: URL
+    public let height: Int
+    public let data: String?
+    /// Already a sidebar tab: its Keep as Tab is done.
+    public var kept: Bool
+    public init(id: AIPageID, title: String, html: URL, height: Int, data: String?, kept: Bool) {
+        self.id = id; self.title = title; self.html = html; self.height = height; self.data = data; self.kept = kept
+    }
+}
+
+/// A card that shows a conversation (`PaneContent.conversation`): its live state, or its saved transcript.
+public struct ConversationCard: Equatable, Sendable, Codable {
+    public let page: PageID
+    public let answer: AIAnswerSnapshot
+    public init(page: PageID, answer: AIAnswerSnapshot) { self.page = page; self.answer = answer }
+}
+
+/// A card that shows a kept page (`PaneContent.aiPage`).
+public struct AIPageCard: Equatable, Sendable, Codable {
+    public let page: PageID
+    public let content: AIPageSnapshot?
+    public init(page: PageID, content: AIPageSnapshot?) { self.page = page; self.content = content }
+}
+
+/// How a saved conversation's next session starts (`Effect.aiOpenConversation`): continuing the agent's own session
+/// when it kept one, else with the transcript ahead of the next message.
+public struct AIResume: Hashable, Sendable, Codable {
+    /// The agent's own session id; nil when it kept none.
+    public let session: String?
+    /// The transcript as text: sent when the session cannot be continued.
+    public let history: String
+    public init(session: String?, history: String) { self.session = session; self.history = history }
+}

@@ -85,6 +85,10 @@ struct Doc: Sendable, Equatable {
     var tabPreferences = TabPreferences()
     /// Every Easel's board, whether or not a row shows it (the Library's Easels page lists them all).
     var easels: [EaselID: Easel] = [:]
+    /// Every saved conversation and every page an agent rendered, whether or not a row shows them. Not in state.json:
+    /// BrkApp/ConversationFiles.swift keeps one file each and loads them at launch (`SystemEvent.conversationsLoaded`).
+    var conversations: [AIRequestID: StoredConversation] = [:]
+    var aiPages: [AIPageID: AIPageRecord] = [:]
 }
 
 /// Arc: `SpaceModel` + `CustomInfo`.

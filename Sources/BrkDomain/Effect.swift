@@ -39,7 +39,8 @@ public enum Effect: Hashable, Sendable {
     /// the `.ai` request with the same id is its first turn and names its agent. A folder: tools on, approvals on, chosen
     /// by the user, and this `choice` names the agent.
     /// `tabs`: the window whose profile Brk's tab tools serve (`AgentTabs`); the agent's own tools then ask every time.
-    case aiOpenConversation(AIRequestID, folder: String?, choice: AIProviderChoice, tabs: WindowID? = nil)
+    /// `resume`: a saved conversation shown again; its session starts now and continues the agent's own, else carries the transcript.
+    case aiOpenConversation(AIRequestID, folder: String?, choice: AIProviderChoice, tabs: WindowID? = nil, resume: AIResume? = nil)
     /// The chips sent with the conversation's next message; the agent reads their text with Brk's tools.
     case aiAttach(AIRequestID, [AIAttachment])
     /// The text after @ changed. The title and address matches are already in the snapshot; this is where a search by

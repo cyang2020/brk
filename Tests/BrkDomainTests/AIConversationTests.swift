@@ -36,18 +36,18 @@ final class AIConversationTests: XCTestCase {
         let d = enabled()
         let id = try firstTurn(d.user(.assist(.ask("Why?"))))
         d.system(.aiPartial(id, "Because"))
-        XCTAssertEqual(d.view.ai?.conversation?.items, [.assistant("Because")])
+        XCTAssertEqual(d.view.ai?.conversation?.items, [.user("Why?"), .assistant("Because")], "the question is the transcript's first message")
         // One turn at a time: the panel offers Stop while one runs.
         XCTAssertTrue(d.user(.assist(.followUp("And then?"))).effects.isEmpty)
         d.system(.aiResult(id, .text("Because of this.")))
-        XCTAssertEqual(d.view.ai?.conversation?.items, [.assistant("Because of this.")])
+        XCTAssertEqual(d.view.ai?.conversation?.items, [.user("Why?"), .assistant("Because of this.")])
         XCTAssertEqual(d.view.ai?.busy, false)
         let next = try turn(d.user(.assist(.followUp("And then?"))))
         XCTAssertEqual(next.conversation, id)
         XCTAssertEqual(d.view.ai?.busy, true)
         d.system(.aiPartial(next.turn, "After"))
         d.system(.aiResult(next.turn, .text("After that.")))
-        XCTAssertEqual(d.view.ai?.conversation?.items, [.assistant("Because of this."), .user("And then?"), .assistant("After that.")])
+        XCTAssertEqual(d.view.ai?.conversation?.items, [.user("Why?"), .assistant("Because of this."), .user("And then?"), .assistant("After that.")])
         XCTAssertEqual(d.view.ai?.text, "After that.")
     }
 
@@ -58,7 +58,7 @@ final class AIConversationTests: XCTestCase {
         let t = d.user(.assist(.stop))
         XCTAssertTrue(t.effects.contains(.aiCancel(id)))
         XCTAssertFalse(t.effects.contains(.aiCloseConversation(id)), "Stop ends the turn, not the conversation")
-        XCTAssertEqual(d.view.ai?.conversation?.items, [.assistant("Because"), .notice("Stopped.")])
+        XCTAssertEqual(d.view.ai?.conversation?.items, [.user("Why?"), .assistant("Because"), .notice("Stopped.")])
         XCTAssertEqual(d.view.ai?.busy, false)
         XCTAssertNoThrow(try turn(d.user(.assist(.followUp("Go on")))))
     }
@@ -95,7 +95,7 @@ final class AIConversationTests: XCTestCase {
         d.system(.aiConversation(id, .step(AIAgentStep(id: "s", title: "Run: ls", state: .running), turn: id)))
         d.system(.aiPartial(id, "First.Then."))
         d.system(.aiConversation(id, .step(AIAgentStep(id: "s", title: "Run: ls", state: .done), turn: id)))
-        XCTAssertEqual(d.view.ai?.conversation?.items, [.assistant("First."), .step(AIAgentStep(id: "s", title: "Run: ls", state: .done)), .assistant("Then.")])
+        XCTAssertEqual(Array(d.view.ai?.conversation?.items.dropFirst() ?? []), [.assistant("First."), .step(AIAgentStep(id: "s", title: "Run: ls", state: .done)), .assistant("Then.")])
         d.system(.aiResult(id, .text("First.Then. Finished.")))
         XCTAssertEqual(d.view.ai?.conversation?.items.last, .assistant("Then. Finished."))
     }
@@ -108,7 +108,7 @@ final class AIConversationTests: XCTestCase {
         assertUnchanged(d.state, d.system(.aiFolderChosen(d.window, nil)))
         let t = d.system(.aiFolderChosen(d.window, "/tmp/project"))
         let open = try XCTUnwrap(t.effects.lazy.compactMap { effect -> (AIRequestID, String?)? in
-            if case .aiOpenConversation(let id, let folder, _, _) = effect { (id, folder) } else { nil }
+            if case .aiOpenConversation(let id, let folder, _, _, _) = effect { (id, folder) } else { nil }
         }.first)
         XCTAssertEqual(open.1, "/tmp/project")
         XCTAssertEqual(d.view.ai?.conversation?.folder, "/tmp/project")
@@ -121,7 +121,7 @@ final class AIConversationTests: XCTestCase {
         let d = enabled()
         let opened = d.system(.aiFolderChosen(d.window, "/tmp/project"))
         let folderSession = try XCTUnwrap(opened.effects.lazy.compactMap { effect -> AIRequestID? in
-            if case .aiOpenConversation(let id, _, _, _) = effect { id } else { nil }
+            if case .aiOpenConversation(let id, _, _, _, _) = effect { id } else { nil }
         }.first)
         let page = try XCTUnwrap(d.state.findPage(in: d.window))
         let browser = try XCTUnwrap(d.state.session.live[page]?.browser)

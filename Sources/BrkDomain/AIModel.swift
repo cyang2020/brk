@@ -89,6 +89,18 @@ public enum AIIntent: Hashable, Sendable, Codable {
     case mention(String?)
     /// A `brk://tab/<id>` link in an agent's answer: that tab is shown, or opened again from the archive or history.
     case openTabLink(String)
+    /// One of the intents above from a conversation's own tab: it acts on that conversation, not the window's panel.
+    indirect case inTab(AIRequestID, AIIntent)
+    /// The panel's Open as Tab: the conversation moves into its sidebar tab, shown full size; its session goes on.
+    case openAsTab
+    /// A `brk://conversation/<id>` link: that conversation's tab is shown, or opened again from the archive.
+    case openConversation(AIRequestID)
+    /// Keep as Tab on a page in an answer: the page becomes a sidebar tab of its own.
+    case keepPage(AIPageID)
+    /// A click on a link in an agent's page.
+    case pageLink(AIPageID, URL)
+    /// The answer to the window's `AIPageLinkPrompt`: open the address, or not.
+    case answerPageLink(Bool)
 }
 
 /// What the user gave the conversation, before Brk looks it up.
@@ -208,6 +220,8 @@ public struct AIAnswerSnapshot: Equatable, Sendable, Codable {
     public var site: String? = nil
     /// The conversation shown in the panel; nil for a plain message (a feature that is off, a failure before asking).
     public var conversation: AIConversationSnapshot? = nil
+    /// The pages the conversation's items show, filled in by the projection (`AppState.withPages`).
+    public var pages: [AIPageSnapshot] = []
 }
 
 /// A conversation with a local agent in the Max panel. Session only, one per window. Its id is the first request's.
@@ -231,6 +245,9 @@ public struct AIConversationSnapshot: Equatable, Sendable, Codable {
     /// The chips waiting in the input for the next message.
     public var attached: [AIAttachment] = []
     public var mention: AIMentionSnapshot? = nil
+    /// Shown from its saved transcript with no session behind it (after a relaunch, or put away): the next message
+    /// starts one, continuing the agent's own session where the agent keeps one.
+    public var dormant = false
     public init(id: AIRequestID, folder: String? = nil, tabs: Bool = false) { self.id = id; self.folder = folder; self.tabs = tabs }
 }
 public enum AIConversationItem: Equatable, Sendable, Codable {
@@ -239,6 +256,8 @@ public enum AIConversationItem: Equatable, Sendable, Codable {
     case step(AIAgentStep)
     case approval(AIAgentApproval)
     case notice(String)
+    /// A page the agent rendered (`brk_html_render`), shown inline where it was made.
+    case page(AIPageRef)
 }
 /// One thing the agent does (a command, a file edit, a search), as it reports it.
 public struct AIAgentStep: Equatable, Sendable, Codable {
@@ -275,6 +294,12 @@ public enum AIConversationEvent: Equatable, Sendable, Codable {
     /// The agent no longer waits for this approval (the turn ended, or it was answered elsewhere).
     case approvalClosed(String)
     case notice(String)
+    /// The agent's own session id after a turn, which a later launch continues; nil when it keeps none.
+    case resumable(String?)
+    /// Page text reached the conversation through Brk's tools; `flagged` when the injection check flagged it.
+    case pageText(flagged: Bool)
+    /// The agent rendered a page (`brk_html_render`); the app has written its HTML file.
+    case page(AIPageRecord)
 }
 
 /// What an installed agent says about itself, read without sending the model anything (the Max pane, the panel).
@@ -368,6 +393,13 @@ struct AISession: Equatable, Sendable {
     var localDecisions = false
     /// A download Max is renaming in the background, and the window that started it.
     var renamingDownloads: [DownloadID: WindowID] = [:]
+    /// Live conversations outside a panel: shown in their own tab, or still running out of sight
+    /// (Rules/ConversationTabs.swift). A panel's conversation stays in `answers`.
+    var tabAnswers: [AIRequestID: AIAnswerSnapshot] = [:]
+    /// The window a tab conversation runs in: where it was shown or typed into last.
+    var tabWindows: [AIRequestID: WindowID] = [:]
+    /// A link in an agent's page that asks before it opens, by window.
+    var linkPrompts: [WindowID: AIPageLinkPrompt] = [:]
 }
 public struct AIGroupPlan: Hashable, Sendable, Codable {
     public let folder: String

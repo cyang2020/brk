@@ -34,7 +34,7 @@ public struct ProjectionContext: Sendable {
 public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot {
     var windows: [WindowID: WindowSnapshot] = [:]
     for id in state.doc.windows.keys {
-        if var window = projectWindow(id, state, ctx) { window.linkStatus = state.session.windows[id]?.linkStatus; window.ai = state.session.ai.answers[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
+        if var window = projectWindow(id, state, ctx) { window.linkStatus = state.session.windows[id]?.linkStatus; window.ai = state.session.ai.answers[id].map(state.withPages); window.conversations = state.conversationCards(in: id); window.aiPages = state.aiPageCards(in: id); window.pageLinkPrompt = state.session.ai.linkPrompts[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
     }
     return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state, systemScheme: ctx.systemScheme) + state.session.ai.requests.values.flatMap(\.hidden), settings: projectSettings(state),
                        sites: state.siteSnapshots(),
@@ -79,7 +79,7 @@ func projectPages(_ state: AppState, systemScheme: Scheme = .light) -> [PageSpec
         let requested = live?.requestContext == context ? live?.requestedURL : nil
         let initialURL = requested ?? state.address(of: page.item, in: page.window, for: .savedDocument)
         // The History page and Easels are drawn natively in their cards: no browser.
-        if HistoryPage.shows(live?.requestedURL ?? initialURL) || EaselPage.shows(live?.requestedURL ?? initialURL) { return nil }
+        if NativePages.shows(live?.requestedURL ?? initialURL) { return nil }
         var spec = PageSpec(id: page, initialURL: initialURL, context: context, downloadPolicy: policy, muted: state.tab(page.item)?.muted ?? false)
         spec.hoverPreviews = state.doc.tabPreferences.hoverPreviews
         spec.websitePolicy = state.websitePolicy(for: page, systemScheme: systemScheme)
@@ -174,7 +174,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     func tabRow(_ tab: ItemID, _ original: Tab, _ kind: SectionKind) -> TabRow {
         let t = state.displayedTab(tab, in: id) ?? original
         var row = TabRow(id: tab, section: kind, title: t.displayTitle, url: t.url, favicon: t.favicon, icon: t.icon, status: status(tab),
-               loading: state.session.live[PageID(window: id, item: tab)]?.loading ?? false, loaded: state.session.loaded.contains(PageID(window: id, item: tab)),
+               loading: state.session.live[PageID(window: id, item: tab)]?.loading ?? ConversationPage.id(of: t.url).map(state.conversationBusy) ?? false, loaded: state.session.loaded.contains(PageID(window: id, item: tab)),
                audible: state.session.live[PageID(window: id, item: tab)]?.audible ?? false, muted: t.muted,
                canReset: kind != .today && t.pinnedURL != nil && t.pinnedURL != t.url)
         row.awaitingFirstDocument = awaitingFirstDocument(tab, t)
@@ -319,6 +319,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             let page = PageID(window: id, item: p)
             if HistoryPage.shows(address) { content = .history(page) }
             else if let easel = EaselPage.id(of: address), state.doc.easels[easel] != nil { content = .easel(page, easel) }
+            else if let conversation = ConversationPage.id(of: address) { content = .conversation(page, conversation) }
+            else if let aiPage = AIPageTab.id(of: address) { content = .aiPage(page, aiPage) }
             else { content = (state.session.live[page]?.crashed ?? false) ? .crashed(page) : .page(page) }
         } else {
             content = .blank
@@ -360,6 +362,13 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             pill.share = easel
             pill.host = EaselCopy.share
             pill.toolbarText = doc.toolbarVisible ? EaselCopy.share : nil
+            pill.canGoBack = false; pill.canGoForward = false
+        }
+        // A conversation's or kept page's pill names what the card shows, not its brk:// address.
+        if ConversationPage.shows(t.url) || AIPageTab.shows(t.url) {
+            let name = ConversationPage.shows(t.url) ? AICopy.conversationPill : AICopy.pagePill
+            pill.text = name; pill.host = name
+            pill.toolbarText = doc.toolbarVisible ? name : nil
             pill.canGoBack = false; pill.canGoForward = false
         }
     }
@@ -597,7 +606,7 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
         if tab.url == nil { enabled.remove(.copyCurrentURL) }
         if tab.pinnedURL == nil || tab.pinnedURL == tab.url { enabled.remove(.resetTab) }
         // A board has no page to reload, zoom, print or inspect.
-        if EaselPage.shows(tab.url) { enabled.subtract(pageActions) }
+        if NativePages.shows(tab.url) && !HistoryPage.shows(tab.url) { enabled.subtract(pageActions) }
     } else {
         enabled.subtract(pageActions + [.archiveTab, .copyCurrentURL, .pinTab, .rename, .resetTab])
     }

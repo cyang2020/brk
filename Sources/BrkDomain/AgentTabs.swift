@@ -143,6 +143,8 @@ extension AppState {
     /// Facts for an open tab of the saved tree, nil for anything else (a folder, a split, a private window's tab).
     private func agentFacts(_ id: ItemID, window: WindowID) -> AgentTabFacts? {
         guard locate(id) == .global, case .tab(let tab)? = doc.tree[id]?.body, let role = doc.tree.role(of: id) else { return nil }
+        // Conversations and kept pages have their own tools (`brk_conversation_*`, `brk_page_save`).
+        if ConversationPage.shows(tab.url) || AIPageTab.shows(tab.url) { return nil }
         let place: AgentTabPlace
         let space: SpaceID?
         let profile: ProfileID

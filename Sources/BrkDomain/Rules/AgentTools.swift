@@ -56,6 +56,8 @@ public enum AgentAct: Hashable, Sendable {
     /// Tidy's typed result: every group in one step, with Tidy's undo when it regroups the shown Space's Today.
     case group(space: SpaceID, section: AgentDestination.Section, [AgentGroup])
     case split([ItemID])
+    /// A page the agent rendered in its conversation, kept as a sidebar tab (`brk_page_save`).
+    case keepPage(AIPageID, title: String?, conversation: AIRequestID)
 }
 
 public struct AgentActRequest: Hashable, Sendable {
@@ -211,6 +213,10 @@ extension Work {
             let split = state.doc.tree.splitContaining(ids[0])
             guard let split, ids.allSatisfy({ state.doc.tree.splitContaining($0) == split }) else { return refuse("Those tabs could not go into one split.") }
             done("Showing them side by side.", [split.rawValue])
+        case .keepPage(let page, let title, let conversation):
+            guard state.doc.aiPages[page]?.conversation == conversation else { return refuse("No page of this conversation has that id. Render one with `brk_html_render` first.") }
+            guard let row = keepPage(page, title: title, in: window, show: false) else { return refuse("The page could not be kept as a tab.") }
+            done("Kept as a tab at the top of Today.", [row.rawValue])
         }
     }
 }

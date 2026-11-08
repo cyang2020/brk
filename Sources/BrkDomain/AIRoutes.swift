@@ -93,6 +93,9 @@ public enum AIDecisionRoute: Hashable, Sendable, Codable {
 }
 
 extension AICopy {
+    /// The URL pill of a card showing a conversation, and of one showing a kept page.
+    public static let conversationPill = "AI Conversation"
+    public static let pagePill = "AI Page"
     public static let nameWithAI = "Name with AI"
     public static let moveTo = "Move to"
     public static let cleanupDuplicates = "Duplicates"

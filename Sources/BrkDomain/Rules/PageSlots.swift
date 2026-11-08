@@ -40,6 +40,14 @@ extension AppState {
             tab.title = easel.title
             tab.favicon = EaselPage.favicon
         }
+        // A conversation's row is named after the conversation, a kept page's after the page.
+        if let conversation = ConversationPage.id(of: tab.url) {
+            tab.title = doc.conversations[conversation]?.title ?? ConversationPage.untitled
+            tab.favicon = ConversationPage.favicon
+        } else if let page = AIPageTab.id(of: tab.url) {
+            tab.title = doc.aiPages[page]?.title ?? tab.title
+            tab.favicon = AIPageTab.favicon
+        }
         return tab
     }
 
@@ -95,7 +103,7 @@ extension Work {
         state.session.live[page]!.requestContext = state.browsingContext(of: page.item)
         // The History page and an Easel's board have no browser (`projectPages` lists none, so reconcile closes one that was there); it is
         // committed at once, as no engine will report it.
-        if HistoryPage.shows(url) || EaselPage.shows(url) {
+        if NativePages.shows(url) {
             state.doc.windows[page.window]?.slots[page.item]?.committedURL = url
             return
         }
