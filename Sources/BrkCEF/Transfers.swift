@@ -1,11 +1,20 @@
 import BrkBase
-import CefKit
 import Foundation
 
 @MainActor protocol TransferDecision: AnyObject { func resolve(_ destination: URL?) }
 @MainActor protocol TransferControl: AnyObject { func cancel(); func release() }
-extension CefDownloadDecisionCallback: TransferDecision {}
-extension CefDownloadControl: TransferControl {}
+/// One download as the engine reports it at one moment: CefKit's snapshot on CEF, BrkCoreDownload on BrkCore.
+protocol TransferItem {
+    var id: UInt32 { get }
+    var url: URL? { get }
+    var suggestedName: String { get }
+    var receivedBytes: Int64 { get }
+    var totalBytes: Int64 { get }
+    var isComplete: Bool { get }
+    var isCanceled: Bool { get }
+    var isInterrupted: Bool { get }
+    var interruptionReason: Int { get }
+}
 
 /// Runs the production callback transitions. Native adapters transfer references here on the CEF UI thread.
 @MainActor final class Transfers {
@@ -61,7 +70,7 @@ extension CefDownloadControl: TransferControl {}
         return op
     }
 
-    private func capture(_ item: CefDownload, name: String? = nil, in op: Operation) {
+    private func capture(_ item: any TransferItem, name: String? = nil, in op: Operation) {
         if op.details == nil, let url = item.url, url.scheme != nil {
             let candidate = name ?? item.suggestedName
             if !candidate.isEmpty { op.details = DownloadDetails(url: url, suggestedName: TransferFiles.safeName(candidate)) }
@@ -70,7 +79,7 @@ extension CefDownloadControl: TransferControl {}
                                        total: item.totalBytes > 0 ? item.totalBytes : op.progress.total)
     }
 
-    func decision(_ item: CefDownload, name: String, owner: DownloadOwner,
+    func decision(_ item: any TransferItem, name: String, owner: DownloadOwner,
                   available: @escaping () -> Bool, callback: any TransferDecision) {
         let key = Key(browser: owner.browser, native: item.id)
         guard let op = operation(key, owner: owner, sourceAvailable: available) else { callback.resolve(nil); return }
@@ -94,7 +103,7 @@ extension CefDownloadControl: TransferControl {}
         }
     }
 
-    func update(_ item: CefDownload, owner: DownloadOwner, available: @escaping () -> Bool, control: (any TransferControl)?) {
+    func update(_ item: any TransferItem, owner: DownloadOwner, available: @escaping () -> Bool, control: (any TransferControl)?) {
         let key = Key(browser: owner.browser, native: item.id)
         if tombstones.contains(key) { control?.release(); return }
         guard let op = operation(key, owner: owner, sourceAvailable: available) else { control?.cancel(); control?.release(); return }
@@ -164,7 +173,7 @@ extension CefDownloadControl: TransferControl {}
         for id in Array(ids.keys) { cancel(id) }
     }
 
-    private func terminal(_ item: CefDownload, key: Key, op: Operation) {
+    private func terminal(_ item: any TransferItem, key: Key, op: Operation) {
         let end: DownloadEnd
         if op.terminal != nil {
             // Retain the recovery directory named by the timeout result, even after the writer stops.
