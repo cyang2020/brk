@@ -1,0 +1,52 @@
+import BrkBase
+import Foundation
+
+/// One thing search by meaning may find: an open tab, an address from history, an archived tab.
+public struct SearchCorpusItem: Hashable, Sendable {
+    public enum Kind: String, Hashable, Sendable { case tab, history, archive }
+    public var kind: Kind
+    /// The tab's item id, the history address, the archive id.
+    public var id: String
+    public var title: String
+    public var url: String
+}
+
+extension AppState {
+    /// Everything search by meaning may hold, per profile: every space's Pinned and Today tabs and the profile's
+    /// Favorites, the archive, and history (one entry per address, newest first). Web addresses only. Private windows
+    /// keep their tabs outside the saved tree and record no history, so nothing of theirs is here. BrkApp's index keeps
+    /// exactly this and drops the rest, so clearing history or deleting an archived tab removes its vector.
+    public func searchCorpus() -> [ProfileID: [SearchCorpusItem]] {
+        var out: [ProfileID: [SearchCorpusItem]] = [:]
+        var seenTabs = Set<ItemID>()
+        func web(_ url: URL?) -> String? {
+            guard let url, let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else { return nil }
+            return url.absoluteString
+        }
+        func addTabs(under root: ItemID, profile: ProfileID) {
+            for id in doc.tree.tabs(under: root) where seenTabs.insert(id).inserted {
+                guard let item = doc.tree.items[id], case .tab(let tab) = item.body, let url = web(tab.url ?? tab.pinnedURL) else { continue }
+                let title = tab.customTitle?.isEmpty == false ? tab.customTitle! : tab.title
+                out[profile, default: []].append(SearchCorpusItem(kind: .tab, id: id.rawValue, title: title, url: url))
+            }
+        }
+        for spaceID in doc.spaceOrder {
+            guard let space = doc.spaces[spaceID] else { continue }
+            addTabs(under: space.pinnedRoot, profile: space.profile)
+            addTabs(under: space.todayRoot, profile: space.profile)
+        }
+        for (profile, root) in doc.favorites.sorted(by: { $0.key < $1.key }) { addTabs(under: root, profile: profile) }
+        for entry in doc.archive {
+            guard let url = web(entry.tab.url ?? entry.tab.pinnedURL) else { continue }
+            let profile = entry.fromProfile ?? entry.fromSpace.flatMap { doc.spaces[$0]?.profile } ?? .default
+            let title = entry.tab.customTitle?.isEmpty == false ? entry.tab.customTitle! : entry.tab.title
+            out[profile, default: []].append(SearchCorpusItem(kind: .archive, id: entry.id.rawValue, title: title, url: url))
+        }
+        var seenAddresses: [ProfileID: Set<String>] = [:]
+        for visit in doc.history {
+            guard let url = web(visit.url), seenAddresses[visit.profile, default: []].insert(url).inserted else { continue }
+            out[visit.profile, default: []].append(SearchCorpusItem(kind: .history, id: url, title: visit.title, url: url))
+        }
+        return out
+    }
+}

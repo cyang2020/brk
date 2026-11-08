@@ -503,6 +503,8 @@ public enum MaxSetting: Hashable, Sendable, Codable {
     case agentEffort(AIProviderKind, String?)
     /// The Max pane appeared: ask each installed agent about itself.
     case refreshAgents
+    /// The Max pane's On This Mac card: download, stop, remove or choose a local model (`LocalModelsModel.swift`).
+    case localModel(LocalModelAction)
 }
 
 public enum AdvancedSetting: Hashable, Sendable, Codable {
@@ -650,6 +652,8 @@ public enum SystemEvent: Sendable, Equatable {
     case aiAgentsWanted
     /// What the installed agents said about themselves (`Effect.aiRefreshAgents`).
     case aiAgents([AIAgentStatus])
+    /// The local models' downloads and runtime, whenever they change (`Effect.localModel`).
+    case localModels(LocalModelsSnapshot)
     /// The folder the user chose for a session with tools on (nil: the panel was cancelled).
     case aiFolderChosen(WindowID, String?)
     // Later: case liveFolder(ItemID, [URL])   -- a live folder fetch finished.

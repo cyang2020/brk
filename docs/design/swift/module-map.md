@@ -30,6 +30,7 @@ Every module is a SwiftPM target. Paths are under `Sources/`.
 | Content and root | `BrkContent/` | W2 (`PeekCardView`: F3) | the card views, dividers, the Peek card, how the root composes the targets above | `WindowRootView` (`render(_:frames:surface:)`, `focus(_:)`), `ContentAreaView`, `PeekCardView`, `EaselExport` (Share's PNG for BrkApp, which may not import BrkLibrary) | BrkApp |
 | Control protocol | `BrkControl/` | W6 | JSON line framing, the client socket | `ControlRequest`, `ControlOp` (plus `settings`, `openSettings`, `externalURL`), `ControlReply`, `ControlResult`, `NativeFacts`, `ActualView`, `AppWindowFact`, `Hello`, `ControlWire`, `ControlClient` | BrkApp, BrkE2E |
 | App | `BrkApp/` | W2 (`Control/`: W6; `SettingsWindowController.swift`: F1; `ExternalLinks.swift` and the Little Arc host: F3; `MainMenu.swift`, `SuggestionFetcher.swift`: F4; `AIProvider.swift`, `ShareExport.swift`: wave 2 seams) | the state value, dispatch queue, effect execution, window controllers, the settings window, traffic-light placement, menu building, key adapters, download and navigation decisions, debounced atomic writes, quarantine, the clocks, launch and quit order, the control server, the AI tool runner, the export writer, the suggestion fetch, the GetURL handler | `Lifecycle`, `Quit`, `AppStore`, `WindowController`, `BrowserWindow`, `StateFile`, `Clock`, `SystemClock`, `OffsetClock`, `ClockError`, `AIProvider`, `AIProviderSeam`, `CLIProvider`, `AIPrompt`, `ShareExport`, `SuggestionFetcher`, `GetURLHandler`, `DefaultBrowser` | `Brk` (main) |
+| Local models | `BrkLocalModels/` | ai-native slice B (2026-11-08) | the model downloads (pinned, SHA-256 checked), one llama.cpp helper process per model on a Unix socket, the Jev-shaped decision readout, embeddings, the search-by-meaning index file, clustering | `LocalModels`, `ModelCatalog`, `LlamaRuntime`, `ModelStore`, `ModelHelper`, `LocalEmbedder`, `LocalDecider`, `JevRequest`, `JevResponse`, `JevNoneRule`, `SemanticIndex`, `TabClustering` | BrkApp |
 | Composition root | `Brk/main.swift` | W2 | which engine runs; CEF before `NSApp` | the executable | (none) |
 | E2E runner | `BrkE2E/` | W6 | process launch, fixture server, polling, report writing, owned file-panel accessibility verification and system-wide input (`NativePickerInput.swift`: window-server key presses, the status item, a held hot key) | `brk-e2e` executable | (none) |
 | Vendored CefSwift | `Vendor/CefSwift/` at `ba6ebff` | W2 (bumps only) | the CEF C API, refcounting, the dlopen loader, the message pump | `CefKit` product, the `cef` command plugin, `cef-helper` | BrkCEF only |
@@ -67,7 +68,8 @@ BrkLibrary  -> BrkUIKit, BrkLayout, BrkDomain, BrkBase
 BrkSettings -> BrkUIKit, BrkLayout, BrkDomain, BrkBase
 BrkContent  -> BrkSidebar, BrkOverlays, BrkLibrary, BrkTheme, BrkUIKit, BrkLayout, BrkDomain, BrkBase
 BrkControl  -> BrkLayout, BrkDomain, BrkBase
-BrkApp      -> BrkContent, BrkSettings, BrkUIKit, BrkControl, BrkEngine, BrkTheme, BrkLayout, BrkDomain, BrkBase
+BrkLocalModels -> BrkBase (plus CryptoKit and Accelerate)
+BrkApp      -> BrkContent, BrkSettings, BrkUIKit, BrkControl, BrkEngine, BrkTheme, BrkLocalModels, BrkLayout, BrkDomain, BrkBase
 Brk (main)  -> BrkApp, BrkCEF, BrkCoreEngine, BrkEngine, BrkBase
 BrkE2E      -> BrkControl, BrkLayout, BrkDomain, BrkBase
 ```

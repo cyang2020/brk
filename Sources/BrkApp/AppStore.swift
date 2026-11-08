@@ -54,6 +54,7 @@ public final class AppStore {
     private lazy var barLookups = BarLookups(send: { [weak self] in self?.dispatch($0) })
     private lazy var currencyRates = CurrencyRatesStore.live(dataDirectory: Product.dataDirectory(), clock: clock, send: { [weak self] in self?.dispatch($0) })
     private lazy var aiServices = AIServices(engine: engine, send: { [weak self] event in self?.dispatch(.system(event)) })
+    private lazy var localModels = LocalModelServices.live(send: { [weak self] in self?.dispatch($0) })
     private var queue: [Input] = []
     private var dispatching = false
     private(set) var isTerminating = false
@@ -121,6 +122,9 @@ public final class AppStore {
         for request in state.pendingContextDisposals { engine.disposeContext(request) }
         publish(docChanged: false)
         dispatching = false
+        localModels.report()
+        let restored = state
+        localModels.stateChanged { restored.searchCorpus() }
         drain()
         if let window = snapshot.windows.keys.sorted().first {
             if snapshot.sidebarData.needsOnboarding { dispatch(.user(window, .sidebarData(.welcome))) }
@@ -271,6 +275,7 @@ public final class AppStore {
             state = t.state
             publish(docChanged: t.docChanged && !checkpointed)
         }
+        if t.docChanged { let changed = t.state; localModels.stateChanged { changed.searchCorpus() } }
         run(t.effects)
         return KeyHandling(handled: t.keyHandled, shortcut: t.keyShortcut, action: t.keyAction?.rawValue)
     }
@@ -565,6 +570,7 @@ public final class AppStore {
             case .aiApprove(let conversation, let approval, let option): aiServices.approve(conversation: conversation, approval: approval, option: option)
             case .aiCloseConversation(let id): aiServices.closeConversation(id)
             case .aiRefreshAgents: aiServices.refreshAgents(detected: snapshot.settings.max.detected)
+            case .localModel(let action): localModels.perform(action)
             case .aiChooseFolder(let id):
                 guard let owner = windows[id]?.window, owner.attachedSheet == nil else { continue }
                 let panel = NSOpenPanel()

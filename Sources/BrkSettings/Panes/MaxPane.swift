@@ -35,6 +35,7 @@ struct MaxPane: View {
                     .padding(.top, M.introTop.value)
                 enableCard.padding(.top, CardMetrics.introToCard.value)
                 agentCard.padding(.top, M.cardGap.value)
+                LocalModelsCard(models: max.localModels, send: send).padding(.top, M.cardGap.value)
                 SettingsCard { rows(MaxFeature.allCases) }.padding(.top, M.cardGap.value)
                 footer.padding(.top, M.footerTop.value)
             }

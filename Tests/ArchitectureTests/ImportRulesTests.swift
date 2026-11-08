@@ -22,7 +22,8 @@ final class ImportRulesTests: XCTestCase {
         "BrkSettings": ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "AppKit", "SwiftUI", "Foundation", "CoreGraphics"],
         "BrkContent": ["BrkBase", "BrkDomain", "BrkLayout", "BrkTheme", "BrkUIKit", "BrkSidebar", "BrkOverlays", "BrkLibrary", "AppKit", "Foundation", "CoreGraphics"],
         "BrkControl": ["BrkBase", "BrkDomain", "BrkLayout", "Foundation", "CoreGraphics"],
-        "BrkApp": ["NaturalLanguage", "PDFKit", "Carbon", "CoreServices", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "LocalAuthentication", "Security", "os"],
+        "BrkLocalModels": ["BrkBase", "Foundation", "CryptoKit", "Accelerate"],
+        "BrkApp": ["NaturalLanguage", "PDFKit", "Carbon", "CoreServices", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "LocalAuthentication", "Security", "os"],
         "Brk": ["BrkApp", "BrkBase", "BrkCEF", "BrkCoreEngine", "BrkEngine", "AppKit", "Foundation"],
         "BrkCoreEngine": ["PDFKit", "BrkBase", "BrkEngine", "CBrkCore", "AppKit", "Foundation", "os"],
         // BrkCore.framework's interface: an Objective-C header, no Swift.
@@ -37,7 +38,7 @@ final class ImportRulesTests: XCTestCase {
         (#"addChildWindow|canBecomeKeyWindow|method_setImplementation"#, ["BrkCEF/"], "host-window tricks stay in BrkCEF"),
         (#"CefRuntime|CefBrowser|CefChromeBrowser"#, ["BrkCEF/"], "Chromium API stays in BrkCEF"),
         (#"cornerRadius\s*=\s*[1-9]"#, [], "layout numbers live in BrkBase/Metrics.swift"),
-        (#"JSONEncoder\(\)|JSONDecoder\(\)"#, ["BrkDomain/Codec.swift", "BrkDomain/BoostCodec.swift", "BrkControl/", "BrkE2E/"], "one state format, one wire format"),
+        (#"JSONEncoder\(\)|JSONDecoder\(\)"#, ["BrkDomain/Codec.swift", "BrkDomain/BoostCodec.swift", "BrkControl/", "BrkE2E/", "BrkLocalModels/JevWire.swift"], "one state format, one wire format (and the decision services' wire)"),
     ]
 
     func testEveryTargetImportsOnlyWhatTheModuleMapAllows() throws {

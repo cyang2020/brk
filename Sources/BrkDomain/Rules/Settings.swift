@@ -164,6 +164,8 @@ extension Work {
                 state.doc.settings.max.agentOptions = options.isEmpty ? nil : options
             case .refreshAgents:
                 effects.append(.aiRefreshAgents)
+            case .localModel(let action):
+                effects.append(.localModel(action))
             }
         case .advanced(let setting):
             switch setting {
