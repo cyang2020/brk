@@ -14930,6 +14930,230 @@
           "scope": "Real launch, no agent and no key, models downloaded: Tidy, placement, duplicates, search by meaning in the bar and History."
         }
       ]
+    },
+    {
+      "id": "B027",
+      "section": "AI agent",
+      "feature": "Conversations are saved sidebar tabs",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md, docs/design/ai-conversations.md).",
+      "description": "Every conversation is saved; a row appears at the top of Today when its first message is sent; pin, search and reopen like a tab.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "After ⌘Q and a relaunch the conversation's row and transcript are back.",
+      "owner": "ai-native-d-conversations-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-d/README.md",
+          "scope": "Parent's run at 881e2a8a: 1629 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_PAGES_AGENT=claude BRK_E2E_REAL_PAGES_MODEL=haiku python3 verify/ai-native/merge-gate-d/run-native.py <name> --only AIRealPages-claude",
+          "artifact": "verify/ai-native/merge-gate-d/real-pages-claude/shots/",
+          "scope": "Real Claude (Haiku 5.5), real clicks and keys: chart answer, Keep as Tab, ⌘Q and relaunch, continue, recall; slice D also passed it on Codex (gpt-6-luna), verify/ai-native/d-conversations-pages."
+        }
+      ]
+    },
+    {
+      "id": "B028",
+      "section": "AI agent",
+      "feature": "Panel and conversation tab",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md, docs/design/ai-conversations.md).",
+      "description": "The panel is for quick questions; Open as Tab or a click on the row shows the same conversation full size; Close keeps a running answer going.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "The agent session carries on when the conversation moves into its tab.",
+      "owner": "ai-native-d-conversations-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-d/README.md",
+          "scope": "Parent's run at 881e2a8a: 1629 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_PAGES_AGENT=claude BRK_E2E_REAL_PAGES_MODEL=haiku python3 verify/ai-native/merge-gate-d/run-native.py <name> --only AIRealPages-claude",
+          "artifact": "verify/ai-native/merge-gate-d/real-pages-claude/shots/",
+          "scope": "Real Claude (Haiku 5.5), real clicks and keys: chart answer, Keep as Tab, ⌘Q and relaunch, continue, recall; slice D also passed it on Codex (gpt-6-luna), verify/ai-native/d-conversations-pages."
+        }
+      ]
+    },
+    {
+      "id": "B029",
+      "section": "AI agent",
+      "feature": "Continue another day",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md, docs/design/ai-conversations.md).",
+      "description": "A follow-up continues the agent's own session (Claude --resume, Codex thread resume with its sandbox and approval rule kept); the saved transcript is the fallback.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "The next launch's follow-up continued the saved session.",
+      "owner": "ai-native-d-conversations-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-d/README.md",
+          "scope": "Parent's run at 881e2a8a: 1629 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_PAGES_AGENT=claude BRK_E2E_REAL_PAGES_MODEL=haiku python3 verify/ai-native/merge-gate-d/run-native.py <name> --only AIRealPages-claude",
+          "artifact": "verify/ai-native/merge-gate-d/real-pages-claude/shots/",
+          "scope": "Real Claude (Haiku 5.5), real clicks and keys: chart answer, Keep as Tab, ⌘Q and relaunch, continue, recall; slice D also passed it on Codex (gpt-6-luna), verify/ai-native/d-conversations-pages."
+        }
+      ]
+    },
+    {
+      "id": "B030",
+      "section": "AI agent",
+      "feature": "Conversation reading tools",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md, docs/design/ai-conversations.md).",
+      "description": "brk_conversation_list, brk_conversation_search and brk_conversation_read, paged with caps, profile-scoped, with links.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "A new conversation finds and links the old one.",
+      "owner": "ai-native-d-conversations-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-d/README.md",
+          "scope": "Parent's run at 881e2a8a: 1629 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_PAGES_AGENT=claude BRK_E2E_REAL_PAGES_MODEL=haiku python3 verify/ai-native/merge-gate-d/run-native.py <name> --only AIRealPages-claude",
+          "artifact": "verify/ai-native/merge-gate-d/real-pages-claude/shots/",
+          "scope": "Real Claude (Haiku 5.5), real clicks and keys: chart answer, Keep as Tab, ⌘Q and relaunch, continue, recall; slice D also passed it on Codex (gpt-6-luna), verify/ai-native/d-conversations-pages."
+        }
+      ]
+    },
+    {
+      "id": "B031",
+      "section": "AI agent",
+      "feature": "Charts and pages in answers",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md, docs/design/ai-conversations.md).",
+      "description": "brk_html_preview (off-screen PNG, height, console) and brk_html_render show an agent-written page inline, with Brk's theme colours that follow theme changes; comparisons and trends become charts.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "The chart answer appears inside the reply.",
+      "owner": "ai-native-d-conversations-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-d/README.md",
+          "scope": "Parent's run at 881e2a8a: 1629 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_PAGES_AGENT=claude BRK_E2E_REAL_PAGES_MODEL=haiku python3 verify/ai-native/merge-gate-d/run-native.py <name> --only AIRealPages-claude",
+          "artifact": "verify/ai-native/merge-gate-d/real-pages-claude/shots/",
+          "scope": "Real Claude (Haiku 5.5), real clicks and keys: chart answer, Keep as Tab, ⌘Q and relaunch, continue, recall; slice D also passed it on Codex (gpt-6-luna), verify/ai-native/d-conversations-pages."
+        }
+      ]
+    },
+    {
+      "id": "B032",
+      "section": "AI agent",
+      "feature": "Page sandbox",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md, docs/design/ai-conversations.md).",
+      "description": "Pages run in WebKit with throwaway storage, a fixed content policy, a block list for every load and no navigation after the first; a real click on a link asks Brk, with approval for new addresses once page text is in.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Unit tests with real WebKit: no connection from 27 attempts, no cookies or storage, no navigation, script clicks open nothing.",
+      "owner": "ai-native-d-conversations-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-d/README.md",
+          "scope": "Parent's run at 881e2a8a: 1629 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-d/run-native.py <name> --only AIPagesFixture,...",
+          "artifact": "verify/ai-native/merge-gate-d/fixture-1/REPORT.md",
+          "scope": "AIPagesFixture: saved conversation relaunched, a chart kept as a tab from its right-click menu, a link inside the chart asks before it opens."
+        }
+      ]
+    },
+    {
+      "id": "B033",
+      "section": "AI agent",
+      "feature": "Keep a chart as a tab",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md, docs/design/ai-conversations.md).",
+      "description": "Keep as Tab under each chart, the chart's right-click menu, and brk_page_save; the tab keeps its HTML, its data (window.brk.data) and the conversation that made it.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "The kept tab shows the chart after a relaunch.",
+      "owner": "ai-native-d-conversations-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-d/README.md",
+          "scope": "Parent's run at 881e2a8a: 1629 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_PAGES_AGENT=claude BRK_E2E_REAL_PAGES_MODEL=haiku python3 verify/ai-native/merge-gate-d/run-native.py <name> --only AIRealPages-claude",
+          "artifact": "verify/ai-native/merge-gate-d/real-pages-claude/shots/",
+          "scope": "Real Claude (Haiku 5.5), real clicks and keys: chart answer, Keep as Tab, ⌘Q and relaunch, continue, recall; slice D also passed it on Codex (gpt-6-luna), verify/ai-native/d-conversations-pages."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-d/run-native.py <name> --only AIPagesFixture,...",
+          "artifact": "verify/ai-native/merge-gate-d/fixture-1/REPORT.md",
+          "scope": "AIPagesFixture: saved conversation relaunched, a chart kept as a tab from its right-click menu, a link inside the chart asks before it opens."
+        }
+      ]
     }
   ]
 }
