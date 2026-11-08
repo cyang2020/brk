@@ -145,8 +145,9 @@ enum AIBasicPrompts {
     }
 }
 
-/// Tidy's grouping step. The text model groups and names in one request; slice B's embeddings will supply
-/// `clusters`, and the text model then only names the groups (`AIBasicPrompts.groupNames`).
+/// Tidy's grouping without a text model. One text-model request groups and names (Haiku agreed with hand labels at
+/// 0.84 to 0.93, embeddings alone at 0.54 to 0.62; slice B, 2026-11-08), so slice B's embedding clusters are used
+/// only when there is no agent and no key; the groups are then named after the site most of their tabs share.
 @MainActor protocol TabClustering: AnyObject {
     /// Each inner list a group of the given tabs' ids; every tab in exactly one group.
     func clusters(_ tabs: [AITab]) async throws -> [[ItemID]]
@@ -263,7 +264,7 @@ struct AIBasicContext {
             case .renameTab(_, let title, let url): return .reply(.text(try AIBasicPrompts.title(try await run(AIBasicPrompts.tabTitle(title: title, url: url), background: true))))
             case .nameTabs(let tabs): return .reply(.tabNames(try AIBasicPrompts.tabNames(try await run(AIBasicPrompts.tabNames(tabs), background: true))))
             case .nameFolder(_, let tabs): return .reply(.text(try AIBasicPrompts.name(try await run(AIBasicPrompts.folderName(tabs)))))
-            case .tidyToday(_, let tabs): return .reply(.groups(try await tidy(tabs, run: { try await run($0) })))
+            case .tidyToday(_, let tabs): return .reply(.groups(try await tidy(tabs, route: route, run: { try await run($0) })))
             case .summarize(let content): return .reply(.preview(try AIBasicPrompts.preview(try await run(AIBasicPrompts.preview(content)))))
             case .renameDownload(_, let original): return .reply(.text(try AIBasicPrompts.filename(try await run(AIBasicPrompts.downloadName(original), background: true))))
             case .instant(let query): return .reply(.links(try AIBasicPrompts.links(try await run(AIBasicPrompts.instant(query)))))
@@ -294,12 +295,23 @@ struct AIBasicContext {
         } catch { return .failed("\(error)") }
     }
 
-    private func tidy(_ tabs: [AITab], run: (StructuredPrompt) async throws -> StructuredAnswer) async throws -> [AIGroupPlan] {
-        guard let clustering else { return try AIBasicPrompts.groups(try await run(AIBasicPrompts.tidy(tabs))) }
+    private func tidy(_ tabs: [AITab], route: AIBasicRoute, run: (StructuredPrompt) async throws -> StructuredAnswer) async throws -> [AIGroupPlan] {
+        guard case .unavailable = route, let clustering else { return try AIBasicPrompts.groups(try await run(AIBasicPrompts.tidy(tabs))) }
         let byID = Dictionary(uniqueKeysWithValues: tabs.map { ($0.id, $0) })
         let groups = try await clustering.clusters(tabs).map { $0.compactMap { byID[$0] } }.filter { !$0.isEmpty }
-        let names = try AIBasicPrompts.groupNames(try await run(AIBasicPrompts.groupNames(groups)))
-        return groups.enumerated().map { AIGroupPlan(folder: names[$0.offset] ?? "Tabs", tabs: $0.element.map(\.id.rawValue)) }
+        return groups.map { AIGroupPlan(folder: Self.siteName($0), tabs: $0.map(\.id.rawValue)) }
+    }
+
+    /// A group's name without a text model: the site most of its tabs share ("recipes.example" → "Recipes").
+    static func siteName(_ tabs: [AITab]) -> String {
+        let sites = tabs.compactMap { tab -> String? in
+            guard let host = tab.url.host?.lowercased() else { return nil }
+            let labels = host.split(separator: ".").filter { !["www", "m"].contains($0) }
+            return labels.count >= 2 ? String(labels[labels.count - 2]) : labels.first.map(String.init)
+        }
+        let counts = Dictionary(sites.map { ($0, 1) }, uniquingKeysWith: +)
+        guard let best = counts.max(by: { ($0.value, $1.key) < ($1.value, $0.key) }), best.value * 2 > tabs.count else { return "Tabs" }
+        return best.key.prefix(1).uppercased() + best.key.dropFirst()
     }
 
     // MARK: Decisions
@@ -316,14 +328,15 @@ struct AIBasicContext {
     }()
     private var decisionFeature: String?
 
-    func decisionRoute(_ context: AIBasicContext, basic: AIBasicRoute) -> AIDecisionRoute {
-        AIDecisionRoute.resolve(context.max.settings, keys: keys.stored, localReady: localDecisions?.isAvailable == true, basic: basic)
+    func decisionRoute(_ context: AIBasicContext, basic: AIBasicRoute, yesNo: Bool = false) -> AIDecisionRoute {
+        AIDecisionRoute.resolve(context.max.settings, keys: keys.stored, localReady: localDecisions?.isAvailable == true, basic: basic, yesNo: yesNo)
     }
 
     private func decide(_ request: DecisionRequest, feature: AIFeature, context: AIBasicContext, route basic: AIBasicRoute) async throws -> DecisionAnswers {
         if let problem = request.problem { throw AIRouteError.message("Brk asked a malformed question (\(problem)).") }
         decisionFeature = feature.title
-        let route = decisionRoute(context, basic: basic)
+        let yesNo = request.questions.values.allSatisfy { if case .noul = $0 { true } else { false } }
+        let route = decisionRoute(context, basic: basic, yesNo: yesNo)
         let answers: DecisionAnswers
         switch route {
         case .local:

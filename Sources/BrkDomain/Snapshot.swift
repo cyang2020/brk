@@ -732,12 +732,14 @@ public struct MaxSnapshot: Sendable, Equatable, Codable {
     /// Where the basic features run now, and who answers decisions.
     public var basicRoute: AIBasicRoute = .unavailable("")
     public var decisionRoute: AIDecisionRoute = .textModel(.unavailable(""))
+    /// JevK5 on this Mac is ready: yes/no questions go to it.
+    public var localDecisions = false
 
     public init(settings: MaxSettings, detected: [AIProviderKind], active: AIProviderKind?, askProvider: String? = nil, agents: [AIAgentStatus] = []) {
         self.settings = settings; self.detected = detected; self.active = active; self.askProvider = askProvider; self.agents = agents
     }
 
-    private enum CodingKeys: String, CodingKey { case settings, detected, active, askProvider, agents, keys, basicRoute, decisionRoute }
+    private enum CodingKeys: String, CodingKey { case settings, detected, active, askProvider, agents, keys, basicRoute, decisionRoute, localDecisions }
 
     /// A snapshot written before the basic layer's fields still reads.
     public init(from decoder: any Decoder) throws {
@@ -750,6 +752,7 @@ public struct MaxSnapshot: Sendable, Equatable, Codable {
         keys = try c.decodeIfPresent([AIService: AIKeyStatus].self, forKey: .keys) ?? [:]
         basicRoute = try c.decodeIfPresent(AIBasicRoute.self, forKey: .basicRoute) ?? .unavailable("")
         decisionRoute = try c.decodeIfPresent(AIDecisionRoute.self, forKey: .decisionRoute) ?? .textModel(.unavailable(""))
+        localDecisions = try c.decodeIfPresent(Bool.self, forKey: .localDecisions) ?? false
     }
 }
 

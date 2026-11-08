@@ -225,6 +225,28 @@ final class AIBasicChannelTests: XCTestCase {
         XCTAssertEqual(AIBasicChannel.feature(.decide(DecisionRequest(state: .null, questions: [:]), feature: .tabPlacement)), "Place New Tabs")
     }
 
+    func testTidyUsesEmbeddingClustersOnlyWithoutAnAgentOrAKey() async throws {
+        final class Clusters: TabClustering {
+            var asked = 0
+            func clusters(_ tabs: [AITab]) async throws -> [[ItemID]] { asked += 1; return [tabs.filter { $0.url.host!.contains("recipes") }.map(\.id), tabs.filter { !$0.url.host!.contains("recipes") }.map(\.id)] }
+        }
+        let channel = AIBasicChannel(keys: AIKeyStore(memoryOnly: true))
+        let clusters = Clusters()
+        channel.clustering = clusters
+        let tabs = [AITab(id: ItemID("a"), title: "Soup", url: URL(string: "https://www.recipes.example/soup")!),
+                    AITab(id: ItemID("b"), title: "Pie", url: URL(string: "https://recipes.example/pie")!),
+                    AITab(id: ItemID("c"), title: "Kyoto", url: URL(string: "https://travel.example/kyoto")!)]
+        var settings = MaxSettings.default
+        settings.provider = .claude
+        let none = AIBasicContext(max: MaxSnapshot(settings: settings, detected: [], active: nil), choice: .claude)
+        let outcome = await channel.answer(.tidyToday(SpaceID("s"), tabs: tabs), context: none)
+        if AIProviderSeam.mode == .real {
+            XCTAssertEqual(outcome, .reply(.groups([AIGroupPlan(folder: "Recipes", tabs: ["a", "b"]), AIGroupPlan(folder: "Travel", tabs: ["c"])])))
+            XCTAssertEqual(clusters.asked, 1)
+        }
+        XCTAssertEqual(AIBasicChannel.siteName([tabs[0], tabs[2]]), "Tabs", "no site shared by most")
+    }
+
     func testPricesAreApproximateAndUnknownModelsHaveNone() {
         XCTAssertEqual(AIPrices.cost("claude-haiku-5-5", input: 1_000_000, output: 1_000_000) ?? 0, 0.60, accuracy: 1e-9)
         XCTAssertEqual(AIPrices.cost("gpt-6-luna", input: 1_000_000, output: 0, price: AIPrices.decisions) ?? 0, 0.10, accuracy: 1e-9)

@@ -56,7 +56,7 @@ struct AccountsCard: View {
                 SettingsPopUp<AIDecisionChoice>(field: "decisions", entries: AIDecisionChoice.allCases.map { .option(MaxBasicCopy.decisionTitle($0), $0) },
                                                 selected: snapshot.settings.decisions ?? .automatic, width: .selected(minimum: 180)) { context.dispatch(.settings(.max(.decisions($0)))) }
             }
-            SettingsLabel(text: MaxBasicCopy.decisionRoute(snapshot.decisionRoute), field: "decisionRoute", secondary: true)
+            SettingsLabel(text: MaxBasicCopy.decisionRoute(snapshot.decisionRoute, localReady: snapshot.localDecisions), field: "decisionRoute", secondary: true)
                 .padding(.horizontal, CardMetrics.rowPadding.value).padding(.bottom, 8)
         }
         }
@@ -248,7 +248,12 @@ enum MaxBasicCopy {
         }
     }
 
-    static func decisionRoute(_ route: AIDecisionRoute) -> String {
+    static func decisionRoute(_ route: AIDecisionRoute, localReady: Bool = false) -> String {
+        let yesNo = localReady && route != .local ? " Yes/no questions (is this a duplicate?) go to JevK5 on this Mac." : ""
+        return decisionChoices(route) + yesNo
+    }
+
+    private static func decisionChoices(_ route: AIDecisionRoute) -> String {
         switch route {
         case .local: "Decisions are answered by JevK5 on this Mac, with probabilities: sure answers act, others suggest."
         case .openai: "Decisions go to OpenAI's Decisions API with your key, with probabilities: sure answers act, others suggest."

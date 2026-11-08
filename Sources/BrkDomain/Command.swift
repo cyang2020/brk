@@ -670,6 +670,9 @@ public enum SystemEvent: Sendable, Equatable {
     case aiUsage(AIUsageKey, AIUsageCount)
     /// The pause before naming tabs is over (`Effect.aiBasicTimer`).
     case aiBasicTick
+    /// Tabs whose titles mean the same (slice B's embeddings, similarity ≥ 0.92) but whose addresses differ: each pair
+    /// is asked as a yes/no question before the cleanup list offers it.
+    case aiDuplicateCandidates([AIDuplicatePair])
     // Later: case liveFolder(ItemID, [URL])   -- a live folder fetch finished.
 }
 

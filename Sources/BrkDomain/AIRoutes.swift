@@ -75,14 +75,19 @@ public enum AIDecisionRoute: Hashable, Sendable, Codable {
         if case .textModel = self { false } else { true }
     }
 
-    /// The user's choice when it can run: a service chosen without its key, or JevK5 not ready, falls back to the text
-    /// model.
-    public static func resolve(_ settings: MaxSettings, keys: Set<AIService>, localReady: Bool, basic: AIBasicRoute) -> AIDecisionRoute {
+    /// The user's choice when it can run; a service chosen without its key is Automatic. Automatic follows slice B's
+    /// measurements (docs/design/ai-native.md, 第 0 步): yes/no questions go to JevK5 on this Mac when it is ready
+    /// (0.7 s, offline); choices such as a new tab's group go to the basic-features text model (114 of 121 right with
+    /// Haiku or Luna), and to JevK5 only when there is no agent and no key.
+    public static func resolve(_ settings: MaxSettings, keys: Set<AIService>, localReady: Bool, basic: AIBasicRoute, yesNo: Bool = false) -> AIDecisionRoute {
         switch settings.decisions ?? .automatic {
         case .openai where keys.contains(.openai): return .openai
         case .jev where keys.contains(.typesafe): return .jev
         case .textModel: return .textModel(basic)
-        default: return localReady ? .local : .textModel(basic)
+        default:
+            if yesNo && localReady { return .local }
+            if case .unavailable = basic, localReady { return .local }
+            return .textModel(basic)
         }
     }
 }

@@ -29,6 +29,14 @@ struct AIPlacementAsk: Equatable, Sendable {
     var spaces: [String: SpaceID] = [:]
 }
 
+/// Two tabs that may be the same page under different addresses.
+public struct AIDuplicatePair: Hashable, Sendable, Codable {
+    public let a: ItemID
+    public let b: ItemID
+    public let similarity: Double
+    public init(a: ItemID, b: ItemID, similarity: Double) { self.a = a; self.b = b; self.similarity = similarity }
+}
+
 /// A one-click suggestion on a tab's row. Never applied by itself.
 public struct AISuggestion: Hashable, Sendable, Codable {
     public enum Target: Hashable, Sendable, Codable { case folder(ItemID), space(SpaceID) }
@@ -57,6 +65,10 @@ struct AIBasicSession: Equatable, Sendable {
     var folderNaming: [AIRequestID: ItemID] = [:]
     /// The reasons already told this session, so a failing agent says so once.
     var told: Set<String> = []
+    /// Yes/no requests about candidate pairs: each question's key to the copy and the tab that stays.
+    var duplicateAsks: [AIRequestID: [String: AIDuplicatePair]] = [:]
+    /// Copies confirmed as the same page as another tab, offered in the cleanup list with the address duplicates.
+    var nearDuplicates: Set<ItemID> = []
 }
 
 extension Work {
@@ -71,6 +83,8 @@ extension Work {
         for id in state.session.ai.basic.naming.keys where state.session.pendingAI[id] == nil { state.session.ai.basic.naming[id] = nil }
         for id in state.session.ai.basic.placements.keys where state.session.pendingAI[id] == nil { state.session.ai.basic.placements[id] = nil }
         for id in state.session.ai.basic.folderNaming.keys where state.session.pendingAI[id] == nil { state.session.ai.basic.folderNaming[id] = nil }
+        for id in state.session.ai.basic.duplicateAsks.keys where state.session.pendingAI[id] == nil { state.session.ai.basic.duplicateAsks[id] = nil }
+        state.session.ai.basic.nearDuplicates = state.session.ai.basic.nearDuplicates.filter { state.tab($0) != nil }
 
         if max.enabled(.tabNames) {
             // Pages that changed, and named tabs whose address left the site they were named for (a commit changes the
@@ -324,6 +338,11 @@ extension Work {
     }
 
     mutating func applyDecision(_ id: AIRequestID, _ answers: DecisionAnswers) {
+        if let pairs = state.session.ai.basic.duplicateAsks.removeValue(forKey: id) {
+            // Only a suggestion follows, so a yes is enough, with or without a probability.
+            for (key, pair) in pairs { if case .noul(true, _)? = answers[key] { state.session.ai.basic.nearDuplicates.insert(pair.a) } }
+            return
+        }
         guard let ask = state.session.ai.basic.placements.removeValue(forKey: id) else { return }
         // The tab must still be where it opened, on the page that was asked about.
         guard let space = state.doc.spaces[ask.space], state.doc.tree[ask.tab]?.parent == space.todayRoot,
@@ -370,6 +389,25 @@ extension Work {
 
     // MARK: The cleanup list
 
+    /// Slice B's candidates: pairs the address rule did not already settle go out as one yes/no request (at most eight
+    /// pairs); `a` is the copy offered for closing, `b` the tab that stays.
+    mutating func askDuplicates(_ pairs: [AIDuplicatePair]) {
+        guard state.doc.settings.max.enabled(.tabCleanup) else { return }
+        var asked: [String: AIDuplicatePair] = [:], questions: [String: DecisionQuestion] = [:], state: [String: DecisionValue] = [:]
+        for pair in pairs where pair.a != pair.b {
+            guard asked.count < 8, let a = self.state.tab(pair.a), let b = self.state.tab(pair.b), !self.state.session.ai.basic.nearDuplicates.contains(pair.a),
+                  let ua = a.url, let ub = b.url, AICleanup.addressKey(ua) != AICleanup.addressKey(ub) else { continue }
+            let key = "pair\(asked.count)"
+            asked[key] = pair
+            questions[key] = .noul("Are tabs \(key).a and \(key).b the same page?", yes: "the same page under another address or title", no: "different pages, even on the same site or topic")
+            state[key] = .object(["a": .object(["title": .string(a.displayTitle), "url": .string(ua.absoluteString)]),
+                                  "b": .object(["title": .string(b.displayTitle), "url": .string(ub.absoluteString)])])
+        }
+        guard !questions.isEmpty else { return }
+        let id = requestAI(.decide(DecisionRequest(state: .object(state), questions: questions), feature: .tabCleanup))
+        self.state.session.ai.basic.duplicateAsks[id] = asked
+    }
+
     /// The list behind the cleanup button: each tab with its own Close or Archive, then all of a kind at once.
     /// Only suggestions; nothing closes until the person picks a row.
     func cleanupMenu(_ space: SpaceID, in window: WindowID) -> [MenuEntry] {
@@ -397,7 +435,8 @@ extension Work {
     /// Today tabs that repeat another tab of the space, and Today tabs not shown for a long time.
     func cleanupCandidates(_ space: SpaceID) -> (duplicates: [ItemID], stale: [ItemID]) {
         guard let value = state.doc.spaces[space] else { return ([], []) }
-        return AICleanup.candidates(tree: state.doc.tree, space: value, now: ctx.now, threshold: state.doc.settings.profiles[value.profile]?.autoArchive ?? .default)
+        return AICleanup.candidates(tree: state.doc.tree, space: value, now: ctx.now, threshold: state.doc.settings.profiles[value.profile]?.autoArchive ?? .default,
+                                    near: state.session.ai.basic.nearDuplicates)
     }
 }
 
@@ -405,16 +444,9 @@ extension Work {
 /// (the pinned one, or the most recently shown copy, stays). Stale is not shown for half the space's archive time,
 /// at least two hours and at most three days.
 public enum AICleanup {
-    static func candidates(tree: SidebarTree, space: Space, now: Instant, threshold: AutoArchiveThreshold) -> (duplicates: [ItemID], stale: [ItemID]) {
+    static func candidates(tree: SidebarTree, space: Space, now: Instant, threshold: AutoArchiveThreshold, near: Set<ItemID> = []) -> (duplicates: [ItemID], stale: [ItemID]) {
         func tab(_ id: ItemID) -> Tab? { if case .tab(let value)? = tree[id]?.body { value } else { nil } }
-        func key(_ url: URL?) -> String? {
-            guard let url, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false), ["http", "https"].contains(parts.scheme?.lowercased()) else { return nil }
-            parts.fragment = nil
-            parts.scheme = "https"
-            parts.host = parts.host?.lowercased().replacingOccurrences(of: "www.", with: "", options: .anchored)
-            if parts.path.hasSuffix("/") && parts.path.count > 1 { parts.path.removeLast() }
-            return parts.string
-        }
+        func key(_ url: URL?) -> String? { url.flatMap(addressKey) }
         // Today's tabs, groups included; a copy in Pinned is the one that stays.
         let today = tree.tabs(under: space.todayRoot)
         let pinned = Set(tree.tabs(under: space.pinnedRoot).compactMap { tab($0).flatMap { key($0.url) } })
@@ -424,6 +456,7 @@ public enum AICleanup {
             keep[k] = id
         }
         let duplicates = today.filter { id in
+            if near.contains(id) { return true }
             guard let k = key(tab(id)?.url) else { return false }
             return pinned.contains(k) || keep[k] != id
         }
@@ -432,6 +465,25 @@ public enum AICleanup {
             !duplicates.contains(id) && (tab(id).map { now.since($0.lastActiveAt) >= window } ?? false)
         }
         return (duplicates, stale)
+    }
+
+    /// Slice B's address rule (verify/ai-native/b-local-models/bench/dup_rule.py; 26 of 30 pairs alone, no false
+    /// duplicate): two addresses are the same page when they match without the fragment, tracking parameters, a
+    /// leading www. or m., and a trailing index.html. Nil for anything but http(s).
+    public static func addressKey(_ url: URL) -> String? {
+        guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false), ["http", "https"].contains(parts.scheme?.lowercased()),
+              var host = parts.host?.lowercased(), !host.isEmpty else { return nil }
+        for prefix in ["www.", "m."] where host.hasPrefix(prefix) { host.removeFirst(prefix.count); break }
+        host = host.replacingOccurrences(of: ".m.wikipedia.org", with: ".wikipedia.org")
+        var path = parts.path
+        for suffix in ["/index.html", "/index.htm", "/"] where path.hasSuffix(suffix) { path.removeLast(suffix.count); break }
+        if path.isEmpty { path = "/" }
+        let query = (parts.queryItems ?? []).filter { !isTracking($0.name) }.map { $0.name + "=" + ($0.value ?? "") }.joined(separator: "&")
+        return host + (parts.port.map { ":\($0)" } ?? "") + path + "?" + query
+    }
+
+    static func isTracking(_ name: String) -> Bool {
+        name.hasPrefix("utm_") || ["from", "spm", "share_source", "share_medium", "isLoggingIn", "ref", "fbclid", "gclid"].contains(name)
     }
 }
 

@@ -133,6 +133,8 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
             max.keys = state.session.ai.keys
             max.basicRoute = state.basicRoute
             max.decisionRoute = AIDecisionRoute.resolve(doc.settings.max, keys: state.storedKeys, localReady: state.session.ai.localDecisions, basic: max.basicRoute)
+            // Yes/no questions go to JevK5 only under Automatic; a backend the user chose takes every question.
+            max.localDecisions = state.session.ai.localDecisions && (doc.settings.max.decisions ?? .automatic) == .automatic
             return max
         }(),
         advanced: doc.settings.advanced,
@@ -269,7 +271,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         spaceSnapshot.today.tidying = state.session.ai.tidying.contains(id)
     }
     if doc.kind == .standard, state.doc.settings.max.enabled(.tabCleanup) {
-        let found = AICleanup.candidates(tree: tree, space: space, now: ctx.now, threshold: state.doc.settings.profiles[space.profile]?.autoArchive ?? .default)
+        let found = AICleanup.candidates(tree: tree, space: space, now: ctx.now, threshold: state.doc.settings.profiles[space.profile]?.autoArchive ?? .default,
+                                         near: state.session.ai.basic.nearDuplicates)
         spaceSnapshot.today.cleanup = found.duplicates.count + found.stale.count
     }
     if space.pinnedCollapsed, let shown, tree.role(of: shown.id)?.kind == .pinned,

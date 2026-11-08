@@ -98,7 +98,11 @@ final class AIBasicLayerTests: XCTestCase {
         var max = MaxSettings.default
         let basic = AIBasicRoute.cli(.claude, model: "claude-haiku-5-5", effort: nil)
         XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: false, basic: basic), .textModel(basic))
-        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: true, basic: basic), .local)
+        // Slice B's numbers: choices go to the text model while there is one; yes/no to JevK5 once it is ready.
+        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: true, basic: basic), .textModel(basic))
+        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: true, basic: basic, yesNo: true), .local)
+        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: true, basic: .unavailable("none")), .local, "no agent and no key")
+        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: false, basic: basic, yesNo: true), .textModel(basic))
         max.decisions = .jev
         XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [.typesafe], localReady: true, basic: basic), .jev)
         XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: false, basic: basic), .textModel(basic), "Jev chosen without its key")
@@ -409,6 +413,34 @@ final class AIBasicLayerTests: XCTestCase {
         XCTAssertGreaterThan(d.view.space.today.cleanup, 0)
     }
 
+    func testTheAddressRuleIsSliceBs() {
+        func same(_ a: String, _ b: String) -> Bool { AICleanup.addressKey(url(a)) == AICleanup.addressKey(url(b)) }
+        XCTAssertTrue(same("https://www.example.com/page#usage", "http://example.com/page"))
+        XCTAssertTrue(same("https://m.example.com/a/index.html", "https://example.com/a/"))
+        XCTAssertTrue(same("https://example.com/p?utm_source=x&id=3&fbclid=1", "https://example.com/p?id=3"))
+        XCTAssertTrue(same("https://en.m.wikipedia.org/wiki/Arc", "https://en.wikipedia.org/wiki/Arc"))
+        XCTAssertFalse(same("https://example.com/p?id=3", "https://example.com/p?id=4"))
+        XCTAssertFalse(same("https://example.com/xm5", "https://example.com/xm6"))
+        XCTAssertNil(AICleanup.addressKey(url("file:///tmp/a.html")))
+    }
+
+    func testEmbeddingCandidatesAreAskedYesOrNoAndAYesJoinsTheList() throws {
+        let d = driver([.tabCleanup])
+        let news = d.open("https://news.example/"), front = d.open("https://news.example/news")
+        let other = d.open("https://news.example/jobs")
+        XCTAssertEqual(d.view.space.today.cleanup, 0, "different addresses: not duplicates by the rule")
+        let t = d.system(.aiDuplicateCandidates([AIDuplicatePair(a: front, b: news, similarity: 0.95), AIDuplicatePair(a: other, b: news, similarity: 0.93)]))
+        let (id, task) = try XCTUnwrap(aiEffects(t).first)
+        guard case .decide(let request, .tabCleanup) = task else { return XCTFail("\(task)") }
+        XCTAssertEqual(request.questions.count, 2)
+        XCTAssertTrue(request.questions.values.allSatisfy { if case .noul = $0 { true } else { false } })
+        let key = try XCTUnwrap(request.questions.keys.sorted().first)
+        d.system(.aiResult(id, .reply(.decision(DecisionAnswers(answers: [key: .noul(true, probability: 0.97), "pair1": .noul(false, probability: 0.1)], backend: "jevk5")))))
+        let found = d.state.cleanupCandidatesForTest(d.view.space.id, now: d.ctx.now)
+        XCTAssertEqual(found.duplicates, [front])
+        XCTAssertEqual(d.view.space.today.cleanup, 1)
+    }
+
     // MARK: Usage
 
     func testUsageAddsUpPerFeatureAndStartsAgainEachMonth() {
@@ -445,6 +477,7 @@ final class AIBasicLayerTests: XCTestCase {
 extension AppState {
     func cleanupCandidatesForTest(_ space: SpaceID, now: Instant) -> (duplicates: [ItemID], stale: [ItemID]) {
         guard let value = doc.spaces[space] else { return ([], []) }
-        return AICleanup.candidates(tree: doc.tree, space: value, now: now, threshold: doc.settings.profiles[value.profile]?.autoArchive ?? .default)
+        return AICleanup.candidates(tree: doc.tree, space: value, now: now, threshold: doc.settings.profiles[value.profile]?.autoArchive ?? .default,
+                                    near: session.ai.basic.nearDuplicates)
     }
 }

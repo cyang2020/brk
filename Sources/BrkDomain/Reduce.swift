@@ -167,7 +167,7 @@ struct Work {
             switch event {
             case .imageImported(let window, _, _, _, _, _), .shared(let window, _, _), .failed(let window, _, _): begin(window: window)
             }
-        case .boost, .currencyRates, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .aiConversation, .aiAgents, .aiAgentsWanted, .aiFolderChosen, .aiKeys, .aiUsage, .aiBasicTick: begin(window: nil)
+        case .boost, .currencyRates, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .aiConversation, .aiAgents, .aiAgentsWanted, .aiFolderChosen, .aiKeys, .aiUsage, .aiBasicTick, .aiDuplicateCandidates: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -242,6 +242,7 @@ struct Work {
             state.session.ai.localDecisions = local
         case .aiUsage(let key, let count): recordUsage(key, count)
         case .aiBasicTick: aiBasicTick()
+        case .aiDuplicateCandidates(let pairs): askDuplicates(pairs)
         }
     }
 

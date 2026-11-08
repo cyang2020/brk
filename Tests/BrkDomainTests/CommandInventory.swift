@@ -595,6 +595,7 @@ enum CommandInventory {
         case .aiKeys: "aiKeys"
         case .aiUsage: "aiUsage"
         case .aiBasicTick: "aiBasicTick"
+        case .aiDuplicateCandidates: "aiDuplicateCandidates"
         }
     }
 
