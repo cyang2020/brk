@@ -3,18 +3,28 @@ import BrkBase
 import BrkDomain
 import BrkUIKit
 
-/// The Max panel: a session-only conversation with the user's local agent beside the page. Live text, the steps the agent
-/// takes, the approvals it asks for, follow-ups and Stop. Arc has no such panel; it follows Brk's own panel style and T3
-/// Code's behaviour. Source buttons open through Brk in the same browsing context.
+/// Where a conversation is drawn: the Max panel beside the page, or its own tab, filling the card.
+enum AIDocumentStyle { case panel, tab }
+
+/// A conversation with the user's local agent: in the Max panel beside the page, or full size in the conversation's tab.
+/// Live text, the steps the agent takes, the approvals it asks for, the pages it renders, follow-ups and Stop. Arc has
+/// no such view; it follows Brk's own panel style and T3 Code's behaviour. Source buttons open through Brk in the same
+/// browsing context.
 @MainActor
 final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     private let dispatch: Dispatch
+    let style: AIDocumentStyle
     private let material = NSVisualEffectView()
     private let heading = NSTextField(labelWithString: "Max · Local agent")
     private let question = NSTextField(wrappingLabelWithString: "")
     private let scroll = NSScrollView()
-    private let text = NSTextView()
+    /// TextKit 1: pages are laid over their attachments' glyph rects, and the answers' tables are text tables.
+    private let text = NSTextView(usingTextLayoutManager: false)
+    private lazy var pages = TranscriptPages(text: text)
     private let close = AIActionButton("Close")
+    private let openTab = AIActionButton("Open as Tab")
+    private var pageTheme: PageTheme?
+    private var textWidth: CGFloat = 0
     private let progress = NSProgressIndicator()
     private let input = NSTextField()
     private let send = AIActionButton("Send")
@@ -40,21 +50,25 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
     private var dismissedMention: String?
     private let mentionBack = NSView()
 
-    init(dispatch: @escaping Dispatch) {
+    init(dispatch: @escaping Dispatch, style: AIDocumentStyle = .panel) {
         self.dispatch = dispatch
+        self.style = style
         super.init(frame: .zero)
         isHidden = true
-        setAccessibilityIdentifier("ai-document")
+        if style == .panel { setAccessibilityIdentifier("ai-document") } else { identify(.aiControl("conversation-tab")) }
         wantsLayer = true
-        layer?.cornerRadius = Metrics.ai.cornerRadius.value
         layer?.masksToBounds = true
-        layer?.borderWidth = Metrics.ai.borderWidth.value
-        layer?.borderColor = NSColor.separatorColor.cgColor
+        if style == .panel {
+            layer?.cornerRadius = Metrics.ai.cornerRadius.value
+            layer?.borderWidth = Metrics.ai.borderWidth.value
+            layer?.borderColor = NSColor.separatorColor.cgColor
+        }
+        material.isHidden = style == .tab
         material.material = .sidebar; material.blendingMode = .withinWindow; material.state = .active
         heading.font = .systemFont(ofSize: Metrics.ai.headingFont.value, weight: .semibold)
         heading.lineBreakMode = .byTruncatingTail
-        heading.setAccessibilityIdentifier("ai-heading")
-        question.font = .systemFont(ofSize: Metrics.ai.questionFont.value, weight: .medium)
+        heading.setAccessibilityIdentifier(style == .panel ? "ai-heading" : "ai-tab-heading")
+        question.font = .systemFont(ofSize: style == .tab ? Metrics.ai.tabTitleFont.value : Metrics.ai.questionFont.value, weight: style == .tab ? .semibold : .medium)
         question.maximumNumberOfLines = 2; question.lineBreakMode = .byTruncatingTail
         text.isEditable = false; text.isSelectable = true; text.isRichText = true
         text.drawsBackground = false; text.textColor = .labelColor
@@ -63,11 +77,29 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         text.textContainer?.widthTracksTextView = true
         text.linkTextAttributes = [.foregroundColor: NSColor.linkColor, .cursor: NSCursor.pointingHand]
         text.delegate = self
-        text.setAccessibilityIdentifier("ai-answer")
+        text.setAccessibilityIdentifier(style == .panel ? "ai-answer" : "ai-tab-answer")
         scroll.documentView = text; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.drawsBackground = false
         progress.style = .spinning; progress.controlSize = .small; progress.isDisplayedWhenStopped = false
         close.setAccessibilityIdentifier("ai-close")
         close.onPress = { [weak self] in guard let self else { return }; dispatch(.assist(answer?.busy == true && answer?.conversation == nil ? .cancel : .dismiss)) }
+        close.isHidden = style == .tab
+        openTab.identify(.aiControl("open-tab"))
+        openTab.toolTip = "Show this conversation full size in its own tab. It keeps running."
+        openTab.onPress = { dispatch(.assist(.openAsTab)) }
+        openTab.isHidden = true
+        pages.onEvent = { [weak self] page, event in
+            if case .link(let url) = event { self?.send(.pageLink(page, url)) }
+        }
+        pages.onHeight = { [weak self] in
+            guard let self, let answer = self.answer else { return }
+            self.rendered = []
+            self.showTranscript(answer)
+        }
+        pages.menu = { [weak self] page in
+            guard let self else { return [] }
+            let kept = self.answer?.pages.first { $0.id == page }?.kept == true
+            return [ClosureMenuItem(kept ? "Show Tab" : "Keep as Tab") { [weak self] in self?.send(.keepPage(page)) }]
+        }
         input.placeholderString = "Ask a follow-up"
         input.font = .systemFont(ofSize: Metrics.ai.bodyFont.value)
         input.lineBreakMode = .byTruncatingTail
@@ -87,7 +119,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         send.onPress = { [weak self] in self?.sendOrStop() }
         folder.identify(.aiControl("folder"))
         folder.toolTip = "Start a session that may run commands and change files in a folder you choose. It asks you first."
-        folder.onPress = { dispatch(.assist(.chooseFolder)) }
+        folder.onPress = { [weak self] in self?.send(.chooseFolder) }
         settings.identify(.aiControl("agent-settings"))
         settings.toolTip = "Choose the agent, model and effort in Settings → Max."
         settings.onPress = { dispatch(.settings(.openPane(.max))) }
@@ -106,7 +138,16 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         // A long command (a whole document going to a service) wraps, so more of what would leave shows before Allow.
         approvalDetail.maximumNumberOfLines = 4; approvalDetail.lineBreakMode = .byCharWrapping
         approvalDetail.cell?.truncatesLastVisibleLine = true
-        for view in [material, heading, question, scroll, close, progress, approvalBack, approvalTitle, approvalDetail, folderStatus, folder, settings, input, send, mentionBack] as [NSView] { addSubview(view) }
+        for view in [material, heading, question, scroll, close, openTab, progress, approvalBack, approvalTitle, approvalDetail, folderStatus, folder, settings, input, send, mentionBack] as [NSView] { addSubview(view) }
+    }
+
+    /// The conversation this view shows.
+    var conversationID: AIRequestID? { answer?.conversation?.id }
+
+    /// An intent from this view: as it is from the panel, on this conversation from its tab.
+    private func send(_ intent: AIIntent) {
+        if style == .tab, let id = answer?.conversation?.id { dispatch(.assist(.inTab(id, intent))) }
+        else { dispatch(.assist(intent)) }
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
@@ -118,29 +159,49 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
 
     private func sendOrStop() {
         guard let answer else { return }
-        if answer.busy { dispatch(.assist(.stop)); return }
+        if answer.busy { send(.stop); return }
         let message = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty else { return }
         input.stringValue = ""
-        dispatch(.assist(.followUp(message)))
+        send(.followUp(message))
     }
 
-    func render(_ answer: AIAnswerSnapshot?, in area: CGRect) {
+    /// The colors a tab's card has behind the column, like Brk's other native pages (History).
+    private static func cardColor(_ scheme: Scheme) -> NSColor {
+        scheme == .light ? .white : NSColor(srgbRed: 0x20 / 255, green: 0x21 / 255, blue: 0x24 / 255, alpha: 1)
+    }
+
+    func render(_ answer: AIAnswerSnapshot?, in area: CGRect, theme: ResolvedTheme? = nil) {
         guard let answer else {
             self.answer = nil; shownConversation = nil; rendered = []; isHidden = true; progress.stopAnimation(nil)
+            pages.removeAll()
             return
         }
         isHidden = false
         let m = Metrics.ai
-        let width = min(m.width.value, max(m.minimumWidth.value, area.width - m.inset.value * 2))
-        frame = CGRect(x: area.maxX - width - m.inset.value, y: area.minY + m.inset.value,
-                       width: width, height: max(m.minimumHeight.value, area.height - m.inset.value * 2))
+        if style == .tab {
+            frame = area
+        } else {
+            let width = min(m.width.value, max(m.minimumWidth.value, area.width - m.inset.value * 2))
+            frame = CGRect(x: area.maxX - width - m.inset.value, y: area.minY + m.inset.value,
+                           width: width, height: max(m.minimumHeight.value, area.height - m.inset.value * 2))
+        }
+        if let theme {
+            let card: RGBA? = style == .tab ? (theme.scheme == .light ? RGBA(1, 1, 1) : RGBA(hex: "#202124")) : nil
+            let next = PageTheme(theme, background: card ?? (theme.scheme == .light ? RGBA(hex: "#EDEDED") : RGBA(hex: "#2A2A2C")))
+            if next != pageTheme { pageTheme = next; pages.apply(next) }
+            if style == .tab {
+                appearance = NSAppearance(named: theme.scheme == .light ? .aqua : .darkAqua)
+                layer?.backgroundColor = Self.cardColor(theme.scheme).cgColor
+            }
+        }
         if self.answer != answer {
             self.answer = answer
             question.stringValue = answer.title
             heading.stringValue = Self.headingText(answer.conversation)
             showTranscript(answer)
             close.title = answer.busy && answer.conversation == nil ? "Cancel" : "Close"
+            openTab.isHidden = style == .tab || answer.conversation == nil || answer.conversation?.ended == true
             if answer.busy { progress.startAnimation(nil) } else { progress.stopAnimation(nil) }
             showInput(answer)
             showChips(answer.conversation)
@@ -157,7 +218,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
             controls = []
             func control(_ title: String, _ intent: AIIntent, _ identifier: String) {
                 let button = AIActionButton(title); button.setAccessibilityIdentifier(identifier)
-                button.onPress = { [weak self] in self?.dispatch(.assist(intent)) }; controls.append(button)
+                button.onPress = { [weak self] in self?.send(intent) }; controls.append(button)
             }
             if answer.canUndo { control("Undo Organize Today", .undoOrganize, "ai-undo") }
             if answer.site != nil { control("Never translate this site", .neverTranslateSite, "ai-never-site") }
@@ -223,7 +284,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         for option in approval.options {
             let button = AIActionButton(option.title)
             button.identify(.aiControl("approval-" + option.kind.rawValue))
-            button.onPress = { [weak self] in self?.dispatch(.assist(.approve(approval: approval.id, option: option.id))) }
+            button.onPress = { [weak self] in self?.send(.approve(approval: approval.id, option: option.id)) }
             approvalButtons.append(button)
             addSubview(button)
         }
@@ -238,10 +299,18 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         let wasAtBottom = scroll.documentVisibleRect.maxY >= text.bounds.height - Metrics.ai.gap.value
         // Only what changed is built again: while the agent writes, that is its last row.
         var next: [(item: AIConversationItem, text: NSAttributedString)] = []
+        let width = max(40, text.textContainer.map { $0.size.width - $0.lineFragmentPadding * 2 } ?? scroll.contentSize.width)
         for (index, item) in conversation.items.enumerated() {
-            guard let value = AIConversationText.attributed(item) else { continue }
-            _ = index
-            if next.count < rendered.count, rendered[next.count].item == item { next.append(rendered[next.count]) }
+            // The panel shows the first question as its title.
+            if style == .panel, index == 0, case .user(let first) = item, first == answer.title { continue }
+            let value: NSAttributedString?
+            if case .page(let ref) = item {
+                value = answer.pages.first { $0.id == ref.id }.map { pageRow($0, width: width) }
+            } else {
+                value = AIConversationText.attributed(item)
+            }
+            guard let value else { continue }
+            if next.count < rendered.count, rendered[next.count].item == item, !Self.isPage(item) { next.append(rendered[next.count]) }
             else { next.append((item, value)) }
         }
         rendered = next
@@ -251,7 +320,21 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
             joined.append(row.text)
         }
         if text.attributedString() != joined { text.textStorage?.setAttributedString(joined) }
+        pages.place(answer.pages)
         if wasAtBottom { text.scrollToEndOfDocument(nil) }
+    }
+
+    private static func isPage(_ item: AIConversationItem) -> Bool { if case .page = item { true } else { false } }
+
+    /// A page in the transcript: the page, then a caption with its title and Keep as Tab (or Show Tab once kept).
+    private func pageRow(_ page: AIPageSnapshot, width: CGFloat) -> NSAttributedString {
+        let out = NSMutableAttributedString(attributedString: pages.attachment(page, width: width))
+        let small: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: Metrics.ai.stepFont.value), .foregroundColor: NSColor.secondaryLabelColor]
+        out.append(NSAttributedString(string: "\n" + AgentCopyText.oneLine(page.title, limit: 80) + "  ·  ", attributes: small))
+        var link = small
+        link[.link] = URL(string: "brk-keep://page/" + page.id.rawValue)
+        out.append(NSAttributedString(string: page.kept ? "Show Tab" : "Keep as Tab", attributes: link))
+        return out
     }
 
     private static var body: [NSAttributedString.Key: Any] {
@@ -261,7 +344,9 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         let address = (link as? URL)?.absoluteString ?? link as? String
         guard let address, let url = URL(string: address) else { return true }
-        if let tab = AgentTabLink.id(url) { dispatch(.assist(.openTabLink(tab))) }
+        if let tab = AgentTabLink.id(url) { send(.openTabLink(tab)) }
+        else if let conversation = ConversationPage.id(of: url) { send(.openConversation(conversation)) }
+        else if url.scheme == "brk-keep", url.host == "page" { send(.keepPage(AIPageID(url.lastPathComponent))) }
         else if ["http", "https"].contains(url.scheme?.lowercased()) { dispatch(.commandBar(.submit(url.absoluteString))) }
         return true
     }
@@ -278,7 +363,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
             let chip = AIChipButton(id: attachment.id, title: title)
             chip.toolTip = attachment.tabs.prefix(12).map { $0.title + ($0.url.map { " — " + $0.absoluteString } ?? "") }.joined(separator: "\n")
             chip.setAccessibilityIdentifier("ai-chip-" + attachment.id)
-            chip.onRemove = { [weak self] in self?.dispatch(.assist(.detach(attachment.id))) }
+            chip.onRemove = { [weak self] in self?.send(.detach(attachment.id)) }
             addSubview(chip)
             return chip
         }
@@ -325,7 +410,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         let query = Self.mentionQuery(input.stringValue)
         if query != dismissedMention { dismissedMention = nil }
         guard answer?.conversation?.tabs == true else { return }
-        if query != answer?.conversation?.mention?.query || (query == nil) != (answer?.conversation?.mention == nil) { dispatch(.assist(.mention(query))) }
+        if query != answer?.conversation?.mention?.query || (query == nil) != (answer?.conversation?.mention == nil) { send(.mention(query)) }
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
@@ -350,8 +435,8 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         guard let mention, mention.matches.indices.contains(index) else { return }
         let text = input.stringValue
         if let at = text.lastIndex(of: "@") { input.stringValue = String(text[..<at]) }
-        dispatch(.assist(.attach([.tab(mention.matches[index].id)])))
-        dispatch(.assist(.mention(nil)))
+        send(.attach([.tab(mention.matches[index].id)]))
+        send(.mention(nil))
         window?.makeFirstResponder(input)
         input.currentEditor()?.selectedRange = NSRange(location: (input.stringValue as NSString).length, length: 0)
     }
@@ -366,19 +451,33 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         super.layout()
         let m = Metrics.ai, pad = m.padding.value, gap = m.gap.value, row = m.buttonHeight.value
         material.frame = bounds
-        close.frame = CGRect(x: bounds.width - pad - m.closeWidth.value, y: pad, width: m.closeWidth.value, height: row)
-        heading.frame = CGRect(x: pad, y: pad, width: bounds.width - pad * 3 - m.closeWidth.value - row, height: row)
-        progress.frame = CGRect(x: close.frame.minX - row - gap, y: pad, width: row, height: row)
-        question.frame = CGRect(x: pad, y: pad + row + gap, width: bounds.width - pad * 2, height: m.questionHeight.value)
-        var bottom = bounds.height - pad
+        // A tab lays the same parts out in a reading column in the middle of its card.
+        let column: CGRect = style == .tab
+            ? CGRect(x: max(0, (bounds.width - min(m.tabColumnWidth.value, bounds.width - m.tabColumnInset.value * 2)) / 2), y: m.tabColumnInset.value / 2,
+                     width: min(m.tabColumnWidth.value, bounds.width - m.tabColumnInset.value * 2), height: bounds.height - m.tabColumnInset.value)
+            : bounds
+        let width = column.width, height = column.height
+        defer {
+            if style == .tab {
+                for view in subviews where view !== material { view.frame.origin.x += column.minX; view.frame.origin.y += column.minY }
+            }
+        }
+        let closeWidth = style == .tab ? 0 : m.closeWidth.value
+        close.frame = CGRect(x: width - pad - closeWidth, y: pad, width: closeWidth, height: row)
+        let tabWidth = openTab.isHidden ? 0 : m.openAsTabWidth.value
+        openTab.frame = CGRect(x: close.frame.minX - gap - tabWidth, y: pad, width: tabWidth, height: row)
+        heading.frame = CGRect(x: pad, y: pad, width: max(0, openTab.frame.minX - pad - gap * 2 - row), height: row)
+        progress.frame = CGRect(x: openTab.frame.minX - row - gap, y: pad, width: row, height: row)
+        question.frame = CGRect(x: pad, y: pad + row + gap, width: width - pad * 2, height: m.questionHeight.value)
+        var bottom = height - pad
         if !input.isHidden {
             bottom -= row
-            send.frame = CGRect(x: bounds.width - pad - m.sendWidth.value, y: bottom, width: m.sendWidth.value, height: row)
+            send.frame = CGRect(x: width - pad - m.sendWidth.value, y: bottom, width: m.sendWidth.value, height: row)
             input.frame = CGRect(x: pad, y: bottom + 2, width: send.frame.minX - gap - pad, height: row - 4)
             bottom -= gap
             // Chips sit on the input's edge, left to right, as many lines as they need.
             if !chipButtons.isEmpty {
-                let height = m.chipHeight.value, width = bounds.width - pad * 2
+                let height = m.chipHeight.value, width = width - pad * 2
                 var lines: [[(AIChipButton, CGFloat)]] = [[]]
                 var x: CGFloat = 0
                 for chip in chipButtons {
@@ -399,10 +498,10 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
             if !mentionRows.isEmpty {
                 let height = m.mentionRowHeight.value, inner = gap / 2
                 var top = (chipButtons.first?.frame.minY ?? input.frame.minY) - gap / 2 - CGFloat(mentionRows.count) * height - inner * 2
-                mentionBack.frame = CGRect(x: pad, y: top, width: bounds.width - pad * 2, height: CGFloat(mentionRows.count) * height + inner * 2)
+                mentionBack.frame = CGRect(x: pad, y: top, width: width - pad * 2, height: CGFloat(mentionRows.count) * height + inner * 2)
                 top += inner
                 for row in mentionRows {
-                    row.frame = CGRect(x: pad + inner, y: top, width: bounds.width - (pad + inner) * 2, height: height)
+                    row.frame = CGRect(x: pad + inner, y: top, width: width - (pad + inner) * 2, height: height)
                     top += height
                 }
             }
@@ -410,7 +509,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         // The status line: what this conversation may do, a way to a folder, a way to the agent's settings.
         bottom -= row
         let settingsWidth = m.settingsWidth.value, folderWidth = folder.isHidden ? 0 : m.folderWidth.value
-        settings.frame = CGRect(x: bounds.width - pad - settingsWidth, y: bottom, width: settingsWidth, height: row)
+        settings.frame = CGRect(x: width - pad - settingsWidth, y: bottom, width: settingsWidth, height: row)
         folder.frame = CGRect(x: settings.frame.minX - gap - folderWidth, y: bottom, width: folderWidth, height: row)
         folderStatus.frame = CGRect(x: pad, y: bottom + 5, width: max(0, (folder.isHidden ? settings.frame.minX : folder.frame.minX) - gap - pad), height: row - 8)
         bottom -= gap
@@ -418,7 +517,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
             let inner = pad / 2
             let buttons = approvalButtons
             bottom -= row + inner
-            var x = bounds.width - pad - inner
+            var x = width - pad - inner
             for button in buttons.reversed() {
                 let width = max(m.closeWidth.value, button.intrinsicContentSize.width + gap)
                 x -= width
@@ -429,21 +528,29 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
             var top = bottom
             if !approvalDetail.isHidden {
                 top -= m.approvalDetailHeight.value
-                approvalDetail.frame = CGRect(x: pad + inner, y: top, width: bounds.width - (pad + inner) * 2, height: m.approvalDetailHeight.value)
+                approvalDetail.frame = CGRect(x: pad + inner, y: top, width: width - (pad + inner) * 2, height: m.approvalDetailHeight.value)
             }
             top -= m.approvalTitleHeight.value
-            approvalTitle.frame = CGRect(x: pad + inner, y: top, width: bounds.width - (pad + inner) * 2, height: m.approvalTitleHeight.value)
-            approvalBack.frame = CGRect(x: pad, y: top - inner, width: bounds.width - pad * 2, height: (bounds.height - pad) - (top - inner) - (bounds.height - pad - bottom) + row + inner * 2 + gap)
+            approvalTitle.frame = CGRect(x: pad + inner, y: top, width: width - (pad + inner) * 2, height: m.approvalTitleHeight.value)
+            approvalBack.frame = CGRect(x: pad, y: top - inner, width: width - pad * 2, height: (height - pad) - (top - inner) - (height - pad - bottom) + row + inner * 2 + gap)
             bottom = top - inner - gap
         }
         for button in (sources + controls).reversed() {
             bottom -= row
-            button.frame = CGRect(x: pad, y: bottom, width: bounds.width - pad * 2, height: row)
+            button.frame = CGRect(x: pad, y: bottom, width: width - pad * 2, height: row)
             bottom -= gap
         }
         let top = question.frame.maxY + gap
-        scroll.frame = CGRect(x: pad, y: top, width: bounds.width - pad * 2, height: max(row, bottom - top))
+        scroll.frame = CGRect(x: pad, y: top, width: width - pad * 2, height: max(row, bottom - top))
         text.frame.size.width = scroll.contentSize.width
+        // Pages are as wide as the text: a new width lays them out again.
+        if abs(textWidth - scroll.contentSize.width) > 0.5 {
+            textWidth = scroll.contentSize.width
+            if let answer {
+                rendered = []
+                DispatchQueue.main.async { [weak self] in self?.showTranscript(answer) }
+            }
+        }
     }
 }
 
@@ -464,6 +571,9 @@ enum AIConversationText {
             return NSAttributedString(string: option.title + ": " + approval.title, attributes: [.font: NSFont.systemFont(ofSize: smallSize), .foregroundColor: NSColor.secondaryLabelColor])
         case .notice(let text):
             return NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: smallSize), .foregroundColor: NSColor.secondaryLabelColor])
+        case .page:
+            // Drawn by the view with its sandboxed page (`pageRow`).
+            return nil
         }
     }
 

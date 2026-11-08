@@ -645,6 +645,13 @@ public struct AIMetrics: MetricGroup {
     public let chipRadius = Metric(6.0, .guess("a tab chip's corners"))
     public let mentionRowHeight = Metric(24.0, .guess("one tab in the @ list"))
     public let dropBorderWidth = Metric(2.0, .guess("the panel's outline while tabs are dragged over it"))
+    public let openAsTabWidth = Metric(96.0, .guess("the panel's Open as Tab button"))
+    public let tabColumnWidth = Metric(720.0, .guess("a conversation tab's reading column, like a chat app's"))
+    public let tabColumnInset = Metric(28.0, .guess("a conversation tab's margin around its column"))
+    public let tabTitleFont = Metric(20.0, .guess("a conversation tab's title"))
+    public let pageGap = Metric(6.0, .guess("space between a page in an answer and its caption"))
+    public let linkPromptWidth = Metric(460.0, .guess("the card that asks before a page's link opens"))
+    public let linkPromptHeight = Metric(112.0, .guess("the card that asks before a page's link opens"))
 }
 
 /// Arc's Boost panel, measured on this run's 2x shots (P37-a/b/c/d-arc-editor.png).

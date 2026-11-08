@@ -32,6 +32,10 @@ public final class WindowRootView: NSView {
     private let zapOverlay: BoostZapOverlayView
     private let boostPanel: BoostPanel
     private let aiAnswer: AIAnswerDocumentView
+    /// Conversation tabs and kept pages, drawn over their cards like History and Easels.
+    private let conversationCards: ConversationCardsView
+    private let pageCards: AIPageCardsView
+    private let linkPrompt: PageLinkPromptView
     private let aiPreview: AIPreviewCardView
     private let linkStatus = LinkStatusCapsule()
     private let captureOverlay: CaptureOverlayView
@@ -57,6 +61,9 @@ public final class WindowRootView: NSView {
         zapOverlay = BoostZapOverlayView(dispatch: dispatch)
         boostPanel = BoostPanel(dispatch: dispatch)
         aiAnswer = AIAnswerDocumentView(dispatch: dispatch)
+        conversationCards = ConversationCardsView(dispatch: dispatch)
+        pageCards = AIPageCardsView(dispatch: dispatch)
+        linkPrompt = PageLinkPromptView(dispatch: dispatch)
         aiPreview = AIPreviewCardView(dispatch: dispatch)
         captureOverlay = CaptureOverlayView(dispatch: dispatch)
         tabTools = TabToolsOverlayView(dispatch: dispatch)
@@ -73,7 +80,11 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, linkPrompt, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        conversationCards.parent = self
+        conversationCards.below = toolbar
+        pageCards.parent = self
+        pageCards.below = toolbar
         for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak veil = inactiveVeil] _ in
                 guard let veil else { return }
@@ -85,18 +96,30 @@ public final class WindowRootView: NSView {
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.contentDropCardSize = { [weak content] in content?.dropCardSize ?? .zero }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
-        sidebar.endContentDrop = { [weak content, weak aiAnswer] in
+        sidebar.endContentDrop = { [weak content, weak aiAnswer, weak self] in
             content?.endDrop()
             aiAnswer?.showDropTarget(false)
+            self?.conversationCards.clearDropTargets()
         }
-        sidebar.panelSpaceDrop = { [weak aiAnswer] space, point in
-            guard let aiAnswer, !aiAnswer.isHidden, aiAnswer.frame.contains(point) else { aiAnswer?.showDropTarget(false); return nil }
+        sidebar.panelSpaceDrop = { [weak aiAnswer, weak self] space, point in
+            guard let aiAnswer, !aiAnswer.isHidden, aiAnswer.frame.contains(point) else {
+                aiAnswer?.showDropTarget(false)
+                // A conversation's tab takes the drop like the panel does.
+                if let tab = self?.conversationCards.view(at: point), let id = tab.conversationID { tab.showDropTarget(true); return .assist(.inTab(id, .attach([.space(space)]))) }
+                return nil
+            }
             aiAnswer.showDropTarget(true)
             return .assist(.attach([.space(space)]))
         }
-        sidebar.panelDropEnded = { [weak aiAnswer] in aiAnswer?.showDropTarget(false) }
-        sidebar.panelDrop = { [weak content, weak aiAnswer] item, kind, point in
-            guard let aiAnswer, !aiAnswer.isHidden, aiAnswer.frame.contains(point) else { aiAnswer?.showDropTarget(false); return nil }
+        sidebar.panelDropEnded = { [weak aiAnswer, weak self] in aiAnswer?.showDropTarget(false); self?.conversationCards.clearDropTargets() }
+        sidebar.panelDrop = { [weak content, weak aiAnswer, weak self] item, kind, point in
+            guard let aiAnswer, !aiAnswer.isHidden, aiAnswer.frame.contains(point) else {
+                aiAnswer?.showDropTarget(false)
+                guard let tab = self?.conversationCards.view(at: point), let id = tab.conversationID, kind != .section else { self?.conversationCards.clearDropTargets(); return nil }
+                if kind == .tab { _ = content?.dropCommand(item, at: CGPoint(x: -1, y: -1)) }
+                tab.showDropTarget(true)
+                return .assist(.inTab(id, .attach([kind == .folder ? .folder(item) : .tab(item.rawValue)])))
+            }
             // The page under the panel shows no drop slot while the panel takes the drop.
             if kind == .tab { _ = content?.dropCommand(item, at: CGPoint(x: -1, y: -1)) }
             aiAnswer.showDropTarget(true)
@@ -184,6 +207,8 @@ public final class WindowRootView: NSView {
         let easelCard = easelCards.first { card in snapshot.content.panes.indices.contains(card.pane) && snapshot.content.panes[card.pane].focused } ?? easelCards.first
         let shownEasel = easelCard.flatMap { card in snapshot.easels.first { if case .easel(let page, _) = card.content { $0.page == page } else { false } } }
         easel.render(shownEasel, in: easelCard?.rect, cornerRadius: easelCard?.cornerRadius ?? 0)
+        conversationCards.render(snapshot.conversations, frames: frames.cards, theme: snapshot.theme)
+        pageCards.render(snapshot.aiPages, frames: frames.cards, theme: snapshot.theme)
         toolbar.render(snapshot.urlPill, rect: frames.toolbar, palette: palette)
         let focusedCard = snapshot.content.panes.firstIndex(where: \.focused).flatMap { i in frames.cards.first { $0.pane == i }?.rect } ?? frames.cards.first?.rect
         loadingBar.render(loading: snapshot.urlPill.loading && snapshot.overlay == nil, progress: snapshot.urlPill.loadProgress,
@@ -199,7 +224,8 @@ public final class WindowRootView: NSView {
         library.render(librarySnapshot, now: snapshot.now, frames: frames, palette: palette)
         peek.render(peekSnapshot, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         findBar.render(snapshot.find, frames: frames.find, palette: palette)
-        aiAnswer.render(snapshot.ai, in: frames.contentArea)
+        aiAnswer.render(snapshot.ai, in: frames.contentArea, theme: snapshot.theme)
+        linkPrompt.render(snapshot.pageLinkPrompt, in: frames.contentArea)
         linkStatus.render(snapshot.overlay == nil ? snapshot.linkStatus : nil, frames: frames)
         aiPreview.render(snapshot.overlay == nil ? snapshot.aiPreview : nil, frames: frames)
         commandBar.render(barSnapshot, frames: frames, palette: palette, window: snapshot.kind)
@@ -265,7 +291,7 @@ public final class WindowRootView: NSView {
     /// shrinks a little, moves right and fades.
     private func placeForLibrary() {
         guard let last else { return }
-        let moving: [NSView] = [content, history, easel, toolbar, loadingBar, findBar]
+        let moving: [NSView] = [content, history, easel, toolbar, loadingBar, findBar] + conversationCards.allViews + pageCards.allViews
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
