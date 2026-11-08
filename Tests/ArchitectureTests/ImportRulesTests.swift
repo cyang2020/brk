@@ -27,7 +27,7 @@ final class ImportRulesTests: XCTestCase {
         "BrkCoreEngine": ["PDFKit", "BrkBase", "BrkEngine", "CBrkCore", "AppKit", "Foundation", "os"],
         // BrkCore.framework's interface: an Objective-C header, no Swift.
         "CBrkCore": [],
-        "BrkE2E": ["PDFKit", "BrkBase", "BrkDomain", "BrkLayout", "BrkControl", "Foundation", "CoreGraphics"],
+        "BrkE2E": ["PDFKit", "Vision", "ImageIO", "BrkBase", "BrkDomain", "BrkLayout", "BrkControl", "Foundation", "CoreGraphics"],
     ]
 
     /// (pattern, the only files allowed to match, why). Paths relative to Sources/.
