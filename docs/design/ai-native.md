@@ -9,7 +9,7 @@
 这些功能背后都是同一条路：每个请求开一个 Claude 或 Codex 会话，把当前页面的文字和问题拼成一段话发过去，等它回一段文字。具体有三个问题。
 
 - 一次性的小活（起标题、Tidy、摘要）用的是和对话同一个模型。用户没选时就是 CLI 的默认模型，这台机器上 Claude 默认是 Fable，起一个五个词的标题也要用最大的模型。
-- 回答的格式只在提示词里用文字要求"只回 JSON"。模型不照做，Brk 就读不出结果。
+- 现有代码没用 structured output。Tidy、悬停摘要、翻译都是在提示词里写 "Answer with JSON only"，拿回一段文本再自己解析，模型多说一句话 Brk 就读不出结果。Claude 和 Codex 的命令行都有 structured output，现有代码没用上，这是写错了。
 - 模型只能看到当前页面。只读模式下工具全关，它看不到别的 tab，也动不了浏览器里的任何东西。对话关掉面板就没了。
 
 用户的判断是：现在的 AI "简直就是直接问 ai 问题，没有任何的核心逻辑和 mcp 或者是 ai native 的东西"。
@@ -20,7 +20,7 @@
 
 **T3 的 threads。** T3 启动 Claude 或 Codex 时，会交给它一组 MCP 工具：列出 thread，按标题和正文搜 thread，分页读任意 thread（每次读几条、每条截多长都有上限），给任意 thread 发消息，开子任务。system prompt 里另有规则，比如"拿到一个 thread id，先读了再回答"，"提到一个 thread 时用它的链接"。所以 T3 不是把所有 thread 塞进 prompt，而是给模型一套自己去查的工具，再告诉它什么时候该查。Brk 里和 thread 对应的是 tab。
 
-**T3 给 thread 起名。** T3 有一个单独的"文字小活用哪个模型"设置，和对话模型分开。默认 Claude 用 `claude-haiku-5-5`，Codex 用 `gpt-6-luna`。调用时把答案的格式（JSON schema）一起交给命令行：Claude 用 `--json-schema`，Codex 用 `--output-schema`。命令行保证回来的结果符合格式。T3 也是每次现开一个进程，靠的是小模型加有保证的格式，所以每个 thread 都能自动起名。Brk 照这个做。
+**T3 给 thread 起名。** T3 有一个单独的"文字小活用哪个模型"设置，和对话模型分开。默认 Claude 用 `claude-haiku-5-5`，Codex 用 `gpt-6-luna`。调用时用命令行的 structured output，把答案的 JSON schema 一起交过去：Claude 用 `--json-schema`，Codex 用 `--output-schema`。T3 也是每次现开一个进程，靠的是小模型加 structured output，所以每个 thread 都能自动起名。Brk 照这个做。
 
 **T3 的 html_render。** 模型有两个工具。`html_preview` 在一个看不见的浏览器里打开模型写的 HTML，返回截图、内容高度和控制台报错，让模型先检查自己的页面。`html_render` 把检查过的页面显示在回答上方。T3 还定了几条页面规则：
 - 颜色只用 T3 给的主题变量，切换深浅色时页面跟着变。
@@ -47,7 +47,7 @@ Brk 本身就是浏览器，显示页面比 T3 更直接。页面里的链接打
 | 模型 | 做什么 | 为什么 |
 |---|---|---|
 | 决策模型（Jev 这一类） | 从给定选项里挑一个、打分、回答是或否，每个答案带概率 | 不写文字，只做选择。厂商自报 70 到 500 毫秒一次，价格是大模型的几百分之一，回答一定符合格式 |
-| 小文字模型，就是用户说的"垃圾模型"（`gpt-6-luna`、`claude-haiku-5-5`） | 起名、摘要、下载文件改名、翻译 | 要写出文字，决策模型做不了。走 T3 那种格式有保证的调用 |
+| 小文字模型，就是用户说的"垃圾模型"（`gpt-6-luna`、`claude-haiku-5-5`） | 起名、摘要、下载文件改名、翻译 | 要写出文字，决策模型做不了。用 structured output 调用，见下一节 |
 | 本机搜索模型（EmbeddingGemma 2） | 按意思搜索，把相似的 tab 归到一起，找出最接近的几个 group | 把文字转成一串数字，意思相近的内容数字也相近。可以在本机跑，免费，Apache 2.0，只处理文字时约 2.7 亿参数 |
 | agent（Claude Code、Codex） | 对话、跨 tab 干活、产出文档、调外部工具 | 只有它们有工具和用户装好的技能 |
 
@@ -61,8 +61,25 @@ Brk 本身就是浏览器，显示页面比 T3 更直接。页面里的链接打
 
 1. Brk 统一按 Jev 的请求格式发决策请求：一段内容加一组题，题型是选择、打分、是或否。JevK5 兼容这个格式，接 OpenAI Decisions 只需要一层很小的转换。
 2. 默认用本机的 JevK5，不需要 key，守住"AI 功能不用 API key"这条已有的规定。
-3. 每个基础功能都要在只装了 Claude 或 Codex 的机器上能用。本机模型没下载、不可用、或者实测不够好时，决策题改由小文字模型用固定格式回答（拿不到概率，按"高把握"处理）。本机模型的作用是让这些功能更快、更便宜，不是让功能能不能用取决于它。
+3. 每个基础功能都要在只装了 Claude 或 Codex 的机器上能用。本机模型没下载、不可用、或者实测不够好时，决策题改由小文字模型用 structured output 回答（拿不到概率，只给建议，不直接动）。本机模型的作用是让这些功能更快、更便宜，不是让功能能不能用取决于它。
 4. JevK5 只支持英文，而用户的 tab 标题和 group 名有很多是中文，所以上线前必须拿真实数据实测（见分步计划第 0 步）。
+
+### 怎么拿到结构化结果
+
+Brk 要的结果大多不是一段话，而是有字段的数据：一个名字、一份分组方案、一张摘要卡片、选中的选项。拿这种结果有四种方式，按场合用。
+
+**命令行的 structured output，用于基础层的一次性小活。** 2026-11-08 在这台机器上实测：
+- Claude（2.1.318）加 `--json-schema`：Claude Code 会给模型加一个 `StructuredOutput` 工具，要求模型调用它交答案，按 schema 检查后放进结果的 `structured_output` 字段。用 `claude-haiku-5-5`、关掉工具和设置，给一个 tab 起名用了 0.93 秒，花费 0.00065 美元。
+- Codex（0.164.0）加 `--output-schema`：走 OpenAI 的 structured outputs，最终消息就是符合 schema 的 JSON。用 `gpt-6-luna`、低推理强度，同一个起名用了 3.6 秒，其中输入有 15,768 个 token，因为 `codex exec` 每次都带着 Codex 自己的整段 system prompt。
+- 所以按 tab 跑的高频小活（起名、归位代答）优先用 Claude 这条路。Codex 这条路要复用一个常驻的 `codex app-server` 会话，在 `turn/start` 上带 `outputSchema`，不要每次现开 `codex exec`。
+
+**Brk 自己的 MCP 工具当作交结果的口子，用于 agent 会话。** agent 会话要先读 tab、调工具，最后才交结果，比如 Tidy 方案、AI 页面的数据。这时让 agent 调 Brk 的工具交结果（例如"把这些 tab 移进这个 group"），工具参数本身有类型，Brk 检查后执行。这和 Claude Code 实现 `--json-schema` 的办法是同一个思路，只是工具由 Brk 提供。
+
+**决策模型，用于选择、打分、是或否。** 题型本身就是有类型的，答案只能是给定选项之一，并带概率，不需要另外约束格式。
+
+**直接调 API 的 structured output，不用。** Anthropic 和 OpenAI 的 API 都能在解码时约束格式，但要 API key，和"AI 功能不用 API key"的规定冲突。
+
+不再用"在提示词里写只回 JSON，然后自己解析文本"这种做法。
 
 ## 基础 AI 功能
 
@@ -148,7 +165,7 @@ Brk 已有 Arc 的 Space（一组 tab），这个功能不能叫 Space。暂名"
 
 ## 分步计划
 
-1. **第 0 步：用真实数据实测模型。** 拿用户真实的 tab 和 group（包括中文），比较 JevK5、"luna 加固定格式"、"haiku 加固定格式"的分组和起名效果与速度。另外测 EmbeddingGemma 2 在这台 M1 16 GB 机器上的速度和内存。有 Jev 或 OpenAI 的 key 时一起比。结果决定决策模型的默认选择。
+1. **第 0 步：用真实数据实测模型。** 拿用户真实的 tab 和 group（包括中文），比较 JevK5、"luna 加 structured output"、"haiku 加 structured output"的分组和起名效果与速度。另外测 EmbeddingGemma 2 在这台 M1 16 GB 机器上的速度和内存。有 Jev 或 OpenAI 的 key 时一起比。结果决定决策模型的默认选择。
 2. **第 1 步：基础层的小模型通道。** 单独选模型，格式由命令行保证。现有的起名、Tidy、摘要、下载改名、翻译都换到这条通道。tab 自动起名扩到所有 tab，group 自动起名，新 tab 自动归位，提示重复和久未看的 tab。
 3. **第 2 步：本机模型。** 跑 EmbeddingGemma 2 和决策模型，下载和存放都要用户知道。做按意思搜索、新的 Tidy 流程，以及新 tab 归位的"先找最接近的几个，再挑一个"。
 4. **第 3 步：agent 底座。** Brk 的 MCP 服务和"看 tab""动 tab""读对话"工具，system prompt 规则，把 tab 交给 agent 的三种方式，对话变成 tab，新的安全规则。
