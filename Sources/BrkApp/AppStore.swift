@@ -55,6 +55,14 @@ public final class AppStore {
     private lazy var currencyRates = CurrencyRatesStore.live(dataDirectory: Product.dataDirectory(), clock: clock, send: { [weak self] in self?.dispatch($0) })
     private lazy var aiServices: AIServices = {
         let services = AIServices(engine: engine, send: { [weak self] event in self?.dispatch(.system(event)) }, state: { [weak self] in self?.state })
+        // The local models (when downloaded) under the basic layer: JevK5 for decisions, embeddings for Tidy without a
+        // text model and for Place New Tabs' shortlist; the page check on the same decision route.
+        services.basic.localDecisions = localModels.decisionBackend
+        services.basic.clustering = localModels
+        services.basic.localPreparing = localModels
+        services.currentMax = { [weak self] in self?.snapshot.settings.max }
+        services.installPageCheck()
+        localModels.onDecisionAvailability = { [weak services] in services?.basic.keys.report() }
         // Agent sessions run on the way the Max pane names for their service, with the key from the Keychain.
         AIAccounts.read = { [weak self] service in
             guard let settings = self?.snapshot.settings.max.settings else { return .subscription }
@@ -67,6 +75,7 @@ public final class AppStore {
     }()
     /// Beside state.json like the Boost, Capture and Easel files, so a test's store never reads a real index.
     private lazy var localModels = LocalModelServices.live(root: stateFile.url.deletingLastPathComponent(), send: { [weak self] in self?.dispatch($0) })
+    private lazy var meaningSearch = MeaningSearchService(models: localModels, send: { [weak self] in self?.dispatch($0) }, state: { [weak self] in self?.state })
     private var queue: [Input] = []
     private var dispatching = false
     private(set) var isTerminating = false
@@ -137,7 +146,7 @@ public final class AppStore {
         publish(docChanged: false)
         dispatching = false
         let restored = state
-        localModels.stateChanged { restored.searchCorpus() }
+        localModels.stateChanged(corpus: { restored.searchCorpus() }, duplicates: { [weak self] in self?.state.duplicateScopes() ?? [] })
         drain()
         if let window = snapshot.windows.keys.sorted().first {
             if snapshot.sidebarData.needsOnboarding { dispatch(.user(window, .sidebarData(.welcome))) }
@@ -274,7 +283,11 @@ public final class AppStore {
         if case .system(.window(let owner, .closed)) = input { spacePanels.ownerGone(owner) }
         if isTerminating, case .user = input { return KeyHandling(handled: false, shortcut: false) }
         if case .user(let window, .commandBar(let command)) = input {
-            switch command { case .queryChanged, .queryChangedForSite, .prefixQuery, .dismiss: suggestions.cancel(window); localSearch.cancel(window); barLookups.cancel(window); default: break }
+            switch command {
+            case .queryChanged, .queryChangedForSite, .prefixQuery, .dismiss:
+                suggestions.cancel(window); localSearch.cancel(window); barLookups.cancel(window); meaningSearch.cancel(window, .commandBar)
+            default: break
+            }
         }
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
         var checkpointed = false
@@ -288,7 +301,7 @@ public final class AppStore {
             state = t.state
             publish(docChanged: t.docChanged && !checkpointed)
         }
-        if t.docChanged { let changed = t.state; localModels.stateChanged { changed.searchCorpus() } }
+        if t.docChanged { let changed = t.state; localModels.stateChanged(corpus: { changed.searchCorpus() }, duplicates: { [weak self] in self?.state.duplicateScopes() ?? [] }) }
         run(t.effects)
         return KeyHandling(handled: t.keyHandled, shortcut: t.keyShortcut, action: t.keyAction?.rawValue)
     }
@@ -315,6 +328,7 @@ public final class AppStore {
         sounds.setEnabled(snapshot.settings.advanced.soundEffects)
         suggestions.reconcile(snapshot)
         localSearch.reconcile(snapshot)
+        meaningSearch.reconcile(snapshot)
         reconcileCaptureSheets()
         if docChanged { stateFile.schedule(StateCodec.encode(state)) }
         engine.reconcile(snapshot.pages)
@@ -580,8 +594,7 @@ public final class AppStore {
             case .aiCancel(let id): aiServices.cancel(id)
             case .aiOpenConversation(let id, let folder, let choice, let tabs): aiServices.openConversation(id, folder: folder, choice: choice, max: snapshot.settings.max, tabs: tabs)
             case .aiAttach(let id, let attachments): aiServices.attach(id, attachments)
-            // A search by meaning for the @ list belongs to the local models; until they run, title and address matches are all.
-            case .aiMentionSearch: break
+            case .aiMentionSearch(let window, let query): meaningSearch.mention(window, query)
             case .agentReadDone(let call, let outcome): aiServices.agentReadDone(call, outcome)
             case .agentActDone(let call, let outcome): aiServices.agentActDone(call, outcome)
             case .aiTurn(let conversation, let turn, let task): aiServices.turn(conversation: conversation, turn: turn, task: task, max: snapshot.settings.max)
@@ -615,6 +628,7 @@ public final class AppStore {
             case .fetchSuggestions(let window, let query, let url):
                 suggestions.fetch(window, query: query, url: url)
             case .searchLocal(let window, let request): localSearch.search(window, request)
+            case .searchByMeaning(let window, let query): meaningSearch.search(window, query)
             case .barTranslationDue(let window, let text): barLookups.translationDue(window, text: text)
             case .lookUpWord(let window, let word): barLookups.define(window, word: word)
             case .openDictionary(let word):
