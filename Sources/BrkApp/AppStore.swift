@@ -2,6 +2,7 @@ import AppKit
 import BrkBase
 import BrkDomain
 import BrkEngine
+import BrkContent
 import BrkLayout
 import BrkSettings
 import os
@@ -55,6 +56,7 @@ public final class AppStore {
     private lazy var currencyRates = CurrencyRatesStore.live(dataDirectory: Product.dataDirectory(), clock: clock, send: { [weak self] in self?.dispatch($0) })
     private lazy var aiServices: AIServices = {
         let services = AIServices(engine: engine, send: { [weak self] event in self?.dispatch(.system(event)) }, state: { [weak self] in self?.state })
+        services.pageTools = pageTools
         // Agent sessions run on the way the Max pane names for their service, with the key from the Keychain.
         AIAccounts.read = { [weak self] service in
             guard let settings = self?.snapshot.settings.max.settings else { return .subscription }
@@ -91,6 +93,10 @@ public final class AppStore {
     let captureSheets = CaptureSheets()
     let captureFiles: CaptureFiles
     let easelFiles: EaselFiles
+    /// Saved conversations and rendered pages, one file each beside state.json.
+    let conversationFiles: ConversationFiles
+    /// What the conversation files hold now, to write only what changed.
+    private var savedConversations: (conversations: [AIRequestID: StoredConversation], pages: [AIPageID: AIPageRecord]) = ([:], [:])
     public var insertCaptureInEasel: (@MainActor (EaselCaptureInsertion, WindowID) -> Void)?
     let outputSheets = OutputSheets()
     var didPublish: ((AppSnapshot) -> Void)?
@@ -113,6 +119,7 @@ public final class AppStore {
         self.boostFiles = BoostFiles(root: stateFile.url.deletingLastPathComponent())
         captureFiles = CaptureFiles(root: stateFile.url.deletingLastPathComponent())
         easelFiles = EaselFiles(root: stateFile.url.deletingLastPathComponent())
+        conversationFiles = ConversationFiles(root: stateFile.url.deletingLastPathComponent())
         snapshot = project(restored.state, ProjectionContext(now: clock.now(), calendar: Calendar.autoupdatingCurrent))
         for row in snapshot.settings.profiles {
             let id = row.profile.id
@@ -122,6 +129,10 @@ public final class AppStore {
         }
         // What the Max pane's On This Mac card shows, read from disk before the first render (no dispatch of its own).
         state = reduce(state, .system(.localModels(localModels.initialSnapshot())), Context(now: clock.now(), newID: { UUID().uuidString })).state
+        // Saved conversations and pages, before the first render: a restored window may show one in a card.
+        let (conversations, pages) = conversationFiles.load()
+        state = reduce(state, .system(.conversationsLoaded(conversations, pages)), Context(now: clock.now(), newID: { UUID().uuidString })).state
+        savedConversations = (state.savedConversations, state.savedPages)
         snapshot = project(state, ProjectionContext(now: clock.now(), calendar: Calendar.autoupdatingCurrent))
     }
 
@@ -181,8 +192,35 @@ public final class AppStore {
     /// logged and reported; the quit goes on (the debounced copy on disk is the fallback).
     public func prepareSpaceToolsForShutdown() { spacePanels.cancelAll(); captureSheets.cancelAll() }
 
+    /// The page tools' side in the app: pages written beside the conversations, previewed in the page sandbox with the
+    /// window's theme, at the width of the reply where the conversation shows.
+    private var pageTools: BrkPageTools {
+        BrkPageTools(
+            write: { [conversationFiles] html, page in try conversationFiles.writeHTML(html, page: page) },
+            preview: { [weak self] html, data, width, window in
+                let theme = self?.snapshot.windows[window]?.theme ?? resolveTheme(.default, systemScheme: .light)
+                return await PageSandbox.preview(html: html, data: data, width: width, theme: PageTheme(theme))
+            },
+            replyWidth: { [weak self] conversation, window in
+                let m = Metrics.ai
+                let inTab = self?.snapshot.windows[window]?.conversations.contains { $0.answer.conversation?.id == conversation } == true
+                return Int((inTab ? m.tabColumnWidth.value : m.width.value) - m.padding.value * 2 - 10)
+            })
+    }
+
+    /// Writes the conversations and pages that changed since the last write.
+    private func saveConversations() {
+        let now = (state.savedConversations, state.savedPages)
+        guard now.0 != savedConversations.conversations || now.1 != savedConversations.pages else { return }
+        let changes = ConversationChanges(from: savedConversations, to: now)
+        conversationFiles.save(conversations: changes.conversations, removed: changes.removed, pages: changes.pages, removedPages: changes.removedPages)
+        savedConversations = now
+    }
+
     @discardableResult
     public func flush() -> Bool {
+        saveConversations()
+        conversationFiles.flush()
         do { try stateFile.writeNow(StateCodec.encode(state)); return true } catch {
             log.error("flush failed: \(error)")
             return false
@@ -317,6 +355,7 @@ public final class AppStore {
         localSearch.reconcile(snapshot)
         reconcileCaptureSheets()
         if docChanged { stateFile.schedule(StateCodec.encode(state)) }
+        saveConversations()
         engine.reconcile(snapshot.pages)
         for id in windows.keys where snapshot.windows[id] == nil {
             exports.ownerGone(id)
@@ -578,7 +617,7 @@ public final class AppStore {
                 }
             case .ai(let id, let task, let choice): aiServices.answer(id, task: task, choice: choice, max: snapshot.settings.max)
             case .aiCancel(let id): aiServices.cancel(id)
-            case .aiOpenConversation(let id, let folder, let choice, let tabs): aiServices.openConversation(id, folder: folder, choice: choice, max: snapshot.settings.max, tabs: tabs)
+            case .aiOpenConversation(let id, let folder, let choice, let tabs, let resume): aiServices.openConversation(id, folder: folder, choice: choice, max: snapshot.settings.max, tabs: tabs, resume: resume)
             case .aiAttach(let id, let attachments): aiServices.attach(id, attachments)
             // A search by meaning for the @ list belongs to the local models; until they run, title and address matches are all.
             case .aiMentionSearch: break
