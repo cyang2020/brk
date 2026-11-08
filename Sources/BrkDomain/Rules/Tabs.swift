@@ -66,8 +66,8 @@ extension Work {
                 guard moveItem(unit, to: .into(parent: space.pinnedRoot, index: Int.max)) else { return }
                 setPinnedAddresses(under: unit, in: window)
                 // Max "renamed pinned tabs": a tidier title from the local AI tool (AIProvider seam).
-                if state.doc.settings.max.renamePinnedTabs, let t = state.displayedTab(tab, in: window), let url = t.url, t.customTitle == nil {
-                    requestAI(.renameTab(tab, title: t.displayTitle, url: url))
+                if state.doc.settings.max.titlesOn, let t = state.displayedTab(tab, in: window), let url = t.url, t.customTitle == nil {
+                    requestAI(.renameTab(tab, title: t.displayTitle, url: url), from: window)
                 }
                 toast(ToastCopy.pinned(to: state.displayTitle(of: space.id)), in: window)
             case .pinned:

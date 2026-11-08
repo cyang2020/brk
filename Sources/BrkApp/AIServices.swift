@@ -93,13 +93,41 @@ final class AIServices {
         }
     }
 
-    func turn(conversation: AIRequestID, turn: AIRequestID, task: AITask) {
-        guard let session = conversations[conversation] else {
+    func turn(conversation: AIRequestID, turn: AIRequestID, task: AITask, max: MaxSnapshot? = nil) {
+        guard var session = conversations[conversation] else {
             send(.aiResult(turn, .failed("This conversation has ended. Ask again from the command bar.")))
             return
         }
+        // A model or effort picked in the Max pane since the session started (the panel's Agent… button leads there,
+        // and an agent out of quota says to switch model) applies from this message on.
+        if let max, !session.plain {
+            let wanted = max.settings.agentOptions?[session.spec.kind]
+            if wanted?.model != session.spec.model || wanted?.effort != session.spec.effort {
+                session = renew(conversation, session, model: wanted?.model, effort: wanted?.effort)
+            }
+        }
         turns[turn] = conversation
         session.send(AIPrompt.text(for: task), turn: turn)
+    }
+
+    /// The conversation's session again with another model or effort. A session with tools on continues the agent's
+    /// own session; a read-only one keeps nothing, so the new model starts without the earlier messages, and says so.
+    private func renew(_ id: AIRequestID, _ old: AgentSession, model: String?, effort: String?) -> AgentSession {
+        let readOnly = old.spec.access == .readOnly
+        var directory = old.spec.directory
+        if readOnly {
+            directory = FileManager.default.temporaryDirectory.appendingPathComponent("brk-ai-" + UUID().uuidString, isDirectory: true)
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        let kind = old.spec.kind
+        let spec = AgentSpec(kind: kind, executable: old.spec.executable, model: model, effort: effort, access: old.spec.access, directory: directory,
+                             resume: readOnly ? nil : old.resumeID)
+        let session = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(kind), plain: old.plain) { [weak self] in self?.report($0, conversation: id, kind: kind) }
+        conversations[id] = session
+        for (turn, owner) in turns where owner == id { turns[turn] = nil }
+        closing.append(Task { await old.close() })
+        send(.aiConversation(id, .notice(readOnly ? AgentCopy.modelChangedFresh : AgentCopy.modelChanged)))
+        return session
     }
 
     func approve(conversation: AIRequestID, approval: String, option: String) {

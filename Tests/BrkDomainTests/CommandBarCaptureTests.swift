@@ -19,7 +19,8 @@ final class CommandBarCaptureTests: XCTestCase {
         d.user(.settings(.max(.provider(.off))))
         d.user(.assist(.open(.question)))
         XCTAssertNil(d.bar)
-        XCTAssertEqual(d.view.tabTools.toast?.text, "No local AI tool selected for Max")
+        // The tool set to off is Max turned off (Turn Off Max does that): the notice says how to turn it back on.
+        XCTAssertEqual(d.view.tabTools.toast?.text, "Max is off. Turn it on in Settings → Max.")
 
         d.user(.settings(.max(.provider(.auto))))
         d.user(.assist(.open(.question)))

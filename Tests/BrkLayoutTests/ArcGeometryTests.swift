@@ -104,6 +104,18 @@ final class ArcGeometryTests: XCTestCase {
         let b = d.open("b.example.com")
         XCTAssertEqual(TablistLayout.rows(d.view.space, width: 228).map(\.kind), [.topSpacer, .item(a), .divider, .newTab, .item(b)])
     }
+    /// Arc 1.170, a new Space with Today tabs and nothing pinned (verify/completion/max-ui-20261107/arc-no-pinned-*.png):
+    /// the divider is there, with Clear and, with Tidy Tabs on, Tidy, so a person without pinned tabs can tidy.
+    func testTheDividerShowsWithoutPinnedTabs() throws {
+        let d = LayoutDriver()
+        let a = d.view.space.today.rows[0].id
+        XCTAssertTrue(d.view.space.pinned.rows.isEmpty)
+        XCTAssertEqual(TablistLayout.rows(d.view.space, width: 228).map(\.kind), [.topSpacer, .divider, .newTab, .item(a)])
+        d.user(.settings(.max(.tidyTabs(true))))
+        while d.view.space.today.rows.count < 7 { _ = d.open("t\(d.view.space.today.rows.count).example.com") }
+        XCTAssertTrue(d.view.space.today.canTidy)
+        XCTAssertTrue(TablistLayout.rows(d.view.space, width: 228).contains { $0.kind == .divider })
+    }
     /// Title row 40 at y 4; URL pill 36 tall, 8 from each side; dock 50 at the bottom.
     func testSidebarColumnStack() throws {
         let f = try XCTUnwrap(LayoutDriver().frames().sidebar)

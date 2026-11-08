@@ -3,10 +3,10 @@ import BrkBase
 import BrkDomain
 import BrkUIKit
 
-/// The URL pill's second line (Arc's affordances below the URL, P01-a, P50-b/c): "Share Quote" while text is
-/// highlighted (a click copies the link to the highlight); otherwise "Translation Available", which takes no click of
-/// its own (a click edits the address, as on the rest of the pill), or "Translated", which underlines under the
-/// pointer and opens the translation popover.
+/// The URL pill's second line (Arc's affordances below the URL, P01-a, P50-b/c/g): "Share Quote" while text is
+/// highlighted (a click copies the link to the highlight); otherwise "Translation Available", which opens Arc's
+/// "Translate this page to English?" popover (P50-g), or "Translated", which opens the Translated from popover
+/// (P50-d). Both underline under the pointer.
 @MainActor
 final class PillTranslationLine: HoverView {
     private let label = NSTextField(labelWithString: "")
@@ -37,8 +37,10 @@ final class PillTranslationLine: HoverView {
 
     private var clickable: Bool {
         if shareQuote { return true }
-        if case .translated? = state { return true }
-        return false
+        switch state {
+        case .translated?, .available?: return true
+        default: return false
+        }
     }
 
     /// The width the text needs, so the line's hover area is the word, not the whole pill.
@@ -73,8 +75,11 @@ final class PillTranslationLine: HoverView {
     override func mouseUp(with event: NSEvent) {
         guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         if shareQuote { dispatch(.page(.shareQuote)); return }
-        guard case .translated(let source)? = state else { return }
-        popover.show(from: label, source: source)
+        switch state {
+        case .translated(let source)?: popover.show(from: label, kind: .translated(from: source))
+        case .available?: popover.show(from: label, kind: .offer(to: AILanguages.systemTarget))
+        default: break
+        }
     }
 }
 
@@ -87,9 +92,9 @@ final class TranslationPopover: NSObject, NSPopoverDelegate {
     private var popover: NSPopover?
     init(dispatch: @escaping Dispatch) { self.dispatch = dispatch }
 
-    func show(from anchor: NSView, source: String) {
+    func show(from anchor: NSView, kind: TranslationPopoverKind) {
         close()
-        let content = TranslationPopoverView(source: source, dispatch: { [weak self] command in
+        let content = TranslationPopoverView(kind: kind, dispatch: { [weak self] command in
             self?.close()
             self?.dispatch(command)
         })
@@ -113,18 +118,35 @@ final class TranslationPopover: NSObject, NSPopoverDelegate {
     func popoverDidClose(_ notification: Notification) { popover = nil }
 }
 
+/// What the popover is about: a translated page (Use Original), or one that can be translated (Translate, P50-g).
+enum TranslationPopoverKind: Equatable {
+    case translated(from: String)
+    case offer(to: String)
+}
+
 @MainActor
 private final class TranslationPopoverView: NSView {
     private let disc = NSTextField(labelWithString: "Aa")
     private let discFill = NSView()
     private let sentence: NSTextField
     private let options = NSButton(title: AICopy.options, target: nil, action: nil)
-    private let original = NSButton(title: AICopy.useOriginal, target: nil, action: nil)
+    private let original: NSButton
+    private let kind: TranslationPopoverKind
     private let dispatch: Dispatch
 
-    init(source: String, dispatch: @escaping Dispatch) {
+    init(kind: TranslationPopoverKind, dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
-        sentence = NSTextField(labelWithString: AICopy.translatedFrom(source))
+        self.kind = kind
+        switch kind {
+        case .translated(let source):
+            sentence = NSTextField(labelWithString: AICopy.translatedFrom(source))
+            original = NSButton(title: AICopy.useOriginal, target: nil, action: nil)
+        case .offer(let target):
+            // P50-g: "Translate this page / to English?" over two lines beside the disc.
+            sentence = NSTextField(wrappingLabelWithString: AICopy.translateOffer(target))
+            sentence.maximumNumberOfLines = 2
+            original = NSButton(title: AICopy.translate, target: nil, action: nil)
+        }
         super.init(frame: CGRect(origin: .zero, size: CGSize(width: Draw.translationPopover.value[0], height: Draw.translationPopover.value[1])))
         identify(.aiControl("translation-popover"))
         let d = Draw.translationDisc.value
@@ -136,8 +158,13 @@ private final class TranslationPopoverView: NSView {
         disc.alignment = .center
         sentence.font = .systemFont(ofSize: Draw.translationTextFont.value)
         sentence.textColor = NSColor(srgbRed: 0x5C / 255.0, green: 0x5F / 255.0, blue: 0x61 / 255.0, alpha: 1)
-        sentence.lineBreakMode = .byTruncatingTail
-        for (button, name, filled) in [(options, "translation-options", true), (original, "translation-use-original", false)] {
+        if case .offer = kind {
+            sentence.lineBreakMode = .byWordWrapping
+            sentence.cell?.wraps = true
+            sentence.cell?.truncatesLastVisibleLine = true
+        } else { sentence.lineBreakMode = .byTruncatingTail }
+        let second = if case .offer = kind { "translation-translate" } else { "translation-use-original" }
+        for (button, name, filled) in [(options, "translation-options", true), (original, second, false)] {
             button.isBordered = false
             button.wantsLayer = true
             button.layer?.cornerRadius = Metrics.urlPill.accessoryRadius.value
@@ -163,13 +190,19 @@ private final class TranslationPopoverView: NSView {
         discFill.frame = CGRect(x: d[0], y: d[1], width: d[2], height: d[2])
         let discText = disc.intrinsicContentSize.height
         disc.frame = CGRect(x: d[0], y: d[1] + (d[2] - discText) / 2, width: d[2], height: discText)
-        let line = sentence.intrinsicContentSize.height, leading = Draw.translationTextLeading.value
-        sentence.frame = CGRect(x: leading, y: d[1] + (d[2] - line) / 2, width: bounds.width - leading - d[0], height: line)
+        let leading = Draw.translationTextLeading.value, width = bounds.width - leading - d[0]
+        let line = sentence.cell?.cellSize(forBounds: CGRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude)).height ?? sentence.intrinsicContentSize.height
+        sentence.frame = CGRect(x: leading, y: d[1] + (d[2] - line) / 2, width: width, height: line)
         options.frame = CGRect(x: b[0], y: b[1], width: b[2], height: b[3])
         original.frame = CGRect(x: b[0] + b[2] + b[4], y: b[1], width: b[2], height: b[3])
     }
 
-    @objc private func useOriginal() { dispatch(.assist(.useOriginal)) }
+    @objc private func useOriginal() {
+        switch kind {
+        case .translated: dispatch(.assist(.useOriginal))
+        case .offer(let target): dispatch(.assist(.translate(target)))
+        }
+    }
 
     @objc private func showOptions() {
         let menu = NSMenu()

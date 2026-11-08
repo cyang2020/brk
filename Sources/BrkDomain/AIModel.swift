@@ -3,19 +3,37 @@ import Foundation
 
 public enum AIFeature: String, CaseIterable, Hashable, Sendable, Codable {
     case commandBar, askPage, linkPreviews, downloadRename, instantLinks, browse, translation
+    /// The switch's name where the person finds it: the Max pane's row titles (P38-max-list), More Settings' rows.
     public var title: String {
         switch self {
         case .commandBar: "Ask in Command Bar"
         case .askPage: "Ask on Page"
-        case .linkPreviews: "5-Second Link Previews"
-        case .downloadRename: "Tidy Download Names"
+        case .linkPreviews: "5-Second Previews"
+        case .downloadRename: "Tidy Downloads"
         case .instantLinks: "Instant Links"
         case .browse: "Browse for Me"
         case .translation: "Translate Pages"
         }
     }
+    /// Brk's own three are switched in Advanced → More Settings…; Arc's are in the Max pane.
+    public var inMoreSettings: Bool { [.askPage, .browse, .translation].contains(self) }
+    /// Where the switch is, as a message says it, and the pane a link opens.
+    public var place: String { inMoreSettings ? "Settings → Advanced → More Settings…" : "Settings → Max" }
+    public var pane: SettingsPane { inMoreSettings ? .advanced : .max }
 }
-public enum AIMode: String, Hashable, Sendable, Codable { case question, page, instant, browse, translate }
+public enum AIMode: String, Hashable, Sendable, Codable {
+    case question, page, instant, browse, translate
+    /// The switch this bar's feature has; the question bar has its own notice (P43-a).
+    var feature: AIFeature? {
+        switch self {
+        case .question: nil
+        case .page: .askPage
+        case .instant: .instantLinks
+        case .browse: .browse
+        case .translate: .translation
+        }
+    }
+}
 public enum AIIntent: Hashable, Sendable, Codable {
     case open(AIMode)
     case ask(String)
@@ -56,8 +74,10 @@ public struct AITranslationExclusions: Hashable, Sendable, Codable {
     public init() {}
 }
 extension MaxSettings {
-    /// The user's switch, else "Automatically enable future … features" for a feature never switched.
-    public func enabled(_ feature: AIFeature) -> Bool { features?[feature] ?? autoEnableFutureFeatures ?? false }
+    /// Max on, and the user's switch, else "Automatically enable future … features" for a feature never switched.
+    public func enabled(_ feature: AIFeature) -> Bool { isOn && switched(feature) }
+    /// The switch alone, kept while Max is off.
+    public func switched(_ feature: AIFeature) -> Bool { features?[feature] ?? autoEnableFutureFeatures ?? false }
 }
 
 /// Arc's 5-Second Preview card (P45-a): under the hovered link, the summary's title and two to four details, each an
@@ -273,6 +293,10 @@ struct AISession: Equatable, Sendable {
     var agents: [AIProviderKind: AIAgentStatus] = [:]
     /// By conversation: how much of the running turn's text rows above its last step already show.
     var turnText: [AIRequestID: Int] = [:]
+    /// A background request's window (Tidy Tab Titles, Tidy Downloads): where its result or failure is told.
+    var backgroundWindows: [AIRequestID: WindowID] = [:]
+    /// A download Max is renaming in the background, and the window that started it.
+    var renamingDownloads: [DownloadID: WindowID] = [:]
 }
 public struct AIGroupPlan: Hashable, Sendable, Codable {
     public let folder: String
@@ -299,6 +323,9 @@ public enum AICopy {
     public static func translatedFrom(_ language: String) -> String { "Translated from \(language)." }
     public static let options = "Options"
     public static let useOriginal = "Use Original"
+    /// P50-g: the popover of a page that can be translated, and its button.
+    public static func translateOffer(_ language: String) -> String { "Translate this page to \(language)?" }
+    public static let translate = "Translate"
     public static let chooseAnotherLanguage = "Choose Another Language"
     public static let neverTranslateSite = "Never Translate This Site"
     public static let languageSettings = "Language Settings"

@@ -408,6 +408,26 @@ enum NativeSystemInput {
         return out
     }
 
+    /// The screen frame (top-left origin, as mouse events take it) of the first element in the app's windows whose
+    /// identifier is `identifier`, or whose title is `title` (and role one of `roles`): where a real click goes for a
+    /// control of a window the control socket does not describe (the settings window, a popover).
+    static func frame(pid: Int32, identifier: String? = nil, title: String? = nil, roles: [String] = []) -> CGRect? {
+        _ = wakeAccessibilityTree(pid: pid)
+        let windows = NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? []
+        for window in windows {
+            guard let node = NativePickerInput.find(window, { node, role in
+                if let identifier, NativePickerInput.string(node, kAXIdentifierAttribute) != identifier { return false }
+                if let title, NativePickerInput.string(node, kAXTitleAttribute) != title && NativePickerInput.string(node, kAXDescriptionAttribute) != title { return false }
+                return roles.isEmpty || roles.contains(role)
+            }) else { continue }
+            var point = CGPoint.zero, size = CGSize.zero
+            if let value = NativePickerInput.attribute(node, kAXPositionAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgPoint, &point) }
+            if let value = NativePickerInput.attribute(node, kAXSizeAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgSize, &size) }
+            if size.width > 0, size.height > 0 { return CGRect(origin: point, size: size) }
+        }
+        return nil
+    }
+
     /// Opens the pop-up button whose identifier is `identifier` in the app's windows with AXPress and presses its item
     /// titled `title`, as a user picking from it does.
     static func choosePopUp(pid: Int32, identifier: String, title: String) throws {

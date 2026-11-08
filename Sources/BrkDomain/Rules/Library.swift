@@ -152,7 +152,7 @@ extension Work {
                 state.doc.downloads[index].filename = receipt.url.lastPathComponent
                 state.doc.downloads[index].received = receipt.bytes
                 state.doc.downloads[index].total = receipt.bytes
-                if state.doc.settings.max.enabled(.downloadRename) { requestAI(.renameDownload(update.id, original: receipt.url.lastPathComponent)) }
+                if state.doc.settings.max.enabled(.downloadRename) { requestAI(.renameDownload(update.id, original: receipt.url.lastPathComponent), from: page.window) }
             case .cancelled: state.doc.downloads[index].state = .cancelled
             case .interrupted: state.doc.downloads[index].state = .interrupted
             case .failed: state.doc.downloads[index].state = .failed

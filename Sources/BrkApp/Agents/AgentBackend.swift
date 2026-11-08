@@ -70,6 +70,9 @@ enum AgentCopy {
     static func missing(_ kind: AIProviderKind) -> String {
         "\(kind.displayName) is not installed: Brk did not find \(kind.executableNames[0]) on your PATH. Install it, or choose another agent in Settings → Max."
     }
+    /// The Max pane's model or effort changed while a conversation was open.
+    static let modelChanged = "Model or effort changed in Settings → Max: this message goes to the new choice."
+    static let modelChangedFresh = "Model or effort changed in Settings → Max: this message goes to the new choice, which does not see the earlier messages."
     static func noAnswer(_ kind: AIProviderKind) -> String {
         "\(kind.displayName) did not start in time. Try it in Terminal, then try again."
     }

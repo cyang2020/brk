@@ -107,14 +107,28 @@ extension Work {
                 if !state.doc.keyOverrides.isEmpty { state.doc.keyOverrides = [:] }
             }
         case .max(let setting):
+            // While Max is off its switches show off (P38-b). One switched on turns Max on with that feature alone;
+            // the others it kept for Turn On Max would otherwise come back at the same time.
+            func maxOnWithOnly() {
+                guard !state.doc.settings.max.isOn else { return }
+                state.doc.settings.max.provider = .auto
+                state.doc.settings.max.tidyTabs = false
+                state.doc.settings.max.renamePinnedTabs = false
+                state.doc.settings.max.features = Dictionary(uniqueKeysWithValues: AIFeature.allCases.map { ($0, false) })
+            }
             switch setting {
             case .feature(let feature, let on):
+                if on { maxOnWithOnly() }
                 if state.doc.settings.max.features == nil { state.doc.settings.max.features = [:] }
                 state.doc.settings.max.features?[feature] = on
             case .resetTranslationExclusions: state.doc.settings.max.translationExclusions = nil
             case .provider(let choice): state.doc.settings.max.provider = choice
-            case .renamePinnedTabs(let on): state.doc.settings.max.renamePinnedTabs = on
-            case .tidyTabs(let on): state.doc.settings.max.tidyTabs = on
+            case .renamePinnedTabs(let on):
+                if on { maxOnWithOnly() }
+                state.doc.settings.max.renamePinnedTabs = on
+            case .tidyTabs(let on):
+                if on { maxOnWithOnly() }
+                state.doc.settings.max.tidyTabs = on
             case .autoEnableFutureFeatures(let on): state.doc.settings.max.autoEnableFutureFeatures = on ? true : nil
             case .enable(let on):
                 var max = state.doc.settings.max
@@ -125,6 +139,11 @@ extension Work {
                     var features = max.features ?? [:]
                     for feature in AIFeature.allCases where features[feature] == nil { features[feature] = true }
                     max.features = features
+                    // With every switch off Turn On Max would change nothing a person can see: it turns them all on.
+                    if !max.tidyTabs && !max.renamePinnedTabs && !AIFeature.allCases.contains(where: max.switched) {
+                        max.tidyTabs = true; max.renamePinnedTabs = true
+                        max.features = Dictionary(uniqueKeysWithValues: AIFeature.allCases.map { ($0, true) })
+                    }
                 } else {
                     max.provider = .off
                 }

@@ -171,7 +171,7 @@ public enum ToastCopy {
     public static let captureInProgress = "Capture in Progress…"
     public static let exitFullScreen = "To exit full screen, press"
     public static let escapeKey = "esc"
-    public static let downloadRenamed = "Download renamed!"
+    public static let downloadRenamed = "Download renamed to:"
     public static let boostInstalled = "Boost installed!"
     public static let importSucceeded = "Success! We imported all of your stuff"
     public static let importPartly = "Only some of your data imported. Please try again!"

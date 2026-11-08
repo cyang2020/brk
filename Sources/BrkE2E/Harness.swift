@@ -200,7 +200,13 @@ final class AppUnderTest {
         // A real-agent run is opt-in (`AIRealScenarios`) and spends the user's quota.
         if scenarioID.hasPrefix("AIReal") {
             environment["BRK_AI_REAL_AGENTS"] = "1"
-            environment["BRK_TEST_AI_FOLDER"] = dataDirectory.appendingPathComponent("ai-work", isDirectory: true).path
+            if scenarioID.hasPrefix("AIRealUI") {
+                // As a GUI app starts: launchd's short PATH, so the agents are found the way a Dock launch finds them;
+                // the folder comes from the real open panel.
+                environment["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+            } else {
+                environment["BRK_TEST_AI_FOLDER"] = dataDirectory.appendingPathComponent("ai-work", isDirectory: true).path
+            }
         }
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
         if scenarioID.hasPrefix("TabTools") || scenarioID.hasPrefix("SidebarTools") || scenarioID.hasPrefix("R36") || scenarioID.hasPrefix("R49") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }

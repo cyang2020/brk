@@ -18,7 +18,7 @@ import Foundation
 
     let spec: AgentSpec
     private let environment: [String: String]
-    private let plain: Bool
+    let plain: Bool
     private let output: @MainActor (Output) -> Void
     private var backend: (any AgentBackend)?
     private var resume: String?
@@ -41,7 +41,11 @@ import Foundation
         self.environment = environment
         self.plain = plain
         self.output = output
+        resume = spec.resume
     }
+
+    /// The agent's own session id this conversation could continue from in a new process (a session with tools on).
+    var resumeID: String? { backend?.resumeID ?? resume }
 
     /// Starts the process; a session with tools on does so before its first message, so the panel can say which model.
     func begin() {
