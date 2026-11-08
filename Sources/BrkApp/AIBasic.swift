@@ -2,6 +2,7 @@ import BrkBase
 import BrkDomain
 import Foundation
 import NaturalLanguage
+import os
 
 // The basic layer's channel (docs/design/ai-native.md, 基础 AI 功能 and 怎么拿到结构化结果): every one-shot task is
 // a prompt with a JSON schema, answered by the basic-features model on the route the user chose (`AIBasicRoute`):
@@ -175,6 +176,7 @@ struct AIBasicContext {
 
 @MainActor final class AIBasicChannel {
     static let limit = 2
+    private let log = Logger(subsystem: "Brk", category: "basic-ai")
     let keys: AIKeyStore
     /// Slice B's local runtime registers here: JevK5 for decisions, embeddings for Tidy's groups.
     var localDecisions: (any DecisionBackend)? { didSet { keys.report() } }
@@ -423,9 +425,19 @@ struct AIBasicContext {
             let answer = try await run(AIBasicPrompts.decision(request), route: text, feature: usage, background: background)
             answers = try AIBasicPrompts.decision(answer, request: request, backend: (text.model ?? "text model") + " (no probabilities)")
         }
+        // Which way and which answer, never what was asked about.
+        log.notice("decision for \(usage, privacy: .public) on \(answers.backend, privacy: .public): \(answers.answers.map { "\($0.key)=\(Self.short($0.value))" }.sorted().joined(separator: " "), privacy: .public)")
         // Probabilities from a backend that should give none are dropped: only those may act.
         if !route.givesProbabilities { return DecisionAnswers(answers: answers.answers.mapValues(Self.withoutProbability), backend: answers.backend) }
         return answers
+    }
+
+    private static func short(_ answer: DecisionAnswer) -> String {
+        switch answer {
+        case .choice: "choice@\(answer.probability.map { String(format: "%.2f", $0) } ?? "-")"
+        case .score(let index, _): "level \(index)"
+        case .noul(let yes, let probability): "\(yes ? "yes" : "no")@\(probability.map { String(format: "%.2f", $0) } ?? "-")"
+        }
     }
 
     private static func withoutProbability(_ answer: DecisionAnswer) -> DecisionAnswer {

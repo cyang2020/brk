@@ -143,6 +143,28 @@ final class LocalWiringRealModelTests: XCTestCase {
         XCTAssertFalse(models, "two products on one site")
     }
 
+    func testAnIndexPassPostsTheNearDuplicatePairOnce() async throws {
+        var sent: [Input] = []
+        let posting = LocalModelServices(models: LocalModels(root: root, runtime: LlamaRuntime.executable()), debounce: .milliseconds(50)) { sent.append($0) }
+        let soup = "Grandma's Chicken Noodle Soup Recipe - Easy Weeknight Dinners | Cooking Corner"
+        let corpus: [ProfileID: [SearchCorpusItem]] = [.default: [
+            SearchCorpusItem(kind: .tab, id: "a", title: soup, url: "http://127.0.0.1:51022/basic-soup.html"),
+            SearchCorpusItem(kind: .tab, id: "b", title: soup, url: "http://127.0.0.1:51022/basic-soup.html?print=1"),
+            SearchCorpusItem(kind: .tab, id: "c", title: "Kyoto Travel Guide 2026", url: "http://127.0.0.1:51022/basic-kyoto.html")]]
+        let scope = DuplicateScope(space: SpaceID("s"), profile: .default, entries: [
+            DuplicateScope.Entry(id: ItemID("a"), title: soup, url: URL(string: "http://127.0.0.1:51022/basic-soup.html")!, pinned: false, lastActiveAt: Instant(milliseconds: 1)),
+            DuplicateScope.Entry(id: ItemID("b"), title: soup, url: URL(string: "http://127.0.0.1:51022/basic-soup.html?print=1")!, pinned: false, lastActiveAt: Instant(milliseconds: 2)),
+            DuplicateScope.Entry(id: ItemID("c"), title: "Kyoto Travel Guide 2026", url: URL(string: "http://127.0.0.1:51022/basic-kyoto.html")!, pinned: false, lastActiveAt: Instant(milliseconds: 3))])
+        posting.stateChanged(corpus: { corpus }, duplicates: { [scope] })
+        func posted() -> [[AIDuplicatePair]] { sent.compactMap { if case .system(.aiDuplicateCandidates(let pairs)) = $0 { pairs } else { nil } } }
+        for _ in 0..<200 where posted().isEmpty { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertEqual(posted().map { $0.map { [$0.a.rawValue, $0.b.rawValue] } }, [[["a", "b"]]])
+        posting.stateChanged(corpus: { corpus }, duplicates: { [scope] })
+        try await Task.sleep(for: .seconds(2))
+        XCTAssertEqual(posted().count, 1, "asked once a session")
+        await posting.models.shutdown()
+    }
+
     // MARK: 7. The page check on JevK5
 
     func testJevK5FlagsAPageThePhrasesMiss() async throws {

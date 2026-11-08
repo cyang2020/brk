@@ -235,6 +235,19 @@ enum AIRealLocalScenarios {
         try? VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
         return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " | ")
     }
+    /// What text recognition reads in one region (window points) of a window screenshot.
+    private static func ocr(_ url: URL?, in region: CGRect, app: AppUnderTest) -> String {
+        guard let url, let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              let width = try? app.native().contentSize.width, width > 0 else { return "" }
+        let scale = Double(image.width) / width
+        let box = CGRect(x: region.minX * scale, y: region.minY * scale, width: region.width * scale, height: region.height * scale)
+        guard let crop = image.cropping(to: box.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))) else { return "" }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        try? VNImageRequestHandler(cgImage: crop, options: [:]).perform([request])
+        return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+    }
     private static func scrollSettings(_ app: AppUnderTest, lines: Int32, times: Int) throws {
         guard let window = try app.native().appWindows.first(where: { $0.className == "NSWindow" && $0.isVisible }),
               let info = (CGWindowListCopyWindowInfo([.optionIncludingWindow], CGWindowID(window.number)) as? [[String: Any]])?.first,
@@ -400,11 +413,16 @@ enum AIRealLocalScenarios {
             let found = try XCTUnwrapValue(try bar(app)?.meaning?.rows.first)
             try expect(found.tab == lisbon.id, "the first match is \(found.title)")
             app.sleep(0.5)
-            let drawn = ocr(shot(app, "bar-\(name)"))
+            let picture = shot(app, "bar-\(name)")
+            let drawn = ocr(picture)
+            // The rows are known by index; the one that draws the found page's title is the one to click.
             var row: CGRect?
-            for index in 0..<5 where row == nil { row = NativeSystemInput.frame(pid: pid, identifier: ViewID.commandBarResult(index).identifier, title: found.title) }
+            for index in 0..<5 where row == nil {
+                guard let frame = try? visible(app.native(), .commandBarResult(index)).frame else { continue }
+                if ocr(picture, in: frame, app: app).contains("Lisbon") { row = frame }
+            }
             let frame = try XCTUnwrapValue(row)
-            try click(CGPoint(x: frame.midX, y: frame.midY))
+            try click(try screen(app, frame))
             try app.waitUntil("the Lisbon tab shown") { try tabs(app).first { $0.id == lisbon.id }?.status == .current }
             try expect(drawn.contains("Lisbon"), "the bar did not draw it: \(drawn.prefix(300))")
             return "row “\(found.title)” drawn and clicked; the tab is shown"

@@ -171,6 +171,7 @@ final class LocalModelServices {
     private func passFinished(_ counts: [ProfileID: Int]) {
         running = nil
         indexed = counts
+        log.notice("index pass done: \(counts.values.reduce(0, +)) entries, again \(self.again)")
         report()
         if again { again = false; startPass() } else { Task { await postDuplicateCandidates() } }
     }
@@ -229,6 +230,7 @@ final class LocalModelServices {
             for entry in scope.entries { vectors[entry.id] = await index.vector(for: "tab:" + entry.id.rawValue) }
         }
         let pairs = Self.duplicatePairs(scopes, vectors: vectors, asked: &askedPairs)
+        log.notice("near duplicates: \(scopes.count) spaces, \(vectors.values.count) tabs with vectors, \(pairs.count) new pairs")
         var start = 0
         while start < pairs.count {
             send(.system(.aiDuplicateCandidates(Array(pairs[start..<min(start + 8, pairs.count)]))))
