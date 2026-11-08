@@ -41,7 +41,7 @@ enum AIBasicRealUIScenarios {
 
     private static let codes: [Character: (CGKeyCode, Bool)] = {
         var map: [Character: (CGKeyCode, Bool)] = [" ": (49, false), ":": (41, true), ";": (41, false), "-": (27, false), "_": (27, true), ".": (47, false), ",": (43, false),
-                                                   "/": (44, false), "?": (44, true), "'": (39, false), "=": (24, false), "|": (42, true), "!": (18, true)]
+                                                   "/": (44, false), "?": (44, true), "'": (39, false), "=": (24, false), "|": (42, true), "!": (18, true), "#": (20, true)]
         for (letter, code) in zip("asdfhgzxcvbqwerytuiopnmljk", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 32, 34, 31, 35, 45, 46, 37, 38, 40] as [CGKeyCode]) {
             map[letter] = (code, false); map[Character(letter.uppercased())] = (code, true)
         }
@@ -242,10 +242,12 @@ enum AIBasicRealUIScenarios {
             let soup = try open(app, site.url("basic-soup.html"))
             kyoto = try open(app, site.url("basic-kyoto.html"))
             swift = try open(app, site.url("basic-swift.html"))
-            let long = [soup.id: "Grandma's Chicken", kyoto!.id: "Kyoto Travel Guide 2026", swift!.id: "Swift Concurrency Explained"]
+            // The pages' titles are eight words and more; a name is two to five.
+            let long = [soup.id: "Grandma's Chicken Noodle Soup Recipe", kyoto!.id: "Kyoto Travel Guide 2026", swift!.id: "Swift Concurrency Explained"]
+            func named(_ row: TabRow) -> Bool { !row.title.isEmpty && row.title.split(separator: " ").count <= 6 }
             try app.waitUntil("the three tabs named", timeout: 120) {
                 let rows = try tabs(app)
-                return long.allSatisfy { id, prefix in rows.first { $0.id == id }.map { !$0.title.hasPrefix(prefix) && !$0.title.isEmpty } ?? false }
+                return long.keys.allSatisfy { id in rows.first { $0.id == id }.map(named) ?? false }
             }
             shot(app, "names")
             return try tabs(app).filter { long[$0.id] != nil }.map { "\"\($0.title)\"" }.joined(separator: ", ")
@@ -369,8 +371,8 @@ enum AIBasicRealUIScenarios {
         if wanted("preview") { log.check("5-Second Previews: Shift held over a link") {
             _ = try open(app, site.url("basic-bread.html#preview"))
             let card = try frame(app, .card(0))
-            // The first link on the page ("Soup"), in the line under the paragraph.
-            try PhysicalPointer.move(app, to: CGPoint(x: card.minX + 58, y: card.minY + 148), window: app.window!)
+            // The pages' first line is a large link ("Soup"), 40 points in from the corner.
+            try PhysicalPointer.move(app, to: CGPoint(x: card.minX + 64, y: card.minY + 58), window: app.window!)
             try NativeSystemInput.setShift(true)
             defer { try? NativeSystemInput.setShift(false) }
             try app.waitUntil("the preview card's summary", timeout: 90) { let p = try app.view().aiPreview; return p?.busy == false && (p?.details.isEmpty == false || p?.failure != nil) }

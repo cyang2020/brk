@@ -498,7 +498,8 @@ extension Work {
             guard !urls.isEmpty else { completeAI(id, text: "The tool did not propose a safe web address."); return nil }
             makeAIHidden(id, urls: urls)
         case (.tidyToday(let space, let tabs), .groups(let groups)):
-            guard let request = state.session.ai.requests[id], eligibleAITabs(space, in: request.window) == tabs,
+            // Ids, not titles: Name Tabs may rename a tab while the plan is being made.
+            guard let request = state.session.ai.requests[id], eligibleAITabs(space, in: request.window).map(\.id) == tabs.map(\.id),
                   let plan = AIValidation.plan(groups, eligible: tabs) else { completeAI(id, text: "The plan was invalid or Today changed. No tabs were moved. Retry Organize Today Tabs."); return nil }
             applyAIOrganize(id, space: space, tabs: tabs, plan: plan)
         case (.translate(_, let content), .translation(let nodes)):

@@ -440,8 +440,9 @@ public enum AIValidation {
     public static func plan(_ groups: [AIGroupPlan], eligible: [AITab]) -> [AIGroupPlan]? {
         guard (1...12).contains(groups.count),
               groups.allSatisfy({ !$0.folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.folder.count <= 60 && !$0.tabs.isEmpty }) else { return nil }
+        // Every id must be one Brk sent, once; a tab a small model left out stays in Today ungrouped.
         let ids = groups.flatMap(\.tabs)
-        guard Set(ids).count == ids.count, Set(ids) == Set(eligible.map { $0.id.rawValue }) else { return nil }
+        guard Set(ids).count == ids.count, Set(ids).isSubset(of: Set(eligible.map { $0.id.rawValue })) else { return nil }
         return groups
     }
     /// Why this folder cannot be a session's working folder, nil when it can. Home and every folder above it hold

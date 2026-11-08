@@ -237,6 +237,26 @@ final class AIBasicLayerTests: XCTestCase {
     private func titles(_ entries: [MenuEntry]) -> [String] { entries.compactMap { if case .action(let title, _, _) = $0 { title } else { nil } } }
     private func folderTitle(_ d: Driver, _ id: ItemID) -> String? { if case .folder(let f)? = d.state.doc.tree[id]?.body { f.title } else { nil } }
 
+    func testTidySurvivesANameArrivingMeanwhileAndLeavesOutTabsUngrouped() throws {
+        let d = driver([.tabNames])
+        d.user(.settings(.max(.tidyTabs(true))))
+        let a = d.open("https://a.example/one"), b = d.open("https://b.example/two"), c = d.open("https://c.example/three")
+        let (id, task) = try XCTUnwrap(aiEffects(d.user(.assist(.organizeToday))).first)
+        guard case .tidyToday(_, let tabs) = task else { return XCTFail() }
+        // Name Tabs renames a tab while the plan is out.
+        settle(d, a, title: "First long title here")
+        let (names, _) = try XCTUnwrap(aiEffects(tick(d)).first)
+        d.system(.aiResult(names, .reply(.tabNames([a.rawValue: "First"]))))
+        XCTAssertEqual(d.row(a)?.title, "First")
+        // The small model left one tab out: the others are grouped, that one stays in Today.
+        let left = tabs.map(\.id).filter { $0 != c }
+        d.system(.aiResult(id, .reply(.groups([AIGroupPlan(folder: "Letters", tabs: left.map(\.rawValue))]))))
+        XCTAssertEqual(d.state.doc.tree[a]?.parent, d.state.doc.tree[b]?.parent)
+        XCTAssertNotEqual(d.state.doc.tree[a]?.parent, d.state.doc.spaces[d.view.space.id]?.todayRoot)
+        XCTAssertEqual(d.state.doc.tree[c]?.parent, d.state.doc.spaces[d.view.space.id]?.todayRoot)
+        XCTAssertTrue(d.view.tabTools.toast?.text.hasPrefix("Tidied Tabs!") == true)
+    }
+
     // MARK: Folder names
 
     func testNameWithAIIsOnTheMenuOnlyWhenOnAndRenamesWithUndo() throws {
