@@ -326,7 +326,7 @@ final class AIBasicLayerTests: XCTestCase {
         let (second, _) = try placementRequest(d, other)
         d.system(.aiResult(second, .reply(.decision(DecisionAnswers(answers: ["group": .choice("Recipes", probabilities: nil)], backend: "text")))))
         XCTAssertNotEqual(d.state.doc.tree[other]?.parent, group, "no probability: never moved")
-        XCTAssertEqual(d.row(other)?.aiSuggestion, "Move to Recipes")
+        XCTAssertEqual(d.row(other)?.aiSuggestion, AISuggestionLabel(action: "Move to", name: "Recipes"))
         d.user(.assist(.acceptSuggestion(other)))
         XCTAssertEqual(d.state.doc.tree[other]?.parent, group)
         XCTAssertNil(d.state.session.ai.basic.suggestions[other])
@@ -338,7 +338,7 @@ final class AIBasicLayerTests: XCTestCase {
         let (id, _) = try placementRequest(d, middle)
         d.system(.aiResult(id, .reply(.decision(DecisionAnswers(answers: ["group": .choice("Recipes", probabilities: ["Recipes": 0.6, DecisionQuestion.noneName: 0.4])], backend: "jevk5")))))
         XCTAssertNotEqual(d.state.doc.tree[middle]?.parent, group)
-        XCTAssertEqual(d.row(middle)?.aiSuggestion, "Move to Recipes")
+        XCTAssertEqual(d.row(middle)?.aiSuggestion?.name, "Recipes")
         d.user(.assist(.dismissSuggestion(middle)))
         XCTAssertNil(d.row(middle)?.aiSuggestion)
 
@@ -359,7 +359,7 @@ final class AIBasicLayerTests: XCTestCase {
         XCTAssertEqual(Set(request.questions["space"]?.choiceNames ?? []), Set([d.state.displayTitle(of: home), "Work"]))
         d.system(.aiResult(id, .reply(.decision(DecisionAnswers(answers: ["space": .choice("Work", probabilities: ["Work": 0.99])], backend: "jevk5")))))
         XCTAssertEqual(d.state.role(of: tab)?.space, home, "however sure, the tab stays")
-        XCTAssertEqual(d.row(tab)?.aiSuggestion, "Move to Work")
+        XCTAssertEqual(d.row(tab)?.aiSuggestion?.text, "Move to Work")
         d.user(.assist(.acceptSuggestion(tab)))
         XCTAssertEqual(d.state.role(of: tab)?.space, work)
     }

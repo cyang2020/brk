@@ -182,7 +182,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         row.mediaPlayers = state.session.live[PageID(window: id, item: tab)]?.mediaPlayers ?? []
         row.mediaError = state.session.live[PageID(window: id, item: tab)]?.mediaError
         row.renameHint = session.renameHint == tab
-        row.aiSuggestion = state.session.ai.basic.suggestions[tab]?.title
+        row.aiSuggestion = state.session.ai.basic.suggestions[tab]?.label
         if tab == focusedPane, case .peek(_, let peeked)? = session.overlay, kind != .scratch {
             row.peeking = true
             row.peekFavicon = state.displayedTab(peeked, in: id)?.favicon

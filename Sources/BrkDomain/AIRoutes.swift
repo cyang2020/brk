@@ -94,6 +94,7 @@ public enum AIDecisionRoute: Hashable, Sendable, Codable {
 
 extension AICopy {
     public static let nameWithAI = "Name with AI"
+    public static let moveTo = "Move to"
     public static let cleanupDuplicates = "Duplicates"
     public static let cleanupStale = "Not Opened Lately"
     public static let cleanupTooltip = "Tabs you might close"

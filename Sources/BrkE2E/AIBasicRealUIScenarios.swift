@@ -4,6 +4,8 @@ import BrkDomain
 import BrkLayout
 import CoreGraphics
 import Foundation
+import ImageIO
+import Vision
 
 /// The basic AI layer the way a person meets it, on a real agent's small model: real keys and clicks at the window
 /// server from a new user's state (Settings → Max, Turn On Max, the agent), then Name Tabs, a title the user typed,
@@ -166,13 +168,35 @@ enum AIBasicRealUIScenarios {
     }
     private static func shot(_ app: AppUnderTest, _ name: String) { _ = try? app.screenshot("AIBasicRealUI-\(name)") }
     private static func toast(_ app: AppUnderTest) -> String? { (try? app.view().tabTools.toast).flatMap { $0.map { $0.text + ($0.subtitle.map { " " + $0 } ?? "") } } }
+    /// A window by number, or the browser window's area (a menu is a window of its own over it); never the whole screen,
+    /// which shows the person's desktop.
     private static func capture(_ app: AppUnderTest, _ name: String, window: Int? = nil) {
         let capture = Process()
         capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         let out = app.shotsDirectory.appendingPathComponent("AIBasicRealUI-\(name).png").path
-        capture.arguments = window.map { ["-x", "-l", String($0), out] } ?? ["-x", out]
+        if let window { capture.arguments = ["-x", "-l", String(window), out] }
+        else if let frame = try? app.native().windowFrame {
+            let top = CGDisplayBounds(CGMainDisplayID()).height - frame.maxY
+            capture.arguments = ["-x", "-R", "\(Int(frame.minX)),\(Int(top)),\(Int(frame.width)),\(Int(frame.height))", out]
+        } else { return }
         try? capture.run(); capture.waitUntilExit()
     }
+    /// The text drawn in `region` (window points) of a window screenshot `width` pixels wide, by Apple's text
+    /// recognition.
+    private static func readText(_ url: URL, in region: CGRect, app: AppUnderTest, width: Int) throws -> String {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            throw Check(description: "cannot read \(url.lastPathComponent)")
+        }
+        let scale = Double(image.width) / max(1, try app.native().contentSize.width)
+        let box = CGRect(x: region.minX * scale, y: region.minY * scale, width: region.width * scale, height: region.height * scale).insetBy(dx: -6, dy: -4)
+        guard let crop = image.cropping(to: box.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))) else { throw Check(description: "the region \(region) is outside the shot") }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        try VNImageRequestHandler(cgImage: crop, options: [:]).perform([request])
+        return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+    }
+
     private static func settingsWindow(_ app: AppUnderTest) throws -> Int? {
         try app.native().appWindows.first(where: { $0.className == "NSWindow" && $0.isVisible })?.number
     }
@@ -281,9 +305,14 @@ enum AIBasicRealUIScenarios {
             try key(.command, .l)
             try type(localhost("basic-lisbon.html").absoluteString)
             try key([], .returnKey)
-            try app.waitUntil("a new name for the new site", timeout: 120) {
-                guard let row = try tabs(app).first(where: { $0.id == kyoto.id }), row.url?.host == "localhost" else { return false }
-                return row.title != before && !row.title.hasPrefix("48 Hours in Lisbon") && !row.title.isEmpty
+            // The new page's title is twelve words; a name is two to six, and not the old one.
+            do {
+                try app.waitUntil("a new name for the new site", timeout: 120) {
+                    guard let row = try tabs(app).first(where: { $0.id == kyoto.id }), row.url?.host == "localhost" else { return false }
+                    return row.title != before && !row.title.isEmpty && row.title.split(separator: " ").count <= 6
+                }
+            } catch {
+                throw Check(description: "\(error); the row reads \(String(describing: try? tabs(app).first { $0.id == kyoto.id }?.title)), notice \(toast(app) ?? "none")")
             }
             let after = try tabs(app).first { $0.id == kyoto.id }?.title ?? ""
             shot(app, "renamed-after-move")
@@ -319,18 +348,24 @@ enum AIBasicRealUIScenarios {
         if wanted("place") { log.check("Place New Tabs: a new recipe tab gets a one-click suggestion, and the click moves it") {
             guard try !folders(app).isEmpty else { throw Check(description: "no groups to place into (run with tidy)") }
             let pie = try open(app, site.url("basic-pie.html"))
-            var suggestion: String?
+            var suggestion: AISuggestionLabel?
             try app.waitUntil("a suggestion or a move", timeout: 120) {
                 suggestion = try tabs(app).first { $0.id == pie.id }?.aiSuggestion
                 return suggestion != nil || toast(app)?.hasPrefix("Moved to") == true
             }
-            shot(app, "placement-suggestion")
+            app.sleep(0.5)
+            let shown = try app.screenshot("AIBasicRealUI-placement-suggestion")
             if toast(app)?.hasPrefix("Moved to") == true { return "moved at once: \(toast(app)!)" }
+            let label = try XCTUnwrapValue(suggestion)
+            try expect(try folders(app).contains { $0.title == label.name }, "the suggestion names \(label.name), not a group of this space")
+            // What the row draws, read from the screenshot's pixels: the group's name must be on screen.
+            let drawn = try readText(shown.url, in: try frame(app, .tabTool("ai-suggestion-line-" + pie.id.rawValue)), app: app, width: shown.width)
+            try expect(drawn.contains(label.name), "the row draws \"\(drawn)\" for \(label.text)")
             try click(app, .tabTool("ai-suggestion-" + pie.id.rawValue))
             try app.waitUntil("the tab in its group") { try folders(app).contains { $0.children.contains { $0.id == pie.id } } }
             let into = try folders(app).first { $0.children.contains { $0.id == pie.id } }?.title ?? "?"
             shot(app, "placement-moved")
-            return "suggested \"\(suggestion ?? "")\", clicked, now in \"\(into)\""
+            return "suggested \"\(label.text)\", drawn as \"\(drawn)\", clicked, now in \"\(into)\""
         } }
 
         if wanted("cleanup") { log.check("Suggest Tabs to Close: a duplicate is listed beside Tidy and closed from the list") {

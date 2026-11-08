@@ -623,9 +623,9 @@ final class RowView: HoverView {
             title.stringValue = tab.title
             renameHint.isHidden = !tab.renameHint || renaming
             renameHint.textColor = palette.ink.text.withAlphaComponent(Draw.renameHintInk.value)
-            if let text = tab.aiSuggestion, !renaming, !tab.renameHint {
+            if let label = tab.aiSuggestion, !renaming, !tab.renameHint {
                 suggestion.isHidden = false
-                suggestion.render(text, id: tab.id, palette: palette)
+                suggestion.render(label, id: tab.id, palette: palette)
             }
             icon.render(IconContent(tab: tab), tint: palette.ink.secondary, palette: palette)
             if tab.awaitingFirstDocument { title.stringValue = SidebarCopy.untitled }
@@ -993,50 +993,60 @@ final class SplitSegmentView: HoverView {
     }
 }
 
-/// Place New Tabs' suggestion on a row: "→ Move to Recipes" in the accent colour, a small × after it. Both parts are
-/// `HoverView`s, so they take the click before the row does.
+/// Place New Tabs' suggestion on a row: "→ Move to" and the destination's name in the accent colour, a small × after
+/// them. Each is one line; when the row is narrow the name is cut short with "…", never the action. Every part is a
+/// `HoverView`, so it takes the click before the row does.
 @MainActor
 final class SuggestionLine: NSView {
-    private let move = SuggestionPart()
-    private let close = SuggestionPart()
-    var accept: (() -> Void)? { didSet { move.action = accept } }
+    let action = SuggestionPart()
+    let name = SuggestionPart()
+    let close = SuggestionPart()
+    var accept: (() -> Void)? { didSet { action.action = accept; name.action = accept } }
     var dismiss: (() -> Void)? { didSet { close.action = dismiss } }
+    static let closeWidth: CGFloat = 14
+    static let gap: CGFloat = 3
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        addSubview(move)
-        addSubview(close)
+        for part in [action, name, close] { addSubview(part) }
         close.toolTip = "Dismiss suggestion"
     }
     required init?(coder: NSCoder) { fatalError("not used") }
 
     override var isFlipped: Bool { true }
 
-    func render(_ text: String, id: ItemID, palette: Palette) {
-        move.label.attributedStringValue = NSAttributedString(string: "→ " + text, attributes: [.font: NSFont.systemFont(ofSize: Draw.renameHintFont.value, weight: .medium), .foregroundColor: palette.focusColor])
-        move.toolTip = text
+    func render(_ label: AISuggestionLabel, id: ItemID, palette: Palette) {
+        action.text("→ " + label.action, color: palette.focusColor)
+        name.text(label.name, color: palette.focusColor)
+        toolTip = label.text
         close.glyph.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Dismiss suggestion")?
             .withSymbolConfiguration(.init(pointSize: Draw.renameHintFont.value - 2, weight: .semibold))
         close.glyph.contentTintColor = palette.ink.secondary
-        move.identify(.tabTool("ai-suggestion-" + id.rawValue))
+        identify(.tabTool("ai-suggestion-line-" + id.rawValue))
+        action.identify(.tabTool("ai-suggestion-" + id.rawValue))
+        name.identify(.tabTool("ai-suggestion-name-" + id.rawValue))
         close.identify(.tabTool("ai-suggestion-dismiss-" + id.rawValue))
-        move.setAccessibilityLabel(text)
+        action.setAccessibilityLabel(label.text)
+        name.setAccessibilityLabel(label.text)
         close.setAccessibilityLabel("Dismiss suggestion")
         needsLayout = true
     }
 
-    override var fittingSize: NSSize { NSSize(width: move.label.intrinsicContentSize.width + 18, height: max(move.label.intrinsicContentSize.height, 14)) }
+    override var fittingSize: NSSize {
+        NSSize(width: action.natural.width + Self.gap + name.natural.width + Self.gap + Self.closeWidth, height: max(action.natural.height, 14))
+    }
 
     override func layout() {
         super.layout()
-        let closeWidth: CGFloat = 14
-        let width = min(move.label.intrinsicContentSize.width, bounds.width - closeWidth - 2)
-        move.frame = CGRect(x: 0, y: 0, width: max(0, width), height: bounds.height)
-        close.frame = CGRect(x: move.frame.maxX + 2, y: 0, width: closeWidth, height: bounds.height)
+        let actionWidth = min(action.natural.width, bounds.width - Self.closeWidth - Self.gap)
+        action.frame = CGRect(x: 0, y: 0, width: max(0, actionWidth), height: bounds.height)
+        let room = bounds.width - action.frame.maxX - Self.gap * 2 - Self.closeWidth
+        name.frame = CGRect(x: action.frame.maxX + Self.gap, y: 0, width: max(0, min(name.natural.width, room)), height: bounds.height)
+        close.frame = CGRect(x: name.frame.maxX + Self.gap, y: 0, width: Self.closeWidth, height: bounds.height)
     }
 }
 
-/// One clickable part of a suggestion: a label or a glyph, acting on mouse up inside it.
+/// One clickable part of a suggestion: a one-line label or a glyph, acting on mouse up inside it.
 @MainActor
 final class SuggestionPart: HoverView {
     let label = NSTextField(labelWithString: "")
@@ -1045,12 +1055,34 @@ final class SuggestionPart: HoverView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        label.lineBreakMode = .byTruncatingTail
         label.isSelectable = false
+        label.usesSingleLineMode = true
+        label.maximumNumberOfLines = 1
+        label.cell?.wraps = false
+        label.cell?.truncatesLastVisibleLine = true
+        label.lineBreakMode = .byTruncatingTail
         addSubview(label)
         addSubview(glyph)
         setAccessibilityRole(.button)
     }
+
+    /// The text on one line, cut with "…" at its end when the part is narrower than it.
+    func text(_ value: String, color: NSColor) {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byTruncatingTail
+        label.attributedStringValue = NSAttributedString(string: value, attributes: [.font: NSFont.systemFont(ofSize: Draw.renameHintFont.value, weight: .medium),
+                                                                                     .foregroundColor: color, .paragraphStyle: style])
+        needsLayout = true
+    }
+
+    /// The width and height the text takes on one line.
+    var natural: CGSize {
+        let size = label.attributedStringValue.size()
+        return CGSize(width: ceil(size.width) + 4, height: ceil(size.height))
+    }
+
+    /// The text does not fit and ends in "…".
+    var isTruncated: Bool { bounds.width < natural.width }
 
     override func layout() {
         super.layout()

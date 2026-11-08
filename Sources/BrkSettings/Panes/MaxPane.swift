@@ -169,7 +169,7 @@ struct MaxPane: View {
         let chosen = max.settings.basic(kind)
         let listed = status?.models ?? []
         // The default small model is offered even before the agent lists its models (or when it does not list it).
-        let models = (chosen?.model).map { model in listed.contains { $0.id == model } ? listed : [AIAgentModel(id: model, name: model)] + listed } ?? listed
+        let models = (chosen?.model).map { model in listed.contains { $0.id == model } ? listed : [AIAgentModel(id: model, name: MaxBasicCopy.modelName(model))] + listed } ?? listed
         let efforts = models.first { $0.id == chosen?.model }?.efforts ?? []
         CardDivider()
         CardRow {

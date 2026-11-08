@@ -41,8 +41,7 @@ public struct AIDuplicatePair: Hashable, Sendable, Codable {
 public struct AISuggestion: Hashable, Sendable, Codable {
     public enum Target: Hashable, Sendable, Codable { case folder(ItemID), space(SpaceID) }
     public let target: Target
-    /// "Move to Recipes", "Move to Work Space".
-    public let title: String
+    public let label: AISuggestionLabel
     let at: Instant
 }
 
@@ -350,7 +349,7 @@ extension Work {
         if case .choice(let name, _)? = answers["space"], let target = ask.spaces[name], target != ask.space,
            DecisionBand(answers["space"]?.probability) != .ignore {
             // Another space is only ever suggested.
-            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .space(target), title: "Move to \(state.displayTitle(of: target))", at: ctx.now)
+            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .space(target), label: AISuggestionLabel(action: AICopy.moveTo, name: state.displayTitle(of: target)), at: ctx.now)
             return
         }
         guard case .choice(let name, _)? = answers["group"], let folder = ask.groups[name], case .folder(let value)? = state.doc.tree[folder]?.body else { return }
@@ -362,7 +361,7 @@ extension Work {
             undoToast("Moved to “\(value.title)”! Use", undo: .placement(ask.tab, parent: space.todayRoot, index: index), in: ask.window)
         case .act, .suggest:
             // A pinned folder pins the tab: that is the person's call, however sure the answer is.
-            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .folder(folder), title: "Move to \(value.title)", at: ctx.now)
+            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .folder(folder), label: AISuggestionLabel(action: AICopy.moveTo, name: value.title), at: ctx.now)
         case .ignore: break
         }
     }

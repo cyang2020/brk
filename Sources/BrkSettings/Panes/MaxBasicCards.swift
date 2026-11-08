@@ -263,10 +263,20 @@ enum MaxBasicCopy {
         }
     }
 
+    /// "claude-haiku-5-5" → "Haiku 5.5", "gpt-6-luna" → "GPT-6 Luna"; other ids as they are.
+    static func modelName(_ id: String) -> String {
+        let parts = id.split(separator: "-").map(String.init)
+        if parts.first == "claude", parts.count >= 3, parts.dropFirst(2).allSatisfy({ Int($0) != nil }) {
+            return parts[1].capitalized + " " + parts.dropFirst(2).joined(separator: ".")
+        }
+        if parts.first == "gpt", parts.count >= 3 { return "GPT-" + parts[1] + " " + parts.dropFirst(2).map(\.capitalized).joined(separator: " ") }
+        return id
+    }
+
     static func routeText(_ route: AIBasicRoute) -> String {
         switch route {
-        case .cli(let kind, let model, _): "\(model ?? "default model") on your \(kind.displayName) subscription"
-        case .api(let service, let model, _): "\(model) with your \(service.displayName) API key"
+        case .cli(let kind, let model, _): "\(model.map(modelName) ?? "the default model") on your \(kind.displayName) subscription"
+        case .api(let service, let model, _): "\(modelName(model)) with your \(service.displayName) API key"
         case .unavailable(let reason): reason
         }
     }

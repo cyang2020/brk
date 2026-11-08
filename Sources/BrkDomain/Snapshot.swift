@@ -207,6 +207,15 @@ public struct SectionSnapshot: Sendable, Equatable, Codable {
 }
 
 /// The link under the pointer as Arc's capsule shows it: the address without "http://".
+/// A suggestion's words: what it does ("Move to") and where to ("Recipes"). The row shows both; when it is narrow the
+/// destination's name is cut short, never the action.
+public struct AISuggestionLabel: Hashable, Sendable, Codable {
+    public let action: String
+    public let name: String
+    public init(action: String, name: String) { self.action = action; self.name = name }
+    public var text: String { action + " " + name }
+}
+
 public struct LinkStatusSnapshot: Sendable, Equatable, Codable {
     public let page: PageID
     public let text: String
@@ -303,8 +312,8 @@ public struct TabRow: Sendable, Equatable, Codable {
     public var peekFavicon: URL? = nil
     /// The row shows "Double-click to rename" under its title (dropped on the Space name strip, Q13-h).
     public var renameHint: Bool = false
-    /// Place New Tabs' one-click suggestion under the title ("Move to Recipes"); nil when there is none.
-    public var aiSuggestion: String? = nil
+    /// Place New Tabs' one-click suggestion under the title; nil when there is none.
+    public var aiSuggestion: AISuggestionLabel? = nil
     /// An Instant Links row, not a tab (Arc's `instantLinks` sidebar item, P48-a): Max's flower and "Searching the
     /// web for you…", or "Oops, something went wrong." when nothing opened.
     public var instant: InstantRowState? = nil
