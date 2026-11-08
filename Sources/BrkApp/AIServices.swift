@@ -32,13 +32,6 @@ final class AIServices {
         self.engine = engine; self.send = send; self.state = state
         basic.keys.onChange = { [weak self] statuses in self?.send(.aiKeys(statuses, localDecisions: self?.basic.localDecisions?.isAvailable == true)) }
         basic.onUsage = { [weak self] key, count in self?.send(.aiUsage(key, count)) }
-        AIAccounts.read = { [weak self] service in
-            guard let settings = self?.state()?.doc.settings.max else { return .subscription }
-            switch AIAccounts.credential(for: service, settings: settings) {
-            case .subscription: return .subscription
-            case .apiKey(let key): return .apiKey(key)
-            }
-        }
     }
 
     /// The reducer's pause (Name Tabs waits for pages to settle).

@@ -53,7 +53,18 @@ public final class AppStore {
     private lazy var localSearch = LocalSearch.live(send: { [weak self] in self?.dispatch($0) })
     private lazy var barLookups = BarLookups(send: { [weak self] in self?.dispatch($0) })
     private lazy var currencyRates = CurrencyRatesStore.live(dataDirectory: Product.dataDirectory(), clock: clock, send: { [weak self] in self?.dispatch($0) })
-    private lazy var aiServices = AIServices(engine: engine, send: { [weak self] event in self?.dispatch(.system(event)) }, state: { [weak self] in self?.state })
+    private lazy var aiServices: AIServices = {
+        let services = AIServices(engine: engine, send: { [weak self] event in self?.dispatch(.system(event)) }, state: { [weak self] in self?.state })
+        // Agent sessions run on the way the Max pane names for their service, with the key from the Keychain.
+        AIAccounts.read = { [weak self] service in
+            guard let settings = self?.snapshot.settings.max.settings else { return .subscription }
+            switch AIAccounts.credential(for: service, settings: settings) {
+            case .subscription: return .subscription
+            case .apiKey(let key): return .apiKey(key)
+            }
+        }
+        return services
+    }()
     /// Beside state.json like the Boost, Capture and Easel files, so a test's store never reads a real index.
     private lazy var localModels = LocalModelServices.live(root: stateFile.url.deletingLastPathComponent(), send: { [weak self] in self?.dispatch($0) })
     private var queue: [Input] = []
