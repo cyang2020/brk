@@ -167,7 +167,7 @@ struct Work {
             switch event {
             case .imageImported(let window, _, _, _, _, _), .shared(let window, _, _), .failed(let window, _, _): begin(window: window)
             }
-        case .boost, .currencyRates, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .aiConversation, .aiAgents, .aiAgentsWanted, .aiFolderChosen, .aiKeys, .aiUsage, .aiBasicTick, .aiDuplicateCandidates: begin(window: nil)
+        case .boost, .currencyRates, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .aiConversation, .aiAgents, .aiAgentsWanted, .aiFolderChosen, .aiKeys, .aiUsage, .aiBasicTick, .aiDuplicateCandidates, .localModels: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -233,6 +233,7 @@ struct Work {
         case .aiDownloadRenamed(let id, let original, let new, let error): aiDownloadRenamed(id, original: original, new: new, error: error)
         case .aiConversation(let id, let event): aiConversation(id, event)
         case .aiAgents(let statuses): aiAgents(statuses)
+        case .localModels(let snapshot): state.session.localModels = snapshot
         case .aiAgentsWanted:
             let max = state.doc.settings.max
             if max.provider != .off, max.tidyTabs || max.renamePinnedTabs || AIFeature.allCases.contains(where: max.enabled) { effects.append(.aiRefreshAgents) }

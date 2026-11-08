@@ -22,7 +22,8 @@
 #    iconset, iconutil makes Resources/<Product>.icns and CFBundleIconFile names it, before the bundle is signed again.
 #    scripts/declare-scripting.sh adds the AppleScript dictionary, the build's commit and repository, the release
 #    notes and credits pages (A133, A125, A129); scripts/dock-tile/build-plugin.sh adds the Dock tile plug-in that
-#    shows the Icon pane's choice while Brk is not running (A131).
+#    shows the Icon pane's choice while Brk is not running (A131). scripts/add-llama-runtime.sh puts the pinned
+#    llama.cpp runtime for the local models in Contents/Helpers/llama (Sources/BrkLocalModels).
 # 6. codesign --verify --deep --strict.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -61,6 +62,7 @@ rm -rf "$(dirname "$ICONSET")"
 python3 scripts/declare-site-permissions.py "$APP"
 scripts/declare-scripting.sh "$APP"
 scripts/dock-tile/build-plugin.sh "$APP"
+scripts/add-llama-runtime.sh "$APP"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 echo "[build] $APP signed ad hoc and verified"

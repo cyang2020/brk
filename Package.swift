@@ -67,10 +67,13 @@ let package = Package(
         ),
         // The control-socket protocol, shared by the app's server and the e2e runner.
         .target(name: "BrkControl", dependencies: ["BrkBase", "BrkDomain", "BrkLayout"], swiftSettings: strict),
+        // Local models (docs/design/ai-native.md, 模型分工): downloads with consent, a llama.cpp helper process per model,
+        // the Jev-shaped decider, embeddings, the search-by-meaning index, clustering. No AppKit; BrkApp wires it in.
+        .target(name: "BrkLocalModels", dependencies: ["BrkBase"], swiftSettings: strict),
         // The running app: the state owner, windows, key routing, menu, persistence, clock, control server.
         .target(
             name: "BrkApp",
-            dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings"],
+            dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels"],
             exclude: ["SoundAssets", "Scripting/Brk.sdef"],
             swiftSettings: strict
         ),
@@ -98,7 +101,8 @@ let package = Package(
         .testTarget(name: "BrkThemeTests", dependencies: ["BrkDomain", "BrkTheme"], swiftSettings: strict),
         .testTarget(name: "BrkEngineTests", dependencies: ["BrkBase", "BrkEngine"], swiftSettings: strict),
         .testTarget(name: "BrkCEFTests", dependencies: ["BrkBase", "BrkDomain", "BrkCEF", .product(name: "CefKit", package: "CefSwift")], exclude: ["CaptureFixture.png"], swiftSettings: strict),
-        .testTarget(name: "BrkAppTests", dependencies: ["BrkBase", "BrkDomain", "BrkApp", "BrkSettings"], swiftSettings: strict),
+        .testTarget(name: "BrkLocalModelsTests", dependencies: ["BrkBase", "BrkLocalModels"], swiftSettings: strict),
+        .testTarget(name: "BrkAppTests", dependencies: ["BrkBase", "BrkDomain", "BrkApp", "BrkSettings", "BrkLocalModels"], swiftSettings: strict),
         // Scans every `import` under Sources/ against the dependency rules in module-map.md.
         .testTarget(name: "ArchitectureTests", dependencies: ["BrkBase"], swiftSettings: strict),
     ]

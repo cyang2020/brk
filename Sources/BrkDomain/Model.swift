@@ -238,6 +238,8 @@ struct HistoryEntry: Sendable, Equatable {
 // MARK: - Session
 
 struct Session: Sendable, Equatable {
+    /// The local models' state as BrkApp last reported it (`SystemEvent.localModels`); not saved.
+    var localModels = LocalModelsSnapshot()
     var boosts: [ProfileID: BoostCatalog] = [:]
     var boostErrors: [ProfileID: String] = [:]
     var automaticPiPCandidates: [PageID: DocumentToken] = [:]

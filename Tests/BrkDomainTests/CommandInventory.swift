@@ -146,6 +146,7 @@ enum CommandInventory {
         .aiDeadline(AIRequestID("ghost")), .aiHoverReady(WindowID("ghost"), example, nil), .aiTranslated(AIRequestID("ghost"), false),
         .aiDownloadRenamed(download, originalPath: "/tmp/ghost", newPath: nil, error: nil),
         .aiConversation(AIRequestID("ghost"), .notice("x")), .aiAgents([]), .aiAgentsWanted, .aiFolderChosen(WindowID("ghost"), nil),
+        .localModels(LocalModelsSnapshot()),
         .page(siteTarget.document.browser, .linkHovered(nil)),
     ]
 
@@ -596,6 +597,7 @@ enum CommandInventory {
         case .aiUsage: "aiUsage"
         case .aiBasicTick: "aiBasicTick"
         case .aiDuplicateCandidates: "aiDuplicateCandidates"
+        case .localModels: "localModels"
         }
     }
 

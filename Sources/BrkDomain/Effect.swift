@@ -48,6 +48,8 @@ public enum Effect: Hashable, Sendable {
     case aiChooseFolder(WindowID)
     /// Ask every installed agent about itself; the answer is `SystemEvent.aiAgents`. Nothing is sent to a model.
     case aiRefreshAgents
+    /// A local model action from the Max pane, for BrkApp's LocalModelServices.
+    case localModel(LocalModelAction)
     case aiRead(AIRequestID, DocumentToken)
     case aiTranslate(AIRequestID, AIPageContent, [AITextNode])
     case aiWatch(AIRequestID, seconds: Int)

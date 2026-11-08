@@ -191,6 +191,8 @@ extension Work {
                 effects.append(.aiTestKey(service))
             case .resetUsage:
                 state.doc.settings.max.usage = nil
+            case .localModel(let action):
+                effects.append(.localModel(action))
             }
         case .advanced(let setting):
             switch setting {

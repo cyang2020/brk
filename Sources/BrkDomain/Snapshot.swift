@@ -743,12 +743,15 @@ public struct MaxSnapshot: Sendable, Equatable, Codable {
     public var decisionRoute: AIDecisionRoute = .textModel(.unavailable(""))
     /// JevK5 on this Mac is ready: yes/no questions go to it.
     public var localDecisions = false
+    /// The On This Mac card: the local models' downloads and whether this copy can run them. Optional so snapshots
+    /// written before it existed still decode.
+    public var localModels: LocalModelsSnapshot? = nil
 
     public init(settings: MaxSettings, detected: [AIProviderKind], active: AIProviderKind?, askProvider: String? = nil, agents: [AIAgentStatus] = []) {
         self.settings = settings; self.detected = detected; self.active = active; self.askProvider = askProvider; self.agents = agents
     }
 
-    private enum CodingKeys: String, CodingKey { case settings, detected, active, askProvider, agents, keys, basicRoute, decisionRoute, localDecisions }
+    private enum CodingKeys: String, CodingKey { case settings, detected, active, askProvider, agents, keys, basicRoute, decisionRoute, localDecisions, localModels }
 
     /// A snapshot written before the basic layer's fields still reads.
     public init(from decoder: any Decoder) throws {
@@ -762,6 +765,7 @@ public struct MaxSnapshot: Sendable, Equatable, Codable {
         basicRoute = try c.decodeIfPresent(AIBasicRoute.self, forKey: .basicRoute) ?? .unavailable("")
         decisionRoute = try c.decodeIfPresent(AIDecisionRoute.self, forKey: .decisionRoute) ?? .textModel(.unavailable(""))
         localDecisions = try c.decodeIfPresent(Bool.self, forKey: .localDecisions) ?? false
+        localModels = try c.decodeIfPresent(LocalModelsSnapshot.self, forKey: .localModels)
     }
 }
 

@@ -514,6 +514,8 @@ public enum MaxSetting: Hashable, Sendable, Codable {
     /// The key's Test: one request that lists the models it can use.
     case testKey(AIService)
     case resetUsage
+    /// The Max pane's On This Mac card: download, stop, remove or choose a local model (`LocalModelsModel.swift`).
+    case localModel(LocalModelAction)
 }
 
 public enum AdvancedSetting: Hashable, Sendable, Codable {
@@ -661,6 +663,8 @@ public enum SystemEvent: Sendable, Equatable {
     case aiAgentsWanted
     /// What the installed agents said about themselves (`Effect.aiRefreshAgents`).
     case aiAgents([AIAgentStatus])
+    /// The local models' downloads and runtime, whenever they change (`Effect.localModel`).
+    case localModels(LocalModelsSnapshot)
     /// The folder the user chose for a session with tools on (nil: the panel was cancelled).
     case aiFolderChosen(WindowID, String?)
     /// Which services have a key in the Keychain, and what the last test of each said (never the keys); whether JevK5

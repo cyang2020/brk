@@ -135,6 +135,7 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
             max.decisionRoute = AIDecisionRoute.resolve(doc.settings.max, keys: state.storedKeys, localReady: state.session.ai.localDecisions, basic: max.basicRoute)
             // Yes/no questions go to JevK5 only under Automatic; a backend the user chose takes every question.
             max.localDecisions = state.session.ai.localDecisions && (doc.settings.max.decisions ?? .automatic) == .automatic
+            max.localModels = state.session.localModels
             return max
         }(),
         advanced: doc.settings.advanced,
