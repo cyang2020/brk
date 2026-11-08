@@ -14,6 +14,7 @@ import Foundation
         case approval(AIAgentApproval, AIRequestID)
         case approvalClosed(String)
         case notice(String)
+        case usage(AIUsageCount)
     }
 
     let spec: AgentSpec
@@ -218,6 +219,7 @@ import Foundation
             else { backend?.answer(approval: approval.id, option: approval.options.first { $0.kind == .deny }?.id ?? "") }
         case .approvalClosed(let id): output(.approvalClosed(id))
         case .notice(let message): output(.notice(message))
+        case .usage(let count): output(.usage(count))
         case .turnEnded(let end):
             if stopping { turnEndedDuringStop(); return }
             guard let turn = currentTurn else { return }

@@ -48,6 +48,19 @@ extension AISession {
 }
 
 extension StoredConversation {
+    /// What the command bar searches: the title, and what was said, cut from the start when it is long.
+    public var candidate: ConversationCandidate {
+        var text = messages.compactMap { _, item -> String? in
+            switch item {
+            case .user(let value), .assistant(let value): value
+            case .page(let page): page.title
+            default: nil
+            }
+        }.joined(separator: "\n")
+        if text.count > ConversationCandidate.textLimit { text = String(text.prefix(ConversationCandidate.textLimit)) }
+        return ConversationCandidate(id: id, title: title, text: text)
+    }
+
     /// The saved transcript as a view shows it, with no session behind it: the next message starts one.
     func snapshot() -> AIAnswerSnapshot {
         var conversation = AIConversationSnapshot(id: id, folder: folder, tabs: tabs)
@@ -102,7 +115,11 @@ extension AppState {
     func pageSnapshot(_ record: AIPageRecord, height: Int? = nil) -> AIPageSnapshot {
         let kept = doc.tree.allTabs().contains { AIPageTab.id(of: tab($0)?.url) == record.id }
             || doc.archive.contains { AIPageTab.id(of: $0.tab.url) == record.id }
-        return AIPageSnapshot(id: record.id, title: record.title, html: record.html, height: height ?? record.height, data: record.data, kept: kept)
+        var snapshot = AIPageSnapshot(id: record.id, title: record.title, html: record.html, height: height ?? record.height, data: record.data, kept: kept)
+        snapshot.saved = record.saved
+        snapshot.saveSchema = record.saveSchema
+        snapshot.revision = record.revision ?? 0
+        return snapshot
     }
 
     /// The conversation tabs a window's cards show, with what each shows: its live state or its saved transcript.

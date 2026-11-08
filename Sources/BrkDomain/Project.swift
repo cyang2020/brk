@@ -184,6 +184,11 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         row.mediaError = state.session.live[PageID(window: id, item: tab)]?.mediaError
         row.renameHint = session.renameHint == tab
         row.aiSuggestion = state.session.ai.basic.suggestions[tab]?.label
+        if let live = state.livePageRow(t.url, now: ctx.now) {
+            row.liveMark = live.mark
+            row.sourceStatus = live.status
+            if live.refreshing { row.loading = true }
+        }
         if tab == focusedPane, case .peek(_, let peeked)? = session.overlay, kind != .scratch {
             row.peeking = true
             row.peekFavicon = state.displayedTab(peeked, in: id)?.favicon
@@ -225,6 +230,8 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             guard let item = tree[child] else { return nil }
             switch item.body {
             case .tab(let t):
+                // A live page shown on chosen weekdays stays out of Today on the others, unless the window shows it.
+                if kind == .today, status(child) == .idle, state.livePageHiddenToday(t.url, now: ctx.now, calendar: ctx.calendar) { return nil }
                 return .tab(tabRow(child, t, kind))
             case .folder(let f):
                 var folder = FolderRow(group: f.isGroup, id: child, section: kind, title: f.title, collapsed: !state.folderIsExpanded(child, in: id), icon: f.icon, children: rows(under: child, kind))
@@ -436,6 +443,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             instantLinks: doc.kind != .incognito && state.doc.settings.max.enabled(.instantLinks),
             local: target == .newTab ? session.localResults : nil,
             meaning: session.meaning[.commandBar].map { MeaningCandidates(text: $0.text, rows: state.meaningCandidates($0, profile: profile)) },
+            conversations: doc.kind != .standard ? [] : state.conversations(of: profile).prefix(ConversationCandidate.limit).map(\.candidate),
             rates: state.session.currencyRates,
             now: session.barClock ?? Instant(milliseconds: 0),
             askAgentFound: state.activeAgent != nil,
@@ -682,8 +690,15 @@ private func archiveGroups(_ state: AppState, _ ctx: ProjectionContext) -> [Arch
     for (index, entry) in state.doc.archive.enumerated() {
         let bucket = archiveBucket(of: entry.archivedAt, now: ctx.now, calendar: ctx.calendar)
         let from = entry.fromSpace.flatMap { state.doc.spaces[$0] != nil ? state.displayTitle(of: $0) : nil }
-        byBucket[bucket, default: []].append((ArchiveEntry(id: entry.id, title: entry.structure?.title ?? entry.tab.displayTitle, url: entry.tab.url, favicon: entry.tab.favicon,
-                                                           archivedAt: entry.archivedAt, reason: entry.reason, fromSpaceTitle: from), index))
+        var shown = ArchiveEntry(id: entry.id, title: entry.structure?.title ?? entry.tab.displayTitle, url: entry.tab.url, favicon: entry.tab.favicon,
+                                 archivedAt: entry.archivedAt, reason: entry.reason, fromSpaceTitle: from)
+        let single: Bool = if case .folder? = entry.structure { false } else if case .split? = entry.structure { false } else { true }
+        if single, let conversation = ConversationPage.id(of: entry.tab.url), state.doc.conversations[conversation] != nil {
+            shown.deletable = .conversation(pages: state.doc.aiPages.values.filter { $0.conversation == conversation }.count)
+        } else if single, let page = AIPageTab.id(of: entry.tab.url), state.doc.aiPages[page] != nil {
+            shown.deletable = .page
+        }
+        byBucket[bucket, default: []].append((shown, index))
     }
     return ArchiveBucket.allCases.compactMap { bucket in
         byBucket[bucket].map { list in

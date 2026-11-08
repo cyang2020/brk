@@ -12,6 +12,9 @@ enum AgentAccess: Equatable, Sendable {
     /// Brk's tab tools without asking; the agent's own tools and skills on, each use asked in the panel whatever the
     /// user's own allow rules say. In an empty folder Brk made for this session.
     case browser
+    /// A live page's refresh, with nobody there to ask: Brk's read tools and the page's data tool only. No built-in tool,
+    /// no settings file, hook, skill or other MCP server; anything else is refused without asking. In an empty folder.
+    case refresh
 }
 
 /// The MCP server an agent starts for Brk's tab tools (`BrkToolEndpoint.command`).
@@ -52,6 +55,8 @@ enum AgentBackendEvent {
     case approvalClosed(String)
     case notice(String)
     case turnEnded(AgentTurnEnd)
+    /// What the turn's model requests cost, as the agent reported it (live page refreshes count it).
+    case usage(AIUsageCount)
     /// The process ended by itself or by a failure. The message says why, nil after an orderly stop.
     case exited(String?)
 }

@@ -639,6 +639,8 @@ public final class AppStore {
             case .aiTurn(let conversation, let turn, let task): aiServices.turn(conversation: conversation, turn: turn, task: task, max: snapshot.settings.max)
             case .aiApprove(let conversation, let approval, let option): aiServices.approve(conversation: conversation, approval: approval, option: option)
             case .aiCloseConversation(let id): aiServices.closeConversation(id)
+            case .aiRefreshPage(let run): aiServices.refreshPage(run, max: snapshot.settings.max)
+            case .aiStopRefresh(let id): aiServices.stopRefresh(id)
             case .aiRefreshAgents: aiServices.refreshAgents(detected: snapshot.settings.max.detected)
             case .localModel(let action): localModels.perform(action)
             case .aiChooseFolder(let id):

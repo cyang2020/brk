@@ -45,7 +45,7 @@ final class Driver {
         if file == nil { commitRequested() }
     }
 
-    var ctx: Context { Context(now: now, newID: ids.next) }
+    var ctx: Context { Context(now: now, newID: ids.next, calendar: Driver.calendar) }
 
     @discardableResult
     func user(_ command: Command, in window: WindowID? = nil) -> Transition { apply(reduce(state, .user(window ?? self.window, command), ctx)) }

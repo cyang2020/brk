@@ -240,6 +240,65 @@ final class PageSandboxTests: XCTestCase {
         XCTAssertEqual(after, "#F2F2F5|light,dark", "the variables changed and the page heard it")
     }
 
+    // MARK: The page's own saves (window.brk.save)
+
+    /// Runs `script` in the page; `brk.save`'s promise settles to "ok" or the reason it was refused.
+    private func save(_ view: PageSandboxView, _ value: String) async -> String? {
+        await view.evaluateInPage("try { await window.brk.save(\(value)); return 'ok'; } catch (e) { return 'refused: ' + (e && e.message || e); }")
+    }
+
+    func testAPageSavesItsOwnStateThroughOneCheckedMessage() async throws {
+        let schema = #"{"additionalProperties":false,"properties":{"notes":{"additionalProperties":{"maxLength":200,"type":"string"},"type":"object"},"ticked":{"items":{"type":"string"},"type":"array"}},"type":"object"}"#
+        let view = PageSandboxView(html: "<!doctype html><p>list</p>", data: #"{"items":[{"id":"a"}]}"#, saved: #"{"ticked":["a"]}"#, saveSchema: schema, theme: theme, page: AIPageID("p"))
+        var saves: [String] = []
+        view.onSave = { saves.append($0) }
+        _ = window(for: view)
+        try await loaded(view)
+        let before = await view.evaluateInPage("return JSON.stringify(window.brk.saved) + '|' + Object.isFrozen(window.brk) + '|' + typeof window.brk.save")
+        XCTAssertEqual(before, #"{"ticked":["a"]}|true|function"#, "the page reads what it saved before")
+        let ok = await save(view, #"{ticked: ['a', 'b'], notes: {b: 'buy on Friday'}}"#)
+        XCTAssertEqual(ok, "ok")
+        XCTAssertEqual(saves, [#"{"notes":{"b":"buy on Friday"},"ticked":["a","b"]}"#], "normalized, keys sorted")
+        let answer1 = await save(view, #"{ticked: ['a'], secret: document.cookie}"#)
+        XCTAssertEqual(answer1, "refused: Brk did not save it: data.secret is not in the page's shape.")
+        let answer2 = await save(view, "[1, 2]")
+        XCTAssertEqual(answer2, "refused: brk.save takes a JSON object")
+        let answer3 = await save(view, #"{notes: {a: 'x'.repeat(201)}}"#)
+        XCTAssertEqual(answer3, "refused: Brk did not save it: data.notes.a is longer than 200 characters.")
+        let answer4 = await save(view, #"{notes: {a: 'x'.repeat(\#(AIPageLimits.saved))}}"#)
+        XCTAssertEqual(answer4, "refused: Brk did not save it: it is larger than \(AIPageLimits.saved) bytes.")
+        // Posting to the handler directly is the same one message, with the same checks.
+        let direct = await view.evaluateInPage("try { await window.webkit.messageHandlers.brkSave.postMessage({ticked: 1}); return 'ok'; } catch (e) { return 'refused: ' + e.message; }")
+        XCTAssertEqual(direct, "refused: brk.save takes a JSON object")
+        XCTAssertEqual(saves.count, 1, "nothing refused reached Brk")
+        // Nothing else crosses: no other handler, and the save does not navigate or load anything.
+        let others = await view.evaluateInPage("return Object.keys(window.webkit.messageHandlers).sort().join(',') + '|' + typeof window.webkit.messageHandlers.brk")
+        XCTAssertTrue(others?.hasSuffix("|undefined") == true, "\(others ?? "nil")")
+        XCTAssertEqual(view.allowedNavigations, [PageSandboxPolicy.documentURL])
+    }
+
+    func testSavesAreRateCappedAndAPreviewSavesNothing() async throws {
+        let view = PageSandboxView(html: "<!doctype html><p>x</p>", data: nil, theme: theme, page: AIPageID("p"))
+        var saves = 0
+        view.onSave = { _ in saves += 1 }
+        _ = window(for: view)
+        try await loaded(view)
+        let burst = await view.evaluateInPage("""
+        let ok = 0, refused = '';
+        for (let n = 0; n < \(AIPageLimits.savesPerMinute + 5); n++) {
+          try { await window.brk.save({n}); ok++; } catch (e) { refused = e.message; }
+        }
+        return ok + '|' + refused;
+        """)
+        XCTAssertEqual(burst, "\(AIPageLimits.savesPerMinute)|Too many saves this minute; try again shortly.")
+        XCTAssertEqual(saves, AIPageLimits.savesPerMinute)
+        let preview = PageSandboxView(html: "<!doctype html><p>x</p>", data: nil, theme: theme)
+        _ = window(for: preview)
+        try await loaded(preview)
+        let answer5 = await save(preview, "{a: 1}")
+        XCTAssertEqual(answer5, "refused: Saving is off here.")
+    }
+
     func testAPreviewPicturesThePageAtItsContentHeightWithItsConsole() async throws {
         let html = """
         <!doctype html><div style="height:300px;background:var(--card);border-radius:var(--radius)">chart</div>

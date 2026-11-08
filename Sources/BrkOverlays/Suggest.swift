@@ -23,6 +23,8 @@ public struct Suggestion: Equatable, Sendable {
         /// Brk's own: a tab, an archived tab or a visited page the local search model found by meaning
         /// (`CommandBarSnapshot.meaning`).
         case meaning
+        /// Brk's own: a saved conversation found by its title or by what was said in it.
+        case conversation
     }
     public let kind: Kind
     public let title: String
@@ -215,7 +217,9 @@ public enum Suggest {
         if !bar.fillsPane, let color = QuickColors.parse(text) {
             rows.insert(contentsOf: colorRows(color), at: QuickColors.leads(text) ? 0 : rows.firstIndex { $0.kind == .openTyped }.map { $0 + 1 } ?? rows.count)
         }
-        rows = withLastRows(rows, meaningRows(text, isAddress: isAddress, shown: rows, bar: bar) + localRows(text, isAddress: isAddress, bar: bar), limit: limit)
+        let conversations = conversationRows(needle, isAddress: isAddress, shown: rows, bar: bar)
+        let meaning = meaningRows(text, isAddress: isAddress, shown: rows + conversations, bar: bar)
+        rows = withLastRows(rows, conversations + meaning + localRows(text, isAddress: isAddress, bar: bar), limit: limit)
         // An exact phrase like "left half": its row low down. Nothing else about the window reaches ordinary queries.
         if bar.createsTab, let placement = WindowSnap.exact(text) { rows = withLastRows(rows, [placementRow(placement)], limit: limit) }
         return Array(rows.prefix(limit))
@@ -395,6 +399,39 @@ public enum Suggest {
 
     /// The most rows found by meaning among the others.
     private static let meaningCap = 2
+    /// The most conversation rows among the others.
+    private static let conversationCap = 2
+
+    /// Saved conversations whose title has the text, then those where every word of it was said, newest first; none
+    /// whose row another row already offers. Choosing one opens its conversation tab.
+    private static func conversationRows(_ needle: String, isAddress: Bool, shown: [Suggestion], bar: CommandBarSnapshot) -> [Suggestion] {
+        guard !isAddress, !bar.fillsPane, !needle.isEmpty, !bar.conversations.isEmpty else { return [] }
+        var taken = Set<String>()
+        for row in shown {
+            if case .tab(.focus(let id)) = row.command, let tab = bar.tabs.first(where: { $0.tab == id }), let conversation = ConversationPage.id(of: tab.url) {
+                taken.insert(conversation.rawValue)
+            }
+        }
+        let words = needle.split(whereSeparator: \.isWhitespace).map(String.init)
+        var titled: [Suggestion] = [], said: [Suggestion] = []
+        for conversation in bar.conversations where !taken.contains(conversation.id.rawValue) {
+            let open = Command.assist(.openConversation(conversation.id))
+            if fold(conversation.title).contains(needle) {
+                titled.append(Suggestion(kind: .conversation, title: conversation.title, subtitle: nil, symbol: "bubble.left.and.bubble.right", favicon: ConversationPage.favicon,
+                                         hint: OverlayCopy.conversation, command: open))
+                continue
+            }
+            let text = fold(conversation.text)
+            guard words.allSatisfy(text.contains), let first = words.first, let range = text.range(of: first) else { continue }
+            let at = text.distance(from: text.startIndex, to: range.lowerBound)
+            let characters = Array(conversation.text)
+            let start = max(0, min(at, characters.count) - 30), end = min(characters.count, start + 90)
+            let snippet = (start > 0 ? "…" : "") + String(characters[start..<end]).split(whereSeparator: \.isNewline).joined(separator: " ")
+            said.append(Suggestion(kind: .conversation, title: conversation.title, subtitle: snippet, symbol: "bubble.left.and.bubble.right", favicon: ConversationPage.favicon,
+                                   hint: OverlayCopy.conversation, command: open))
+        }
+        return Array((titled + said).prefix(conversationCap))
+    }
 
     /// The search model's pages for exactly this text, best first, without the focused tab and without a page another
     /// row already offers. An open tab switches to it like Switch to Tab; an archived tab or a visit opens its address.
@@ -405,6 +442,7 @@ public enum Suggest {
             switch row.command {
             case .tab(.focus(let id)): if let tab = bar.tabs.first(where: { $0.tab == id }) { taken.insert(tab.url.absoluteString) }
             case .commandBar(.submit(let address)): taken.insert(address)
+            case .assist(.openConversation(let id)): taken.insert(ConversationPage.url(id).absoluteString)
             default: break
             }
         }
@@ -413,6 +451,11 @@ public enum Suggest {
         for found in meaning.rows where rows.count < meaningCap && taken.insert(found.url.absoluteString).inserted {
             let open = found.tab.flatMap { id in bar.tabs.first { $0.tab == id } }
             let title = found.title.isEmpty ? displayURL(found.url) : found.title
+            if found.place == .conversation, let conversation = ConversationPage.id(of: found.url) {
+                rows.append(Suggestion(kind: .meaning, title: title, subtitle: nil, symbol: "sparkle.magnifyingglass", favicon: nil,
+                                       hint: OverlayCopy.conversation, command: .assist(.openConversation(conversation))))
+                continue
+            }
             rows.append(Suggestion(kind: .meaning, title: title, subtitle: nil, symbol: "sparkle.magnifyingglass", favicon: nil,
                                    hint: open != nil ? OverlayCopy.switchToTab : found.place == .archive ? OverlayCopy.archived : nil,
                                    command: open.map { .tab(.focus($0.tab)) } ?? .commandBar(.submit(found.url.absoluteString))))
@@ -723,6 +766,7 @@ extension OverlayCopy {
     static let copyColor = "Copy Color"
     static let openDictionary = "Open Dictionary"
     static let archived = "Archived"
+    static let conversation = "Conversation"
     static func noDefinition(_ word: String) -> String { "No definition for \(word)" }
     static func translatePage(_ target: String) -> String { "Translate this page to \(target)" }
     static func translating(_ target: String) -> String { "Translating to \(target)…" }

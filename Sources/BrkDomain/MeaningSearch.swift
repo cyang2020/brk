@@ -45,7 +45,7 @@ public struct MeaningResults: Hashable, Sendable, Codable {
 
 /// One command bar row found by meaning, resolved against the state: an open tab to switch to, or an address to open.
 public struct MeaningCandidate: Hashable, Sendable, Codable {
-    public enum Place: String, Hashable, Sendable, Codable { case tab, history, archive }
+    public enum Place: String, Hashable, Sendable, Codable { case tab, history, archive, conversation }
     public var place: Place
     public var title: String
     public var url: URL
@@ -149,6 +149,9 @@ extension AppState {
         case "history":
             guard let visit = doc.history.filter({ $0.profile == profile && $0.url.absoluteString == raw }).max(by: { $0.visitedAt < $1.visitedAt }) else { return nil }
             return MeaningCandidate(place: .history, title: visit.title, url: visit.url, tab: nil)
+        case "conversation":
+            guard let conversation = doc.conversations[AIRequestID(raw)], conversation.profile == profile else { return nil }
+            return MeaningCandidate(place: .conversation, title: conversation.title, url: ConversationPage.url(conversation.id), tab: nil)
         default:
             return nil
         }

@@ -184,8 +184,15 @@ final class BrkToolSocket: @unchecked Sendable {
     static let versions = ["2025-06-18", "2025-03-26", "2024-11-05"]
     typealias Handler = @MainActor (_ name: String, _ arguments: [String: Any]) async -> BrkToolResult
     private let handler: Handler
+    /// The tools this server lists, and the rules it gives with them: a conversation's, or a live page refresh's.
+    private let tools: [BrkToolCatalog.Name]
+    private let instructions: String
 
-    init(handler: @escaping Handler) { self.handler = handler }
+    init(tools: [BrkToolCatalog.Name] = BrkToolCatalog.conversationTools, instructions: String = BrkToolCatalog.rules, handler: @escaping Handler) {
+        self.tools = tools
+        self.instructions = instructions
+        self.handler = handler
+    }
 
     /// The reply to one message, nil for a notification.
     func receive(_ line: Data) async -> Data? {
@@ -201,11 +208,11 @@ final class BrkToolSocket: @unchecked Sendable {
             return result(["protocolVersion": asked.flatMap { Self.versions.contains($0) ? $0 : nil } ?? Self.versions[0],
                            "capabilities": ["tools": ["listChanged": false]],
                            "serverInfo": ["name": BrkToolCatalog.server, "title": Product.name, "version": "1"],
-                           "instructions": BrkToolCatalog.rules])
+                           "instructions": instructions])
         case "ping":
             return result([:])
         case "tools/list":
-            return result(["tools": BrkToolCatalog.specs.map(\.json)])
+            return result(["tools": BrkToolCatalog.specs.filter { tools.contains($0.name) }.map(\.json)])
         case "tools/call":
             guard let name = params["name"] as? String else {
                 return Self.encode(["jsonrpc": "2.0", "id": id, "error": ["code": -32602, "message": "Missing tool name"] as [String: Any]])

@@ -101,6 +101,10 @@ public enum AIIntent: Hashable, Sendable, Codable {
     case pageLink(AIPageID, URL)
     /// The answer to the window's `AIPageLinkPrompt`: open the address, or not.
     case answerPageLink(Bool)
+    /// The page saved its own data (`window.brk.save`): JSON text, checked against the page's save shape.
+    case pageSave(AIPageID, String)
+    /// A kept page's schedule, weekdays, refresh model, or Refresh Now, from its row's menu.
+    case livePage(AIPageID, AIPageLiveChange)
 }
 
 /// What the user gave the conversation, before Brk looks it up.
@@ -300,6 +304,9 @@ public enum AIConversationEvent: Equatable, Sendable, Codable {
     case pageText(flagged: Bool)
     /// The agent rendered a page (`brk_html_render`); the app has written its HTML file.
     case page(AIPageRecord)
+    /// The agent changed one of this conversation's pages (`brk_page_update`): new HTML (already written to its file),
+    /// data, title or height; nil leaves that as it was.
+    case pageUpdated(AIPageID, html: Bool, data: String?, schema: String?, saveSchema: String?, title: String?, height: Int?)
 }
 
 /// What an installed agent says about itself, read without sending the model anything (the Max pane, the panel).
@@ -400,6 +407,16 @@ struct AISession: Equatable, Sendable {
     var tabWindows: [AIRequestID: WindowID] = [:]
     /// A link in an agent's page that asks before it opens, by window.
     var linkPrompts: [WindowID: AIPageLinkPrompt] = [:]
+    /// Live pages refreshing now, and the run of each (Rules/LivePageRules.swift).
+    var refreshing: [AIPageID: AIRequestID] = [:]
+    /// Refreshing pages whose data the run has changed.
+    var refreshChanged: Set<AIPageID> = []
+    /// Each page's saves in the current minute (the rate cap).
+    var pageSaves: [AIPageID: AIPageSaveCount] = [:]
+}
+struct AIPageSaveCount: Equatable, Sendable {
+    var minute: Int64
+    var saves: Int
 }
 public struct AIGroupPlan: Hashable, Sendable, Codable {
     public let folder: String

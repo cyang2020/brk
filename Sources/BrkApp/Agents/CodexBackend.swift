@@ -7,7 +7,7 @@ import Foundation
 @MainActor final class CodexBackend: AgentBackend {
     var events: (@MainActor (AgentBackendEvent) -> Void)?
     private(set) var process: AgentProcess?
-    var resumeID: String? { spec.access != .readOnly ? thread : nil }
+    var resumeID: String? { spec.access != .readOnly && spec.access != .refresh ? thread : nil }
     private let spec: AgentSpec
     private let environment: [String: String]
     private var peer: JSONRPCPeer?
@@ -39,8 +39,18 @@ import Foundation
             // codex-cli 0.164.0 (two exact matches, both asked).
             return ["app-server", "-c", "mcp_servers=" + (spec.tools.map(Self.mcpServer) ?? "{}"), "-c", "web_search=\"disabled\"",
                     "-c", "features.apps=false", "-c", "sandbox_workspace_write.network_access=false"] + account
+        case .refresh:
+            // Read-only's switches, Brk's server in place of the user's own, and every feature that gives the model a tool
+            // of Codex's own turned off: no shell, no file view, no browser, no helpers, no plugins, hooks or skill search.
+            return ["app-server", "-c", "mcp_servers=" + (spec.tools.map(Self.mcpServer) ?? "{}"), "-c", "web_search=\"disabled\"",
+                    "-c", "sandbox_mode=\"read-only\"", "-c", "approval_policy=\"never\""]
+                + refreshFeaturesOff.flatMap { ["-c", "features.\($0)=false"] } + account
         }
     }
+
+    /// Codex 0.164.0's features that add a tool of its own, off in a refresh.
+    static let refreshFeaturesOff = ["shell_tool", "unified_exec", "apps", "plugins", "hooks", "multi_agent", "image_generation", "browser_use", "browser_use_external",
+                                     "computer_use", "in_app_browser", "view_image", "skill_search", "skill_mcp_dependency_install", "goals", "tool_suggest", "sleep_tool", "code_mode_host"]
 
     /// `{brk={command="…",args=["…"]}}` as TOML.
     static func mcpServer(_ tools: AgentToolsLink) -> String {
@@ -97,8 +107,11 @@ import Foundation
         case .browser:
             params["sandbox"] = "workspace-write"; params["approvalPolicy"] = "untrusted"
             params["developerInstructions"] = BrkToolCatalog.rules
+        case .refresh:
+            params["sandbox"] = "read-only"; params["approvalPolicy"] = "never"; params["ephemeral"] = true
+            params["developerInstructions"] = BrkToolCatalog.refreshRules
         }
-        guard let resume = spec.resume, spec.access != .readOnly else { return ("thread/start", params) }
+        guard let resume = spec.resume, spec.access != .readOnly, spec.access != .refresh else { return ("thread/start", params) }
         params["threadId"] = resume
         params["excludeTurns"] = true
         return ("thread/resume", params)
@@ -175,7 +188,15 @@ import Foundation
             let status = item["status"] as? String
             guard let step = Self.step(item, state: status == "failed" || status == "declined" ? .failed : .done) else { return }
             events?(.step(step))
+        case "thread/tokenUsage/updated":
+            // The thread's running total; a refresh's thread is new, so the last total is the turn's.
+            if let total = (params["tokenUsage"] as? [String: Any])?["total"] as? [String: Any] {
+                usageUpdates += 1
+                turnUsage = AIUsageCount(requests: usageUpdates, inputTokens: total["inputTokens"] as? Int ?? 0, outputTokens: total["outputTokens"] as? Int ?? 0,
+                                         cachedTokens: total["cachedInputTokens"] as? Int ?? 0)
+            }
         case "turn/completed":
+            if let usage = turnUsage { events?(.usage(usage)); turnUsage = nil; usageUpdates = 0 }
             let body = params["turn"] as? [String: Any] ?? [:]
             separatorDue = false
             for (id, _) in pendingApprovals { events?(.approvalClosed(id)) }
@@ -194,6 +215,8 @@ import Foundation
         }
     }
     private var separatorDue = false
+    private var turnUsage: AIUsageCount?
+    private var usageUpdates = 0
 
     private func request(_ id: Any, _ method: String, _ params: [String: Any]) {
         // Read-only never asks; anything that does ask is refused without showing it.
@@ -213,7 +236,7 @@ import Foundation
             peer?.respond(id, ["permissions": [String: Any](), "scope": "turn"])
         case "mcpServer/elicitation/request":
             // Brk's own tools ask in Brk's panel themselves; anything else's question is declined.
-            let brk = spec.access == .browser && params["serverName"] as? String == BrkToolCatalog.server
+            let brk = (spec.access == .browser || spec.access == .refresh) && params["serverName"] as? String == BrkToolCatalog.server
             peer?.respond(id, brk ? ["action": "accept", "content": [String: Any]()] : ["action": "decline"])
         case "item/tool/requestUserInput":
             peer?.respond(id, ["answers": [String: Any]()])

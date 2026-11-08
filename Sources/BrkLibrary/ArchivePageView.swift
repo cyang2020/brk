@@ -147,6 +147,22 @@ final class ArchivePageView: NSView {
         layoutPage()
     }
 
+    /// Delete for good asks first, in a sheet on the window: what goes, and that it cannot come back.
+    func confirmDelete(_ entry: ArchiveEntry) {
+        guard let deletable = entry.deletable else { return }
+        let alert = NSAlert()
+        alert.messageText = LibraryCopy.deleteForGoodQuestion(entry.title)
+        alert.informativeText = LibraryCopy.deleteForGoodDetail(deletable)
+        alert.addButton(withTitle: LibraryCopy.delete).hasDestructiveAction = true
+        alert.addButton(withTitle: LibraryCopy.cancel)
+        alert.window.identifier = NSUserInterfaceItemIdentifier("archive-delete-alert")
+        let id = entry.id
+        let answer: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            if response == .alertFirstButtonReturn { self?.dispatch(.archive(.delete(id))) }
+        }
+        if let window { alert.beginSheetModal(for: window, completionHandler: answer) } else { answer(alert.runModal()) }
+    }
+
     func beginClearConfirmation() {
         guard !isHidden, archive?.groups.isEmpty == false else { return }
         setConfirming(true)
@@ -194,9 +210,9 @@ final class ArchivePageView: NSView {
         let groups = shownGroups
         let formatter = ArchiveTime(timeZone: timeZone)
         for group in groups {
-            let section = ArchiveGroupView(bucket: group.bucket, entries: group.entries, formatter: formatter, colors: colors) { [weak self] id in
+            let section = ArchiveGroupView(bucket: group.bucket, entries: group.entries, formatter: formatter, colors: colors, restore: { [weak self] id in
                 self?.dispatch(.archive(.restore(id)))
-            }
+            }, delete: { [weak self] entry in self?.confirmDelete(entry) })
             list.addSubview(section)
         }
         let hasEntries = !(archive?.groups.isEmpty ?? true)
@@ -256,14 +272,15 @@ final class ArchivePageView: NSView {
 final class ArchiveGroupView: NSView {
     let height: CGFloat
 
-    init(bucket: ArchiveBucket, entries: [ArchiveEntry], formatter: ArchiveTime, colors: LibraryColors, restore: @escaping (ArchiveID) -> Void) {
+    init(bucket: ArchiveBucket, entries: [ArchiveEntry], formatter: ArchiveTime, colors: LibraryColors, restore: @escaping (ArchiveID) -> Void,
+         delete: ((ArchiveEntry) -> Void)? = nil) {
         let m = LibraryDraw.list
         height = m.dayHeaderHeight.value + CGFloat(entries.count) * m.rowPitch.value
         super.init(frame: .zero)
         identify(.archiveGroup(bucket))
         addSubview(DayHeaderView(LibraryCopy.bucket(bucket), colors: colors))
         for entry in entries {
-            addSubview(ArchiveEntryView(entry: entry, bucket: bucket, formatter: formatter, colors: colors, restore: restore))
+            addSubview(ArchiveEntryView(entry: entry, bucket: bucket, formatter: formatter, colors: colors, restore: restore, delete: delete))
         }
     }
 
@@ -297,14 +314,20 @@ final class ArchiveEntryView: NSView {
     private let restoreButton = NSButton()
     private let colors: LibraryColors
     private let onRestore: () -> Void
+    /// A conversation or kept page: Delete for Good in the context menu (it asks first).
+    private let onDelete: (() -> Void)?
+    private let deletable: ArchiveDeletable?
     /// "3:05 PM · Manually Closed · Work".
     let meta: String
     private var hovered = false
 
-    init(entry: ArchiveEntry, bucket: ArchiveBucket, formatter: ArchiveTime, colors: LibraryColors, restore: @escaping (ArchiveID) -> Void) {
+    init(entry: ArchiveEntry, bucket: ArchiveBucket, formatter: ArchiveTime, colors: LibraryColors, restore: @escaping (ArchiveID) -> Void,
+         delete: ((ArchiveEntry) -> Void)? = nil) {
         let m = LibraryDraw.list
         self.colors = colors
         onRestore = { restore(entry.id) }
+        deletable = entry.deletable
+        onDelete = entry.deletable == nil ? nil : delete.map { delete in { delete(entry) } }
         title = NSTextField(labelWithString: entry.title)
         url = NSTextField(labelWithString: entry.url.map(ArchiveEntryView.address) ?? "")
         meta = [formatter.text(entry.archivedAt, in: bucket), LibraryCopy.reason(entry.reason), entry.fromSpaceTitle]
@@ -360,6 +383,9 @@ final class ArchiveEntryView: NSView {
         let menu = NSMenu()
         menu.autoenablesItems = false
         menu.addItem(LibraryFilterButton.item(LibraryCopy.restore) { [weak self] in self?.onRestore() })
+        if let onDelete, let deletable {
+            menu.addItem(LibraryFilterButton.item(LibraryCopy.deleteForGood(deletable)) { onDelete() })
+        }
         menu.addItem(.separator())
         let info = NSMenuItem(title: meta, action: nil, keyEquivalent: "")
         info.isEnabled = false

@@ -41,7 +41,7 @@ final class AgentSessionTests: XCTestCase {
             case .step(let step, _):
                 if let index = recorder.steps.firstIndex(where: { $0.id == step.id }) { recorder.steps[index] = step } else { recorder.steps.append(step) }
             case .approval(let approval, _): recorder.approvals.append(approval)
-            case .approvalClosed, .notice: break
+            case .approvalClosed, .notice, .usage: break
             }
         }
         return (session, recorder)

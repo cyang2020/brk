@@ -157,10 +157,25 @@ public struct AIPageRecord: Hashable, Sendable, Codable {
     /// Page text had reached its conversation when the agent wrote it: an address this page opens that the profile has
     /// not visited asks first, as `brk_tab_open` does.
     public let readPages: Bool
+    /// The shape of `data` the agent declared with the page (JSON Schema text, `AIPageShape`); a refresh's data must fit
+    /// it. Nil: the shape of the first data (`dataShape`).
+    public var schema: String?
+    /// The shape of what the page saves itself (`window.brk.save`); nil: any JSON object.
+    public var saveSchema: String?
+    /// What the page saved itself (ticks, notes), as JSON text: the page reads it as `window.brk.saved`, and a refresh
+    /// reads it but never writes it.
+    public var saved: String?
+    /// The addresses the page was made from, as the agent listed them: the only ones a refresh may load.
+    public var sources: [URL]?
+    public var live: AIPageLive?
+    /// Goes up when the data or the HTML is replaced, so views showing the page load it again.
+    public var revision: Int?
 
-    public init(id: AIPageID, title: String, html: URL, height: Int, data: String?, conversation: AIRequestID, profile: ProfileID, createdAt: Instant, readPages: Bool) {
+    public init(id: AIPageID, title: String, html: URL, height: Int, data: String?, conversation: AIRequestID, profile: ProfileID, createdAt: Instant, readPages: Bool,
+                schema: String? = nil, saveSchema: String? = nil, sources: [URL]? = nil) {
         self.id = id; self.title = title; self.html = html; self.height = height; self.data = data
         self.conversation = conversation; self.profile = profile; self.createdAt = createdAt; self.readPages = readPages
+        self.schema = schema; self.saveSchema = saveSchema; self.sources = sources
     }
 }
 
@@ -192,6 +207,12 @@ public struct AIPageSnapshot: Hashable, Sendable, Codable {
     public let data: String?
     /// Already a sidebar tab: its Keep as Tab is done.
     public var kept: Bool
+    /// What the page saved itself, read as `window.brk.saved`.
+    public var saved: String? = nil
+    /// The shape its saves must have (JSON Schema text); nil: any JSON object.
+    public var saveSchema: String? = nil
+    /// A view loads the page again when this changes (new data or HTML), never for the page's own saves.
+    public var revision: Int = 0
     public init(id: AIPageID, title: String, html: URL, height: Int, data: String?, kept: Bool) {
         self.id = id; self.title = title; self.html = html; self.height = height; self.data = data; self.kept = kept
     }

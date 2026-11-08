@@ -28,6 +28,7 @@ extension Work {
             effects.append(.window(window, .requestArchiveClear))
         case .clear:
             if !state.doc.archive.isEmpty { state.doc.archive = []; toast(ToastCopy.archiveCleared, in: window) }
+        case .delete(let id): deleteForGood(id, in: window)
         }
     }
 
@@ -45,6 +46,8 @@ extension Work {
             guard let threshold = state.profileSettings(space.profile).autoArchive.interval else { continue }
             for unit in state.doc.tree[space.todayRoot]?.children ?? [] {
                 guard !state.doc.tree.tabs(under: unit).contains(where: onScreen.contains) else { continue }
+                // A live page shown on chosen weekdays waits for its day out of sight; archiving it would lose the day.
+                if state.doc.tree.tabs(under: unit).contains(where: { AIPageTab.id(of: state.tab($0)?.url).flatMap { state.doc.aiPages[$0]?.live?.weekdays } != nil }) { continue }
                 if ctx.now.since(state.lastActiveOf(unit)) >= threshold {
                     victims.append(unit)
                     swept[space.id, default: 0] += state.doc.tree.tabs(under: unit).count

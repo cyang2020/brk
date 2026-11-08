@@ -188,9 +188,91 @@ final class AIServices {
 
     func agentReadDone(_ call: String, _ outcome: AgentReadOutcome) {
         for service in toolServices.values { service.readDone(call, outcome) }
+        for refresh in refreshes.values { refresh.tools.readDone(call, outcome) }
     }
     func agentActDone(_ call: String, _ outcome: AgentActOutcome) {
         for service in toolServices.values { service.actDone(call, outcome) }
+        for refresh in refreshes.values { refresh.tools.actDone(call, outcome) }
+    }
+
+    // MARK: Live page refreshes
+
+    /// One refresh in flight: its session, its tools, and the run the reducer knows it by.
+    private struct Refresh {
+        let run: AIPageRefreshRun
+        let session: AgentSession
+        let tools: BrkToolService
+        let deadline: Task<Void, Never>
+    }
+    private var refreshes: [AIRequestID: Refresh] = [:]
+    /// A refresh that has not finished by then is stopped and counts as failed.
+    static let refreshSeconds = 240
+    /// The usage table's line for refreshes.
+    static let refreshFeature = "Live Page Refresh"
+
+    /// `Effect.aiRefreshPage`: a session of the conversation's agent that can only read and write this page's data
+    /// (`AgentAccess.refresh`, `BrkToolService.Mode.refresh`), told what to do once, with nobody there to answer it.
+    func refreshPage(_ run: AIPageRefreshRun, max: MaxSnapshot) {
+        func fail(_ why: String) { send(.aiPageRefresh(run.page, run: run.run, .finished(.failed, detail: why))) }
+        guard !stopping, refreshes[run.run] == nil else { return }
+        guard run.agent == .claude || run.agent == .codex else { return fail("live pages refresh with Claude Code or Codex") }
+        guard let resolved = agent(for: AIProviderChoice(rawValue: run.agent.rawValue) ?? .auto, max: max), resolved.kind == run.agent else {
+            return fail(AgentCopy.missing(run.agent))
+        }
+        guard Bundle.main.executableURL != nil, let endpoint = try? BrkToolEndpoint.make() else { return fail("Brk's tools could not start") }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("brk-ai-" + UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let scope = BrkToolService.LivePageScope(page: run.page, run: run.run, sources: run.sources, schema: AIPageShape.object(run.schema) ?? AIPageShape.anyObject)
+        let tools = BrkToolService(conversation: run.run, window: run.window, endpoint: endpoint, state: { [weak self] in self?.state() },
+                                   send: { [weak self] in self?.send($0) }, engine: engine, ask: { _ in false }, notice: { _ in },
+                                   readPages: true, mode: .refresh(scope))
+        tools.onFlag = { [weak self] reason in self?.endRefresh(run.run, .flagged, detail: reason) }
+        do { try tools.start() } catch { return fail("Brk's tools could not start (\(error))") }
+        var spec = AgentSpec(kind: run.agent, executable: resolved.executable, model: run.model, effort: run.effort, access: resolved.plain ? .readOnly : .refresh,
+                             directory: directory)
+        spec.tools = Self.link(endpoint)
+        spec.account = AIAccounts.choice(for: run.agent)
+        let way: AIAccountWay = spec.account.key == nil ? .subscription : .apiKey
+        let service: AIService = run.agent == .claude ? .anthropic : .openai
+        let session = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(run.agent, account: spec.account), plain: resolved.plain) { [weak self] output in
+            guard let self else { return }
+            switch output {
+            case .finished(_, let outcome):
+                switch outcome {
+                case .failed(let message): self.endRefresh(run.run, .failed, detail: AgentCopy.oneLine(message, limit: 200))
+                case .unavailable: self.endRefresh(run.run, .failed, detail: AgentCopy.missing(run.agent))
+                default: self.endRefresh(run.run, .updated, detail: nil)
+                }
+            case .usage(let count): self.send(.aiUsage(AIUsageKey(feature: Self.refreshFeature, service: service, way: way), count))
+            case .approval(let approval, _):
+                // Nothing in a refresh is asked; an approval that comes anyway is refused.
+                self.refreshes[run.run]?.session.answer(approval: approval.id, option: approval.options.first { $0.kind == .deny }?.id ?? "deny")
+            case .started, .partial, .step, .approvalClosed, .notice: break
+            }
+        }
+        let deadline = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(Self.refreshSeconds)) } catch { return }
+            self?.endRefresh(run.run, .failed, detail: "it did not finish in \(Self.refreshSeconds / 60) minutes")
+        }
+        refreshes[run.run] = Refresh(run: run, session: session, tools: tools, deadline: deadline)
+        session.send(LivePageRefresh.prompt(run, now: Date()), turn: run.run)
+    }
+
+    /// The refresh is over, one way or another: the reducer hears once, and its session and tools go.
+    private func endRefresh(_ id: AIRequestID, _ kind: AIPageRefreshOutcome.Kind, detail: String?) {
+        guard let refresh = refreshes.removeValue(forKey: id) else { return }
+        refresh.deadline.cancel()
+        refresh.tools.stop()
+        send(.aiPageRefresh(refresh.run.page, run: id, .finished(kind, detail: detail)))
+        closing.append(Task { await refresh.session.close() })
+    }
+
+    /// `Effect.aiStopRefresh`: the page is gone; nothing more is reported.
+    func stopRefresh(_ id: AIRequestID) {
+        guard let refresh = refreshes.removeValue(forKey: id) else { return }
+        refresh.deadline.cancel()
+        refresh.tools.stop()
+        closing.append(Task { await refresh.session.close() })
     }
 
     /// The executable and how to talk to it for this instance: the fixture stands in for every agent in a test instance.
@@ -288,6 +370,7 @@ final class AIServices {
         case .approval(let approval, let turn): send(.aiConversation(id, .approval(approval, turn: turn)))
         case .approvalClosed(let approval): send(.aiConversation(id, .approvalClosed(approval)))
         case .notice(let text): send(.aiConversation(id, .notice(text)))
+        case .usage: break
         }
     }
 
@@ -388,6 +471,7 @@ final class AIServices {
         deadlines.removeAll(); hovers.removeAll()
         for task in refreshing.values { task.cancel() }
         for id in Array(conversations.keys) { closeConversation(id) }
+        for id in Array(refreshes.keys) { stopRefresh(id) }
         opening.removeAll()
     }
     func stop() async {

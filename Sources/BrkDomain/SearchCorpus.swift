@@ -1,9 +1,9 @@
 import BrkBase
 import Foundation
 
-/// One thing search by meaning may find: an open tab, an address from history, an archived tab.
+/// One thing search by meaning may find: an open tab, an address from history, an archived tab, a saved conversation.
 public struct SearchCorpusItem: Hashable, Sendable {
-    public enum Kind: String, Hashable, Sendable { case tab, history, archive }
+    public enum Kind: String, Hashable, Sendable { case tab, history, archive, conversation }
     public var kind: Kind
     /// The tab's item id, the history address, the archive id.
     public var id: String
@@ -49,6 +49,12 @@ extension AppState {
             let profile = entry.fromProfile ?? entry.fromSpace.flatMap { doc.spaces[$0]?.profile } ?? .default
             let title = entry.tab.customTitle?.isEmpty == false ? entry.tab.customTitle! : entry.tab.title
             out[profile, default: []].append(SearchCorpusItem(kind: .archive, id: entry.id.rawValue, title: title, url: url))
+        }
+        // A conversation by its title and what the user asked in it (never the agent's answers, which can quote pages).
+        for conversation in doc.conversations.values.sorted(by: { $0.updatedAt > $1.updatedAt }) {
+            let asked = conversation.messages.compactMap { _, item -> String? in if case .user(let text) = item { text } else { nil } }
+            let text = ([conversation.title] + asked.filter { $0 != conversation.title }).joined(separator: " · ")
+            out[conversation.profile, default: []].append(SearchCorpusItem(kind: .conversation, id: conversation.id.rawValue, title: String(text.prefix(300)), url: ""))
         }
         var seenAddresses: [ProfileID: Set<String>] = [:]
         for visit in doc.history {

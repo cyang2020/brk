@@ -692,6 +692,28 @@ final class RowView: HoverView {
             liveMark.setAccessibilityLabel(message)
         } else { liveMark.isHidden = true }
         toolTip = live.map { SidebarCopy.liveFolderTip($0) }
+        // A kept AI page (Brk's own): a dot in the Space's colour for data that changed since the user looked, the
+        // warning sign for a refresh that was stopped or failed; its schedule and last refresh are the tooltip.
+        guard case .tab(let tab) = row, AIPageTab.shows(tab.url) else { return }
+        liveMark.identifier = NSUserInterfaceItemIdentifier("live-page-mark-" + id)
+        liveMark.setAccessibilityIdentifier("live-page-mark-" + id)
+        toolTip = tab.sourceStatus
+        switch tab.liveMark {
+        case .changed?:
+            liveMark.isHidden = false
+            liveMark.image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: Draw.livePageDot.value, weight: .regular))
+            liveMark.contentTintColor = palette.focusColor
+            liveMark.toolTip = tab.sourceStatus
+            liveMark.setAccessibilityLabel(SidebarCopy.livePageChanged)
+        case .attention?:
+            liveMark.isHidden = false
+            liveMark.image = Glyph.warning.image(size: Draw.smallFont.value)
+            liveMark.contentTintColor = NSColor.systemOrange
+            liveMark.toolTip = tab.sourceStatus
+            liveMark.setAccessibilityLabel(SidebarCopy.livePageStopped)
+        case nil: break
+        }
     }
 
     private func configureButton(tab: TabRow, palette: Palette) {

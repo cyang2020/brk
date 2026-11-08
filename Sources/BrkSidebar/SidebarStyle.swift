@@ -70,6 +70,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let spaceHeaderFont = Metric(13.0, .anatomy("verify/visual-pairs/run-20261103 P01-a, P20-a: 对照 is 24.5 x 12 and This Window 80 wide, 13 pt semibold (cra L180 had 14 medium)"))
     let urlFont = Metric(13.0, .anatomy("cra L1219: URL pill host text is SF 13 regular"))
     let smallFont = Metric(12.0, .guess("Clear button and favorites empty title; Arc's tooltips are 12 pt medium (cra L790)"))
+    let livePageDot = Metric(7.0, .guess("Brk-only: a live AI page's new-data dot, the size of Arc's unread dot on a Favorite"))
     let captionFont = Metric(11.0, .guess("favorites empty subtitle; Arc's secondary row line is 11 pt (cra L115)"))
     let clearInkDark = Metric(0.35, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-navy-row-hover-arc.png: Clear reads white at this strength over the theme, less than the row's 0.45 foreground"))
     let clearFont = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/P05/P05-d-arc.png: Clear's ink is 26 x 8 points, 10 pt semibold (11 pt is 28 x 8.5)"))
@@ -312,6 +313,8 @@ enum SidebarCopy {
     /// group of tabs in the sidebar").
     static let closeTabGroup = "Close tab group"
     static let refreshLiveFolder = "Refresh Live Folder"
+    static let livePageChanged = "New data since you last looked"
+    static let livePageStopped = "The last refresh stopped"
 
     /// The note in an open Live Folder without rows.
     static func liveFolderNote(_ state: LiveFolderState) -> String {

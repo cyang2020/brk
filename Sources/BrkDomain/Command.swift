@@ -130,6 +130,9 @@ public enum ArchiveCommand: Hashable, Sendable, Codable {
     case restore(ArchiveID)
     /// Cmd+Shift+T: newest manual or clear entry first, then auto.
     case restoreLast
+    /// An archived conversation or kept page deleted for good: its row, its saved file, and for a conversation its
+    /// pages too. The archive asks first.
+    case delete(ArchiveID)
     /// Present the same confirmation used by the Archive page. No records are deleted by this intent.
     case requestClear
     case clear
@@ -689,6 +692,8 @@ public enum SystemEvent: Sendable, Equatable {
     case agentAct(AgentActRequest)
     /// More tabs for the @ list, by id, found for `query` (a search by meaning, for instance); stale queries are dropped.
     case aiMentionMatches(WindowID, query: String, [String])
+    /// A live page's refresh `run` reported (`Effect.aiRefreshPage`).
+    case aiPageRefresh(AIPageID, run: AIRequestID, AIPageRefreshEvent)
     // Later: case liveFolder(ItemID, [URL])   -- a live folder fetch finished.
 }
 

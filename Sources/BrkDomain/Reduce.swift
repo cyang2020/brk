@@ -5,10 +5,15 @@ import Foundation
 public struct Context: Sendable {
     public let now: Instant
     public let newID: @Sendable () -> String
+    /// The user's calendar and time zone: live pages' schedules and weekdays. A closure, so the context stays a plain
+    /// value the rules can read while they change the state.
+    private let currentCalendar: @Sendable () -> Calendar
+    public var calendar: Calendar { currentCalendar() }
 
-    public init(now: Instant, newID: @escaping @Sendable () -> String) {
+    public init(now: Instant, newID: @escaping @Sendable () -> String, calendar: Calendar = .autoupdatingCurrent) {
         self.now = now
         self.newID = newID
+        currentCalendar = { calendar }
     }
 }
 
@@ -169,7 +174,7 @@ struct Work {
             switch event {
             case .imageImported(let window, _, _, _, _, _), .shared(let window, _, _), .failed(let window, _, _): begin(window: window)
             }
-        case .boost, .currencyRates, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .aiConversation, .conversationsLoaded, .aiAgents, .aiAgentsWanted, .aiFolderChosen, .aiKeys, .aiUsage, .aiBasicTick, .aiDuplicateCandidates, .localModels: begin(window: nil)
+        case .boost, .currencyRates, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .aiConversation, .conversationsLoaded, .aiAgents, .aiAgentsWanted, .aiFolderChosen, .aiKeys, .aiUsage, .aiBasicTick, .aiDuplicateCandidates, .localModels, .aiPageRefresh: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -216,6 +221,7 @@ struct Work {
             }
             requestSidebarSync()
             scheduleFilterListUpdates()
+            checkLivePages()
         case .window(let window, let e): windowEvent(e, in: window)
         case .externalURL(let url): externalURL(url)
         case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
@@ -235,12 +241,17 @@ struct Work {
         case .aiTranslated(let id, let success): aiTranslated(id, success: success)
         case .aiDownloadRenamed(let id, let original, let new, let error): aiDownloadRenamed(id, original: original, new: new, error: error)
         case .aiConversation(let id, let event): aiConversation(id, event)
-        case .conversationsLoaded(let conversations, let pages): conversationsLoaded(conversations, pages)
-        case .aiAgents(let statuses): aiAgents(statuses)
+        case .conversationsLoaded(let conversations, let pages):
+            conversationsLoaded(conversations, pages)
+            if state.doc.aiPages.values.contains(where: { $0.live?.schedule != nil }) { effects.append(.aiRefreshAgents) }
+        case .aiAgents(let statuses):
+            aiAgents(statuses)
+            checkLivePages()
         case .localModels(let snapshot): state.session.localModels = snapshot
         case .aiAgentsWanted:
             let max = state.doc.settings.max
-            if max.provider != .off, max.tidyTabs || max.renamePinnedTabs || AIFeature.allCases.contains(where: max.enabled) { effects.append(.aiRefreshAgents) }
+            let livePages = state.doc.aiPages.values.contains { $0.live?.schedule != nil }
+            if max.provider != .off, max.tidyTabs || max.renamePinnedTabs || livePages || AIFeature.allCases.contains(where: max.enabled) { effects.append(.aiRefreshAgents) }
         case .aiFolderChosen(let window, let folder): aiFolderChosen(folder, in: window)
         case .aiKeys(let keys, let local):
             state.session.ai.keys = keys
@@ -251,6 +262,7 @@ struct Work {
         case .agentRead(let request): agentRead(request)
         case .agentAct(let request): agentAct(request)
         case .aiMentionMatches(let window, let query, let ids): aiMentionMatches(window, query: query, ids: ids)
+        case .aiPageRefresh(let page, let run, let event): aiPageRefresh(page, run: run, event)
         }
     }
 

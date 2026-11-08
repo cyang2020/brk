@@ -1,11 +1,12 @@
 import Foundation
 
-/// Something the index can find: an open tab, a history address or an archived tab, by its title and site. Only those
-/// two go into the model, never page text, and nothing of a private window.
+/// Something the index can find: an open tab, a history address or an archived tab, by its title and site, or a saved
+/// conversation by its title and the user's own messages. Only those go into the model, never page text, and nothing of
+/// a private window.
 public struct IndexEntry: Hashable, Sendable {
-    public enum Kind: String, Hashable, Sendable, CaseIterable { case tab, history, archive }
+    public enum Kind: String, Hashable, Sendable, CaseIterable { case tab, history, archive, conversation }
 
-    /// Stable per thing: "tab:<item id>", "history:<url>", "archive:<archive id>".
+    /// Stable per thing: "tab:<item id>", "history:<url>", "archive:<archive id>", "conversation:<id>".
     public var key: String
     public var kind: Kind
     public var title: String

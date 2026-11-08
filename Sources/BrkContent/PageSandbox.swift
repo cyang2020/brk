@@ -18,8 +18,11 @@ import WebKit
 //   http(s) link goes to Brk as `onLink` from the bridge, which only takes trusted clicks; Brk opens it as a tab, asking
 //   first where the conversation had read pages. A navigation the delegate sees is never taken for a click: WebKit does
 //   not say whether a script started it.
-// - Brk's bridge runs in an isolated script world the page cannot see. The page itself only reads `window.brk.data`
-//   and posts console lines.
+// - Brk's bridge runs in an isolated script world the page cannot see. The page itself reads `window.brk.data` and
+//   `window.brk.saved`, posts console lines, and has one message that changes anything: `window.brk.save(object)`, its
+//   own state (ticks, notes), a JSON object within `AIPageLimits.saved` bytes that fits the page's save shape, at most
+//   `AIPageLimits.savesPerMinute` times a minute. It goes to Brk as `onSave` and is kept with the page; nothing else
+//   crosses, and a preview saves nothing.
 
 /// Brk's theme as the page's CSS variables (T3 Code's names), for light, dark and the Space's color.
 public struct PageTheme: Equatable, Sendable {
@@ -138,19 +141,25 @@ public final class PageSandboxView: NSView {
     public var onEvent: ((PageSandboxEvent) -> Void)?
     /// Keep as Tab and the other items of the page's own menu; nil leaves the menu empty.
     public var menuItems: (() -> [NSMenuItem])?
+    /// The page saved its own state: JSON text that passed the checks. Nil: saving is off (a preview).
+    public var onSave: ((String) -> Void)?
     private let web: SandboxWebView
     private let handler: DocumentHandler
     private let bridge = Bridge()
+    private let saver = Saver()
+    private let saveShape: [String: Any]
     private var theme: PageTheme
     private var loadedDocument = false
     public private(set) var console: [String] = []
     public private(set) var contentHeight: Int?
     public let pageID: AIPageID?
 
-    /// `html` is the whole document; `data` the JSON text the page reads as `window.brk.data`.
-    public init(html: String, data: String?, theme: PageTheme, page: AIPageID? = nil) {
+    /// `html` is the whole document; `data` the JSON text the page reads as `window.brk.data`, `saved` what it saved
+    /// itself (`window.brk.saved`), and `saveSchema` the shape its saves must have.
+    public init(html: String, data: String?, saved: String? = nil, saveSchema: String? = nil, theme: PageTheme, page: AIPageID? = nil) {
         pageID = page
         self.theme = theme
+        saveShape = AIPageShape.object(saveSchema) ?? AIPageShape.anyObject
         handler = DocumentHandler(html: html)
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
@@ -165,7 +174,8 @@ public final class PageSandboxView: NSView {
         let content = configuration.userContentController
         content.add(bridge, contentWorld: world, name: "brk")
         content.add(bridge, contentWorld: .page, name: "brkConsole")
-        content.addUserScript(WKUserScript(source: Self.pageScript(data: data), injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        content.addScriptMessageHandler(saver, contentWorld: .page, name: "brkSave")
+        content.addUserScript(WKUserScript(source: Self.pageScript(data: data, saved: saved), injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         content.addUserScript(WKUserScript(source: Self.bridgeScript(theme: theme), injectionTime: .atDocumentStart, forMainFrameOnly: true, in: world))
         web = SandboxWebView(frame: .zero, configuration: configuration)
         super.init(frame: .zero)
@@ -177,6 +187,7 @@ public final class PageSandboxView: NSView {
         web.menuItems = { [weak self] in self?.menuItems?() ?? [] }
         addSubview(web)
         bridge.owner = self
+        saver.owner = self
         Task { @MainActor [weak self] in
             // No rule list, no page: CSP alone lets preconnect through.
             guard let rules = await Self.rules() else {
@@ -261,16 +272,26 @@ public final class PageSandboxView: NSView {
 
     // MARK: Scripts
 
-    private static func pageScript(data: String?) -> String {
-        // `data` was encoded by Brk as a JSON object; anything else becomes null.
-        let value = data.flatMap { text -> String? in
-            guard let parsed = try? JSONSerialization.jsonObject(with: Data(text.utf8)), parsed is [String: Any] else { return nil }
-            return text
-        } ?? "null"
+    private static func pageScript(data: String?, saved: String?) -> String {
+        // Both were encoded by Brk as JSON objects; anything else becomes null.
+        func object(_ text: String?) -> String {
+            text.flatMap { text -> String? in
+                guard let parsed = try? JSONSerialization.jsonObject(with: Data(text.utf8)), parsed is [String: Any] else { return nil }
+                return text
+            } ?? "null"
+        }
         return """
         (() => {
-          const data = \(value);
-          Object.defineProperty(window, 'brk', { value: Object.freeze({ data }), writable: false, configurable: false });
+          const data = \(object(data));
+          const saved = \(object(saved));
+          const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.brkSave;
+          const save = value => {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) return Promise.reject(new Error('brk.save takes a JSON object'));
+            let text;
+            try { text = JSON.stringify(value); } catch (e) { return Promise.reject(new Error('brk.save takes a JSON object')); }
+            return handler.postMessage(text).then(() => true);
+          };
+          Object.defineProperty(window, 'brk', { value: Object.freeze({ data, saved, save }), writable: false, configurable: false });
           const post = (level, args) => {
             try {
               const text = args.map(a => { try { return typeof a === 'string' ? a : JSON.stringify(a); } catch (e) { return String(a); } }).join(' ');
@@ -321,6 +342,37 @@ public final class PageSandboxView: NSView {
           window.addEventListener('load', () => { measure(); send({ type: 'loaded' }); });
         })();
         """
+    }
+
+    // MARK: Saving
+
+    /// A save the page asked for: why it was refused, nil when it went to Brk.
+    fileprivate func save(_ body: Any) -> String? {
+        guard let onSave else { return "Saving is off here." }
+        guard let text = body as? String else { return "brk.save takes a JSON object" }
+        let minute = Int(ProcessInfo.processInfo.systemUptime / 60)
+        if saver.minute != minute { saver.minute = minute; saver.count = 0 }
+        guard saver.count < AIPageLimits.savesPerMinute else { return "Too many saves this minute; try again shortly." }
+        saver.count += 1
+        switch AIPageShape.check(text, schema: saveShape, limit: AIPageLimits.saved) {
+        case .failure(let refusal): return "Brk did not save it: \(refusal.message)."
+        case .success(let normalized):
+            onSave(normalized)
+            return nil
+        }
+    }
+
+    /// The one page-world message that changes anything (`window.brk.save`), answered so the page's promise settles.
+    @MainActor private final class Saver: NSObject, WKScriptMessageHandlerWithReply {
+        weak var owner: PageSandboxView?
+        var minute = -1
+        var count = 0
+
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage,
+                                   replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void) {
+            guard message.name == "brkSave", message.frameInfo.isMainFrame, let owner else { replyHandler(nil, "Saving is off here."); return }
+            if let refusal = owner.save(message.body) { replyHandler(nil, refusal) } else { replyHandler(true, nil) }
+        }
     }
 
     // MARK: Rules

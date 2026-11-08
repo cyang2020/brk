@@ -47,6 +47,15 @@ import Foundation
                           "--append-system-prompt", BrkToolCatalog.rules]
             if let tools = spec.tools { arguments += ["--mcp-config", Self.mcpConfig(tools), "--allowedTools", "mcp__\(BrkToolCatalog.server)"] }
             if let resume = spec.resume { arguments += ["--resume", resume] }
+        case .refresh:
+            // Read-only's switches (no built-in tool, no settings file, so no hook, plugin or skill; no slash commands,
+            // nothing kept), and Brk's server alone, its refresh tools allowed by name. In `dontAsk` mode a tool that is
+            // not allowed is refused without asking.
+            arguments += ["--tools", "", "--permission-mode", "dontAsk", "--no-session-persistence", "--disable-slash-commands", "--strict-mcp-config", "--setting-sources", "",
+                          "--append-system-prompt", BrkToolCatalog.refreshRules]
+            if let tools = spec.tools {
+                arguments += ["--mcp-config", Self.mcpConfig(tools), "--allowedTools", BrkToolCatalog.refreshTools.map { "mcp__\(BrkToolCatalog.server)__\($0.rawValue)" }.joined(separator: ",")]
+            }
         }
         return arguments
     }
@@ -161,8 +170,8 @@ import Foundation
             }
             let tool = request["tool_name"] as? String ?? "Tool"
             let input = request["input"] as? [String: Any] ?? [:]
-            if spec.access == .readOnly {
-                // Read-only never asks; a request that arrives anyway is refused without showing it.
+            if spec.access == .readOnly || spec.access == .refresh {
+                // Read-only and a refresh never ask; a request that arrives anyway is refused without showing it.
                 write(["type": "control_response", "response": ["subtype": "success", "request_id": id,
                        "response": ["behavior": "deny", "message": "Tools are off in this conversation.", "toolUseID": request["tool_use_id"] ?? ""] as [String: Any]] as [String: Any]])
                 return
@@ -216,6 +225,12 @@ import Foundation
             openSteps = []
             for id in pendingApprovals.keys { events?(.approvalClosed(id)) }
             pendingApprovals = [:]
+            if let usage = object["usage"] as? [String: Any] {
+                let read = usage["cache_read_input_tokens"] as? Int ?? 0, write = usage["cache_creation_input_tokens"] as? Int ?? 0
+                events?(.usage(AIUsageCount(requests: max(1, object["num_turns"] as? Int ?? 1), inputTokens: (usage["input_tokens"] as? Int ?? 0) + read + write,
+                                            outputTokens: usage["output_tokens"] as? Int ?? 0, cachedTokens: read,
+                                            cost: spec.account == .subscription ? nil : object["total_cost_usd"] as? Double)))
+            }
             let text = object["result"] as? String
             if interrupting { events?(.turnEnded(.interrupted)) }
             else if object["is_error"] as? Bool == true {

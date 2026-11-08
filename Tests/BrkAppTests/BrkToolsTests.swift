@@ -85,10 +85,11 @@ final class BrkToolsTests: XCTestCase {
 
     func testTheToolsAreTheSeeAndChangeGroupsWithT3StyleDescriptions() {
         XCTAssertEqual(BrkToolCatalog.specs.map(\.name.rawValue), ["brk_tab_list", "brk_tab_search", "brk_tab_read", "brk_tab_open", "brk_tab_focus", "brk_tab_close", "brk_tab_move", "brk_tab_group", "brk_tab_split",
-                                                                  "brk_conversation_list", "brk_conversation_search", "brk_conversation_read", "brk_html_preview", "brk_html_render", "brk_page_save"])
+                                                                  "brk_conversation_list", "brk_conversation_search", "brk_conversation_read", "brk_html_preview", "brk_html_render", "brk_page_save",
+                                                                  "brk_page_update", "brk_page_source_read", "brk_page_update_data"])
         for spec in BrkToolCatalog.specs {
             // The page tools carry the page rules, as T3 Code's html_render does; the others stay short.
-            if [.preview, .render].contains(spec.name) {
+            if [.preview, .render, .updatePage].contains(spec.name) {
                 XCTAssertTrue(spec.description.contains(BrkToolCatalog.pageRules))
             } else {
                 XCTAssertLessThan(spec.description.count, 420, "\(spec.name) is short")
@@ -116,9 +117,9 @@ final class BrkToolsTests: XCTestCase {
         XCTAssertEqual(try BrkToolCatalog.parse("brk_conversation_read", ["conversationId": "c", "itemId": "m3", "textOffset": 40, "maxCharsPerItem": 100]),
                        .conversationRead(AIRequestID("c"), after: -1, limit: 10, maxChars: 100, item: "m3", offset: 40))
         XCTAssertEqual(try BrkToolCatalog.parse("brk_html_render", ["html": "<p>x</p>", "title": "T", "height": 300, "data": ["a": 1]]),
-                       .render(html: "<p>x</p>", title: "T", height: 300, data: #"{"a":1}"#))
+                       .render(html: "<p>x</p>", title: "T", height: 300, data: #"{"a":1}"#, schema: nil, saveSchema: nil, sources: []))
         XCTAssertEqual(try BrkToolCatalog.parse("brk_html_preview", ["html": "<p>x</p>"]), .preview(html: "<p>x</p>", width: nil, data: nil))
-        XCTAssertEqual(try BrkToolCatalog.parse("brk_page_save", ["pageId": "p"]), .savePage(AIPageID("p"), title: nil))
+        XCTAssertEqual(try BrkToolCatalog.parse("brk_page_save", ["pageId": "p"]), .savePage(AIPageID("p"), title: nil, live: []))
         func refused(_ name: String, _ arguments: [String: Any], file: StaticString = #filePath, line: UInt = #line) {
             XCTAssertThrowsError(try BrkToolCatalog.parse(name, arguments), "\(name) \(arguments)", file: file, line: line)
         }
@@ -344,8 +345,9 @@ final class BrkToolsTests: XCTestCase {
         let notified = try await send(["jsonrpc": "2.0", "method": "notifications/initialized"])
         XCTAssertNil(notified, "a notification has no reply")
         let list = try await send(["jsonrpc": "2.0", "id": 3, "method": "tools/list"])
-        XCTAssertEqual(((list?["result"] as? [String: Any])?["tools"] as? [[String: Any]])?.count, BrkToolCatalog.specs.count)
-        XCTAssertEqual(BrkToolCatalog.specs.count, 15)
+        XCTAssertEqual(((list?["result"] as? [String: Any])?["tools"] as? [[String: Any]])?.count, BrkToolCatalog.conversationTools.count)
+        XCTAssertEqual(BrkToolCatalog.specs.count, 18)
+        XCTAssertEqual(BrkToolCatalog.conversationTools.count, 16, "a conversation has neither of a refresh's own tools")
         let call = try await send(["jsonrpc": "2.0", "id": "x", "method": "tools/call", "params": ["name": "brk_tab_list", "arguments": ["limit": 3]]])
         XCTAssertEqual(call?["id"] as? String, "x")
         XCTAssertEqual(called.first?.0, "brk_tab_list")

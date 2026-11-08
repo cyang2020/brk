@@ -26,6 +26,8 @@ extension Work {
         case .keepPage(let id): _ = keepPage(id, title: nil, in: window, show: true); return
         case .pageLink(let page, let url): pageLink(page, url, in: window); return
         case .answerPageLink(let open): answerPageLink(open, in: window); return
+        case .pageSave(let page, let text): pageSave(page, text, in: window); return
+        case .livePage(let page, let change): livePage(page, change, in: window); return
         case .undoOrganize: undoAIOrganize(in: window); return
         case .neverTranslateSite, .neverTranslateLanguage:
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
@@ -180,7 +182,7 @@ extension Work {
         case .mention(let query):
             guard let host = query == nil ? state.session.ai.host(ofConversation: id) : reviveConversation(id, in: window) else { return }
             mentionChanged(query, at: host, window: window)
-        case .openTabLink, .openConversation, .keepPage, .pageLink, .answerPageLink:
+        case .openTabLink, .openConversation, .keepPage, .pageLink, .answerPageLink, .pageSave, .livePage:
             assist(intent, in: window)
         default: break
         }
@@ -335,6 +337,9 @@ extension Work {
         case .page(let record):
             aiPageRendered(id, record)
             return
+        case .pageUpdated(let page, let html, let data, let schema, let saveSchema, let title, let height):
+            aiPageUpdated(id, page, html: html, data: data, schema: schema, saveSchema: saveSchema, title: title, height: height)
+            return
         default: break
         }
         guard let host = state.session.ai.host(ofConversation: id), var conversation = state.session.ai[host: host]?.conversation else { return }
@@ -358,7 +363,7 @@ extension Work {
                 if case .approval(let a) = $0, a.id == approval, a.answer == nil { nil } else { $0 }
             }
         case .notice(let text): conversation.items.append(.notice(text))
-        case .resumable, .pageText, .page: break
+        case .resumable, .pageText, .page, .pageUpdated: break
         }
         state.session.ai[host: host]?.conversation = conversation
         if case .started = event { commitConversation(id) }
@@ -841,7 +846,9 @@ extension Work {
             case .answer:
                 if case .renameDownload = request.task { state.doc.settings.max.enabled(.downloadRename) }
                 else { state.doc.settings.max.enabled(.commandBar) }
-            case .followUp, .agentRead: [AIFeature.commandBar, .askPage, .browse].contains { state.doc.settings.max.enabled($0) }
+            case .followUp: [AIFeature.commandBar, .askPage, .browse].contains { state.doc.settings.max.enabled($0) }
+            // A live page's refresh reads too, whichever panel features are on.
+            case .agentRead: [AIFeature.commandBar, .askPage, .browse].contains { state.doc.settings.max.enabled($0) } || !state.session.ai.refreshing.isEmpty
             case .askPage: state.doc.settings.max.enabled(.askPage)
             case .preview: state.doc.settings.max.enabled(.linkPreviews)
             case .instant: state.doc.settings.max.enabled(.instantLinks)
@@ -873,6 +880,7 @@ extension Work {
         }
         // A conversation that lost its live state takes its session and every process it started with it.
         reconcileConversations(from: previous)
+        reconcileLivePages()
         // A translation belongs to one document: a reload or a new page shows the page's own text.
         for (page, translation) in state.session.ai.translations where state.session.live[page]?.document != .ready(translation.document) {
             state.session.ai.translations[page] = nil

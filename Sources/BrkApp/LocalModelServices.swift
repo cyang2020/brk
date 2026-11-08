@@ -181,6 +181,7 @@ final class LocalModelServices {
         case .tab: .tab
         case .history: .history
         case .archive: .archive
+        case .conversation: .conversation
         }
     }
 

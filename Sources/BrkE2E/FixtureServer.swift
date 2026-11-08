@@ -16,6 +16,9 @@ final class FixtureServer: @unchecked Sendable {
     func releaseHeldDocument() { heldDocument.signal() }
     func releaseAudioDocument() { heldAudioDocument.signal() }
     func requestCount(_ path: String) -> Int { countLock.withLock { counts[path, default: 0] } }
+    /// A site file served with `text` replaced (a shop's price changes, a page gains an injection): live page scenarios.
+    func replace(in path: String, _ text: String, with replacement: String) { countLock.withLock { replacements[path, default: []].append((text, replacement)) } }
+    private var replacements: [String: [(String, String)]] = [:]
     /// Every `/suggest` request's query string, in order (which engine asked: `engine=<its suggest host>`).
     func suggestQueries() -> [String] { countLock.withLock { suggests } }
     private var suggests: [String] = []
@@ -232,7 +235,12 @@ final class FixtureServer: @unchecked Sendable {
             let body = Data("fixture download\n".utf8)
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=\"fixture.txt\"\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body
         } else if case let file = root.appendingPathComponent(String(path.split(separator: "?")[0].dropFirst())).standardizedFileURL,
-                  file.path.hasPrefix(root.path + "/"), let body = try? Data(contentsOf: file) {
+                  file.path.hasPrefix(root.path + "/"), var body = try? Data(contentsOf: file) {
+            if let changes = countLock.withLock({ replacements["/" + String(path.split(separator: "?")[0].dropFirst())] }), !changes.isEmpty {
+                var text = String(decoding: body, as: UTF8.self)
+                for (old, new) in changes { text = text.replacingOccurrences(of: old, with: new) }
+                body = Data(text.utf8)
+            }
             let type = ["html": "text/html; charset=utf-8", "css": "text/css", "js": "text/javascript", "png": "image/png", "svg": "image/svg+xml", "webm": "video/webm"][file.pathExtension]
                 ?? "application/octet-stream"
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body

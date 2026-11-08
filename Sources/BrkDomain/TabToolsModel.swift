@@ -165,6 +165,7 @@ public enum ToastCopy {
     public static let tabMoved = "Tab moved! Click to go there."
     public static let newSpaceCreated = "New Space Created"
     public static let archiveCleared = "Archive Cleared"
+    public static func deletedForGood(_ title: String) -> String { "Deleted “\(title.count > 40 ? String(title.prefix(39)) + "…" : title)”" }
     public static let folderDeleted = "Folder deleted"
     public static let cannotAddPane = "Cannot Add New Pane"
     public static let newTabCreated = "New Tab Created"

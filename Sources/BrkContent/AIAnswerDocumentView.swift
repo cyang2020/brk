@@ -92,6 +92,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
             if case .link(let url) = event { self?.send(.pageLink(page, url)) }
         }
         pages.onKeep = { [weak self] page in self?.send(.keepPage(page)) }
+        pages.onSave = { [weak self] page, text in self?.send(.pageSave(page, text)) }
         pages.onHeight = { [weak self] in
             guard let self, let answer = self.answer else { return }
             self.rendered = []

@@ -16,8 +16,11 @@ public struct AgentReadRequest: Hashable, Sendable {
     /// An id from `AgentTabFacts`.
     public let tab: String
     public let part: AgentReadPart
-    public init(call: String, window: WindowID, tab: String, part: AgentReadPart) {
-        self.call = call; self.window = window; self.tab = tab; self.part = part
+    /// Instead of a tab: this address, loaded fresh out of sight in the window's profile (a live page's source). The tool
+    /// service has checked it is one the page listed and the profile has visited.
+    public var address: URL? = nil
+    public init(call: String, window: WindowID, tab: String, part: AgentReadPart, address: URL? = nil) {
+        self.call = call; self.window = window; self.tab = tab; self.part = part; self.address = address
     }
 }
 
@@ -56,8 +59,9 @@ public enum AgentAct: Hashable, Sendable {
     /// Tidy's typed result: every group in one step, with Tidy's undo when it regroups the shown Space's Today.
     case group(space: SpaceID, section: AgentDestination.Section, [AgentGroup])
     case split([ItemID])
-    /// A page the agent rendered in its conversation, kept as a sidebar tab (`brk_page_save`).
-    case keepPage(AIPageID, title: String?, conversation: AIRequestID)
+    /// A page the agent rendered in its conversation, kept as a sidebar tab (`brk_page_save`), with the schedule and
+    /// weekdays the user asked for.
+    case keepPage(AIPageID, title: String?, conversation: AIRequestID, live: [AIPageLiveChange] = [])
 }
 
 public struct AgentActRequest: Hashable, Sendable {
@@ -76,7 +80,16 @@ public enum AgentActOutcome: Hashable, Sendable {
 extension Work {
     mutating func agentRead(_ request: AgentReadRequest) {
         func fail(_ text: String) { effects.append(.agentReadDone(request.call, .failed(text))) }
-        guard state.doc.windows[request.window] != nil, state.agentProfile(in: request.window) != nil else { return fail("This conversation's window is gone.") }
+        guard state.doc.windows[request.window] != nil, let profile = state.agentProfile(in: request.window) else { return fail("This conversation's window is gone.") }
+        if let address = request.address {
+            // A source is read from the site again, never from a tab that may show an older copy.
+            guard AIValidation.destination(address.absoluteString) != nil, state.agentKnows(address, profile: profile) else { return fail("Brk reads only addresses this profile has visited.") }
+            guard let window = readerWindow(for: profile, preferring: request.window) else { return fail("No window shows this profile.") }
+            let id = AIRequestID(ctx.newID())
+            state.session.ai.requests[id] = AIRequest(window: window, context: .profile(profile), task: .ask(""), purpose: .agentRead(request.call))
+            makeAIHidden(id, urls: [address])
+            return
+        }
         guard let facts = state.agentTab(request.tab, window: request.window) else { return fail("No tab has this id. List or search tabs for current ids.") }
         // A live page of this tab that is on screen, the conversation's window first. A page loaded out of sight does
         // not answer the reader in time (Chromium's DevTools timed out on every one in the real run of 2026-11-08), so
@@ -213,10 +226,16 @@ extension Work {
             let split = state.doc.tree.splitContaining(ids[0])
             guard let split, ids.allSatisfy({ state.doc.tree.splitContaining($0) == split }) else { return refuse("Those tabs could not go into one split.") }
             done("Showing them side by side.", [split.rawValue])
-        case .keepPage(let page, let title, let conversation):
-            guard state.doc.aiPages[page]?.conversation == conversation else { return refuse("No page of this conversation has that id. Render one with `brk_html_render` first.") }
+        case .keepPage(let page, let title, let conversation, let live):
+            guard let record = state.doc.aiPages[page], record.conversation == conversation else { return refuse("No page of this conversation has that id. Render one with `brk_html_render` first.") }
+            if live.contains(where: { if case .schedule(.some) = $0 { true } else { false } }), record.dataShape == nil {
+                return refuse("This page has no data to refresh. Render it again with `data` and a `dataSchema`, then keep it with `refresh`.")
+            }
             guard let row = keepPage(page, title: title, in: window, show: false) else { return refuse("The page could not be kept as a tab.") }
-            done("Kept as a tab at the top of Today.", [row.rawValue])
+            for change in live { if let problem = applyLive(change, to: page) { return refuse(problem) } }
+            let schedule = state.doc.aiPages[page]?.live?.schedule.map { " It refreshes " + $0.phrase + "." } ?? ""
+            let days = state.doc.aiPages[page]?.live?.weekdays.map { " It shows in Today on " + AIPageWeekdays.title($0) + " only." } ?? ""
+            done("Kept as a tab at the top of Today." + schedule + days, [row.rawValue])
         }
     }
 }

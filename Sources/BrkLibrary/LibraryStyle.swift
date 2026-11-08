@@ -376,6 +376,21 @@ public enum LibraryCopy {
     static let closedHow = "How was the tab closed?"
     /// GUESS (short labels).
     static let restore = "Restore"
+    static func deleteForGood(_ kind: ArchiveDeletable) -> String {
+        switch kind {
+        case .conversation: "Delete Conversation…"
+        case .page: "Delete Page…"
+        }
+    }
+    static func deleteForGoodQuestion(_ title: String) -> String { "Delete “\(title.count > 60 ? String(title.prefix(59)) + "…" : title)” for good?" }
+    static func deleteForGoodDetail(_ kind: ArchiveDeletable) -> String {
+        switch kind {
+        case .conversation(let pages):
+            let made = pages == 0 ? "" : pages == 1 ? " and the page it made" : " and the \(pages) pages it made"
+            return "The conversation's transcript\(made) are deleted from this Mac, also where they are kept as tabs. This cannot be undone."
+        case .page: return "The page, its data and what you saved in it are deleted from this Mac. This cannot be undone."
+        }
+    }
     static let close = "Close"
     static let noMatch = "No archived tabs match your filter."
 

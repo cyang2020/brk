@@ -271,6 +271,11 @@ extension Work {
         if !model.entries.isEmpty, let sources = askAISources(for: request, in: window), !sources.isEmpty {
             model.entries += [.separator, .action(title: "Ask AI", command: .assist(.attach(sources)), enabled: true)]
         }
+        // A kept AI page's schedule, model and weekdays, also Brk's own.
+        if !model.entries.isEmpty, case .item(let id) = request, state.agentProfile(in: window) != nil {
+            let live = state.livePageMenu(state.tab(id)?.url)
+            if !live.isEmpty { model.entries += [.separator] + live }
+        }
         return model
     }
 

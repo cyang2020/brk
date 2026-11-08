@@ -322,6 +322,9 @@ public struct TabRow: Sendable, Equatable, Codable {
     public var renameHint: Bool = false
     /// Place New Tabs' one-click suggestion under the title; nil when there is none.
     public var aiSuggestion: AISuggestionLabel? = nil
+    /// A kept AI page's mark at the row's trailing end: new data since the user last looked, or a refresh that stopped.
+    /// Its schedule and last refresh are the row's tooltip (`sourceStatus`).
+    public var liveMark: LivePageMark? = nil
     /// An Instant Links row, not a tab (Arc's `instantLinks` sidebar item, P48-a): Max's flower and "Searching the
     /// web for you…", or "Oops, something went wrong." when nothing opened.
     public var instant: InstantRowState? = nil
@@ -590,6 +593,8 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     /// Tabs, archived tabs and history the local search model found for the bar's text (Brk's own rows); the view drops
     /// them once its text has moved on. Nil without the search model.
     public var meaning: MeaningCandidates? = nil
+    /// This profile's saved conversations, newest first, for finding one by its title or text.
+    public var conversations: [ConversationCandidate] = []
     public var rates: CurrencyRates? = nil
     /// The time quick answers read (`WindowSession.barClock`).
     public var now = Instant(milliseconds: 0)
@@ -634,6 +639,18 @@ public enum CommandBarPlacement: String, Sendable, Equatable, Codable {
     case overURLPill
 }
 
+/// A saved conversation the command bar finds by its title or by what was said in it (Brk's own rows).
+public struct ConversationCandidate: Sendable, Equatable, Codable {
+    public var id: AIRequestID
+    public var title: String
+    /// What the user and the agent said, oldest first, at most `ConversationCandidate.textLimit` characters.
+    public var text: String
+    public init(id: AIRequestID, title: String, text: String) { self.id = id; self.title = title; self.text = text }
+    public static let textLimit = 6_000
+    /// The newest conversations the bar searches.
+    public static let limit = 200
+}
+
 public struct SwitchCandidate: Sendable, Equatable, Codable {
     public var tab: ItemID
     public var title: String
@@ -675,6 +692,13 @@ public struct ArchiveEntry: Sendable, Equatable, Codable {
     public var archivedAt: Instant
     public var reason: ArchiveReason
     public var fromSpaceTitle: String?
+    /// A conversation (with the number of pages it made) or a kept page: the archive can delete it for good.
+    public var deletable: ArchiveDeletable? = nil
+}
+
+public enum ArchiveDeletable: Sendable, Equatable, Codable {
+    case conversation(pages: Int)
+    case page
 }
 
 public enum FocusTarget: Sendable, Equatable, Codable {

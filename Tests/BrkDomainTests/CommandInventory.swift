@@ -27,6 +27,7 @@ enum CommandInventory {
         .assist(.attach([.tab("ghost"), .folder(ItemID("ghost")), .space(SpaceID("ghost"))])), .assist(.detach("ghost")), .assist(.mention("x")), .assist(.openTabLink("ghost")),
         .assist(.inTab(AIRequestID("ghost"), .followUp("x"))), .assist(.openAsTab), .assist(.openConversation(AIRequestID("ghost"))), .assist(.keepPage(AIPageID("ghost"))),
         .assist(.pageLink(AIPageID("ghost"), URL(string: "https://ghost.example/")!)), .assist(.answerPageLink(true)),
+        .assist(.pageSave(AIPageID("ghost"), "{}")), .assist(.livePage(AIPageID("ghost"), .refreshNow)), .archive(.delete(ArchiveID("ghost"))),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
         .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
         .capture(.act(.copy)),
@@ -152,6 +153,7 @@ enum CommandInventory {
         .localModels(LocalModelsSnapshot()),
         .agentRead(AgentReadRequest(call: "ghost", window: WindowID("ghost"), tab: "ghost", part: .text)),
         .agentAct(AgentActRequest(call: "ghost", window: WindowID("ghost"), act: .close([ItemID("ghost")]))), .aiMentionMatches(WindowID("ghost"), query: "x", ["ghost"]),
+        .aiPageRefresh(AIPageID("ghost"), run: AIRequestID("ghost"), .finished(.failed, detail: nil)),
         .page(siteTarget.document.browser, .linkHovered(nil)),
     ]
 
@@ -244,6 +246,8 @@ enum CommandInventory {
             case .keepPage: "keepPage"
             case .pageLink: "pageLink"
             case .answerPageLink: "answerPageLink"
+            case .pageSave: "pageSave"
+            case .livePage: "livePage"
             }
         case .easel(let c):
             switch c {
@@ -315,7 +319,7 @@ enum CommandInventory {
             case .queryChanged: "queryChanged"
             case .dismiss: "dismiss"
             }
-        case .archive(let c): switch c { case .restore: "restore"; case .restoreLast: "restoreLast"; case .requestClear: "requestClear"; case .clear: "clear" }
+        case .archive(let c): switch c { case .restore: "restore"; case .restoreLast: "restoreLast"; case .requestClear: "requestClear"; case .clear: "clear"; case .delete: "delete" }
         case .tab(let c):
             switch c {
             case .focus: "focus"
@@ -619,6 +623,7 @@ enum CommandInventory {
         case .agentRead: "agentRead"
         case .agentAct: "agentAct"
         case .aiMentionMatches: "aiMentionMatches"
+        case .aiPageRefresh: "aiPageRefresh"
         }
     }
 

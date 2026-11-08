@@ -54,6 +54,11 @@ public enum Effect: Hashable, Sendable {
     case aiApprove(conversation: AIRequestID, approval: String, option: String)
     /// The conversation is over: its session and every process it started go.
     case aiCloseConversation(AIRequestID)
+    /// Refresh a live page: a session of its own with Brk's read tools and `brk_page_update_data` only
+    /// (`SystemEvent.aiPageRefresh`).
+    case aiRefreshPage(AIPageRefreshRun)
+    /// The refresh is no longer wanted (its page was deleted): its session goes, whatever it was doing.
+    case aiStopRefresh(AIRequestID)
     /// Ask the user for a working folder; the answer is `SystemEvent.aiFolderChosen`.
     case aiChooseFolder(WindowID)
     /// Ask every installed agent about itself; the answer is `SystemEvent.aiAgents`. Nothing is sent to a model.

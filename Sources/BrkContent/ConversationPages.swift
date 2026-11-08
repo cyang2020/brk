@@ -70,8 +70,11 @@ final class PageCaptionView: NSView {
 final class TranscriptPages {
     private weak var text: NSTextView?
     private var views: [AIPageID: PageSandboxView] = [:]
+    private var revisions: [AIPageID: Int] = [:]
     private var captions: [AIPageID: PageCaptionView] = [:]
     var onKeep: ((AIPageID) -> Void)?
+    /// The page saved its own state (`window.brk.save`).
+    var onSave: ((AIPageID, String) -> Void)?
     /// The caption row under each page.
     static let captionHeight: CGFloat = 26
     private var heights: [AIPageID: Int] = [:]
@@ -110,6 +113,11 @@ final class TranscriptPages {
             rect.origin.x += origin.x
             rect.origin.y += origin.y
             rect.size = cell.size
+            // New data or HTML: the page loads again. Its own saves never reload it.
+            if let old = views[page.id], revisions[page.id] != page.revision {
+                old.removeFromSuperview()
+                views[page.id] = nil
+            }
             let view = views[page.id] ?? make(page)
             if view.superview !== text { text.addSubview(view) }
             view.frame = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - Self.captionHeight)
@@ -126,6 +134,7 @@ final class TranscriptPages {
         for (id, view) in views where !seen.contains(id) {
             view.removeFromSuperview()
             views[id] = nil
+            revisions[id] = nil
             captions.removeValue(forKey: id)?.removeFromSuperview()
             cache[id] = nil
         }
@@ -145,9 +154,11 @@ final class TranscriptPages {
 
     private func make(_ page: AIPageSnapshot) -> PageSandboxView {
         let html = (try? String(contentsOf: page.html, encoding: .utf8)) ?? Self.missing
-        let view = PageSandboxView(html: html, data: page.data, theme: theme ?? PageTheme(.fallbackLight), page: page.id)
+        let view = PageSandboxView(html: html, data: page.data, saved: page.saved, saveSchema: page.saveSchema, theme: theme ?? PageTheme(.fallbackLight), page: page.id)
         view.identify(.aiControl("page-" + page.id.rawValue))
         let id = page.id
+        revisions[id] = page.revision
+        view.onSave = { [weak self] text in self?.onSave?(id, text) }
         view.onEvent = { [weak self] event in
             guard let self else { return }
             if case .height(let value) = event {
@@ -225,7 +236,7 @@ final class ConversationCardsView {
 @MainActor
 final class AIPageCardsView {
     private let dispatch: Dispatch
-    private var views: [PageID: (page: AIPageID, view: PageSandboxView, back: NSView)] = [:]
+    private var views: [PageID: (page: AIPageID, revision: Int, view: PageSandboxView, back: NSView)] = [:]
     weak var parent: NSView?
     var below: NSView?
 
@@ -238,7 +249,8 @@ final class AIPageCardsView {
             guard let frame = frames.first(where: { if case .aiPage(let page, _) = $0.content { page == card.page } else { false } }) else { continue }
             seen.insert(card.page)
             let content = card.content
-            if let existing = views[card.page], existing.page != content?.id {
+            // Another page, or new data or HTML for this one: load it again. The page's own saves never reload it.
+            if let existing = views[card.page], existing.page != content?.id || existing.revision != (content?.revision ?? 0) {
                 existing.back.removeFromSuperview()
                 views[card.page] = nil
             }
@@ -248,13 +260,15 @@ final class AIPageCardsView {
                 back.layer?.masksToBounds = true
                 back.identify(.aiControl("page-card"))
                 let html = content.flatMap { try? String(contentsOf: $0.html, encoding: .utf8) } ?? TranscriptPages.missing
-                let view = PageSandboxView(html: html, data: content?.data, theme: pageTheme, page: content?.id)
+                let view = PageSandboxView(html: html, data: content?.data, saved: content?.saved, saveSchema: content?.saveSchema, theme: pageTheme, page: content?.id)
+                view.identify(.aiControl("page-card-view"))
                 let id = content?.id
                 view.onEvent = { [weak self] event in
                     if case .link(let url) = event, let id { self?.dispatch(.assist(.pageLink(id, url))) }
                 }
+                if let id { view.onSave = { [weak self] text in self?.dispatch(.assist(.pageSave(id, text))) } }
                 back.addSubview(view)
-                let made = (page: content?.id ?? AIPageID(""), view: view, back: back)
+                let made = (page: content?.id ?? AIPageID(""), revision: content?.revision ?? 0, view: view, back: back)
                 views[card.page] = made
                 return made
             }()
