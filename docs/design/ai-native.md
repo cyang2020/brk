@@ -60,8 +60,8 @@ Brk 本身就是浏览器，显示页面比 T3 更直接。页面里的链接打
 决定如下。
 
 1. Brk 统一按 Jev 的请求格式发决策请求：一段内容加一组题，题型是选择、打分、是或否。JevK5 兼容这个格式，接 OpenAI Decisions 只需要一层很小的转换。
-2. 默认用本机的 JevK5，不需要 key，守住"AI 功能不用 API key"这条已有的规定。
-3. 每个基础功能都要在只装了 Claude 或 Codex 的机器上能用。本机模型没下载、不可用、或者实测不够好时，决策题改由小文字模型用 structured output 回答（拿不到概率，只给建议，不直接动）。本机模型的作用是让这些功能更快、更便宜，不是让功能能不能用取决于它。
+2. 没有填决策模型的 key 时，默认用本机的 JevK5。用户填了 TypeSafe 的 key 就可以选 Jev，填了 OpenAI 的 key 就可以选 Decisions API（见"账号：订阅或 API key"）。
+3. 每个基础功能都要在只有订阅登录、没有任何 API key 的机器上能用。本机模型没下载、不可用、或者实测不够好时，决策题改由小文字模型用 structured output 回答（拿不到概率，只给建议，不直接动）。本机模型的作用是让这些功能更快、更便宜，不是让功能能不能用取决于它。
 4. JevK5 只支持英文，而用户的 tab 标题和 group 名有很多是中文，所以上线前必须拿真实数据实测（见分步计划第 0 步）。
 
 ### 怎么拿到结构化结果
@@ -77,9 +77,36 @@ Brk 要的结果大多不是一段话，而是有字段的数据：一个名字�
 
 **决策模型，用于选择、打分、是或否。** 题型本身就是有类型的，答案只能是给定选项之一，并带概率，不需要另外约束格式。
 
-**直接调 API 的 structured output，不用。** Anthropic 和 OpenAI 的 API 都能在解码时约束格式，但要 API key，和"AI 功能不用 API key"的规定冲突。
+**直接调 API 的 structured output，用于填了 API key 的用户。** OpenAI 的 Responses API（`text.format` 设为 `json_schema`，`strict`）和 Anthropic 的 Messages API 都在生成时就把输出限定在 schema 里，一次网络请求，不用开进程。OpenAI Agents SDK 的 `output_type` 用的也是这个。Agents SDK 只有 Python 和 TypeScript 版，基础层的小活又用不上它的 agent 循环，所以 Brk 用 Swift 直接调这两个 API。
 
 不再用"在提示词里写只回 JSON，然后自己解析文本"这种做法。
+
+## 账号：订阅或 API key
+
+2026-11-08 用户定："允许用户自己用自己的 subscription 或者 api key"。这条替换掉 10 月 30 日的"AI 功能只用本机已登录的 claude/codex，不用 API key"。
+
+每一家服务，用户在设置里选一种用法：
+- **订阅**：用这台 Mac 上已经登录的 Claude Code 或 Codex，花的是用户自己的订阅额度。这是现有的路。
+- **API key**：Anthropic 或 OpenAI 的 key，按 token 计费，和订阅分开算。决策模型另外可以填 TypeSafe 的 key 来用 Jev。
+
+一家只填了 key、没装或没登录命令行，那家的功能照样能用；两样都有，就按用户选的那种走。
+
+不同用法下，各层怎么走：
+
+| | 订阅 | API key |
+|---|---|---|
+| 基础层的小活 | 命令行的 structured output（Claude `--json-schema`，Codex 常驻会话加 `outputSchema`） | Swift 直接调 Responses API 或 Messages API，带 JSON schema |
+| 决策题 | 本机 JevK5，不行时由小文字模型代答 | 再多两个选项：OpenAI 的 key 可选 Decisions API，TypeSafe 的 key 可选 Jev |
+| agent 层 | Claude Code 或 Codex，用登录的账号 | 同样是 Claude Code 或 Codex，只是把 key 交给 Brk 启动的那个进程，让它按 key 计费 |
+
+agent 层在两种用法下都用 Claude Code 和 Codex，原因是用户装的技能（比如飞书）、MCP 和权限设置都在它们那边。换成 Brk 自己用 Agents SDK 写的 agent，这些都要重新接一遍。
+
+key 的规则：
+- 存在 macOS 钥匙串里，不写进 `state.json`，不进日志，不交给任何网页。
+- 不改用户自己的命令行登录。比如不能跑 `codex login --with-api-key`，那会改写 `~/.codex/auth.json`，用户自己在终端用的 Codex 也会跟着换成 key。key 只放进 Brk 启动的那个进程的环境变量里。
+- 设置里每个 key 旁边有"测试"按钮，能看到这个 key 能不能用、能用哪些模型。
+- 用 key 会花钱，所以设置里显示每个功能本月用了多少 token、大约多少钱。
+- Max 设置页里现在写着 "No API key is required"，这句要改成两种用法都说清楚。
 
 ## 基础 AI 功能
 
@@ -161,14 +188,14 @@ Brk 已有 Arc 的 Space（一组 tab），这个功能不能叫 Space。暂名"
 4. 网页文字交给 agent 前，先用决策模型查一遍里面有没有写给 AI 的命令。查出来就在面板里提示，并且这次会话的所有外部工具都要同意。
 5. agent 默认只能看到对话所在 profile 的 tab。别的 profile 的 tab 只有用户拖进来才能看到。无痕窗口永远看不到。
 
-网页文字会发给用户自己选的 Claude 或 Codex 账号，和现在一样。本机模型处理的数据不离开这台机器。
+网页文字会发给用户自己选的服务：订阅时是登录的 Claude 或 Codex 账号，用 key 时是 key 对应的 Anthropic 或 OpenAI API。本机模型处理的数据不离开这台机器。
 
 ## 分步计划
 
 1. **第 0 步：用真实数据实测模型。** 拿用户真实的 tab 和 group（包括中文），比较 JevK5、"luna 加 structured output"、"haiku 加 structured output"的分组和起名效果与速度。另外测 EmbeddingGemma 2 在这台 M1 16 GB 机器上的速度和内存。有 Jev 或 OpenAI 的 key 时一起比。结果决定决策模型的默认选择。
-2. **第 1 步：基础层的小模型通道。** 单独选模型，格式由命令行保证。现有的起名、Tidy、摘要、下载改名、翻译都换到这条通道。tab 自动起名扩到所有 tab，group 自动起名，新 tab 自动归位，提示重复和久未看的 tab。
+2. **第 1 步：基础层的小模型通道和账号设置。** 单独选模型，订阅走命令行的 structured output，key 走 API 的 structured output；钥匙串存 key、测试按钮、用量显示；决策题的 Decisions API 和 Jev 后端。现有的起名、Tidy、摘要、下载改名、翻译都换到这条通道。tab 自动起名扩到所有 tab，group 自动起名，新 tab 自动归位，提示重复和久未看的 tab。
 3. **第 2 步：本机模型。** 跑 EmbeddingGemma 2 和决策模型，下载和存放都要用户知道。做按意思搜索、新的 Tidy 流程，以及新 tab 归位的"先找最接近的几个，再挑一个"。
-4. **第 3 步：agent 底座。** Brk 的 MCP 服务和"看 tab""动 tab""读对话"工具，system prompt 规则，把 tab 交给 agent 的三种方式，对话变成 tab，新的安全规则。
+4. **第 3 步：agent 底座。** Brk 的 MCP 服务和"看 tab""动 tab""读对话"工具，system prompt 规则，把 tab 交给 agent 的三种方式，对话变成 tab，新的安全规则。用户选了 key 时，把 key 交给 Brk 启动的 Claude Code 或 Codex 进程。
 5. **第 4 步：在回答里显示页面，并能存成 tab。**
 6. **第 5 步：会自己更新的 AI 页面。**
 
@@ -187,5 +214,4 @@ Brk 已有 Arc 的 Space（一组 tab），这个功能不能叫 Space。暂名"
 - 自动更新的页面暂名"AI 页面"。
 
 要用户定的：
-- 要不要为决策模型加 API key（线上的 Jev 或 OpenAI Decisions）。不加的话就只用本机 JevK5 和小文字模型代答。
 - 安全规则第 3 条，如果"不放行用户规则"和"保留用户技能"不能两全，选哪个。
