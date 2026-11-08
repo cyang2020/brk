@@ -426,19 +426,23 @@ extension PageTheme {
 /// and lets the page cancel it (and in the first Codex run it never opened).
 private final class SandboxWebView: WKWebView {
     var menuItems: (() -> [NSMenuItem])?
+    private weak var ownMenu: NSMenu?
 
     private func showMenu(_ event: NSEvent) {
         let menu = NSMenu()
         menu.autoenablesItems = false
         for item in menuItems?() ?? [] { menu.addItem(item) }
         guard !menu.items.isEmpty else { return }
+        ownMenu = menu
         NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
     override func rightMouseDown(with event: NSEvent) { showMenu(event) }
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.control) { showMenu(event) } else { super.mouseDown(with: event) }
     }
+    /// A menu WebKit opens by another way gets Brk's items too; Brk's own is left as it was built.
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        guard menu !== ownMenu else { return }
         menu.removeAllItems()
         for item in menuItems?() ?? [] { menu.addItem(item) }
     }

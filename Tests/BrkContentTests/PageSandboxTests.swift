@@ -189,6 +189,33 @@ final class PageSandboxTests: XCTestCase {
         XCTAssertEqual(view.currentURL, PageSandboxPolicy.documentURL)
     }
 
+    func testARightClickOpensBrksMenuNotThePages() async throws {
+        let html = "<!doctype html><body style=\"margin:0;height:200px\"><script>window.menus = 0; document.addEventListener('contextmenu', e => { window.menus++; e.preventDefault(); });</script></body>"
+        let view = PageSandboxView(html: html, data: nil, theme: theme)
+        let window = window(for: view, height: 200, front: true)
+        var asked = 0
+        view.menuItems = {
+            asked += 1
+            let item = NSMenuItem(title: "Keep as Tab", action: nil, keyEquivalent: "")
+            // The menu tracks modally in the event-tracking run loop mode, where the main queue does not run: a timer there closes it.
+            nonisolated(unsafe) let opened = item
+            let timer = Timer(timeInterval: 0.3, repeats: false) { _ in MainActor.assumeIsolated { opened.menu?.cancelTrackingWithoutAnimation() } }
+            RunLoop.main.add(timer, forMode: .common)
+            return [item]
+        }
+        try await loaded(view)
+        let point = NSPoint(x: 40, y: 100)
+        for type in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
+            guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else { continue }
+            window.sendEvent(event)
+        }
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(asked, 1, "Brk's menu was not asked for")
+        let pageSaw = await view.evaluateInPage("return window.menus")
+        XCTAssertEqual(pageSaw, "0", "the page saw the right click")
+    }
+
     func testThePageReadsItsDataAndTheThemeLive() async throws {
         let html = """
         <!doctype html><script>
