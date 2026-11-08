@@ -16,6 +16,11 @@ import BrkUIKit
 public final class SidebarView: NSView {
     /// Content owns its hit zones. Sidebar supplies only the dragged tab and a root-coordinate pointer.
     public var contentDrop: ((ItemID, CGPoint) -> Command?)?
+    /// A drop on the Max panel beside the page (Brk's own): any row, tab, split or folder, becomes this command.
+    public var panelDrop: ((ItemID, ItemKind, CGPoint) -> Command?)?
+    /// A Space's dock icon dragged onto the Max panel; `panelDropEnded` when such a drag is over.
+    public var panelSpaceDrop: ((SpaceID, CGPoint) -> Command?)?
+    public var panelDropEnded: (() -> Void)?
     /// The drag card's size for what the page shows now.
     public var contentDropCardSize: (() -> CGSize)?
     public var beginContentDrop: ((ItemID) -> Void)?
@@ -153,6 +158,8 @@ public final class SidebarView: NSView {
         pager.onSettled = { [weak self] in self?.pagerSettled() }
         miniPlayers.onHoverChange = { [weak self] _ in self?.renderAfterDrag() }
         dock.plusMenuChanged = { [weak self] open in self?.plusMenuOpen = open }
+        dock.spaceDrop = { [weak self] space, point in self?.panelSpaceDrop?(space, point) }
+        dock.spaceDropEnded = { [weak self] in self?.panelDropEnded?() }
         drag.sidebar = self
         identify(.sidebar)
     }

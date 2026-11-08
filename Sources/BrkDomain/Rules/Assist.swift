@@ -83,6 +83,12 @@ extension Work {
         case .followUp(let text):
             guard let q = aiQuestion(text) else { return }
             followUp(q, in: window)
+        case .attach(let sources):
+            guard aiEnabled(.commandBar, window) else { return }
+            attachToConversation(sources, in: window)
+        case .detach(let id): detachFromConversation(id, in: window)
+        case .mention(let query): mentionChanged(query, in: window)
+        case .openTabLink(let id): openTabLink(id, in: window)
         case .chooseFolder:
             guard aiEnabled(.commandBar, window) else { return }
             effects.append(.aiChooseFolder(window))
@@ -186,22 +192,44 @@ extension Work {
     /// A question in the panel to `choice`'s agent, read-only; its follow-ups stay with that agent.
     private mutating func askAgent(_ q: String, choice: AIProviderChoice, in window: WindowID) {
         let id = startAI(.ask(q), purpose: .answer, title: q, window: window, run: false, seconds: Self.panelSeconds)
-        openConversation(id, in: window)
+        openConversation(id, in: window, tabs: true, choice: choice)
         sendAI(id, task: .ask(q), choice: choice)
     }
-    /// The request becomes the first turn of a conversation: its session stays for follow-ups, with tools off.
-    private mutating func openConversation(_ id: AIRequestID, in window: WindowID) {
-        state.session.ai.answers[window]?.conversation = AIConversationSnapshot(id: id)
+    /// The request becomes the first turn of a conversation: its session stays for follow-ups. With `tabs` it has Brk's
+    /// tab tools and the agent's own tools ask every time; without, tools are off (a page question carries page text).
+    private mutating func openConversation(_ id: AIRequestID, in window: WindowID, tabs: Bool = false, choice: AIProviderChoice? = nil) {
+        state.session.ai.answers[window]?.conversation = AIConversationSnapshot(id: id, tabs: tabs)
         state.session.ai.turnText[id] = 0
-        effects.append(.aiOpenConversation(id, folder: nil, choice: state.doc.settings.max.provider))
+        effects.append(.aiOpenConversation(id, folder: nil, choice: choice ?? state.doc.settings.max.provider, tabs: tabs ? window : nil))
     }
     /// The next message in the panel's conversation. One turn at a time: the panel offers Stop while one runs.
     private mutating func followUp(_ q: String, in window: WindowID) {
         guard var answer = state.session.ai.answers[window], var conversation = answer.conversation, !conversation.ended, !answer.busy else { return }
+        if conversation.fresh {
+            // The first message of a conversation started by giving it tabs: its session starts now, and this is its
+            // first request, as a question from the command bar would be.
+            let id = conversation.id
+            conversation.fresh = false
+            let attached = takeAttachments(&conversation)
+            answer.conversation = conversation
+            answer.title = q
+            answer.request = id
+            answer.busy = true
+            answer.text = Self.waiting
+            state.session.ai.answers[window] = answer
+            state.session.ai.requests[id] = AIRequest(window: window, context: state.libraryContext(in: window), task: .ask(q), purpose: .answer)
+            state.session.ai.turnText[id] = 0
+            effects.append(.aiOpenConversation(id, folder: nil, choice: state.doc.settings.max.provider, tabs: window))
+            if !attached.isEmpty { effects.append(.aiAttach(id, attached)) }
+            effects.append(.aiWatch(id, seconds: Self.panelSeconds))
+            sendAI(id, task: .ask(q))
+            return
+        }
         let turn = AIRequestID(ctx.newID())
         state.session.ai.requests[turn] = AIRequest(window: window, context: state.libraryContext(in: window), task: .ask(q), purpose: .followUp)
         state.session.pendingAI[turn] = .ask(q)
         conversation.items.append(.user(q))
+        let attached = conversation.tabs ? takeAttachments(&conversation) : []
         state.session.ai.turnText[conversation.id] = 0
         answer.conversation = conversation
         answer.request = turn
@@ -209,6 +237,7 @@ extension Work {
         answer.text = Self.waiting
         state.session.ai.answers[window] = answer
         if conversation.folder == nil { effects.append(.aiWatch(turn, seconds: Self.panelSeconds)) }
+        if !attached.isEmpty { effects.append(.aiAttach(conversation.id, attached)) }
         effects.append(.aiTurn(conversation: conversation.id, turn: turn, .ask(q)))
     }
     /// The user chose a folder: a new session with tools on and approvals on, waiting for the first message. Home and
@@ -332,7 +361,7 @@ extension Work {
         effects.append(.aiShowTranslation(translation.document, translated: translated))
     }
 
-    private mutating func makeAIHidden(_ id: AIRequestID, urls: [URL]) {
+    mutating func makeAIHidden(_ id: AIRequestID, urls: [URL]) {
         guard let request = state.session.ai.requests[id] else { return }
         let hidden = urls.enumerated().map { index, url in
             var spec = PageSpec(id: PageID(window: request.window, item: ItemID("ai-" + id.rawValue + "-" + String(index))), initialURL: url, context: request.context, muted: true)
@@ -439,6 +468,10 @@ extension Work {
             openConversation(id, in: request.window)
             effects.append(.aiWatch(id, seconds: Self.panelSeconds))
             sendAI(id, task: .browse(question, pages))
+        case .agentRead(let call):
+            state.session.ai.requests[id] = nil
+            effects.append(.aiCancel(id))
+            effects.append(.agentReadDone(call, .content(content)))
         default: break
         }
     }
@@ -615,6 +648,7 @@ extension Work {
             state.session.windows[window]?.barTranslationRequest = nil
             if success { state.session.windows[window]?.barTranslation?.answer = text.trimmingCharacters(in: .whitespacesAndNewlines) }
             else if text != Self.cancelled { state.session.windows[window]?.barTranslation?.failure = text }
+        case .agentRead(let call): effects.append(.agentReadDone(call, .failed(text)))
         case .answer, .askPage, .browse, .followUp: break
         }
     }
@@ -652,7 +686,7 @@ extension Work {
         }
     }
 
-    private mutating func cancelAI(in window: WindowID, slot: AIPurpose.Slot) {
+    mutating func cancelAI(in window: WindowID, slot: AIPurpose.Slot) {
         let ids = state.session.ai.requests.filter { $0.value.window == window && $0.value.purpose.slot == slot }.map(\.key)
         for id in ids { completeAI(id, text: Self.cancelled) }
     }
@@ -720,7 +754,7 @@ extension Work {
             case .answer:
                 if case .renameDownload = request.task { state.doc.settings.max.enabled(.downloadRename) }
                 else { state.doc.settings.max.enabled(.commandBar) }
-            case .followUp: [AIFeature.commandBar, .askPage, .browse].contains { state.doc.settings.max.enabled($0) }
+            case .followUp, .agentRead: [AIFeature.commandBar, .askPage, .browse].contains { state.doc.settings.max.enabled($0) }
             case .askPage: state.doc.settings.max.enabled(.askPage)
             case .preview: state.doc.settings.max.enabled(.linkPreviews)
             case .instant: state.doc.settings.max.enabled(.instantLinks)
@@ -884,7 +918,7 @@ extension Work {
     }
 }
 extension AIPurpose {
-    enum Slot: Equatable { case panel, preview, instant, translate, organize, bar }
+    enum Slot: Equatable { case panel, preview, instant, translate, organize, bar, agent }
     var slot: Slot {
         switch self {
         case .answer, .askPage, .browse, .followUp: .panel
@@ -893,6 +927,7 @@ extension AIPurpose {
         case .translate: .translate
         case .organize: .organize
         case .barTranslation: .bar
+        case .agentRead: .agent
         }
     }
     var isPreview: Bool { slot == .preview }

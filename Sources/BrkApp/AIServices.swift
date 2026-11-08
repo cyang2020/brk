@@ -22,11 +22,23 @@ final class AIServices {
     /// The basic layer: one-shot tasks in a schema, on the subscription or a key (AIBasic.swift).
     let basic = AIBasicChannel(keys: .shared)
     private var wakeTask: Task<Void, Never>?
-    init(engine: any WebEngine, send: @escaping (SystemEvent) -> Void) {
-        self.engine = engine
-        self.send = send
+    private let state: () -> AppState?
+    /// Brk's tab tools of each conversation that has them, and the window whose profile they serve.
+    private var toolServices: [AIRequestID: BrkToolService] = [:]
+    private var tabWindows: [AIRequestID: WindowID] = [:]
+    /// Chips sent with a message, until the turn that carries them starts.
+    private var pendingAttachments: [AIRequestID: [AIAttachment]] = [:]
+    init(engine: any WebEngine, send: @escaping (SystemEvent) -> Void, state: @escaping () -> AppState? = { nil }) {
+        self.engine = engine; self.send = send; self.state = state
         basic.keys.onChange = { [weak self] statuses in self?.send(.aiKeys(statuses, localDecisions: self?.basic.localDecisions?.isAvailable == true)) }
         basic.onUsage = { [weak self] key, count in self?.send(.aiUsage(key, count)) }
+        AIAccounts.read = { [weak self] service in
+            guard let settings = self?.state()?.doc.settings.max else { return .subscription }
+            switch AIAccounts.credential(for: service, settings: settings) {
+            case .subscription: return .subscription
+            case .apiKey(let key): return .apiKey(key)
+            }
+        }
     }
 
     /// The reducer's pause (Name Tabs waits for pages to settle).
@@ -52,7 +64,7 @@ final class AIServices {
         // The first turn of a conversation makes its session, with the agent this request names. Everything else is one
         // prompt in a session of its own.
         if opening.remove(id) != nil {
-            if let failure = makeSession(id, folder: nil, choice: choice, max: max) { send(.aiResult(id, failure)); return }
+            if let failure = makeSession(id, folder: nil, choice: choice, max: max, tabs: tabWindows[id]) { send(.aiResult(id, failure)); return }
             turn(conversation: id, turn: id, task: task)
             return
         }
@@ -75,9 +87,13 @@ final class AIServices {
 
     /// A read-only conversation waits for its first request, which says which agent. A session with tools on starts at
     /// once, so the panel can say which model before the first message.
-    func openConversation(_ id: AIRequestID, folder: String?, choice: AIProviderChoice, max: MaxSnapshot) {
+    func openConversation(_ id: AIRequestID, folder: String?, choice: AIProviderChoice, max: MaxSnapshot, tabs: WindowID? = nil) {
         guard !stopping else { return }
-        guard let folder else { opening.insert(id); return }
+        guard let folder else {
+            opening.insert(id)
+            if let tabs { tabWindows[id] = tabs }
+            return
+        }
         guard let failure = makeSession(id, folder: folder, choice: choice, max: max) else {
             conversations[id]?.begin()
             return
@@ -89,7 +105,7 @@ final class AIServices {
 
     /// The session for a conversation, or why there can be none. Read-only ones work in an empty folder of their own,
     /// deleted when they close; a session with tools on works in the folder the user chose.
-    private func makeSession(_ id: AIRequestID, folder: String?, choice: AIProviderChoice, max: MaxSnapshot) -> AIOutcome? {
+    private func makeSession(_ id: AIRequestID, folder: String?, choice: AIProviderChoice, max: MaxSnapshot, tabs: WindowID? = nil) -> AIOutcome? {
         guard let resolved = agent(for: choice, max: max) else {
             return choice.kind.map { AIProviderSeam.mode == .real ? .failed(AgentCopy.missing($0)) : .unavailable } ?? .unavailable
         }
@@ -100,9 +116,56 @@ final class AIServices {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
         let options = max.settings.agentOptions?[resolved.kind]
-        let spec = AgentSpec(kind: resolved.kind, executable: resolved.executable, model: options?.model, effort: options?.effort, access: folder == nil ? .readOnly : .tools, directory: directory)
-        conversations[id] = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(resolved.kind), plain: resolved.plain) { [weak self] in self?.report($0, conversation: id, kind: resolved.kind) }
+        let access: AgentAccess = folder != nil ? .tools : tabs != nil && !resolved.plain ? .browser : .readOnly
+        var spec = AgentSpec(kind: resolved.kind, executable: resolved.executable, model: options?.model, effort: options?.effort, access: access, directory: directory)
+        spec.account = AIAccounts.choice(for: resolved.kind)
+        if access == .browser, let window = tabs {
+            switch startTools(id, window: window) {
+            case .success(let link): spec.tools = link
+            case .failure(let error): return .failed(error.message)
+            }
+        }
+        conversations[id] = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(resolved.kind, account: spec.account), plain: resolved.plain) { [weak self] in self?.report($0, conversation: id, kind: resolved.kind) }
         return nil
+    }
+
+    /// The conversation's tab tools: a socket of its own, and the command its agent runs to reach it.
+    private func startTools(_ id: AIRequestID, window: WindowID) -> Result<AgentToolsLink, ToolsUnavailable> {
+        if let running = toolServices[id] { return .success(Self.link(running.endpoint)) }
+        guard Bundle.main.executableURL != nil else { return .failure(ToolsUnavailable(message: "Brk could not find its own program for the tab tools.")) }
+        do {
+            let endpoint = try BrkToolEndpoint.make()
+            let service = BrkToolService(conversation: id, window: window, endpoint: endpoint, state: { [weak self] in self?.state() },
+                                         send: { [weak self] in self?.send($0) }, engine: engine,
+                                         ask: { [weak self] approval in
+                                             guard let self, let turn = self.turns.first(where: { $0.value == id })?.key else { return false }
+                                             self.send(.aiConversation(id, .approval(approval, turn: turn)))
+                                             return true
+                                         },
+                                         notice: { [weak self] in self?.send(.aiConversation(id, .notice($0))) })
+            try service.start()
+            toolServices[id] = service
+            return .success(Self.link(endpoint))
+        } catch {
+            return .failure(ToolsUnavailable(message: "Brk's tab tools could not start (\(error)). Ask again."))
+        }
+    }
+    struct ToolsUnavailable: Error { let message: String }
+    private static func link(_ endpoint: BrkToolEndpoint) -> AgentToolsLink {
+        let command = endpoint.command(executable: Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0]))
+        return AgentToolsLink(command: command.command, arguments: command.arguments)
+    }
+
+    /// The chips of a message, kept until its turn starts.
+    func attach(_ id: AIRequestID, _ attachments: [AIAttachment]) {
+        pendingAttachments[id, default: []] += attachments
+    }
+
+    func agentReadDone(_ call: String, _ outcome: AgentReadOutcome) {
+        for service in toolServices.values { service.readDone(call, outcome) }
+    }
+    func agentActDone(_ call: String, _ outcome: AgentActOutcome) {
+        for service in toolServices.values { service.actDone(call, outcome) }
     }
 
     /// The executable and how to talk to it for this instance: the fixture stands in for every agent in a test instance.
@@ -133,7 +196,18 @@ final class AIServices {
             }
         }
         turns[turn] = conversation
-        session.send(AIPrompt.text(for: task), turn: turn)
+        let text = AIPrompt.text(for: task)
+        guard session.spec.access == .browser, let service = toolServices[conversation] else { session.send(text, turn: turn); return }
+        let attached = pendingAttachments.removeValue(forKey: conversation) ?? []
+        service.give(attached)
+        guard !attached.isEmpty else { session.send(text, turn: turn); return }
+        // The chips' titles are page text: checked before they go, and the message waits for the answer.
+        let prefix = BrkToolService.messagePrefix(attached)
+        Task { [weak self] in
+            await service.screen(attached.flatMap(\.tabs).map(\.title).joined(separator: "\n"), source: "a title of the attached tabs")
+            guard let self, self.turns[turn] == conversation, let current = self.conversations[conversation] else { return }
+            current.send(prefix + text, turn: turn)
+        }
     }
 
     /// The conversation's session again with another model or effort. A session with tools on continues the agent's
@@ -146,9 +220,11 @@ final class AIServices {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
         let kind = old.spec.kind
-        let spec = AgentSpec(kind: kind, executable: old.spec.executable, model: model, effort: effort, access: old.spec.access, directory: directory,
+        var spec = AgentSpec(kind: kind, executable: old.spec.executable, model: model, effort: effort, access: old.spec.access, directory: directory,
                              resume: readOnly ? nil : old.resumeID)
-        let session = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(kind), plain: old.plain) { [weak self] in self?.report($0, conversation: id, kind: kind) }
+        spec.tools = old.spec.tools
+        spec.account = AIAccounts.choice(for: kind)
+        let session = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(kind, account: spec.account), plain: old.plain) { [weak self] in self?.report($0, conversation: id, kind: kind) }
         conversations[id] = session
         for (turn, owner) in turns where owner == id { turns[turn] = nil }
         closing.append(Task { await old.close() })
@@ -157,11 +233,15 @@ final class AIServices {
     }
 
     func approve(conversation: AIRequestID, approval: String, option: String) {
+        if approval.hasPrefix(BrkToolService.approvalPrefix) { toolServices[conversation]?.answer(approval: approval, option: option); return }
         conversations[conversation]?.answer(approval: approval, option: option)
     }
 
     func closeConversation(_ id: AIRequestID) {
         opening.remove(id)
+        tabWindows[id] = nil
+        pendingAttachments[id] = nil
+        toolServices.removeValue(forKey: id)?.stop()
         guard let session = conversations.removeValue(forKey: id) else { return }
         for (turn, owner) in turns where owner == id { turns[turn] = nil }
         closing.append(Task { await session.close() })
@@ -174,6 +254,8 @@ final class AIServices {
         case .partial(let turn, let text): send(.aiPartial(turn, text))
         case .finished(let turn, let outcome):
             turns[turn] = nil
+            // What Brk's tools still asked for goes with the turn.
+            if let service = toolServices[id] { for approval in service.closeApprovals() { send(.aiConversation(id, .approvalClosed(approval))) } }
             send(.aiResult(turn, outcome))
         case .step(let step, let turn): send(.aiConversation(id, .step(step, turn: turn)))
         case .approval(let approval, let turn): send(.aiConversation(id, .approval(approval, turn: turn)))

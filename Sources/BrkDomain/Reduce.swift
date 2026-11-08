@@ -162,7 +162,9 @@ struct Work {
             }
         }
         switch event {
-        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .localResults(let window, _), .barTranslationDue(let window, _), .definition(let window, _), .spaceExportFinished(let window, _, _): begin(window: window)
+        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .localResults(let window, _), .barTranslationDue(let window, _), .definition(let window, _), .spaceExportFinished(let window, _, _), .aiMentionMatches(let window, _, _): begin(window: window)
+        case .agentRead(let request): begin(window: request.window)
+        case .agentAct(let request): begin(window: request.window)
         case .easel(let event):
             switch event {
             case .imageImported(let window, _, _, _, _, _), .shared(let window, _, _), .failed(let window, _, _): begin(window: window)
@@ -244,6 +246,9 @@ struct Work {
         case .aiUsage(let key, let count): recordUsage(key, count)
         case .aiBasicTick: aiBasicTick()
         case .aiDuplicateCandidates(let pairs): askDuplicates(pairs)
+        case .agentRead(let request): agentRead(request)
+        case .agentAct(let request): agentAct(request)
+        case .aiMentionMatches(let window, let query, let ids): aiMentionMatches(window, query: query, ids: ids)
         }
     }
 

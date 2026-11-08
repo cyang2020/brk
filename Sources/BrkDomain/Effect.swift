@@ -38,7 +38,16 @@ public enum Effect: Hashable, Sendable {
     /// Keep a session for this conversation; it stays for `aiTurn`. `folder` nil: tools off, strictest read-only mode, and
     /// the `.ai` request with the same id is its first turn and names its agent. A folder: tools on, approvals on, chosen
     /// by the user, and this `choice` names the agent.
-    case aiOpenConversation(AIRequestID, folder: String?, choice: AIProviderChoice)
+    /// `tabs`: the window whose profile Brk's tab tools serve (`AgentTabs`); the agent's own tools then ask every time.
+    case aiOpenConversation(AIRequestID, folder: String?, choice: AIProviderChoice, tabs: WindowID? = nil)
+    /// The chips sent with the conversation's next message; the agent reads their text with Brk's tools.
+    case aiAttach(AIRequestID, [AIAttachment])
+    /// The text after @ changed. The title and address matches are already in the snapshot; this is where a search by
+    /// meaning can add its own (`SystemEvent.aiMentionMatches`). BrkApp has none yet.
+    case aiMentionSearch(WindowID, String)
+    /// The answer to `SystemEvent.agentRead` and `SystemEvent.agentAct`, for the tool call `call`.
+    case agentReadDone(String, AgentReadOutcome)
+    case agentActDone(String, AgentActOutcome)
     /// The next user message in a conversation; it answers as request `turn` (`aiPartial`, `aiResult`).
     case aiTurn(conversation: AIRequestID, turn: AIRequestID, AITask)
     case aiApprove(conversation: AIRequestID, approval: String, option: String)

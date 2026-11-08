@@ -7,7 +7,7 @@ import Foundation
 @MainActor final class CodexBackend: AgentBackend {
     var events: (@MainActor (AgentBackendEvent) -> Void)?
     private(set) var process: AgentProcess?
-    var resumeID: String? { spec.access == .tools ? thread : nil }
+    var resumeID: String? { spec.access != .readOnly ? thread : nil }
     private let spec: AgentSpec
     private let environment: [String: String]
     private var peer: JSONRPCPeer?
@@ -26,9 +26,28 @@ import Foundation
     /// Read-only: no shell tool, no web, no MCP servers, in the sandbox's read-only mode, so a write fails in the
     /// kernel even if a tool were to try one. These hold for the whole process, whatever a thread asks for later.
     static func arguments(_ spec: AgentSpec) -> [String] {
-        guard spec.access == .readOnly else { return ["app-server"] }
-        return ["app-server", "-c", "features.shell_tool=false", "-c", "web_search=\"disabled\"", "-c", "mcp_servers={}",
-                "-c", "sandbox_mode=\"read-only\"", "-c", "approval_policy=\"never\""]
+        let account = AIAccountWiring.codexArguments(account: spec.account)
+        switch spec.access {
+        case .tools: return ["app-server"] + account
+        case .readOnly:
+            return ["app-server", "-c", "features.shell_tool=false", "-c", "web_search=\"disabled\"", "-c", "mcp_servers={}",
+                    "-c", "sandbox_mode=\"read-only\"", "-c", "approval_policy=\"never\""] + account
+        case .browser:
+            // Brk's server in place of the user's own, no web search (a search query can carry page text out and Codex
+            // never asks before one), no ChatGPT connectors, and no network for commands in the sandbox, so a command that
+            // reaches out asks to leave it. The user's ~/.codex/rules allow rules did not skip `untrusted` approvals on
+            // codex-cli 0.164.0 (two exact matches, both asked).
+            return ["app-server", "-c", "mcp_servers=" + (spec.tools.map(Self.mcpServer) ?? "{}"), "-c", "web_search=\"disabled\"",
+                    "-c", "features.apps=false", "-c", "sandbox_workspace_write.network_access=false"] + account
+        }
+    }
+
+    /// `{brk={command="…",args=["…"]}}` as TOML.
+    static func mcpServer(_ tools: AgentToolsLink) -> String {
+        func quoted(_ text: String) -> String {
+            "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+        }
+        return "{\(BrkToolCatalog.server)={command=\(quoted(tools.command)),args=[\(tools.arguments.map(quoted).joined(separator: ","))]}}"
     }
 
     func start() throws {
@@ -73,6 +92,9 @@ import Foundation
             // Commands not known to be safe, and every file change, ask first. T3 Code pairs this policy with the
             // read-only sandbox; told it is read-only, a small model answers that it cannot write and never asks.
             params["sandbox"] = "workspace-write"; params["approvalPolicy"] = "untrusted"
+        case .browser:
+            params["sandbox"] = "workspace-write"; params["approvalPolicy"] = "untrusted"
+            params["developerInstructions"] = BrkToolCatalog.rules
         }
         let opened: JSONRPCPeer.Reply = { [weak self] result in
             guard let self else { return }
@@ -184,7 +206,9 @@ import Foundation
             // More access than the sandbox gives: never granted from here. The command can still ask on its own.
             peer?.respond(id, ["permissions": [String: Any](), "scope": "turn"])
         case "mcpServer/elicitation/request":
-            peer?.respond(id, ["action": "decline"])
+            // Brk's own tools ask in Brk's panel themselves; anything else's question is declined.
+            let brk = spec.access == .browser && params["serverName"] as? String == BrkToolCatalog.server
+            peer?.respond(id, brk ? ["action": "accept", "content": [String: Any]()] : ["action": "decline"])
         case "item/tool/requestUserInput":
             peer?.respond(id, ["answers": [String: Any]()])
         default:
@@ -199,7 +223,8 @@ import Foundation
         let names = (decisions ?? ["accept", "acceptForSession", "decline"]).compactMap { $0 as? String }
         var options: [AIAgentApproval.Option] = []
         if names.contains("accept") { options.append(.init(id: "accept", title: "Allow", kind: .allowOnce)) }
-        if names.contains("acceptForSession") { options.append(.init(id: "acceptForSession", title: "Allow for Session", kind: .allowSession)) }
+        // A browser session asks every time.
+        if names.contains("acceptForSession"), spec.access != .browser { options.append(.init(id: "acceptForSession", title: "Allow for Session", kind: .allowSession)) }
         // "decline" lets the turn go on without it; "cancel" also ends the turn.
         if names.contains("decline") { options.append(.init(id: "decline", title: "Deny", kind: .deny)) }
         else { options.append(.init(id: "cancel", title: "Deny", kind: .deny)) }
@@ -229,7 +254,9 @@ import Foundation
         case "fileChange":
             let paths = (item["changes"] as? [[String: Any]] ?? []).compactMap { $0["path"] as? String }
             title = paths.isEmpty ? "Change files" : "Edit " + paths.joined(separator: ", ")
-        case "mcpToolCall": title = [item["server"] as? String, item["tool"] as? String].compactMap { $0 }.joined(separator: ": ")
+        case "mcpToolCall":
+            let named = [item["server"] as? String, item["tool"] as? String].compactMap { $0 }.joined(separator: ": ")
+            title = BrkToolCatalog.stepTitle(named) ?? named
         case "dynamicToolCall": title = item["tool"] as? String ?? "Tool"
         case "webSearch": title = "Search the web: " + AgentCopy.oneLine(item["query"] as? String ?? "")
         case "collabAgentToolCall": title = "Start a helper"

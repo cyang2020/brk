@@ -85,7 +85,27 @@ public final class WindowRootView: NSView {
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.contentDropCardSize = { [weak content] in content?.dropCardSize ?? .zero }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
-        sidebar.endContentDrop = { [weak content] in content?.endDrop() }
+        sidebar.endContentDrop = { [weak content, weak aiAnswer] in
+            content?.endDrop()
+            aiAnswer?.showDropTarget(false)
+        }
+        sidebar.panelSpaceDrop = { [weak aiAnswer] space, point in
+            guard let aiAnswer, !aiAnswer.isHidden, aiAnswer.frame.contains(point) else { aiAnswer?.showDropTarget(false); return nil }
+            aiAnswer.showDropTarget(true)
+            return .assist(.attach([.space(space)]))
+        }
+        sidebar.panelDropEnded = { [weak aiAnswer] in aiAnswer?.showDropTarget(false) }
+        sidebar.panelDrop = { [weak content, weak aiAnswer] item, kind, point in
+            guard let aiAnswer, !aiAnswer.isHidden, aiAnswer.frame.contains(point) else { aiAnswer?.showDropTarget(false); return nil }
+            // The page under the panel shows no drop slot while the panel takes the drop.
+            if kind == .tab { _ = content?.dropCommand(item, at: CGPoint(x: -1, y: -1)) }
+            aiAnswer.showDropTarget(true)
+            switch kind {
+            case .tab, .split: return .assist(.attach([.tab(item.rawValue)]))
+            case .folder: return .assist(.attach([.folder(item)]))
+            case .section: return nil
+            }
+        }
         // Both span the window from its top left, so the Library's coordinates are the dialog host's.
         spaceDialog.cardHeader = { [weak library] space in library?.spaceCardHeader(space) }
         sidebar.onThemeBlend = { [weak background] from, to, progress in background?.scrub(from: from, to: to, progress: progress) }

@@ -24,6 +24,7 @@ enum CommandInventory {
         .assist(.neverTranslateSite), .assist(.neverTranslateLanguage),
         .assist(.useOriginal), .assist(.languageSettings), .assist(.previewHover(true)), .assist(.sharePreview),
         .assist(.followUp("why")), .assist(.stop), .assist(.chooseFolder), .assist(.approve(approval: "a", option: "b")),
+        .assist(.attach([.tab("ghost"), .folder(ItemID("ghost")), .space(SpaceID("ghost"))])), .assist(.detach("ghost")), .assist(.mention("x")), .assist(.openTabLink("ghost")),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
         .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
         .capture(.act(.copy)),
@@ -147,6 +148,8 @@ enum CommandInventory {
         .aiDownloadRenamed(download, originalPath: "/tmp/ghost", newPath: nil, error: nil),
         .aiConversation(AIRequestID("ghost"), .notice("x")), .aiAgents([]), .aiAgentsWanted, .aiFolderChosen(WindowID("ghost"), nil),
         .localModels(LocalModelsSnapshot()),
+        .agentRead(AgentReadRequest(call: "ghost", window: WindowID("ghost"), tab: "ghost", part: .text)),
+        .agentAct(AgentActRequest(call: "ghost", window: WindowID("ghost"), act: .close([ItemID("ghost")]))), .aiMentionMatches(WindowID("ghost"), query: "x", ["ghost"]),
         .page(siteTarget.document.browser, .linkHovered(nil)),
     ]
 
@@ -229,6 +232,10 @@ enum CommandInventory {
             case .stop: "stop"
             case .chooseFolder: "chooseFolder"
             case .approve: "approve"
+            case .attach: "attach"
+            case .detach: "detach"
+            case .mention: "mention"
+            case .openTabLink: "openTabLink"
             }
         case .easel(let c):
             switch c {
@@ -598,6 +605,9 @@ enum CommandInventory {
         case .aiBasicTick: "aiBasicTick"
         case .aiDuplicateCandidates: "aiDuplicateCandidates"
         case .localModels: "localModels"
+        case .agentRead: "agentRead"
+        case .agentAct: "agentAct"
+        case .aiMentionMatches: "aiMentionMatches"
         }
     }
 

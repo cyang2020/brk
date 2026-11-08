@@ -109,6 +109,7 @@ final class DockView: NSView {
             }
         }
         guard draggingSpace == id, let last else { return }
+        _ = spaceDrop?(id, point)
         if let grab {
             // Along the dock only, between the Library and + buttons.
             let local = { (r: CGRect) in r.offsetBy(dx: -last.1.dock.minX, dy: -last.1.dock.minY) }
@@ -117,7 +118,17 @@ final class DockView: NSView {
         }
         dragTarget = last.1.dockSpaces.first { $0.value.contains(point) }?.key
     }
+    /// A Space let go over the Max panel (Brk's own): this command instead of a reorder. Also asked while the icon moves,
+    /// so the panel can show it takes the drop; `spaceDropEnded` says the drag is over.
+    var spaceDrop: ((SpaceID, CGPoint) -> Command?)?
+    var spaceDropEnded: (() -> Void)?
+
     private func finishReorder(_ id: SpaceID, at point: CGPoint) {
+        if draggingSpace == id, let command = spaceDrop?(id, point) {
+            cancelReorder()
+            dispatch(command)
+            return
+        }
         guard draggingSpace == id, let last else { cancelReorder(); return }
         let target = last.1.dockSpaces.first { $0.value.contains(point) }?.key
         let index = target.flatMap { target in last.0.firstIndex { $0.id == target } }
@@ -130,6 +141,7 @@ final class DockView: NSView {
     func cancelReorder() -> Bool {
         let active = draggingSpace != nil || cells.values.contains { $0.isPressed }
         for cell in cells.values { cell.alphaValue = 1; cell.cancelPress() }
+        if draggingSpace != nil { spaceDropEnded?() }
         draggingSpace = nil; dragTarget = nil; grab = nil
         capsule.isHidden = true
         showDrop(space: nil)

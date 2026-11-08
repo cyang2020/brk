@@ -86,24 +86,35 @@ enum AIAgentScenarios {
         try waitAnswer(app, contains: "second")
         let heading = try app.view().ai?.conversation
         try expect(heading?.agent == choice.kind && heading?.folder == nil, "the panel names \(String(describing: heading?.agent)), folder \(String(describing: heading?.folder))")
-        // Read-only, as started: never a flag that skips approval, and the agent's strictest mode.
+        // A question's conversation has Brk's tab tools: never a flag that skips approval, the user's allow rules,
+        // hooks and other MCP servers overridden, the agent's own tools asking every time.
         let first = try XCTUnwrapValue(prompts(app).first)
         let argv = first["argv"] as? [String] ?? []
         for bad in ["--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "bypassPermissions", "--yolo", "-y", "--force"] { try expect(!argv.contains(bad), "started with \(bad): \(argv)") }
         switch choice {
-        case .claude: try expect(argv.contains("--tools") && argv.contains("dontAsk") && !argv.contains("--permission-prompt-tool"), "claude read-only arguments: \(argv)")
-        case .codex: try expect(argv.contains("sandbox_mode=\"read-only\"") && argv.contains("features.shell_tool=false"), "codex read-only arguments: \(argv)")
-        case .gemini: try expect(argv.contains("plan") && argv.contains("--skip-trust"), "gemini read-only arguments: \(argv)")
+        case .claude:
+            try expect(argv.contains("--strict-mcp-config") && argv.contains("--mcp-config") && argv.contains("--permission-prompt-tool") && argv.contains { $0.contains("\"disableAllHooks\":true") }, "claude browser arguments: \(argv)")
+        case .codex: try expect(argv.contains { $0.hasPrefix("mcp_servers={brk=") } && argv.contains("web_search=\"disabled\"") && argv.contains("features.apps=false"), "codex browser arguments: \(argv)")
+        case .gemini: try expect(argv.contains("plan") && argv.contains("--skip-trust") && argv.contains("brk"), "gemini browser arguments: \(argv)")
         default: break
         }
         if [AIProviderChoice.cursor, .opencode].contains(choice) {
             let wanted = choice == .cursor ? "ask" : "plan"
             try expect(calls(app).contains { ($0["params"] as? [String: Any])?["modeId"] as? String == wanted }, "\(choice) did not ask for its \(wanted) mode")
         }
-        // A tool request in this conversation goes nowhere.
+        // A tool of the agent's own asks, with no "for this session"; denied, nothing is written.
         try typeIntoInput(app, "fixture:tool")
-        try app.waitUntil("the turn ended without a question", timeout: 15) { try app.view().ai?.busy == false }
-        try expect(!FileManager.default.fileExists(atPath: URL(fileURLWithPath: first["cwd"] as? String ?? "/nonexistent").appendingPathComponent("written.txt").path), "a read-only conversation wrote a file")
+        try app.waitUntil("an approval or the end of the turn", timeout: 15) {
+            let ai = try app.view().ai
+            return ai?.busy == false || ai?.conversation?.items.contains { if case .approval(let a) = $0 { a.answer == nil } else { false } } == true
+        }
+        if let approval = try app.view().ai?.conversation?.items.lazy.compactMap({ item -> AIAgentApproval? in if case .approval(let a) = item, a.answer == nil { a } else { nil } }).first {
+            try expect(!approval.options.contains { $0.kind == .allowSession }, "a browser session offered \(approval.options)")
+            let deny = try XCTUnwrapValue(approval.options.first { $0.kind == .deny })
+            try app.dispatch(.assist(.approve(approval: approval.id, option: deny.id)))
+            try app.waitUntil("the turn ended after Deny", timeout: 15) { try app.view().ai?.busy == false }
+        }
+        try expect(!FileManager.default.fileExists(atPath: URL(fileURLWithPath: first["cwd"] as? String ?? "/nonexistent").appendingPathComponent("written.txt").path), "a denied tool wrote a file")
         // A follow-up, typed: the same process.
         try typeIntoInput(app, "second question")
         try waitAnswer(app, contains: "second question")

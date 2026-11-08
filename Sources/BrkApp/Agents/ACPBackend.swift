@@ -11,7 +11,7 @@ import Foundation
 @MainActor final class ACPBackend: AgentBackend {
     var events: (@MainActor (AgentBackendEvent) -> Void)?
     private(set) var process: AgentProcess?
-    var resumeID: String? { spec.access == .tools && canLoad ? session : nil }
+    var resumeID: String? { spec.access != .readOnly && canLoad ? session : nil }
     private let spec: AgentSpec
     private let environment: [String: String]
     private var peer: JSONRPCPeer?
@@ -23,6 +23,7 @@ import Foundation
     private var interrupting = false
     private var modelName: String?
     private var steps: [String: String] = [:]
+    private var sentFirst = false
 
     init(spec: AgentSpec, environment: [String: String]) {
         self.spec = spec
@@ -36,7 +37,10 @@ import Foundation
         switch spec.kind {
         case .gemini:
             var arguments = ["--acp"]
-            if spec.access == .readOnly { arguments += ["--skip-trust", "--approval-mode", "plan", "--extensions", "none", "--allowed-mcp-server-names", "brk-none"] }
+            // A browser session keeps the read-only mode for Gemini's own tools; only Brk's server is allowed besides.
+            if spec.access != .tools {
+                arguments += ["--skip-trust", "--approval-mode", "plan", "--extensions", "none", "--allowed-mcp-server-names", spec.access == .browser ? BrkToolCatalog.server : "brk-none"]
+            }
             if let model = spec.model { arguments += ["--model", model] }
             return arguments
         default:
@@ -95,7 +99,11 @@ import Foundation
     }
 
     private func openSession() {
-        let parameters: [String: Any] = ["cwd": spec.directory.path, "mcpServers": [Any]()]
+        var servers: [Any] = []
+        if spec.access == .browser, let tools = spec.tools {
+            servers.append(["name": BrkToolCatalog.server, "command": tools.command, "args": tools.arguments, "env": [Any]()] as [String: Any])
+        }
+        let parameters: [String: Any] = ["cwd": spec.directory.path, "mcpServers": servers]
         let opened: JSONRPCPeer.Reply = { [weak self] result in
             guard let self else { return }
             switch result {
@@ -129,7 +137,7 @@ import Foundation
         if let effort = spec.effort, let option = ACPCatalog.optionID(body, category: "thought_level") {
             peer?.request("session/set_config_option", ["sessionId": session, "configId": option, "value": effort])
         }
-        guard spec.access == .readOnly else { configured(); return }
+        guard spec.access != .tools else { configured(); return }
         let wanted = Self.readOnlyMode(spec.kind)
         let modes = body["modes"] as? [String: Any]
         if modes?["currentModeId"] as? String == wanted { configured(); return }
@@ -154,7 +162,10 @@ import Foundation
     func send(_ text: String) {
         guard let session, isConfigured else { queued = text; return }
         interrupting = false
-        peer?.request("session/prompt", ["sessionId": session, "prompt": [["type": "text", "text": text]]]) { [weak self] result in
+        // ACP has no system prompt: Brk's tool rules lead the first message of a browser session.
+        let prompt = spec.access == .browser && !sentFirst ? BrkToolCatalog.rules + "\n\n" + text : text
+        sentFirst = true
+        peer?.request("session/prompt", ["sessionId": session, "prompt": [["type": "text", "text": prompt]]]) { [weak self] result in
             guard let self else { return }
             self.closeApprovals()
             switch result {
@@ -236,7 +247,8 @@ import Foundation
             let name = $0["name"] as? String ?? option
             switch $0["kind"] as? String {
             case "allow_once": return .init(id: option, title: name, kind: .allowOnce)
-            case "allow_always": return .init(id: option, title: name, kind: .allowSession)
+            // A browser session asks every time.
+            case "allow_always": return spec.access == .browser ? nil : .init(id: option, title: name, kind: .allowSession)
             case "reject_once", "reject_always": return .init(id: option, title: name, kind: .deny)
             default: return nil
             }

@@ -202,7 +202,7 @@ final class AppUnderTest {
         // A real-agent run is opt-in (`AIRealScenarios`) and spends the user's quota.
         if scenarioID.hasPrefix("AIReal") {
             environment["BRK_AI_REAL_AGENTS"] = "1"
-            if scenarioID.hasPrefix("AIRealUI") {
+            if scenarioID.hasPrefix("AIRealUI") || scenarioID.hasPrefix("AIRealTabs") {
                 // As a GUI app starts: launchd's short PATH, so the agents are found the way a Dock launch finds them;
                 // the folder comes from the real open panel.
                 environment["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"

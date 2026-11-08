@@ -266,7 +266,10 @@ def acp():
             else: put({'jsonrpc': '2.0', 'id': rid, 'result': {}})
         elif method == 'session/prompt':
             prompt_id['id'] = rid
-            turn(params['prompt'][0]['text'])
+            said = params['prompt'][0]['text']
+            # ACP has no system prompt: Brk's tool rules lead a browser session's first message, one block, then a blank line.
+            if said.startswith('## Brk browser tools') and '\n\n' in said: said = said.split('\n\n', 1)[1]
+            turn(said)
         elif method == 'session/cancel':
             stop('cancelled')
         elif rid == 500:

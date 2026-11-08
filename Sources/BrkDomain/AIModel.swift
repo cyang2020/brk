@@ -80,6 +80,49 @@ public enum AIIntent: Hashable, Sendable, Codable {
     case chooseFolder
     /// The panel's approval buttons: the answer to a tool approval the agent asked for.
     case approve(approval: String, option: String)
+    /// Tabs, a folder or a Space given to the panel's conversation (a drop on the panel, Ask AI, a pick after @): they
+    /// show as chips in its input and go with the next message. With no conversation open, a new one starts.
+    case attach([AIAttachmentSource])
+    /// A chip's ×.
+    case detach(String)
+    /// The text after an @ in the panel's input, while the user types it; nil when the @ is gone.
+    case mention(String?)
+    /// A `brk://tab/<id>` link in an agent's answer: that tab is shown, or opened again from the archive or history.
+    case openTabLink(String)
+}
+
+/// What the user gave the conversation, before Brk looks it up.
+public enum AIAttachmentSource: Hashable, Sendable, Codable {
+    /// A tab by its agent id (`AgentTabFacts.id`).
+    case tab(String)
+    case folder(ItemID)
+    case space(SpaceID)
+}
+
+/// A chip in the panel's input and the tabs behind it.
+public struct AIAttachment: Hashable, Sendable, Codable {
+    public enum Kind: String, Hashable, Sendable, Codable { case tab, folder, space }
+    public let kind: Kind
+    /// The tab's agent id, the folder's item id or the Space's id.
+    public let id: String
+    public let title: String
+    public let tabs: [AIAttachedTab]
+    public init(kind: Kind, id: String, title: String, tabs: [AIAttachedTab]) { self.kind = kind; self.id = id; self.title = title; self.tabs = tabs }
+}
+public struct AIAttachedTab: Hashable, Sendable, Codable {
+    public let id: String
+    public let title: String
+    public let url: URL?
+    /// A tab of another profile than the conversation's: the user gave it, so the agent may read it, and nothing else of
+    /// that profile.
+    public let otherProfile: Bool
+    public init(id: String, title: String, url: URL?, otherProfile: Bool) { self.id = id; self.title = title; self.url = url; self.otherProfile = otherProfile }
+}
+/// What @ offers while the user types after it: open tabs first, then archived ones, then history.
+public struct AIMentionSnapshot: Hashable, Sendable, Codable {
+    public let query: String
+    public var matches: [AIAttachedTab]
+    public init(query: String, matches: [AIAttachedTab]) { self.query = query; self.matches = matches }
 }
 public struct AITranslationExclusions: Hashable, Sendable, Codable {
     public var languages: Set<String> = []
@@ -181,7 +224,14 @@ public struct AIConversationSnapshot: Equatable, Sendable, Codable {
     public var items: [AIConversationItem] = []
     /// The session ended for good (another agent chosen, Max off); no more messages.
     public var ended = false
-    public init(id: AIRequestID, folder: String? = nil) { self.id = id; self.folder = folder }
+    /// Brk's tab tools are on: the agent reads and changes this profile's tabs, and its own tools ask every time.
+    public var tabs = false
+    /// No message sent yet: the session starts with the first one.
+    public var fresh = false
+    /// The chips waiting in the input for the next message.
+    public var attached: [AIAttachment] = []
+    public var mention: AIMentionSnapshot? = nil
+    public init(id: AIRequestID, folder: String? = nil, tabs: Bool = false) { self.id = id; self.folder = folder; self.tabs = tabs }
 }
 public enum AIConversationItem: Equatable, Sendable, Codable {
     case user(String)
@@ -271,13 +321,15 @@ enum AIPurpose: Equatable, Sendable {
     case answer, askPage(String), preview(URL), instant(String), browse(String), translate(String), organize, followUp
     /// The `translate` prefix: the answer goes in the bar's row.
     case barTranslation
+    /// A page read for an agent's `brk_tab_read` call: the text goes back to the tool, not to the panel.
+    case agentRead(String)
 }
 extension AIPurpose {
     /// Purposes that show in their own place (the preview card, the Today row, the URL pill and its popover, the
     /// Tidy button and a toast), not in the answer panel.
     var inPlace: Bool {
         switch self {
-        case .preview, .instant, .translate, .organize, .barTranslation: true
+        case .preview, .instant, .translate, .organize, .barTranslation, .agentRead: true
         case .answer, .askPage, .browse, .followUp: false
         }
     }

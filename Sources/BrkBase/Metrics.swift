@@ -640,6 +640,11 @@ public struct AIMetrics: MetricGroup {
     public let approvalRadius = Metric(8.0, .guess("the approval card's corners"))
     public let approvalTitleHeight = Metric(36.0, .guess("two lines of an approval's title"))
     public let approvalDetailHeight = Metric(62.0, .guess("four lines of an approval's detail"))
+    public let chipHeight = Metric(22.0, .guess("a tab chip in the panel's input"))
+    public let chipMaxWidth = Metric(170.0, .guess("a tab chip's widest, its title truncated"))
+    public let chipRadius = Metric(6.0, .guess("a tab chip's corners"))
+    public let mentionRowHeight = Metric(24.0, .guess("one tab in the @ list"))
+    public let dropBorderWidth = Metric(2.0, .guess("the panel's outline while tabs are dragged over it"))
 }
 
 /// Arc's Boost panel, measured on this run's 2x shots (P37-a/b/c/d-arc-editor.png).

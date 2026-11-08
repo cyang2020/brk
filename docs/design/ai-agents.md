@@ -72,7 +72,7 @@ A command that double-forked away before Stop and left the process group is the 
 
 T3 is a coding tool: every session is one the user started on their own project. Brk also feeds agents page text from the web, which may be written to attack them, so it needs a mode T3 does not center on.
 
-Anything carrying page or link text runs in a read-only session, in an empty temporary folder of its own, deleted afterwards:
+A page question carries page text in its prompt and runs in a read-only session, in an empty temporary folder of its own, deleted afterwards:
 
 | Agent | Read-only | Checked on this machine |
 | --- | --- | --- |
@@ -86,7 +86,34 @@ On top of that, in read-only sessions Brk answers any approval request itself wi
 
 Claude's own settings still apply in a folder session. `--permission-mode default` overrides a `defaultMode: bypassPermissions` in `~/.claude/settings.json`, which this machine has (seen in the real run: `Write` asked), but the allow rules in that file hold, so a command it allows, `python3` here, runs without asking. T3 does the same. Read-only sessions load no settings at all.
 
-A session with tools on starts only from the panel's Work in a Folder…, in the folder the user picks. Brk refuses home and the disk's root, and no page text goes into such a session. No flag that skips approvals is passed anywhere; a unit test checks each agent's arguments.
+A session with tools on in a folder starts only from the panel's Work in a Folder…, in the folder the user picks. Brk refuses home and the disk's root, and no page text goes into such a session. No flag that skips approvals is passed anywhere; a unit test checks each agent's arguments.
+
+## Browser sessions: Brk's tab tools
+
+A question asked in the panel (command bar, Ask AI, a drop of tabs) opens a browser session (`AgentAccess.browser`, docs/design/ai-native.md, 安全与权限). The agent gets Brk's MCP server and keeps its own tools and skills; every use of one of those asks in the panel, whatever the user's own allow rules say. Page questions (Ask on Page, Browse for Me) stay read-only, and folder sessions get no tab tools, because the user's allow rules hold there.
+
+**How the server reaches Brk.** Each conversation gets its own Unix socket and token file in `$TMPDIR/brkt-<pid>/` (folder 0700, files 0600). The agent starts Brk's own executable as its MCP server, `Brk --brk-tools <base>`; that bridge reads `<base>.token`, connects to `<base>.sock` and presents the token on the first line, then copies bytes both ways. The socket refuses a peer of another user and a wrong or late token, and goes away with the conversation. The token is never on a command line or in an environment variable. The control socket used by tests is a separate thing and is not involved.
+
+**Tools** (`BrkToolCatalog`, descriptions in T3 Code's style): `brk_tab_list`, `brk_tab_search`, `brk_tab_read` (paged, at most 20,000 characters a call; Brk's page reader takes a page's main text up to 24,000 characters), `brk_tab_open`, `brk_tab_focus`, `brk_tab_close`, `brk_tab_move`, `brk_tab_group`, `brk_tab_split`. Every change is a typed request the reducer checks and applies with the same rules a sidebar click runs (`Rules/AgentTools.swift`); an agent never hands Brk JSON in a reply.
+
+**Arguments**, checked on this machine on 2026-11-08 (claude 2.1.318, codex-cli 0.164.0):
+
+| Agent | Browser session |
+| --- | --- |
+| Claude | The user's settings load, so their skills do (`--setting-sources` without `user` drops `~/.claude/skills` too: 155 commands with it, 55 without). `--settings` adds `disableAllHooks: true` (a PermissionRequest hook could answer for the user; the user's and plugins' hooks stopped running) and an `ask` rule for each built-in tool given by `--tools Bash,Read,Write,Edit,Skill,WebFetch,WebSearch`. Ask beats allow: with `Bash(python3:*)` allowed in `~/.claude/settings.json`, `python3 -c …` reached Brk as `can_use_tool`, and without the rule ran unasked. `--strict-mcp-config --mcp-config` with Brk's server only, `--allowedTools mcp__brk`, `--permission-mode default`, `--permission-prompt-tool stdio`, Brk's rules by `--append-system-prompt`. Brk answers itself a `Skill` load and a `Read` of a file inside an installed skill's own folder (followed through links: `~/.claude/skills/lark-doc` links to `~/.agents/skills/lark-doc`) or the session's empty folder; everything else is shown with Allow and Deny only. |
+| Codex | `mcp_servers={brk={…}}` replaces the user's servers, `web_search="disabled"` (Codex never asks before a search, and a query can carry page text), `features.apps=false`, `sandbox_workspace_write.network_access=false`; the thread has `workspace-write`, `approvalPolicy: untrusted` and Brk's rules as `developerInstructions`. Two exact matches of the user's `~/.codex/rules` allow rules still asked under this policy. Codex runs its known-safe read-only commands (`cat`, `ls`, `rg`) without asking; any network use leaves the sandbox and asks. Allow for Session is not offered. An elicitation from Brk's own server is accepted (Brk asks in its panel itself). |
+| Gemini, Cursor, OpenCode | Brk's server in `session/new`'s `mcpServers` (Gemini: `--allowed-mcp-server-names brk`), their read-only mode kept for their own tools, Brk's rules ahead of the first message. Not signed in here: arguments only. |
+
+**Reading a tab that is not on screen.** Chromium's DevTools did not answer the page reader within its 3 seconds for a page loaded out of sight (14 timeouts in one real run). Such a tab is read like one that is not loaded: a hidden reader page loads its address in the tab's own profile, as Browse for Me does.
+
+## API keys
+
+The user picks, per service, the CLI's own sign-in or an API key (docs/design/ai-native.md, 账号：订阅或 API key). A key goes only into the environment of the process Brk starts; inherited `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`, `CODEX_API_KEY` are still stripped. Brk never runs a login command.
+
+- Claude: `ANTHROPIC_API_KEY`. With a fake key the init message says `apiKeySource: ANTHROPIC_API_KEY` and the turn fails with "Invalid API key", so the stored sign-in is not used.
+- Codex: `codex app-server` reads neither `CODEX_API_KEY` nor `OPENAI_API_KEY` (both tried with `forced_login_method="api"`: the request went out without a key). A model provider of Brk's own reads it: `-c model_providers.brk-openai={…,env_key="BRK_OPENAI_API_KEY",wire_api="responses"} -c model_provider="brk-openai" -c forced_login_method="api" -c cli_auth_credentials_store="ephemeral"`. With a fake key OpenAI answered "Incorrect API key provided: sk-brk-f****2222", `account/read` said `requiresOpenaiAuth: false`, and `~/.codex/auth.json` was not touched.
+
+The arguments and environment of a key session differ from a subscription session only by these (a unit test checks it). Slice A's settings fill `AIAccounts.read`; until then every service uses the subscription. No real key was available, so no paid request has run.
 
 ## What is left out on purpose
 
