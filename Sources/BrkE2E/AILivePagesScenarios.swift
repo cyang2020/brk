@@ -1,4 +1,3 @@
-import ApplicationServices
 import BrkBase
 import BrkControl
 import BrkDomain
@@ -258,6 +257,19 @@ enum AILivePagesScenarios {
         try expect(!card.hidden && card.frame.height > 150, "the page card: \(card)")
         let inset = Metrics.ai.tabColumnInset.value
         return card.frame.insetBy(dx: inset, dy: inset)
+    }
+    /// Shows the fixture's home tab: its row, or, when something covers the row, the command bar's Switch to Tab.
+    private static func lookAway(_ app: AppUnderTest) throws {
+        let home = try todayRow(app) { $0.url?.absoluteString.hasSuffix("index.html") == true }
+        do { try click(app, at: centre(stillFrame(app, .row(home.id)))) } catch {
+            try WindowServerKeys.ensureFrontmost(app, app.window!)
+            try key(.command, .t)
+            try app.waitUntil("the command bar") { if case .commandBar? = try app.view().overlay { true } else { false } }
+            try type("Fixture Home")
+            app.sleep(0.8)
+            try key([], .returnKey)
+        }
+        try app.waitUntil("the home tab shown", timeout: 6) { try todayRow(app) { $0.url?.absoluteString.hasSuffix("index.html") == true }.status == .current }
     }
     private static func showPage(_ app: AppUnderTest, _ page: AIPageID) throws {
         let row = try XCTUnwrapValue(try pageRow(app, page))
@@ -625,26 +637,7 @@ enum AILivePagesScenarios {
     }
     /// The AX frames of the page's checkboxes and text fields: WebKit lists a page's controls to Accessibility.
     private static func pageControls(_ role: String) -> [CGRect] { axNodes(role).map(\.frame) }
-    private static func axNodes(_ role: String) -> [(frame: CGRect, value: String)] {
-        _ = NativeSystemInput.wakeAccessibilityTree(pid: pid)
-        var out: [(CGRect, String)] = []
-        for window in NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? [] {
-            var queue = [window], seen = 0
-            while !queue.isEmpty, seen < 20_000 {
-                let node = queue.removeFirst()
-                seen += 1
-                if NativePickerInput.string(node, kAXRoleAttribute) == role {
-                    var point = CGPoint.zero, size = CGSize.zero
-                    if let value = NativePickerInput.attribute(node, kAXPositionAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgPoint, &point) }
-                    if let value = NativePickerInput.attribute(node, kAXSizeAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgSize, &size) }
-                    let value = NativePickerInput.attribute(node, kAXValueAttribute).map { "\($0)" } ?? ""
-                    if size.width > 0, size.height > 0 { out.append((CGRect(origin: point, size: size), value)) }
-                }
-                queue += NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
-            }
-        }
-        return out.sorted { ($0.0.minY, $0.0.minX) < ($1.0.minY, $1.0.minX) }
-    }
+    private static func axNodes(_ role: String) -> [(frame: CGRect, value: String)] { NativeSystemInput.elements(pid: pid, role: role) }
 
     private static func realRoute(_ app: AppUnderTest, _ choice: AIProviderChoice) throws {
         guard WindowServerKeys.allowed else { throw Check(description: "posting events is not allowed for this runner") }
@@ -726,8 +719,7 @@ enum AILivePagesScenarios {
             if let page { log.check("a shop changes its price, the hour passes: the page shows the new price and its row is marked") {
                 app.site.replace(in: "/shop-kettle.html", "€39.00", with: "€34.50")
                 // Away from the page (so its mark stays until it is looked at), on a tab that is not one of the shops.
-                let home = try todayRow(app) { $0.url?.absoluteString.hasSuffix("index.html") == true }
-                try click(app, at: centre(stillFrame(app, .row(home.id))))
+                try lookAway(app)
                 let kind = try passTheHour(app, page)
                 try expect(kind == "updated", "the outcome: \(kind) \(outcomeDetail(app, page))")
                 let data = record(app, page)?["data"] as? String ?? ""
@@ -761,7 +753,7 @@ enum AILivePagesScenarios {
                 _ = NativeSystemInput.wakeAccessibilityTree(pid: pid)
                 var boxes: [CGRect] = [], fields: [CGRect] = []
                 try app.waitUntil("the page's boxes", timeout: 10) { boxes = pageControls("AXCheckBox"); return !boxes.isEmpty }
-                fields = pageControls("AXTextField")
+                fields = pageControls("AXTextField") + pageControls("AXTextArea")
                 shot(app, prefix, "edits-page")
                 try clickScreen(centre(boxes[0]))
                 if let field = fields.first {
@@ -782,8 +774,7 @@ enum AILivePagesScenarios {
                 shot(app, prefix, "edits-relaunch")
                 _ = NativeSystemInput.wakeAccessibilityTree(pid: pid)
                 let checked = axNodes("AXCheckBox").map(\.value)
-                let home = try todayRow(app) { $0.url?.absoluteString.hasSuffix("index.html") == true }
-                try click(app, at: centre(stillFrame(app, .row(home.id))))
+                try lookAway(app)
                 app.site.replace(in: "/shop-blender.html", "€59.90", with: "€55.00")
                 let kind = try passTheHour(app, page)
                 let after = record(app, page)?["saved"] as? String
@@ -837,8 +828,7 @@ enum AILivePagesScenarios {
                 try open(app, "article-tea.html")
                 try key(.command, .w)
                 app.sleep(0.8)
-                let home = try todayRow(app) { $0.url?.absoluteString.hasSuffix("index.html") == true }
-                try click(app, at: centre(stillFrame(app, .row(home.id))))
+                try lookAway(app)
                 // Then to the next Monday, past 9:00.
                 let kind = try passTheHour(app, weekly, seconds: 4 * 86_400 + 3 * 3_600, timeout: 300)
                 try expect(kind == "updated", "the outcome: \(kind) \(outcomeDetail(app, weekly))")

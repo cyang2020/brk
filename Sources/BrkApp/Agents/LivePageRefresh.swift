@@ -8,7 +8,8 @@ enum LivePageRefresh {
     /// Marks the message, so logs and the fixture agent can tell a refresh from a conversation.
     static let marker = "BRK_LIVE_REFRESH"
 
-    static func prompt(_ run: AIPageRefreshRun, now: Date, timeZone: TimeZone = .current) -> String {
+    static func prompt(_ run: AIPageRefreshRun, timeZone: TimeZone = .current) -> String {
+        let now = Date(timeIntervalSince1970: Double(run.now.milliseconds) / 1000)
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = timeZone

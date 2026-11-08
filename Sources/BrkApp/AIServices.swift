@@ -255,7 +255,7 @@ final class AIServices {
             self?.endRefresh(run.run, .failed, detail: "it did not finish in \(Self.refreshSeconds / 60) minutes")
         }
         refreshes[run.run] = Refresh(run: run, session: session, tools: tools, deadline: deadline)
-        session.send(LivePageRefresh.prompt(run, now: Date()), turn: run.run)
+        session.send(LivePageRefresh.prompt(run), turn: run.run)
     }
 
     /// The refresh is over, one way or another: the reducer hears once, and its tools go. A refresh stopped in the middle

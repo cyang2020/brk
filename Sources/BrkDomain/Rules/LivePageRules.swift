@@ -113,7 +113,7 @@ extension Work {
         state.doc.aiPages[id] = record
         effects.append(.aiRefreshPage(AIPageRefreshRun(run: run, page: id, conversation: conversation.id, profile: record.profile, window: window, agent: agent,
                                                        model: options?.model, effort: options?.effort, title: record.title, data: record.data, saved: record.saved,
-                                                       schema: schema, sources: record.sources ?? [], history: conversation.history(limit: 8_000))))
+                                                       schema: schema, sources: record.sources ?? [], history: conversation.history(limit: 8_000), now: ctx.now)))
         return true
     }
 

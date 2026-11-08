@@ -191,11 +191,13 @@ public struct AIPageRefreshRun: Hashable, Sendable {
     public let sources: [URL]
     /// The conversation so far, as text.
     public let history: String
+    /// Brk's time when the refresh started: "last week" and "now" in the agent's message are this, not the agent's own.
+    public let now: Instant
     public init(run: AIRequestID, page: AIPageID, conversation: AIRequestID, profile: ProfileID, window: WindowID, agent: AIProviderKind, model: String?,
-                effort: String?, title: String, data: String?, saved: String?, schema: String, sources: [URL], history: String) {
+                effort: String?, title: String, data: String?, saved: String?, schema: String, sources: [URL], history: String, now: Instant) {
         self.run = run; self.page = page; self.conversation = conversation; self.profile = profile; self.window = window; self.agent = agent
         self.model = model; self.effort = effort; self.title = title; self.data = data; self.saved = saved; self.schema = schema
-        self.sources = sources; self.history = history
+        self.sources = sources; self.history = history; self.now = now
     }
 }
 

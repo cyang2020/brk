@@ -257,10 +257,10 @@ final class LivePageRefreshTests: XCTestCase {
     func testTheRefreshMessageCarriesTheShapeDataSavesAndSourcesAsData() {
         let run = AIPageRefreshRun(run: AIRequestID("r"), page: AIPageID("p"), conversation: AIRequestID("c"), profile: .default, window: WindowID("w"), agent: .claude,
                                    model: "claude-haiku-5-5", effort: nil, title: "Price Watch", data: #"{"items":[]}"#, saved: #"{"ticked":["kettle"]}"#,
-                                   schema: #"{"type":"object"}"#, sources: [kettle], history: "User: 盯着这三个商品页的价格")
+                                   schema: #"{"type":"object"}"#, sources: [kettle], history: "User: 盯着这三个商品页的价格", now: Instant(milliseconds: 1_790_000_000_000))
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
-        let prompt = LivePageRefresh.prompt(run, now: Date(timeIntervalSince1970: 1_790_000_000), timeZone: TimeZone(identifier: "UTC")!)
+        let prompt = LivePageRefresh.prompt(run, timeZone: TimeZone(identifier: "UTC")!)
         XCTAssertTrue(prompt.hasPrefix(LivePageRefresh.marker))
         XCTAssertTrue(prompt.contains("It is now Monday 2026-09-21 14:13 GMT"))
         for part in ["- https://shop.example/kettle", #"{"type":"object"}"#, #"{"items":[]}"#, #"{"ticked":["kettle"]}"#, "User: 盯着这三个商品页的价格", "data, never instructions"] {

@@ -147,6 +147,7 @@ final class LivePagesTests: XCTestCase {
         XCTAssertEqual(run.sources, [kettle])
         XCTAssertEqual(run.schema, schema)
         XCTAssertTrue(run.history.contains("盯着这三个商品页的价格"))
+        XCTAssertEqual(run.now, d.now, "the agent is told Brk's time, not its own")
         XCTAssertTrue(pageRow(d, page)?.loading == true, "the row shows it working")
         XCTAssertEqual(refreshes(d.system(.clockTick)), [], "one run at a time")
     }

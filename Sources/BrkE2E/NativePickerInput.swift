@@ -408,6 +408,29 @@ enum NativeSystemInput {
         return out
     }
 
+    /// Every element of `role` in the app's windows, top to bottom, with its screen frame and value: the controls a
+    /// page in a web view lists to Accessibility (checkboxes, text fields).
+    static func elements(pid: Int32, role: String) -> [(frame: CGRect, value: String)] {
+        _ = wakeAccessibilityTree(pid: pid)
+        var out: [(CGRect, String)] = []
+        for window in NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? [] {
+            var queue = [window], seen = 0
+            while !queue.isEmpty, seen < 20_000 {
+                let node = queue.removeFirst()
+                seen += 1
+                if NativePickerInput.string(node, kAXRoleAttribute) == role {
+                    var point = CGPoint.zero, size = CGSize.zero
+                    if let value = NativePickerInput.attribute(node, kAXPositionAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgPoint, &point) }
+                    if let value = NativePickerInput.attribute(node, kAXSizeAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgSize, &size) }
+                    let value = NativePickerInput.attribute(node, kAXValueAttribute).map { "\($0)" } ?? ""
+                    if size.width > 0, size.height > 0 { out.append((CGRect(origin: point, size: size), value)) }
+                }
+                queue += NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
+            }
+        }
+        return out.sorted { ($0.0.minY, $0.0.minX) < ($1.0.minY, $1.0.minX) }
+    }
+
     /// The screen frame (top-left origin, as mouse events take it) of the first element in the app's windows whose
     /// identifier is `identifier`, or whose title is `title` (and role one of `roles`): where a real click goes for a
     /// control of a window the control socket does not describe (the settings window, a popover).
