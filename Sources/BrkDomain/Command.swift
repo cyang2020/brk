@@ -652,6 +652,12 @@ public enum SystemEvent: Sendable, Equatable {
     case aiAgents([AIAgentStatus])
     /// The folder the user chose for a session with tools on (nil: the panel was cancelled).
     case aiFolderChosen(WindowID, String?)
+    /// An agent's tool call through Brk's tab tools (BrkApp/Agents/BrkTools): read a tab, or change tabs. Answered with
+    /// `Effect.agentReadDone` and `Effect.agentActDone`.
+    case agentRead(AgentReadRequest)
+    case agentAct(AgentActRequest)
+    /// More tabs for the @ list, by id, found for `query` (a search by meaning, for instance); stale queries are dropped.
+    case aiMentionMatches(WindowID, query: String, [String])
     // Later: case liveFolder(ItemID, [URL])   -- a live folder fetch finished.
 }
 
