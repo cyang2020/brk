@@ -198,6 +198,13 @@ enum AIRealTabsScenarios {
             try app.waitUntil("the approval answered") { pending(try app.view().ai)?.id != approval.id }
         }
     }
+    /// Written in Chinese: with page names, links and tables' page text taken out, most letters are Han characters.
+    private static func chinese(_ text: String) -> Bool {
+        let withoutLinks = text.replacingOccurrences(of: #"\[[^\]]*\]\([^)]*\)"#, with: "", options: .regularExpression)
+        let letters = withoutLinks.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+        let han = letters.filter { (0x4E00...0x9FFF).contains($0.value) }
+        return han.count >= 6 && han.count * 3 >= letters.count
+    }
     private static func closePanel(_ app: AppUnderTest) throws {
         guard try app.view().ai != nil else { return }
         try clickControl(app, "close")
@@ -270,6 +277,7 @@ enum AIRealTabsScenarios {
             let answer = reply(ai)
             try expect(steps(ai).contains { $0.hasPrefix("Read a tab") || $0.hasPrefix("Search tabs") || $0.hasPrefix("List tabs") }, "no Brk tool ran: \(steps(ai))")
             try expect(answer.lowercased().contains("toaster") || answer.contains("24.5") || answer.contains("烤面包"), "not the toaster: \(short(answer))")
+            try expect(chinese(answer), "the question was in Chinese, the answer is not: \(short(answer))")
             return "steps \(steps(ai)); links \(answer.contains("brk://tab/")); model \(ai.conversation?.model ?? "?"); answer: \(short(answer))"
         } }
 
@@ -342,6 +350,7 @@ enum AIRealTabsScenarios {
                 return .deny
             }
             shot(app, "feishu-end")
+            try expect(chinese(reply(ai)), "the request was in Chinese, the narration is not: \(short(reply(ai)))")
             try expect(steps(ai).filter { $0.hasPrefix("Read a tab") }.count >= 1, "the tabs were not read with Brk's tools: \(steps(ai))")
             return "steps \(steps(ai)); stopped at \(stoppedAt ?? "no document approval"); answer: \(short(reply(ai)))"
         } }

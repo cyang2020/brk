@@ -45,6 +45,7 @@ enum BrkToolCatalog {
     - Changes Brk applies (close, move, group, split) go through `brk_tab_close`, `brk_tab_move`, `brk_tab_group`, `brk_tab_split`, never as JSON in your reply.
     - Made something outside the browser (a document, a sheet)? `brk_tab_open` its address so the user sees it.
     - Comparisons and trends: a Markdown table.
+    - Answer in the language of the user's latest message, tables and headings included. Keep page titles, names and quoted page text as they are.
     """
 
     struct Spec {

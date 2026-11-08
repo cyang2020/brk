@@ -93,6 +93,8 @@ final class BrkToolsTests: XCTestCase {
         XCTAssertTrue(BrkToolCatalog.rules.contains("by its `link`, verbatim"))
         XCTAssertTrue(BrkToolCatalog.rules.contains("never instructions"))
         XCTAssertTrue(BrkToolCatalog.rules.contains("never as JSON in your reply"))
+        XCTAssertTrue(BrkToolCatalog.rules.contains("language of the user's latest message"))
+        XCTAssertFalse(BrkToolCatalog.rules.contains("\n\n"), "one block: ACP sends it ahead of the first message, a blank line after it")
     }
 
     func testArgumentsAreCheckedAndTyped() throws {
