@@ -167,6 +167,22 @@ enum QuickBarScenarios {
 
     private static func inputText(_ app: AppUnderTest) throws -> String { try app.native().editorText ?? "" }
 
+    /// An AI prefix's word that cannot work here: the reason beside the input, then Tab opens `pane` and no mode is entered.
+    private static func blockedWord(_ app: AppUnderTest, _ word: String, _ reason: String, _ pane: SettingsPane) throws {
+        try open(app)
+        try type(app, word)
+        let card = try visible(app.native(), .commandBar).frame
+        try app.waitUntil("\(word): \(reason)") { try SidebarReviewScenarios.texts(app, in: card).contains(reason) }
+        _ = try app.screenshot("blocked-" + word)
+        try press(app, [], .tab)
+        try app.waitUntil("\(word): Settings at \(pane)") { if case .settings(let settings) = try app.send(.settings) { return settings.pane == pane }; return false }
+        try expect(try !pillShown(app), "\(word) entered a mode")
+        try app.dispatch(.settings(.closeWindow))
+        try app.waitUntil("Settings closed") { if case .settings(let settings) = try app.send(.settings) { return settings.pane == nil }; return false }
+        app.sleep(0.3)
+        if try isOpen(app) { try app.dispatch(.commandBar(.dismiss)) }
+    }
+
     /// `word` and a real Tab: the pill must show, or (`enters` false) the word must stay plain text.
     private static func typeWord(_ app: AppUnderTest, _ word: String, enters: Bool = true) throws {
         try type(app, word)
@@ -908,24 +924,10 @@ enum QuickBarScenarios {
         for (word, question) in [("gemini", "why is rust red?"), ("cursor", "why is ink dark?")] where bar.agentsFound.contains(word) { try asks(word, question) }
 
         // Max's Ask off: the word says why beside the input, and Tab opens the settings that change it, not a prefix.
-        func blocked(_ word: String, _ reason: String, _ pane: SettingsPane) throws {
-            try open(app)
-            try type(app, word)
-            let card = try visible(app.native(), .commandBar).frame
-            try app.waitUntil("\(word): \(reason)") { try SidebarReviewScenarios.texts(app, in: card).contains(reason) }
-            _ = try app.screenshot("blocked-" + word)
-            try press(app, [], .tab)
-            try app.waitUntil("\(word): Settings at \(pane)") { if case .settings(let settings) = try app.send(.settings) { return settings.pane == pane }; return false }
-            try expect(try !pillShown(app), "\(word) entered a mode")
-            try app.dispatch(.settings(.closeWindow))
-            try app.waitUntil("Settings closed") { if case .settings(let settings) = try app.send(.settings) { return settings.pane == nil }; return false }
-            app.sleep(0.3)
-            if try isOpen(app) { try app.dispatch(.commandBar(.dismiss)) }
-        }
         try app.dispatch(.settings(.max(.feature(.commandBar, false))))
-        try blocked("claude", "Claude is off in Max settings", .max)
+        try blockedWord(app, "claude", "Claude is off in Max settings", .max)
         try app.dispatch(.settings(.max(.feature(.askPage, false))))
-        try blocked("summarize", "Ask on Page is off in Advanced settings", .advanced)
+        try blockedWord(app, "summarize", "Ask on Page is off in Advanced settings", .advanced)
         app.passed("claude, gpt, codex, ask and ai each asked with the typed text; page and summarize read the page; gemini and cursor asked where installed; with a switch off the word said why and Tab opened its settings; Max off left the words plain")
     }
 
@@ -1190,12 +1192,10 @@ enum QuickBarScenarios {
                 if case .translated? = try app.view().urlPill.translation { return true }
                 return false
             }
-            // Translation off: the word stays plain.
+            // Translation off: the word says where its switch is, and Tab opens that pane.
             try app.dispatch(.settings(.max(.feature(.translation, false))))
-            try open(app)
-            try typeWord(app, "translate", enters: false)
-            try dismiss(app)
-            app.passed("Pending, then the answer in the row and Return copied it; to ja asked once for the final text; translate page translated the page; off, the word stays plain")
+            try blockedWord(app, "translate", "Translate Pages is off in Advanced settings", .advanced)
+            app.passed("Pending, then the answer in the row and Return copied it; to ja asked once for the final text; translate page translated the page; off, the word said where its switch is and Tab opened it")
         }
     }
 
