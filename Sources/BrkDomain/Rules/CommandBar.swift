@@ -119,6 +119,10 @@ extension Work {
             effects.append(.searchLocal(window, request))
         }
         if case .fillPane = target { return }
+        if !isPrivate, state.searchModelReady, case .profile(let profile) = state.libraryContext(in: window),
+           MeaningSearch.asks(text, engine: state.searchEngine(in: window)), state.session.windows[window]?.meaning[.commandBar]?.text != text {
+            effects.append(.searchByMeaning(window, MeaningQuery(text: text, scope: .commandBar, profile: profile)))
+        }
         if QuickAnswers.usesClock(text) { state.session.windows[window]?.barClock = ctx.now }
         if !isPrivate, QuickAnswers.asksCurrency(text) { effects.append(.needCurrencyRates) }
     }

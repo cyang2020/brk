@@ -546,8 +546,9 @@ public enum AITask: Hashable, Sendable, Codable {
     case nameFolder(ItemID, tabs: [AITab])
     /// The command bar's `translate` prefix: the text in `target`; the outcome is `AIReply.text`.
     case translateText(String, target: String)
-    /// A decision (`DecisionRequest`) for a feature; the outcome is `AIReply.decision`.
-    case decide(DecisionRequest, feature: AIFeature)
+    /// A decision (`DecisionRequest`) for a feature; the outcome is `AIReply.decision`. `hint` is what a local decision
+    /// model needs beyond the request to ask it the way it was measured (BrkApp's local backend only).
+    case decide(DecisionRequest, feature: AIFeature, hint: AIDecisionHint? = nil)
 
     /// One-shot work for the basic-features model, answered in a schema. The others are conversations.
     public var isBasic: Bool {
@@ -556,6 +557,12 @@ public enum AITask: Hashable, Sendable, Codable {
         default: true
         }
     }
+}
+
+/// Place New Tabs for JevK5 (slice B's measurement, verify/ai-native/b-local-models): the five groups nearest the new
+/// tab by meaning, then JevK5 picks among them. The new tab, and each `group` option's tabs by option name.
+public enum AIDecisionHint: Hashable, Sendable, Codable {
+    case placement(question: String, subject: AITab, members: [String: [AITab]], profile: ProfileID)
 }
 
 public struct AITab: Hashable, Sendable, Codable {

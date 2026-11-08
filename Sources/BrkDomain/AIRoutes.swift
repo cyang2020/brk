@@ -102,6 +102,8 @@ extension AICopy {
     public static let cleanupStale = "Not Opened Lately"
     public static let cleanupTooltip = "Tabs you might close"
     public static let maxOff = "Max is off. Turn it on in Settings → Max."
+    /// Tidy on the search model alone found no two tabs alike.
+    public static let nothingAlike = "No Today tabs were alike enough to group."
     public static let noBasicRoute = "Basic AI features need Claude Code or Codex signed in on this Mac, or an Anthropic or OpenAI API key. Set one up in Settings → Max."
     public static func noSchema(_ kind: AIProviderKind) -> String {
         "\(kind.displayName) cannot return answers in a fixed shape, so basic AI features need Claude or Codex, or an Anthropic or OpenAI API key. Choose one in Settings → Max."

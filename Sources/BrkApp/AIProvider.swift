@@ -32,6 +32,14 @@ public enum AIProviderSeam {
     /// The executable for an agent, or nil when it is not installed.
     public static func executable(for kind: AIProviderKind, environment: [String: String] = ProcessInfo.processInfo.environment,
                                   alsoIn fallback: [String] = fallbackDirectories) -> URL? {
+        // A test instance can be given the only folders to look in (empty: none), for a Mac with no agent: PATH alone
+        // cannot hide them, the usual install folders are searched too.
+        if environment["BRK_CONTROL_SOCKET"] != nil, let only = environment["BRK_TEST_AGENT_PATH"] {
+            for directory in only.split(separator: ":").map(String.init) {
+                for name in kind.executableNames where FileManager.default.isExecutableFile(atPath: directory + "/" + name) { return URL(fileURLWithPath: directory + "/" + name) }
+            }
+            return nil
+        }
         let path = environment["PATH"].map { _ in AgentEnvironment.searchPath(environment: environment).filter { !fallbackDirectories.contains($0) } } ?? AgentEnvironment.searchPath(environment: environment)
         for directory in path + fallback {
             for name in kind.executableNames {

@@ -94,6 +94,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     /// The visits a History card lists (`PaneContent.history`): the window's profile's, newest first; none in an
     /// incognito window. Nil while no card shows the History page. F5.
     public var history: [HistoryRow]? = nil
+    /// The History card's matches by meaning for its search text (Brk's own, with the local search model ready).
+    public var historyMeaning: HistoryMeaning? = nil
     /// Who should have keyboard focus. Applied by the window controller only when it changes.
     public var focus: FocusTarget
     /// Shortcut-table actions that apply right now (menu validation greys out the others).
@@ -585,6 +587,9 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var instantLinks: Bool = false
     /// Files and apps for the bar's text; the view drops them once its text has moved on. Only in a new-tab bar.
     public var local: LocalResults? = nil
+    /// Tabs, archived tabs and history the local search model found for the bar's text (Brk's own rows); the view drops
+    /// them once its text has moved on. Nil without the search model.
+    public var meaning: MeaningCandidates? = nil
     public var rates: CurrencyRates? = nil
     /// The time quick answers read (`WindowSession.barClock`).
     public var now = Instant(milliseconds: 0)

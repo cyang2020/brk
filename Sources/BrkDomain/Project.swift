@@ -435,6 +435,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             askProvider: doc.kind != .incognito && state.doc.settings.max.enabled(.commandBar) ? state.askProviderName : nil,
             instantLinks: doc.kind != .incognito && state.doc.settings.max.enabled(.instantLinks),
             local: target == .newTab ? session.localResults : nil,
+            meaning: session.meaning[.commandBar].map { MeaningCandidates(text: $0.text, rows: state.meaningCandidates($0, profile: profile)) },
             rates: state.session.currencyRates,
             now: session.barClock ?? Instant(milliseconds: 0),
             askAgentFound: state.activeAgent != nil,
@@ -560,6 +561,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             ?? WebsiteAppearance(rawValue: state.doc.settings.general.webAppearance.rawValue) ?? .automatic
     )
     snapshot.history = history
+    if history != nil, let profile = historyProfile, let results = session.meaning[.history] {
+        snapshot.historyMeaning = HistoryMeaning(text: results.text, rows: state.historyMeaningRows(results, profile: profile))
+    }
     snapshot.plusMenu = PlusMenu.rows(kind: doc.kind, overrides: state.doc.keyOverrides)
     return snapshot
 }

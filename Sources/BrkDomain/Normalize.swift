@@ -164,6 +164,7 @@ private func repairSessionTargets(_ state: inout AppState) {
         if case .commandBar? = session.overlay {} else {
             if session.suggestions != nil { session.suggestions = nil }
             if session.localResults != nil { session.localResults = nil }
+            if session.meaning[.commandBar] != nil { session.meaning[.commandBar] = nil }
             if session.barClock != nil { session.barClock = nil }
             if session.barTranslation != nil { session.barTranslation = nil }
             if session.barDefinition != nil { session.barDefinition = nil }

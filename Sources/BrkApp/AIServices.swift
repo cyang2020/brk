@@ -30,10 +30,25 @@ final class AIServices {
     private var pendingAttachments: [AIRequestID: [AIAttachment]] = [:]
     /// Where pages are written and how they are previewed (AppStore sets it).
     var pageTools: BrkPageTools?
+    /// The Max settings as the pane shows them now, for work no effect hands them to (the page check).
+    var currentMax: @MainActor () -> MaxSnapshot? = { nil }
+    /// Rule 4's check behind the tab tools' seam (`PageInjectionCheck.decide`).
+    private(set) lazy var pageCheck = PageInjectionModel(channel: basic) { [weak self] in
+        self?.currentMax().map { AIBasicContext(max: $0, choice: $0.settings.provider) }
+    }
+
     init(engine: any WebEngine, send: @escaping (SystemEvent) -> Void, state: @escaping () -> AppState? = { nil }) {
         self.engine = engine; self.send = send; self.state = state
         basic.keys.onChange = { [weak self] statuses in self?.send(.aiKeys(statuses, localDecisions: self?.basic.localDecisions?.isAvailable == true)) }
         basic.onUsage = { [weak self] key, count in self?.send(.aiUsage(key, count)) }
+    }
+
+    /// Puts the page check behind the tab tools' seam; the phrase patterns stay its first pass.
+    func installPageCheck() {
+        PageInjectionCheck.decide = { [weak self] text, url in
+            guard let self else { return PageInjectionCheck.standIn(text) }
+            return await pageCheck.verdict(text, url: url)
+        }
     }
 
     /// The reducer's pause (Name Tabs waits for pages to settle).

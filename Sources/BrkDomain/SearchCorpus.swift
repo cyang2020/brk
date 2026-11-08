@@ -9,6 +9,12 @@ public struct SearchCorpusItem: Hashable, Sendable {
     public var id: String
     public var title: String
     public var url: String
+    public init(kind: Kind, id: String, title: String, url: String) {
+        self.kind = kind
+        self.id = id
+        self.title = title
+        self.url = url
+    }
 }
 
 extension AppState {
@@ -25,9 +31,11 @@ extension AppState {
         }
         func addTabs(under root: ItemID, profile: ProfileID) {
             for id in doc.tree.tabs(under: root) where seenTabs.insert(id).inserted {
-                guard let item = doc.tree.items[id], case .tab(let tab) = item.body, let url = web(tab.url ?? tab.pinnedURL) else { continue }
-                let title = tab.customTitle?.isEmpty == false ? tab.customTitle! : tab.title
-                out[profile, default: []].append(SearchCorpusItem(kind: .tab, id: id.rawValue, title: title, url: url))
+                // The title and address the sidebar shows: a page's title lives in its window's slot, not in the tab.
+                guard let item = doc.tree.items[id], case .tab(let tab) = item.body else { continue }
+                let shown = shownPage(of: id, tab)
+                guard let url = web(shown.url) else { continue }
+                out[profile, default: []].append(SearchCorpusItem(kind: .tab, id: id.rawValue, title: shown.title, url: url))
             }
         }
         for spaceID in doc.spaceOrder {

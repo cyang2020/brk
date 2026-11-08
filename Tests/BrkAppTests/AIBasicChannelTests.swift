@@ -241,7 +241,7 @@ final class AIBasicChannelTests: XCTestCase {
         let none = AIBasicContext(max: MaxSnapshot(settings: settings, detected: [], active: nil), choice: .claude)
         let outcome = await channel.answer(.tidyToday(SpaceID("s"), tabs: tabs), context: none)
         if AIProviderSeam.mode == .real {
-            XCTAssertEqual(outcome, .reply(.groups([AIGroupPlan(folder: "Recipes", tabs: ["a", "b"]), AIGroupPlan(folder: "Travel", tabs: ["c"])])))
+            XCTAssertEqual(outcome, .reply(.groups([AIGroupPlan(folder: "Recipes", tabs: ["a", "b"])])), "a tab like no other stays in Today")
             XCTAssertEqual(clusters.asked, 1)
         }
         XCTAssertEqual(AIBasicChannel.siteName([tabs[0], tabs[2]]), "Tabs", "no site shared by most")
