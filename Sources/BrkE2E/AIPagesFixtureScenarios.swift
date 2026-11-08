@@ -88,10 +88,17 @@ enum AIPagesFixtureScenarios {
 
         // Keep as Tab from the page's own menu, with the right button.
         try click(app, pid: pid, at: CGPoint(x: frame.midX, y: frame.maxY - 30), right: true)
-        var item: CGRect?
-        try app.waitUntil("Keep as Tab in the page's menu", timeout: 6) { item = NativeSystemInput.frame(pid: pid, title: "Keep as Tab", roles: ["AXMenuItem"]); return item != nil }
-        let point = CGPoint(x: item!.midX, y: item!.midY)
-        mouse(.mouseMoved, at: point); usleep(200_000); mouse(.leftMouseDown, at: point); usleep(70_000); mouse(.leftMouseUp, at: point); usleep(500_000)
+        // What the screen shows (the control socket's screenshots leave menus out): Brk's window only.
+        let window = try app.native().windowFrame
+        let top = CGDisplayBounds(CGMainDisplayID()).height - window.maxY
+        let capture = Process()
+        capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        capture.arguments = ["-x", "-R", "\(Int(window.minX)),\(Int(top)),\(Int(window.width)),\(Int(window.height))", app.shotsDirectory.appendingPathComponent("AIPagesFixture-menu-screen.png").path]
+        try? capture.run(); capture.waitUntilExit()
+        // The menu is up at the pointer (the screen capture shows it); Accessibility does not list a menu a web view
+        // opens, so the item is chosen with the keyboard, as a person can: Down, then Return.
+        try NativeSystemInput.postSystemWide(KeyChord([], .downArrow)); usleep(250_000)
+        try NativeSystemInput.postSystemWide(KeyChord([], .returnKey)); usleep(500_000)
         try app.waitUntil("the page's tab", timeout: 8) { try app.view().aiPages.first?.content?.id == page }
         app.sleep(1)
         _ = try app.screenshot("AIPagesFixture-page-tab")

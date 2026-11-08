@@ -355,8 +355,10 @@ enum AIRealPagesScenarios {
                 let rect = try pageOnScreen(app, page)
                 guard let point = try uncovered(app, rect) else { throw Check(description: "the page and its button are both covered") }
                 try click(app, at: point, right: true)
-                shot(app, "keep-menu")
-                try chooseMenu("Keep as Tab")
+                // Accessibility does not list a menu a web view opens (AIPagesFixture's screen capture shows it up):
+                // Down, then Return, as a person can.
+                try key([], .downArrow)
+                try key([], .returnKey)
                 path = viaMenu ? "the page's context menu (asked for)" : "the page's context menu (the button sat under a system dialog)"
             }
             try app.waitUntil("the page's tab shown", timeout: 8) { try app.view().aiPages.first?.content?.id == page }
