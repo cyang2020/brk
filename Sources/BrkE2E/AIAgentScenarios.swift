@@ -21,7 +21,9 @@ enum AIAgentScenarios {
     ]
 
     private static func prepare(_ app: AppUnderTest, _ choice: AIProviderChoice) throws {
-        for feature in AIFeature.allCases { try app.dispatch(.settings(.max(.feature(feature, true)))) }
+        // The basic layer (Name Tabs and the rest) would start its own small-model requests beside the conversation and
+        // add their records to the fixture's; these scenarios count the conversation's processes and prompts.
+        for feature in AIFeature.allCases { try app.dispatch(.settings(.max(.feature(feature, !AIFeature.basicLayer.contains(feature))))) }
         try app.dispatch(.settings(.max(.provider(choice))))
     }
 
