@@ -7,7 +7,7 @@ import BrkUIKit
 /// takes, the approvals it asks for, follow-ups and Stop. Arc has no such panel; it follows Brk's own panel style and T3
 /// Code's behaviour. Source buttons open through Brk in the same browsing context.
 @MainActor
-final class AIAnswerDocumentView: NSView, NSTextViewDelegate {
+final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     private let dispatch: Dispatch
     private let material = NSVisualEffectView()
     private let heading = NSTextField(labelWithString: "Max · Local agent")
@@ -31,6 +31,14 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate {
     private var answer: AIAnswerSnapshot?
     private var shownConversation: AIRequestID?
     private var rendered: [(item: AIConversationItem, text: NSAttributedString)] = []
+    /// The chips of tabs given to the next message, and the @ list while one is typed.
+    private var chipButtons: [AIChipButton] = []
+    private var mentionRows: [AIActionButton] = []
+    private var mentionIndex = 0
+    private var mention: AIMentionSnapshot?
+    /// The query whose list Esc closed: it stays closed until the text after @ changes.
+    private var dismissedMention: String?
+    private let mentionBack = NSView()
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -66,7 +74,15 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate {
         input.usesSingleLineMode = true
         input.cell?.sendsActionOnEndEditing = false
         input.target = self; input.action = #selector(submit)
+        input.delegate = self
         input.identify(.aiControl("input"))
+        mentionBack.wantsLayer = true
+        mentionBack.layer?.cornerRadius = Metrics.ai.approvalRadius.value
+        mentionBack.layer?.borderWidth = Metrics.ai.borderWidth.value
+        mentionBack.layer?.borderColor = NSColor.separatorColor.cgColor
+        mentionBack.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        mentionBack.isHidden = true
+        mentionBack.setAccessibilityIdentifier("ai-mentions")
         send.identify(.aiControl("send"))
         send.onPress = { [weak self] in self?.sendOrStop() }
         folder.identify(.aiControl("folder"))
@@ -88,7 +104,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate {
         approvalDetail.font = .monospacedSystemFont(ofSize: Metrics.ai.stepFont.value, weight: .regular)
         approvalDetail.textColor = .secondaryLabelColor
         approvalDetail.maximumNumberOfLines = 4; approvalDetail.lineBreakMode = .byTruncatingTail
-        for view in [material, heading, question, scroll, close, progress, approvalBack, approvalTitle, approvalDetail, folderStatus, folder, settings, input, send] as [NSView] { addSubview(view) }
+        for view in [material, heading, question, scroll, close, progress, approvalBack, approvalTitle, approvalDetail, folderStatus, folder, settings, input, send, mentionBack] as [NSView] { addSubview(view) }
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
@@ -125,6 +141,8 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate {
             close.title = answer.busy && answer.conversation == nil ? "Cancel" : "Close"
             if answer.busy { progress.startAnimation(nil) } else { progress.stopAnimation(nil) }
             showInput(answer)
+            showChips(answer.conversation)
+            showMention(answer.conversation?.mention)
             showApproval(answer)
             for button in sources + controls { button.removeFromSuperview() }
             sources = answer.sources.enumerated().map { index, source in
@@ -161,13 +179,17 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate {
         send.title = answer.busy ? "Stop" : "Send"
         send.identify(.aiControl(answer.busy ? "stop" : "send"))
         input.isEnabled = !answer.busy
-        input.placeholderString = conversation?.folder != nil && !(conversation?.items.contains { if case .user = $0 { true } else { false } } ?? false) ? "Tell the agent what to do here" : "Ask a follow-up"
+        input.placeholderString = conversation?.folder != nil && !(conversation?.items.contains { if case .user = $0 { true } else { false } } ?? false) ? "Tell the agent what to do here"
+            : conversation?.fresh == true ? "Ask about these tabs, or type @ to add one" : conversation?.tabs == true ? "Ask a follow-up, or type @ to add a tab" : "Ask a follow-up"
         folder.isHidden = !open || conversation?.folder != nil
         settings.isHidden = false
         folderStatus.isHidden = conversation == nil
         if let path = conversation?.folder {
             folderStatus.stringValue = "Tools on in " + (path as NSString).lastPathComponent
             folderStatus.toolTip = path
+        } else if conversation?.tabs == true {
+            folderStatus.stringValue = "Tab tools on · other tools ask each time"
+            folderStatus.toolTip = "The agent reads this profile's tabs. It asks before it first closes or moves them, and before every command, file change or other tool of its own."
         } else {
             folderStatus.stringValue = "Tools off"
             folderStatus.toolTip = "This conversation cannot run commands or change files."
@@ -236,10 +258,106 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate {
 
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         let address = (link as? URL)?.absoluteString ?? link as? String
-        if let address, let url = URL(string: address), ["http", "https"].contains(url.scheme?.lowercased()) {
-            dispatch(.commandBar(.submit(url.absoluteString)))
-        }
+        guard let address, let url = URL(string: address) else { return true }
+        if let tab = AgentTabLink.id(url) { dispatch(.assist(.openTabLink(tab))) }
+        else if ["http", "https"].contains(url.scheme?.lowercased()) { dispatch(.commandBar(.submit(url.absoluteString))) }
         return true
+    }
+
+    // MARK: Chips and @
+
+    private func showChips(_ conversation: AIConversationSnapshot?) {
+        let attached = conversation?.ended == false ? conversation?.attached ?? [] : []
+        guard attached.map(\.id) != chipButtons.map(\.chipID) || attached.map(\.title) != chipButtons.map(\.chipTitle) else { return }
+        for chip in chipButtons { chip.removeFromSuperview() }
+        chipButtons = attached.map { attachment in
+            let count = attachment.tabs.count
+            let title = attachment.kind == .tab ? attachment.title : "\(attachment.title) · \(count)"
+            let chip = AIChipButton(id: attachment.id, title: title)
+            chip.toolTip = attachment.tabs.prefix(12).map { $0.title + ($0.url.map { " — " + $0.absoluteString } ?? "") }.joined(separator: "\n")
+            chip.setAccessibilityIdentifier("ai-chip-" + attachment.id)
+            chip.onRemove = { [weak self] in self?.dispatch(.assist(.detach(attachment.id))) }
+            addSubview(chip)
+            return chip
+        }
+    }
+
+    private func showMention(_ next: AIMentionSnapshot?) {
+        let shown = next.flatMap { $0.query == dismissedMention || $0.matches.isEmpty ? nil : $0 }
+        guard shown != mention else { return }
+        if shown?.query != mention?.query { mentionIndex = 0 }
+        mention = shown
+        for row in mentionRows { row.removeFromSuperview() }
+        mentionRows = (shown?.matches ?? []).enumerated().map { index, tab in
+            let host = tab.url?.host.map { "  —  " + $0 } ?? ""
+            let row = AIActionButton(AgentCopyText.oneLine(tab.title, limit: 60) + host)
+            row.isBordered = false; row.alignment = .left; row.lineBreakMode = .byTruncatingTail
+            row.setAccessibilityIdentifier("ai-mention-\(index)")
+            row.onPress = { [weak self] in self?.pickMention(index) }
+            addSubview(row)
+            return row
+        }
+        mentionBack.isHidden = mentionRows.isEmpty
+        mentionIndex = min(mentionIndex, max(0, mentionRows.count - 1))
+        highlightMention()
+    }
+
+    private func highlightMention() {
+        for (index, row) in mentionRows.enumerated() {
+            row.wantsLayer = true
+            row.layer?.cornerRadius = Metrics.ai.chipRadius.value
+            row.layer?.backgroundColor = index == mentionIndex ? NSColor.controlAccentColor.withAlphaComponent(0.2).cgColor : nil
+        }
+    }
+
+    /// The text after the @ that starts a word, up to the end of the input; nil when there is none.
+    static func mentionQuery(_ text: String) -> String? {
+        guard let at = text.lastIndex(of: "@") else { return nil }
+        if at > text.startIndex, !text[text.index(before: at)].isWhitespace { return nil }
+        let query = String(text[text.index(after: at)...])
+        guard query.count <= 60, !query.contains(where: \.isNewline) else { return nil }
+        return query
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+        let query = Self.mentionQuery(input.stringValue)
+        if query != dismissedMention { dismissedMention = nil }
+        guard answer?.conversation?.tabs == true else { return }
+        if query != answer?.conversation?.mention?.query || (query == nil) != (answer?.conversation?.mention == nil) { dispatch(.assist(.mention(query))) }
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        guard control === input, !mentionRows.isEmpty else { return false }
+        switch selector {
+        case #selector(NSResponder.moveDown(_:)):
+            mentionIndex = (mentionIndex + 1) % mentionRows.count; highlightMention(); return true
+        case #selector(NSResponder.moveUp(_:)):
+            mentionIndex = (mentionIndex + mentionRows.count - 1) % mentionRows.count; highlightMention(); return true
+        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)):
+            pickMention(mentionIndex); return true
+        case #selector(NSResponder.cancelOperation(_:)):
+            dismissedMention = mention?.query
+            showMention(nil)
+            return true
+        default: return false
+        }
+    }
+
+    /// The tab under @ becomes a chip, and the @ and what followed it leave the text.
+    private func pickMention(_ index: Int) {
+        guard let mention, mention.matches.indices.contains(index) else { return }
+        let text = input.stringValue
+        if let at = text.lastIndex(of: "@") { input.stringValue = String(text[..<at]) }
+        dispatch(.assist(.attach([.tab(mention.matches[index].id)])))
+        dispatch(.assist(.mention(nil)))
+        window?.makeFirstResponder(input)
+        input.currentEditor()?.selectedRange = NSRange(location: (input.stringValue as NSString).length, length: 0)
+    }
+
+    /// Tabs dragged from the sidebar are over the panel: its outline says it takes them.
+    func showDropTarget(_ on: Bool) {
+        layer?.borderWidth = on ? Metrics.ai.dropBorderWidth.value : Metrics.ai.borderWidth.value
+        layer?.borderColor = (on ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
     }
 
     override func layout() {
@@ -256,6 +374,36 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate {
             send.frame = CGRect(x: bounds.width - pad - m.sendWidth.value, y: bottom, width: m.sendWidth.value, height: row)
             input.frame = CGRect(x: pad, y: bottom + 2, width: send.frame.minX - gap - pad, height: row - 4)
             bottom -= gap
+            // Chips sit on the input's edge, left to right, as many lines as they need.
+            if !chipButtons.isEmpty {
+                let height = m.chipHeight.value, width = bounds.width - pad * 2
+                var lines: [[(AIChipButton, CGFloat)]] = [[]]
+                var x: CGFloat = 0
+                for chip in chipButtons {
+                    let w = min(m.chipMaxWidth.value, chip.intrinsicContentSize.width + gap)
+                    if x > 0, x + w > width { lines.append([]); x = 0 }
+                    lines[lines.count - 1].append((chip, w))
+                    x += w + gap / 2
+                }
+                for line in lines.reversed() {
+                    bottom -= height
+                    var left = pad
+                    for (chip, w) in line { chip.frame = CGRect(x: left, y: bottom, width: w, height: height); left += w + gap / 2 }
+                    bottom -= gap / 2
+                }
+                bottom -= gap / 2
+            }
+            // The @ list floats over the transcript, just above the input.
+            if !mentionRows.isEmpty {
+                let height = m.mentionRowHeight.value, inner = gap / 2
+                var top = (chipButtons.first?.frame.minY ?? input.frame.minY) - gap / 2 - CGFloat(mentionRows.count) * height - inner * 2
+                mentionBack.frame = CGRect(x: pad, y: top, width: bounds.width - pad * 2, height: CGFloat(mentionRows.count) * height + inner * 2)
+                top += inner
+                for row in mentionRows {
+                    row.frame = CGRect(x: pad + inner, y: top, width: bounds.width - (pad + inner) * 2, height: height)
+                    top += height
+                }
+            }
         }
         // The status line: what this conversation may do, a way to a folder, a way to the agent's settings.
         bottom -= row
@@ -351,10 +499,38 @@ enum AIConversationText {
             if intent.contains(.emphasized) { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
             if intent.contains(.code) { font = NSFont.monospacedSystemFont(ofSize: size - 1, weight: .regular) }
             var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
-            if let link = run.link, ["http", "https"].contains(link.scheme?.lowercased()) { attributes[.link] = link }
+            if let link = run.link, ["http", "https", AgentTabLink.scheme].contains(link.scheme?.lowercased()) { attributes[.link] = link }
             out.append(NSAttributedString(string: String(parsed[run.range].characters), attributes: attributes))
         }
         return out
+    }
+}
+
+/// A tab, folder or Space given to the next message: its title, and an × that takes it back.
+@MainActor
+private final class AIChipButton: NSButton {
+    let chipID: String
+    let chipTitle: String
+    var onRemove: () -> Void = {}
+    init(id: String, title: String) {
+        chipID = id
+        chipTitle = title
+        super.init(frame: .zero)
+        self.title = "✕  " + title
+        bezelStyle = .inline; setButtonType(.momentaryPushIn)
+        font = .systemFont(ofSize: Metrics.ai.stepFont.value)
+        lineBreakMode = .byTruncatingTail
+        target = self; action = #selector(pressed)
+        setAccessibilityLabel("Remove " + title)
+    }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
+    @objc private func pressed() { onRemove() }
+}
+
+enum AgentCopyText {
+    static func oneLine(_ text: String, limit: Int) -> String {
+        let line = text.split(whereSeparator: \.isNewline).joined(separator: " ")
+        return line.count > limit ? String(line.prefix(limit)) + "…" : line
     }
 }
 

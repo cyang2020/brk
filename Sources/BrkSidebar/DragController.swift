@@ -291,6 +291,8 @@ final class DragController {
 
     private func target(at root: CGPoint, item: Item, context: Context) -> Target? {
         guard let sidebar else { return nil }
+        // The Max panel lies over the page; nothing of Arc's drop rules changes where it is not.
+        if let command = sidebar.panelDrop?(item.id, item.kind, root) { return .content(command) }
         if item.kind == .tab, let command = sidebar.contentDrop?(item.id, root) { return .content(command) }
         let f = context.frames
         // The strip above an empty, hint-less tray is the way in (`FavoritesGrid.emptyDropZone`), in a space's own window only.

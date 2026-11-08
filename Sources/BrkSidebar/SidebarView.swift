@@ -16,6 +16,8 @@ import BrkUIKit
 public final class SidebarView: NSView {
     /// Content owns its hit zones. Sidebar supplies only the dragged tab and a root-coordinate pointer.
     public var contentDrop: ((ItemID, CGPoint) -> Command?)?
+    /// A drop on the Max panel beside the page (Brk's own): any row, tab, split or folder, becomes this command.
+    public var panelDrop: ((ItemID, ItemKind, CGPoint) -> Command?)?
     /// The drag card's size for what the page shows now.
     public var contentDropCardSize: (() -> CGSize)?
     public var beginContentDrop: ((ItemID) -> Void)?
