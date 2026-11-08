@@ -273,6 +273,26 @@ enum AIRealTabsScenarios {
             return "steps \(steps(ai)); links \(answer.contains("brk://tab/")); model \(ai.conversation?.model ?? "?"); answer: \(short(answer))"
         } }
 
+        if wanted("cheapest") { log.check("a tab link in the answer, clicked, shows that tab") {
+            let toaster = try todayTab(app, "shop-toaster.html")
+            let answer = reply(try app.view().ai)
+            // The link's text as the answer wrote it: [text](brk://tab/<toaster>).
+            guard let range = answer.range(of: "](brk://tab/\(toaster.rawValue))"), let open = answer[..<range.lowerBound].lastIndex(of: "[") else {
+                throw Check(description: "the answer has no link to the toaster's tab")
+            }
+            let text = String(answer[answer.index(after: open)..<range.lowerBound])
+            try click(app, at: centre(frame(app, .row(try todayTab(app, "shop-kettle.html")))))
+            var found: CGRect?
+            try app.waitUntil("the link “\(text)” in the panel", timeout: 6) { found = NativeSystemInput.frame(pid: pid, title: text, roles: ["AXLink"]); return found != nil }
+            let point = CGPoint(x: found!.minX + min(20, found!.width / 2), y: found!.midY)
+            try mouse(.mouseMoved, at: point); usleep(200_000)
+            try mouse(.leftMouseDown, at: point); usleep(70_000)
+            try mouse(.leftMouseUp, at: point); usleep(400_000)
+            try app.waitUntil("the toaster's tab shown") { try app.view().space.today.rows.contains { if case .tab(let t) = $0 { t.id == toaster && t.status == .current } else { false } } }
+            shot(app, "link-clicked")
+            return "clicked “\(text)”, its tab is current"
+        } }
+
         if wanted("mention") { log.check("@ in the input adds a tab as a chip; its × takes it back") {
             if try app.view().ai == nil {
                 try click(app, at: centre(frame(app, .row(try todayTab(app, "shop-kettle.html")))), right: true)
