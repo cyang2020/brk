@@ -1,3 +1,4 @@
+import BrkBase
 import Foundation
 @testable import BrkLocalModels
 import XCTest
@@ -131,5 +132,42 @@ final class JevNoneRuleTests: XCTestCase {
         XCTAssertEqual(JevNoneRule.apply(surelyNone, none: "none"), surelyNone)
         let noNoneOption = JevAnswer(.choice, ids: ["a", "b"], probabilities: [0.4, 0.6])
         XCTAssertEqual(JevNoneRule.apply(noNoneOption, none: "none"), noNoneOption)
+    }
+}
+
+final class LocalDecisionBackendTests: XCTestCase {
+    private let request = DecisionRequest(state: .string("New tab\nTitle: MySQL 索引优化实战 - 掘金"), questions: [
+        "group": .choice("Which group?", options: [DecisionOption("db", "数据库"), DecisionOption("tokyo", "东京旅行")], none: "None of these groups"),
+        "close": .noul("Should the user close it?"),
+        "fit": .score("How well does it fit?", levels: ["badly", "partly", "well"]),
+    ])
+
+    func testTheRequestGoesOverInTheJevShape() {
+        let jev = LocalDecisionBackend.jevRequest(request)
+        XCTAssertEqual(jev.state, .text("New tab\nTitle: MySQL 索引优化实战 - 掘金"))
+        XCTAssertEqual(jev.questions.map(\.key), ["close", "fit", "group"])
+        XCTAssertEqual(jev.questions[2].question.options.map(\.text), ["db: 数据库", "tokyo: 东京旅行", "none_of_the_above: None of these groups"])
+        XCTAssertEqual(jev.questions[1].question.options.map(\.text), ["0: badly", "1: partly", "2: well"])
+        XCTAssertEqual(jev.questions[0].question.kind, .noul)
+        let structured = LocalDecisionBackend.jevRequest(DecisionRequest(state: .object(["title": .string("x")]), questions: ["q": .noul("?")]))
+        XCTAssertEqual(structured.state, .json(#"{"title":"x"}"#))
+    }
+
+    func testAnswersComeBackInSliceAsShapeWithTheNoneRule() throws {
+        let reply = JevResponse(model: "jevk5-4b-v0.3-q4", answers: [
+            "group": JevAnswer(.choice, ids: ["db", "tokyo", "none_of_the_above"], probabilities: [0.09, 0.01, 0.90]),
+            "close": JevAnswer(.noul, ids: ["true", "false"], probabilities: [0.3, 0.7]),
+            "fit": JevAnswer(.score, ids: ["0", "1", "2"], probabilities: [0.1, 0.2, 0.7]),
+        ], usage: JevUsage(inputTokens: 300), latencyMS: 900)
+        let answers = try LocalDecisionBackend.answers(reply, for: request, backend: "jevk5-4b-v0.3-q4")
+        XCTAssertTrue(request.accepts(answers))
+        guard case .choice(let name, let probabilities)? = answers["group"] else { return XCTFail() }
+        XCTAssertEqual(name, "db")
+        XCTAssertEqual(try XCTUnwrap(probabilities?["db"]), 0.9, accuracy: 1e-9)
+        XCTAssertEqual(DecisionBand(answers["group"]?.probability), .act)
+        XCTAssertEqual(answers["close"], .noul(false, probability: 0.3))
+        guard case .score(let level, let expected)? = answers["fit"] else { return XCTFail() }
+        XCTAssertEqual(level, 2)
+        XCTAssertEqual(try XCTUnwrap(expected), 1.6, accuracy: 1e-9)
     }
 }

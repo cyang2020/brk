@@ -189,9 +189,12 @@ final class LocalModelServices {
         guard var embedder = models.embedder, !titles.isEmpty else { return nil }
         embedder.dimensions = 768
         guard let vectors = try? await embedder.embed(titles.map { .document(title: nil, text: $0) }) else { return nil }
-        return TabClustering.clusters(vectors)
+        return EmbeddingGroups.clusters(vectors)
     }
 
     /// The decider when the decision model is usable.
     var decider: LocalDecider? { models.decider }
+
+    /// JevK5 behind slice A's `DecisionBackend`, for `AIBasicChannel.localDecisions` once that channel is merged.
+    lazy var decisionBackend = LocalDecisionBackend(models: models)
 }

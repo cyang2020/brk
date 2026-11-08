@@ -89,25 +89,25 @@ final class IndexAndClusterTests: XCTestCase {
 
     func testClustersMergeCloseVectorsOnly() {
         let vectors = [[1, 0, 0], [0.95, 0.1, 0], [0, 1, 0], [0.05, 0.98, 0], [0, 0, 1]].map { VectorMath.normalized($0.map(Float.init)) }
-        XCTAssertEqual(TabClustering.clusters(vectors, threshold: 0.7), [[0, 1], [2, 3], [4]])
-        XCTAssertEqual(TabClustering.clusters(vectors, threshold: -1).count, 1)
-        XCTAssertEqual(TabClustering.clusters(vectors, threshold: 1.01).count, 5)
-        XCTAssertEqual(TabClustering.clusters([], threshold: 0.7), [])
+        XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: 0.7), [[0, 1], [2, 3], [4]])
+        XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: -1).count, 1)
+        XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: 1.01).count, 5)
+        XCTAssertEqual(EmbeddingGroups.clusters([], threshold: 0.7), [])
     }
 
     /// Average linkage, not single: a chain of neighbours does not pull far ends together.
     func testAverageLinkageDoesNotChain() {
         let angles: [Float] = [0, 0.5, 1.0, 1.5]
         let vectors = angles.map { [cos($0), sin($0)] }
-        let clusters = TabClustering.clusters(vectors, threshold: 0.8)
+        let clusters = EmbeddingGroups.clusters(vectors, threshold: 0.8)
         XCTAssertGreaterThan(clusters.count, 1)
     }
 
     func testNearestAndDuplicateCandidates() {
         let groups: [(id: String, vectors: [[Float]])] = [("db", [[1, 0], [0.9, 0.1]].map(VectorMath.normalized)), ("tokyo", [[0, 1]]), ("empty", [])]
-        let nearest = TabClustering.nearest(VectorMath.normalized([0.8, 0.3]), groups: groups, limit: 5)
+        let nearest = EmbeddingGroups.nearest(VectorMath.normalized([0.8, 0.3]), groups: groups, limit: 5)
         XCTAssertEqual(nearest.map(\.id), ["db", "tokyo"])
-        let pairs = TabClustering.duplicateCandidates([[1, 0], [0.999, 0.04], [0, 1]].map(VectorMath.normalized), threshold: 0.92)
+        let pairs = EmbeddingGroups.duplicateCandidates([[1, 0], [0.999, 0.04], [0, 1]].map(VectorMath.normalized), threshold: 0.92)
         XCTAssertEqual(pairs.map { [$0.0, $0.1] }, [[0, 1]])
     }
 
