@@ -229,8 +229,12 @@ enum AIRealTabsScenarios {
             app.sleep(1)
             try clickAX(identifier: ViewID.settingsField("enableMax").identifier, "Turn On Max")
             try app.waitUntil("Max on") { try settings(app).max.settings.enabled(.commandBar) }
-            try choosePopUp(ViewID.settingsField("agentChoice").identifier, kind.displayName)
-            try app.waitUntil("\(kind.displayName) chosen") { try settings(app).max.settings.provider == choice }
+            // A pop-up that opened late can miss the typed letters: once more, as a person would.
+            for attempt in 1...2 {
+                try choosePopUp(ViewID.settingsField("agentChoice").identifier, kind.displayName)
+                do { try app.waitUntil("\(kind.displayName) chosen") { try settings(app).max.settings.provider == choice }; break }
+                catch { if attempt == 2 { throw error }; try key([], .escape) }
+            }
             var status: AIAgentStatus?
             try app.waitUntil("the agent's status", timeout: 40) {
                 status = try settings(app).max.agents.first { $0.kind == kind }

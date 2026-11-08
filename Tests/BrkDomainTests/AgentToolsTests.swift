@@ -103,6 +103,17 @@ final class AgentToolsTests: XCTestCase {
         XCTAssertTrue(d.snapshot.pages.filter(\.isAIReader).isEmpty)
     }
 
+    /// A page loaded out of sight did not answer the reader in time on a real launch: it is read like one not loaded.
+    func testALoadedTabOutOfSightIsReadByAHiddenReader() throws {
+        let d = enabled()
+        let back = d.open("https://back.example/")
+        _ = d.open("https://front.example/")
+        XCTAssertNotEqual(d.current?.id, back)
+        let t = d.system(.agentRead(AgentReadRequest(call: "r1", window: d.window, tab: back.rawValue, part: .text)))
+        XCTAssertFalse(t.effects.contains { if case .aiRead = $0 { true } else { false } }, "not its own page")
+        XCTAssertEqual(d.snapshot.pages.first(where: \.isAIReader)?.initialURL, URL(string: "https://back.example/"))
+    }
+
     func testSelectionComesFromTheLivePageAndAnUnknownTabFails() throws {
         let d = enabled()
         let (page, _) = try ready(d)

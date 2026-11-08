@@ -2,6 +2,7 @@ import BrkBase
 import BrkDomain
 import BrkEngine
 import Foundation
+import os
 
 /// One conversation's tab tools: what its agent may see, what it may change without asking, and the calls in flight.
 ///
@@ -106,7 +107,22 @@ import Foundation
 
     // MARK: Calls
 
+    private static let log = Logger(subsystem: "brk", category: "tools")
+
+    /// One tool call. The log says which tool and how it ended, never what a page says.
     func call(_ name: String, _ arguments: [String: Any]) async -> BrkToolResult {
+        let started = Date()
+        let result = await perform(name, arguments)
+        let milliseconds = Int(Date().timeIntervalSince(started) * 1000)
+        if result.isError {
+            Self.log.notice("\(name, privacy: .public) failed after \(milliseconds) ms: \(result.body["error"] as? String ?? "", privacy: .public)")
+        } else {
+            Self.log.notice("\(name, privacy: .public) ok after \(milliseconds) ms")
+        }
+        return result
+    }
+
+    private func perform(_ name: String, _ arguments: [String: Any]) async -> BrkToolResult {
         guard !closed else { return .error("This conversation has ended.") }
         let call: BrkToolCatalog.Call
         do { call = try BrkToolCatalog.parse(name, arguments) } catch { return .error(error.message) }

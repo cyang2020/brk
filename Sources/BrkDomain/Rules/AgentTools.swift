@@ -76,9 +76,12 @@ extension Work {
         func fail(_ text: String) { effects.append(.agentReadDone(request.call, .failed(text))) }
         guard state.doc.windows[request.window] != nil, state.agentProfile(in: request.window) != nil else { return fail("This conversation's window is gone.") }
         guard let facts = state.agentTab(request.tab, window: request.window) else { return fail("No tab has this id. List or search tabs for current ids.") }
-        // A live page of this tab, the conversation's window first.
+        // A live page of this tab that is on screen, the conversation's window first. A page loaded out of sight does
+        // not answer the reader in time (Chromium's DevTools timed out on every one in the real run of 2026-11-08), so
+        // such a tab is read like one that is not loaded.
+        let onScreen = state.onScreenTabs()
         let live = state.session.live.filter { page, value in
-            guard page.item.rawValue == facts.id, case .ready = value.document else { return false }
+            guard page.item.rawValue == facts.id, request.part == .selection || onScreen.contains(page.item), case .ready = value.document else { return false }
             return value.requestContext == state.libraryContext(in: page.window)
         }.sorted { ($0.key.window == request.window ? 0 : 1, $0.key.window.rawValue) < ($1.key.window == request.window ? 0 : 1, $1.key.window.rawValue) }.first
         if request.part == .selection {

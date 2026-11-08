@@ -15,18 +15,27 @@ enum PageInjectionVerdict: Equatable, Sendable {
     /// The seam: text and address in, verdict out. Slice A's decision call replaces this.
     static var decide: (_ text: String, _ url: URL?) async -> PageInjectionVerdict = { text, _ in standIn(text) }
 
-    /// Phrases of text written to steer an agent rather than to inform a reader. Deliberately narrow: a flag makes every
+    /// Wording of text written to steer an agent rather than to inform a reader. Deliberately narrow: a flag makes every
     /// tool ask, so a false one costs clicks, never data.
+    private static let patterns: [NSRegularExpression] = [
+        #"\b(ignore|disregard|forget|override)\b.{0,40}\b(previous|prior|earlier|above|your|all|system)\b.{0,20}\b(instructions?|prompts?|rules)\b"#,
+        #"\b(instructions?|notes?|messages?|commands?)\s+(for|to)\s+(an?\s+)?(ai|llm|assistant|agents?|ai agents?|language models?)\b"#,
+        #"\b(note|attention|hey)\s*(to\s+)?(ai|llm|assistant|agent)s?\s*[:,]"#,
+        #"\bif you are an? (ai|llm|language model|assistant|agent)\b"#,
+        #"\bsystem (prompt|instruction|message)s?\s*[:：]"#,
+        #"<\|im_start\|>|\[/?inst\]"#,
+        #"\b(curl|wget)\b[^\n|]{0,200}\|\s*(ba|z)?sh\b"#,
+        #"忽略.{0,10}(之前|以上|所有|先前).{0,6}(指令|指示|提示)"#,
+        #"(给|致)\s*(ai|AI|人工智能|助手|智能体).{0,4}(的)?(指令|指示)"#,
+    ].compactMap { try? NSRegularExpression(pattern: $0, options: [.caseInsensitive, .dotMatchesLineSeparators]) }
+
     static func standIn(_ text: String) -> PageInjectionVerdict {
-        let lower = text.lowercased()
-        let phrases = [
-            "ignore previous instructions", "ignore all previous instructions", "ignore the previous instructions", "disregard previous instructions",
-            "ignore your instructions", "disregard your instructions", "new instructions for the ai", "instructions for ai agents",
-            "note to ai", "attention ai", "if you are an ai", "you are an ai assistant reading this", "system prompt:", "<|im_start|>",
-            "run the following command", "execute the following command", "curl -s", "| sh", "| bash", "rm -rf",
-            "忽略之前的指令", "忽略以上指令", "忽略所有指令", "给ai的指令",
-        ]
-        guard let hit = phrases.first(where: lower.contains) else { return .clean }
-        return .flagged(probability: 1, reason: "it contains “\(hit)”")
+        let range = NSRange(text.startIndex..., in: text)
+        for pattern in patterns {
+            guard let match = pattern.firstMatch(in: text, range: range), let found = Range(match.range, in: text) else { continue }
+            let quoted = text[found].split(whereSeparator: \.isNewline).joined(separator: " ").prefix(60)
+            return .flagged(probability: 1, reason: "it contains “\(quoted)”")
+        }
+        return .clean
     }
 }

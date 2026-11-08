@@ -71,11 +71,16 @@ import Foundation
     static func answersItself(tool: String, input: [String: Any], directory: URL, home: String = NSHomeDirectory()) -> Bool {
         if tool.hasPrefix("mcp__\(BrkToolCatalog.server)__") || tool == "Skill" { return true }
         guard tool == "Read", let path = input["file_path"] as? String, path.hasPrefix("/") else { return false }
-        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
-        let roots = [home + "/.claude/skills", home + "/.claude/plugins", directory.path].map {
-            URL(fileURLWithPath: $0).resolvingSymlinksInPath().standardizedFileURL.path
+        func real(_ path: String) -> String { URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path }
+        let file = URL(fileURLWithPath: path).standardizedFileURL.path
+        if real(file).hasPrefix(real(directory.path) + "/") { return true }
+        // Installed skills are often links to another folder (~/.claude/skills/lark-doc -> ~/.agents/skills/lark-doc):
+        // a file is the skill's when, followed to where it really is, it stays inside that skill's own folder.
+        for root in [home + "/.claude/skills", home + "/.claude/plugins"] where file.hasPrefix(root + "/") {
+            guard let skill = file.dropFirst(root.count + 1).split(separator: "/").first else { return false }
+            return real(file).hasPrefix(real(root + "/" + skill) + "/")
         }
-        return roots.contains { resolved.hasPrefix($0 + "/") }
+        return false
     }
 
     func start() throws {
