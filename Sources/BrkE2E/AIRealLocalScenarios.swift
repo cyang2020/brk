@@ -314,8 +314,12 @@ enum AIRealLocalScenarios {
             let max = try settings(app).max
             try expect(AIFeature.basicLayer.allSatisfy(max.settings.enabled), "Turn On Max left the Brk features off: \(max.settings.features ?? [:])")
             if agent == nil { guard case .unavailable = max.basicRoute else { throw Check(description: "an agent was found: \(max.basicRoute)") } }
-            try scrollSettings(app, lines: -8, times: 14)
-            let card = ocr(captureSettings(app, "on-this-mac-\(name)"))
+            // The card sits below Arc's rows and the Accounts card: scroll as a person does until it is on screen.
+            var card = ""
+            for _ in 0..<6 where !card.contains("Chinese") {
+                try scrollSettings(app, lines: -8, times: 12)
+                card = ocr(captureSettings(app, "on-this-mac-\(name)"))
+            }
             try expect(card.contains("Chinese"), "the card does not read the measured languages: \(card.prefix(400))")
             try key(.command, .w)
             ready = true

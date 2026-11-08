@@ -102,12 +102,20 @@ extension AppState {
     }
 
     /// The bar's rows for an answer, best first: tabs of the window's profile (with their item, so the row switches to
-    /// them), archived tabs and history by address. Keys the state no longer has are skipped.
+    /// them), archived tabs and history by address, one row per address. An address that is open in a tab is that tab,
+    /// whichever of its entries matched first (a visited page's history entry and its tab read the same to the model).
+    /// Keys the state no longer has are skipped.
     func meaningCandidates(_ results: MeaningResults, profile: ProfileID) -> [MeaningCandidate] {
         var out: [MeaningCandidate] = []
-        var seen = Set<String>()
+        var position: [String: Int] = [:]
         for hit in results.hits {
-            guard let candidate = meaningCandidate(hit.key, profile: profile), seen.insert(candidate.url.absoluteString).inserted else { continue }
+            guard let candidate = meaningCandidate(hit.key, profile: profile) else { continue }
+            let address = candidate.url.absoluteString
+            if let at = position[address] {
+                if out[at].tab == nil, candidate.tab != nil { out[at] = candidate }
+                continue
+            }
+            position[address] = out.count
             out.append(candidate)
         }
         return out

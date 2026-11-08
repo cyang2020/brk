@@ -52,13 +52,14 @@ final class LocalWiringDomainTests: XCTestCase {
         d.user(.commandBar(.open(.newTab)))
         d.user(.commandBar(.queryChanged("something warm to cook")))
         d.system(.meaningResults(d.window, MeaningResults(text: "something warm to cook", scope: .commandBar, hits: [
-            MeaningHit(key: "tab:" + soup.rawValue, score: 0.84), MeaningHit(key: "history:https://news.example/today", score: 0.8),
+            MeaningHit(key: "history:https://recipes.example/soup", score: 0.84), MeaningHit(key: "tab:" + soup.rawValue, score: 0.84),
+            MeaningHit(key: "history:https://news.example/today", score: 0.8),
             MeaningHit(key: "tab:gone", score: 0.79), MeaningHit(key: "history:https://never.example/", score: 0.78)])))
         guard case .commandBar(let bar)? = d.view.overlay else { return XCTFail("no bar") }
         let found = try XCTUnwrap(bar.meaning)
         XCTAssertEqual(found.text, "something warm to cook")
         XCTAssertEqual(found.rows.map(\.place), [.tab, .history], "keys the state no longer has are skipped")
-        XCTAssertEqual(found.rows.first?.tab, soup)
+        XCTAssertEqual(found.rows.first?.tab, soup, "an address open in a tab is the tab, though its history entry came first")
         XCTAssertEqual(found.rows.first?.url.absoluteString, "https://recipes.example/soup")
         XCTAssertEqual(found.rows.last?.url.absoluteString, "https://news.example/today")
         _ = other
