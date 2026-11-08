@@ -188,7 +188,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
             folderStatus.stringValue = "Tools on in " + (path as NSString).lastPathComponent
             folderStatus.toolTip = path
         } else if conversation?.tabs == true {
-            folderStatus.stringValue = "Tab tools on · other tools ask each time"
+            folderStatus.stringValue = "Tab tools on · others ask"
             folderStatus.toolTip = "The agent reads this profile's tabs. It asks before it first closes or moves them, and before every command, file change or other tool of its own."
         } else {
             folderStatus.stringValue = "Tools off"
@@ -471,16 +471,62 @@ enum AIConversationText {
         let plain: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: size), .foregroundColor: NSColor.labelColor]
         let code: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedSystemFont(ofSize: size - 1, weight: .regular), .foregroundColor: NSColor.labelColor]
         var inCode = false, first = true
-        for line in text.components(separatedBy: "\n") {
+        let lines = text.components(separatedBy: "\n")
+        var index = 0
+        while index < lines.count {
+            let line = lines[index]
+            index += 1
             if line.trimmingCharacters(in: .whitespaces).hasPrefix("```") { inCode.toggle(); continue }
             if !first { out.append(NSAttributedString(string: "\n", attributes: plain)) }
             first = false
             if inCode { out.append(NSAttributedString(string: line, attributes: code)); continue }
+            // A Markdown table: a header row, a |---| row, then rows while lines start with |.
+            if index < lines.count, let header = tableCells(line), let rule = tableCells(lines[index]), rule.allSatisfy({ $0.allSatisfy { "-: ".contains($0) } && $0.contains("-") }) {
+                var rows = [header]
+                index += 1
+                while index < lines.count, let cells = tableCells(lines[index]) { rows.append(cells); index += 1 }
+                out.append(table(rows, size: size))
+                continue
+            }
             let hashes = line.prefix { $0 == "#" }.count
             if (1...6).contains(hashes), line.dropFirst(hashes).first == " " {
                 out.append(inline(String(line.dropFirst(hashes + 1)), size: size, weight: .semibold))
             } else {
                 out.append(inline(line, size: size, weight: .regular))
+            }
+        }
+        return out
+    }
+
+    /// The cells of a `| a | b |` line, nil for any other line.
+    static func tableCells(_ line: String) -> [String]? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("|"), trimmed.count > 1 else { return nil }
+        var body = trimmed.dropFirst()
+        if body.hasSuffix("|") { body = body.dropLast() }
+        return body.split(separator: "|", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    /// Rows as an AppKit text table: hairline borders, the header row in semibold.
+    private static func table(_ rows: [[String]], size: CGFloat) -> NSAttributedString {
+        let columns = rows.map(\.count).max() ?? 1
+        let table = NSTextTable()
+        table.numberOfColumns = columns
+        table.collapsesBorders = true
+        let out = NSMutableAttributedString()
+        for (row, cells) in rows.enumerated() {
+            for column in 0..<columns {
+                let block = NSTextTableBlock(table: table, startingRow: row, rowSpan: 1, startingColumn: column, columnSpan: 1)
+                block.setWidth(4, type: .absoluteValueType, for: .padding)
+                block.setWidth(Metrics.ai.borderWidth.value, type: .absoluteValueType, for: .border)
+                block.setBorderColor(.separatorColor)
+                if row == 0 { block.backgroundColor = NSColor.labelColor.withAlphaComponent(0.06) }
+                let style = NSMutableParagraphStyle()
+                style.textBlocks = [block]
+                let cell = NSMutableAttributedString(attributedString: inline(column < cells.count ? cells[column] : "", size: size - 1, weight: row == 0 ? .semibold : .regular))
+                cell.append(NSAttributedString(string: "\n", attributes: [.font: NSFont.systemFont(ofSize: size - 1)]))
+                cell.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: cell.length))
+                out.append(cell)
             }
         }
         return out

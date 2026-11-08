@@ -42,7 +42,8 @@ enum AIRealTabsScenarios {
     // MARK: Real input
 
     private static let codes: [Character: (CGKeyCode, Bool)] = {
-        var map: [Character: (CGKeyCode, Bool)] = [" ": (49, false), ".": (47, false), "-": (27, false), "@": (19, true), "/": (44, false), ":": (41, true)]
+        var map: [Character: (CGKeyCode, Bool)] = [" ": (49, false), ".": (47, false), "-": (27, false), "@": (19, true), "/": (44, false), ":": (41, true),
+                                                   "?": (44, true), "=": (24, false), "_": (27, true), "&": (26, true)]
         for (letter, code) in zip("asdfhgzxcvbqwerytuiopnmljk", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 32, 34, 31, 35, 45, 46, 37, 38, 40] as [CGKeyCode]) {
             map[letter] = (code, false); map[Character(letter.uppercased())] = (code, true)
         }
@@ -291,6 +292,8 @@ enum AIRealTabsScenarios {
         if wanted("feishu") { log.check("drag three tabs onto the panel, “帮我把这几个 tabs 总结一下 变成一个飞书文档”") {
             try closePanel(app)
             let tabs = try ["kettle", "toaster", "blender"].map { try todayTab(app, "shop-\($0).html") }
+            // A plain click ends the earlier multi-selection, so Ask AI gives this one tab.
+            try click(app, at: centre(frame(app, .row(tabs[0]))))
             try click(app, at: centre(frame(app, .row(tabs[0]))), right: true)
             try chooseMenu("Ask AI")
             try app.waitUntil("the panel") { try app.view().ai?.conversation?.attached.count == 1 }
