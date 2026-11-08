@@ -40,6 +40,16 @@ public final class BrkCoreRuntime {
         self.application = application
     }
 
+    /// What Chrome's own `main` does first (chrome/app/chrome_exe_main_mac.cc): a stand-in default malloc zone, registered while the process
+    /// has one thread, which Chromium's allocator swaps for its own when the framework loads. Call before anything else. Without the library
+    /// (a bundle assembled before it existed) the framework still swaps the zones itself, as it did before.
+    public static func registerAllocatorZone() {
+        let path = Bundle.main.bundleURL.appendingPathComponent("Contents/Frameworks/libBrkCoreEarly.dylib").path
+        guard let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL), let entry = dlsym(handle, "BrkCoreEarlyMallocZoneRegistration") else { return }
+        typealias Entry = @convention(c) () -> Void
+        unsafeBitCast(entry, to: Entry.self)()
+    }
+
     /// Runs Chromium's main, which runs NSApp, until Chromium has shut down. The exit code.
     public func run() -> Int32 { Int32(application.run()) }
 

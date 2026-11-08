@@ -14,8 +14,10 @@ import BrkEngine
 BrkToolBridge.runIfAsked()
 
 MainActor.assumeIsolated {
-    CrashBacktrace.install()
     let options = LaunchOptions()
+    // Before anything else, while this is the only thread (BrkCoreRuntime.registerAllocatorZone).
+    if options.engine == .core { BrkCoreRuntime.registerAllocatorZone() }
+    CrashBacktrace.install()
     let engine: any WebEngine
     var coreRuntime: BrkCoreRuntime?
     switch options.engine {

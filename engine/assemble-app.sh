@@ -9,5 +9,7 @@ rm -rf "$ROOT/dist-core"
 mkdir -p "$ROOT/dist-core"
 cp -cR "$ROOT/dist/Brk.app" "$APP"
 cp -cR "$BRK_SRC/$BRK_OUT_BRK/BrkCore.framework" "$APP/Contents/Frameworks/BrkCore.framework"
+# Loaded by Brk's main before the framework (BrkCoreRuntime.registerAllocatorZone).
+cp -c "$BRK_SRC/$BRK_OUT_BRK/libBrkCoreEarly.dylib" "$APP/Contents/Frameworks/libBrkCoreEarly.dylib"
 codesign --force --deep --sign - "$APP" >/dev/null 2>&1
 codesign --verify --deep --strict "$APP" && echo "$APP"

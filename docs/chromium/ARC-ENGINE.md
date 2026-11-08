@@ -122,6 +122,25 @@ in `engine/tools/arc-inspect.sh`; its output lands in `~/brk-chromium/arc-notes/
 - [inferred] Chromium makes the popup's web contents as usual, so `activeTab`, `chrome.tabs` and `currentWindow` behave as in
   Chrome. Instead of Chrome's bubble, the shell gets the web contents and hosts its view in its own window.
 
+### The action popup's window (read 2026-11-08)
+
+- [seen] `Arc.BrowserExtensionWindow` is an `NSWindow` subclass (not `NSPanel`) and its own `NSWindowDelegate`, with three methods:
+  `windowWillClose:`, `initWithContentRect:styleMask:backing:defer:` (Swift's "not available" trap) and `.cxx_destruct`.
+- [seen] Its Swift initializer (arm64 0x1001082c0 to 0x1001084b8, disassembled with `llvm-objdump` from a thinned copy of `MacOS/Arc`, message
+  sends resolved through the `objc_msgSend$` stubs to `__objc_selrefs`) calls `initWithContentRect:styleMask:backing:defer:` with style mask
+  **3** (titled and closable) and backing 2 (buffered), a content rect built from 300.0, then `setDelegate:` (itself),
+  `setContentViewController:` (an `NSViewController` whose view hosts the popup's `nativeView`), `setContentSize:`,
+  `setCollectionBehavior:` 256 (full-screen auxiliary), `setMovableByWindowBackground:` YES, `setTabbingMode:` 2 (disallowed). No titlebar
+  call (`titlebarAppearsTransparent`, `titleVisibility`, `standardWindowButton:`, `setLevel:`, `setHasShadow:`) appears in that file's code.
+- [seen] `Arc.BrowserExtensionWindowController` has `windowDidBecomeKey:`, `onWindowWillMove:`, `closeCurrentItem:` and the ivar
+  `userHasMovedWindow`. Its setup calls `setWindowFrameAutosaveName:` (with the bundle identifier; the string `.browserExtensionWindowAutosaveFrame`
+  is in the binary) and adds two notification observers; its placement reads `window.parentWindow`, an anchor view's `bounds` converted to the
+  parent's content view, offsets of 40.0, then `convertPointToScreen:` and `setFrameOrigin:`. The anchor string "Button for the window content
+  extensions button" is in the binary.
+- [inferred] Arc's popup is a small standard window with a title bar and close button, a child of the browser window, placed beside the
+  extensions button, which the user can drag away; once dragged it keeps its place (autosaved). It is not a borderless bubble. Whether it closes
+  on a click outside could not be read from the binary (the controller has no resign-key method; Chromium's own popup code may close it).
+
 ### Codecs
 
 - [seen] The CEF 154.0.34 binary Brk ships, asked at run time by `engine/tools/codec-probe.py` (saved in
