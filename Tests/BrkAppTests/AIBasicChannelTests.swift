@@ -42,6 +42,13 @@ final class AIBasicChannelTests: XCTestCase {
         XCTAssertTrue(AIBasicPrompts.translateText("x", target: "German").input.contains("German"))
     }
 
+    func testTidyLeavesALoneTabInTodayInsteadOfAGroupOfOne() throws {
+        let answer = StructuredAnswer(json: Data(#"{"groups":[{"name":"Recipes","tabs":["a","b"]},{"name":"Other","tabs":["c"]},{"name":"Twice","tabs":["d","d"]}]}"#.utf8), usage: AIUsageCount())
+        let plan = try AIBasicPrompts.groups(answer)
+        XCTAssertEqual(plan.map(\.folder), ["Recipes"], "a group needs two different tabs")
+        XCTAssertTrue(AIBasicPrompts.tidy([]).instructions.contains("never make a catch-all folder"))
+    }
+
     func testDecisionAnswersFromTheTextModelCarryNoProbability() throws {
         let request = DecisionRequest(state: .string("s"), questions: ["g": .choice("?", options: [DecisionOption("A"), DecisionOption("B")]), "y": .noul("?"), "s": .score("?", levels: ["lo", "hi"])])
         let answer = StructuredAnswer(json: Data(#"{"g":"B","y":false,"s":1}"#.utf8), usage: AIUsageCount())

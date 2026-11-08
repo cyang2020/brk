@@ -37,7 +37,7 @@ enum AIBasicPrompts {
     }
     static func tidy(_ tabs: [AITab]) -> StructuredPrompt {
         StructuredPrompt(name: "tidy_plan",
-                         instructions: "Group these browser tabs into two to six folders by topic, every tab id in exactly one folder. Name each folder in one to three words, in the language most of its titles use. " + dataRule,
+                         instructions: "Group these browser tabs into two to six folders by topic. A folder needs at least two tabs that share its topic, and a tab id goes in at most one folder. Leave out a tab that shares its topic with no other tab; never make a catch-all folder such as Other or Misc. Name each folder in one to three words, in the language most of its titles use. " + dataRule,
                          input: json(["tabs": tabs.map { ["id": $0.id.rawValue, "title": $0.title, "url": $0.url.absoluteString] }]),
                          schema: .object([.init("groups", .array(.object([.init("name", .string()), .init("tabs", .array(.string()))])))]))
     }
@@ -123,7 +123,10 @@ enum AIBasicPrompts {
     }
     static func title(_ answer: StructuredAnswer) throws -> String { try answer.decode(Title.self).title }
     static func name(_ answer: StructuredAnswer) throws -> String { try answer.decode(Name.self).name }
-    static func groups(_ answer: StructuredAnswer) throws -> [AIGroupPlan] { try answer.decode(Groups.self).groups.map { AIGroupPlan(folder: $0.name, tabs: $0.tabs) } }
+    /// A group of one is no group: its tab stays in Today, as it does when the search model groups without an agent.
+    static func groups(_ answer: StructuredAnswer) throws -> [AIGroupPlan] {
+        try answer.decode(Groups.self).groups.filter { Set($0.tabs).count >= 2 }.map { AIGroupPlan(folder: $0.name, tabs: $0.tabs) }
+    }
     static func groupNames(_ answer: StructuredAnswer) throws -> [Int: String] {
         Dictionary(try answer.decode(GroupNames.self).names.map { ($0.group, $0.name) }, uniquingKeysWith: { a, _ in a })
     }
