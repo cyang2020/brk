@@ -9,6 +9,12 @@ public struct SearchCorpusItem: Hashable, Sendable {
     public var id: String
     public var title: String
     public var url: String
+    public init(kind: Kind, id: String, title: String, url: String) {
+        self.kind = kind
+        self.id = id
+        self.title = title
+        self.url = url
+    }
 }
 
 extension AppState {

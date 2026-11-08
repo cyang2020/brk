@@ -401,9 +401,12 @@ extension Work {
         guard state.doc.settings.max.enabled(.tabCleanup), state.canAnswerYesNo else { return }
         var asked = 0
         for pair in pairs where pair.a != pair.b {
-            guard asked < 8, let a = state.tab(pair.a), let b = state.tab(pair.b), !state.session.ai.basic.nearDuplicates.contains(pair.a),
-                  let ua = a.url, let ub = b.url, AICleanup.addressKey(ua) != AICleanup.addressKey(ub) else { continue }
-            let text = "Tab 1: \(a.displayTitle)\nAddress 1: \(ua.absoluteString)\nTab 2: \(b.displayTitle)\nAddress 2: \(ub.absoluteString)"
+            // The titles the sidebar shows: a tab's own record holds none for most open pages, and JevK5 read two bare
+            // addresses as a coin toss (0.47 and 0.52 on the real route, 0.89 with the titles).
+            guard asked < 8, let a = state.tab(pair.a), let b = state.tab(pair.b), !state.session.ai.basic.nearDuplicates.contains(pair.a) else { continue }
+            let shownA = state.shownPage(of: pair.a, a), shownB = state.shownPage(of: pair.b, b)
+            guard let ua = shownA.url, let ub = shownB.url, AICleanup.addressKey(ua) != AICleanup.addressKey(ub) else { continue }
+            let text = "Tab 1: \(shownA.title)\nAddress 1: \(ua.absoluteString)\nTab 2: \(shownB.title)\nAddress 2: \(ub.absoluteString)"
             let request = DecisionRequest(state: .string(text), questions: [AICleanup.sameQuestionKey: .noul(AICleanup.sameQuestion)])
             let id = requestAI(.decide(request, feature: .tabCleanup))
             state.session.ai.basic.duplicateAsks[id] = [AICleanup.sameQuestionKey: pair]

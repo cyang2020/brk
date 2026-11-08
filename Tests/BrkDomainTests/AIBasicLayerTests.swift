@@ -430,6 +430,8 @@ final class AIBasicLayerTests: XCTestCase {
         d.system(.aiProvidersDetected([.claude]))
         let news = d.open("https://news.example/"), front = d.open("https://news.example/news")
         let other = d.open("https://news.example/jobs")
+        d.page(news, .titleChanged("Hacker News"))
+        d.page(front, .titleChanged("Hacker News"))
         XCTAssertEqual(d.view.space.today.cleanup, 0, "different addresses: not duplicates by the rule")
         let t = d.system(.aiDuplicateCandidates([AIDuplicatePair(a: front, b: news, similarity: 0.95), AIDuplicatePair(a: other, b: news, similarity: 0.93)]))
         let asked = aiEffects(t)
@@ -438,7 +440,7 @@ final class AIBasicLayerTests: XCTestCase {
         guard case .decide(let request, .tabCleanup, nil) = task else { return XCTFail("\(task)") }
         XCTAssertEqual(request.questions, ["same_page": .noul("Are these two browser tabs the same web page (the same document or item, perhaps with a different address form), rather than two different pages on the same site or topic?")])
         guard case .string(let text) = request.state else { return XCTFail("\(request.state)") }
-        XCTAssertTrue(text.hasPrefix("Tab 1: ") && text.contains("\nAddress 1: https://news.example/news\nTab 2: ") && text.hasSuffix("Address 2: https://news.example/"), text)
+        XCTAssertEqual(text, "Tab 1: Hacker News\nAddress 1: https://news.example/news\nTab 2: Hacker News\nAddress 2: https://news.example/", "the titles the sidebar shows")
         d.system(.aiResult(id, .reply(.decision(DecisionAnswers(answers: ["same_page": .noul(true, probability: 0.97)], backend: "jevk5")))))
         d.system(.aiResult(asked[1].0, .reply(.decision(DecisionAnswers(answers: ["same_page": .noul(false, probability: 0.1)], backend: "jevk5")))))
         let found = d.state.cleanupCandidatesForTest(d.view.space.id, now: d.ctx.now)
@@ -446,17 +448,18 @@ final class AIBasicLayerTests: XCTestCase {
         XCTAssertEqual(d.view.space.today.cleanup, 1)
     }
 
-    func testCandidatesAreNotAskedWhenNothingCanAnswerYesOrNo() {
+    func testCandidatesAreNotAskedWhenNothingCanAnswerYesOrNo() throws {
         let d = driver([.tabCleanup])
         let news = d.open("https://news.example/"), front = d.open("https://news.example/news")
+        d.page(news, .titleChanged("Hacker News"))
+        d.page(front, .titleChanged("Hacker News"))
         XCTAssertTrue(aiEffects(d.system(.aiDuplicateCandidates([AIDuplicatePair(a: front, b: news, similarity: 0.95)]))).isEmpty, "no agent, no key, no JevK5")
         XCTAssertTrue(d.state.duplicateScopes().isEmpty)
         d.system(.aiKeys([:], localDecisions: true))
         XCTAssertEqual(aiEffects(d.system(.aiDuplicateCandidates([AIDuplicatePair(a: front, b: news, similarity: 0.95)]))).count, 1, "JevK5 answers without an agent")
-        let scopes = d.state.duplicateScopes()
-        XCTAssertEqual(scopes.count, 1)
-        XCTAssertTrue(Set(scopes[0].entries.map(\.id)).isSuperset(of: [news, front]))
-        XCTAssertTrue(scopes[0].entries.allSatisfy { !$0.pinned })
+        let scope = try XCTUnwrap(d.state.duplicateScopes().first)
+        XCTAssertEqual(Set(scope.entries.map(\.id)), [news, front], "tabs whose page showed no title yet stay out")
+        XCTAssertTrue(scope.entries.allSatisfy { !$0.pinned })
         d.user(.settings(.max(.feature(.tabCleanup, false))))
         XCTAssertTrue(d.state.duplicateScopes().isEmpty, "Suggest Tabs to Close off")
     }
