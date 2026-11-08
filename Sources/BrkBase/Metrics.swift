@@ -651,7 +651,7 @@ public struct AIMetrics: MetricGroup {
     public let tabTitleFont = Metric(20.0, .guess("a conversation tab's title"))
     public let pageGap = Metric(6.0, .guess("space between a page in an answer and its caption"))
     public let linkPromptWidth = Metric(460.0, .guess("the card that asks before a page's link opens"))
-    public let linkPromptHeight = Metric(112.0, .guess("the card that asks before a page's link opens"))
+    public let linkPromptHeight = Metric(124.0, .guess("the card that asks before a page's link opens"))
 }
 
 /// Arc's Boost panel, measured on this run's 2x shots (P37-a/b/c/d-arc-editor.png).

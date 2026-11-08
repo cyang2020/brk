@@ -299,7 +299,7 @@ final class PageLinkPromptView: NSView {
         material.material = .popover; material.blendingMode = .withinWindow; material.state = .active
         identify(.aiControl("page-link-prompt"))
         title.font = .systemFont(ofSize: Metrics.ai.bodyFont.value, weight: .semibold)
-        title.maximumNumberOfLines = 2; title.lineBreakMode = .byCharWrapping
+        title.maximumNumberOfLines = 1; title.lineBreakMode = .byTruncatingMiddle; title.usesSingleLineMode = true
         detail.font = .systemFont(ofSize: Metrics.ai.stepFont.value)
         detail.textColor = .secondaryLabelColor
         detail.maximumNumberOfLines = 2
@@ -330,11 +330,11 @@ final class PageLinkPromptView: NSView {
 
     override func layout() {
         super.layout()
-        let m = Metrics.ai, pad = m.padding.value / 1.5, row = m.buttonHeight.value
+        let m = Metrics.ai, pad = m.padding.value / 1.5, row = m.buttonHeight.value, gap = m.gap.value
         material.frame = bounds
-        title.frame = CGRect(x: pad, y: pad, width: bounds.width - pad * 2, height: 36)
-        detail.frame = CGRect(x: pad, y: pad + 36, width: bounds.width - pad * 2, height: 32)
-        cancel.frame = CGRect(x: bounds.width - pad - 160, y: bounds.height - pad - row, width: 76, height: row)
+        title.frame = CGRect(x: pad, y: pad, width: bounds.width - pad * 2, height: 20)
+        detail.frame = CGRect(x: pad, y: title.frame.maxY + gap / 2, width: bounds.width - pad * 2, height: 34)
         open.frame = CGRect(x: bounds.width - pad - 76, y: bounds.height - pad - row, width: 76, height: row)
+        cancel.frame = CGRect(x: open.frame.minX - gap - 76, y: open.frame.minY, width: 76, height: row)
     }
 }
