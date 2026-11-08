@@ -8,6 +8,7 @@ import Foundation
 enum CoreScenarios {
     static let all = [
         Scenario("Core-popup", "an extension's action popup opens from the site controls; typed text and a click in it reach the page's content script", popupReceipt),
+        Scenario("Core-dialogs", "a page's alert, confirm and prompt open as a sheet on its window; Return and Escape answer the page", dialogs),
     ]
 
     private static func fixture(_ app: AppUnderTest, _ path: String) -> URL {
@@ -76,4 +77,32 @@ enum CoreScenarios {
         app.note("receipt \(title)")
     }
 
+    @Sendable static func dialogs(_ app: AppUnderTest) throws {
+        guard app.engine == .core else { throw Skipped(description: "needs BrkCore; CEF's dialogs are app-modal") }
+        let url = app.site.url("page2.html")
+        let item = try app.load(url)
+        let page = PageID(window: app.window!, item: item)
+        try app.waitForPageInput(page, at: url)
+        func title() throws -> String { tab(item, in: try app.view())?.title ?? "" }
+        func sheet() throws -> String? { try app.native().sheetClass }
+        try app.evaluate(page, "setTimeout(()=>{alert('Hello from the page');document.title='alert:closed'},0)")
+        try app.waitUntil("the alert's sheet on the window") { try sheet() != nil }
+        try app.screenshot("alert-sheet")
+        try app.press("return")
+        try app.waitUntil("the page past its alert") { try title() == "alert:closed" }
+        try expect(try sheet() == nil, "the alert's sheet stayed")
+        try app.evaluate(page, "setTimeout(()=>{document.title='confirm:'+confirm('Keep going?')},0)")
+        try app.waitUntil("the confirm's sheet") { try sheet() != nil }
+        try app.press("escape")
+        try app.waitUntil("Escape answers Cancel") { try title() == "confirm:false" }
+        try app.evaluate(page, "setTimeout(()=>{document.title='prompt:'+prompt('Your name?','Brk')},0)")
+        try app.waitUntil("the prompt's sheet") { try sheet() != nil }
+        try app.press("return")
+        try app.waitUntil("Return answers OK with the default text") { try title() == "prompt:Brk" }
+        try app.evaluate(page, "setTimeout(()=>{alert('Gone with the page');document.title='never'},0)")
+        try app.waitUntil("a second alert's sheet") { try sheet() != nil }
+        try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
+        try app.waitUntil("a navigation takes the open dialog away") { try sheet() == nil }
+        try app.waitUntil("the reloaded page") { try title() == "Fixture Page 2" }
+    }
 }

@@ -48,6 +48,109 @@ typedef NS_ENUM(NSInteger, BrkCoreDisposition) {
 @protocol BrkCoreBrowser;
 @protocol BrkCoreExtension;
 
+/// The connection of the page's visible navigation entry, the input of Chrome's own security indicator (content's SSLStatus).
+typedef struct {
+  /// The entry has a valid address; false: nothing to say yet.
+  bool known;
+  /// The document came over TLS (the entry has a certificate).
+  bool secureConnection;
+  /// A certificate error Chromium holds against the page (net::IsCertStatusError), and it was loaded anyway.
+  bool certificateError;
+  /// The page displayed or ran plain HTTP content, or content with a certificate error.
+  bool insecureContent;
+  /// A form on the page submits to a plain HTTP address.
+  bool insecureForm;
+  /// net's CertStatus bits.
+  uint32_t certStatus;
+  /// content's SSLStatus::ContentStatusFlags bits.
+  uint32_t contentStatus;
+} BrkCoreSecurity;
+
+/// One download a page started, as Chromium's DownloadItem reports it now. Kept by the framework until Chromium drops the item.
+NS_SWIFT_UI_ACTOR
+@protocol BrkCoreDownload <NSObject>
+/// Chromium's id, stable across updates.
+@property(nonatomic, readonly) uint32_t downloadID;
+@property(nonatomic, readonly, nullable) NSURL* url;
+/// The file name Chromium would give it (Content-Disposition, the address, the MIME type), without a folder.
+@property(nonatomic, readonly, copy) NSString* suggestedName;
+@property(nonatomic, readonly) int64_t receivedBytes;
+/// 0 when the server did not say.
+@property(nonatomic, readonly) int64_t totalBytes;
+@property(nonatomic, readonly) BOOL isComplete;
+@property(nonatomic, readonly) BOOL isCanceled;
+@property(nonatomic, readonly) BOOL isInterrupted;
+/// download::DownloadInterruptReason, 0 for none.
+@property(nonatomic, readonly) NSInteger interruptionReason;
+/// Where Chromium writes it, once it has a destination.
+@property(nonatomic, readonly, nullable) NSString* fullPath;
+/// Answers -webContents:willDownload:. Chromium writes the file at exactly `path` and renames nothing; nil cancels. Only the first answer counts.
+- (void)continueToPath:(nullable NSString*)path;
+- (void)cancel;
+@end
+
+/// What a site asks for. One request can ask for several (camera and microphone).
+typedef NS_OPTIONS(uint32_t, BrkCorePermissionKind) {
+  BrkCorePermissionKindCamera = 1 << 0,
+  BrkCorePermissionKindMicrophone = 1 << 1,
+  BrkCorePermissionKindGeolocation = 1 << 2,
+  BrkCorePermissionKindNotifications = 1 << 3,
+  BrkCorePermissionKindClipboard = 1 << 4,
+  BrkCorePermissionKindMidi = 1 << 5,
+  BrkCorePermissionKindWindowManagement = 1 << 6,
+  BrkCorePermissionKindStorageAccess = 1 << 7,
+  BrkCorePermissionKindSensors = 1 << 8,
+  /// "This site wants to download multiple files" (Chrome's DownloadRequestLimiter).
+  BrkCorePermissionKindMultipleDownloads = 1 << 9,
+  BrkCorePermissionKindPointerLock = 1 << 10,
+  /// Anything else Chromium asks about (local fonts, idle detection, protocol handlers…).
+  BrkCorePermissionKindOther = 1u << 31,
+};
+
+typedef NS_ENUM(NSInteger, BrkCorePermissionAnswer) {
+  /// Chromium remembers the allow for the origin.
+  BrkCorePermissionAnswerAllow = 0,
+  /// Chromium remembers the block.
+  BrkCorePermissionAnswerDeny = 1,
+  /// Closed without a choice; the site may ask again.
+  BrkCorePermissionAnswerDismiss = 2,
+};
+
+/// A permission prompt Chromium's PermissionRequestManager wants shown for a page (Chrome shows its bubble here).
+NS_SWIFT_UI_ACTOR
+@protocol BrkCorePermissionRequest <NSObject>
+/// Unique in the process.
+@property(nonatomic, readonly) uint64_t promptID;
+@property(nonatomic, readonly) BrkCorePermissionKind kinds;
+/// The origins as URLs ("https://site.test/").
+@property(nonatomic, readonly, copy) NSString* requestingOrigin;
+@property(nonatomic, readonly, copy) NSString* embeddingOrigin;
+/// Only the first answer counts, and none after Chromium took the request back.
+- (void)answer:(BrkCorePermissionAnswer)answer;
+@end
+
+typedef NS_ENUM(NSInteger, BrkCoreDialogKind) {
+  BrkCoreDialogKindAlert = 0,
+  BrkCoreDialogKindConfirm = 1,
+  BrkCoreDialogKindPrompt = 2,
+  /// beforeunload: leave or stay.
+  BrkCoreDialogKindBeforeUnload = 3,
+};
+
+/// A JavaScript dialog a page opened: alert, confirm, prompt, or the leave-page question.
+NS_SWIFT_UI_ACTOR
+@protocol BrkCoreDialog <NSObject>
+@property(nonatomic, readonly) BrkCoreDialogKind kind;
+@property(nonatomic, readonly, copy) NSString* message;
+@property(nonatomic, readonly, copy) NSString* defaultPromptText;
+/// The frame's origin as Chrome titles the dialog ("site.test says").
+@property(nonatomic, readonly, copy) NSString* originTitle;
+/// For BrkCoreDialogKindBeforeUnload: the page is being reloaded, not left.
+@property(nonatomic, readonly) BOOL isReload;
+/// OK / Leave (YES) or Cancel / Stay (NO). Only the first answer counts.
+- (void)answer:(BOOL)accepted text:(nullable NSString*)text;
+@end
+
 NS_SWIFT_UI_ACTOR
 @protocol BrkCoreWebContentsDelegate <NSObject>
 /// A main-frame navigation is about to start or redirect. NO cancels it.
@@ -87,6 +190,23 @@ NS_SWIFT_UI_ACTOR
       requestsOpening:(NSURL*)url
           disposition:(BrkCoreDisposition)disposition
           userGesture:(BOOL)userGesture;
+@optional
+/// A download of this page needs a destination (CEF's OnBeforeDownload). Answer with -continueToPath:, now or later.
+- (void)webContents:(id<BrkCoreWebContents>)contents willDownload:(id<BrkCoreDownload>)download;
+/// It changed: progress, completion, cancellation, interruption (CEF's OnDownloadUpdated).
+- (void)webContents:(id<BrkCoreWebContents>)contents downloadDidUpdate:(id<BrkCoreDownload>)download;
+/// A site asks for a permission (CEF's OnShowPermissionPrompt). Unanswered, it stays open until Chromium takes it back.
+- (void)webContents:(id<BrkCoreWebContents>)contents requestsPermission:(id<BrkCorePermissionRequest>)request;
+/// Chromium took the request back: navigation, the page closed, the request was answered another way.
+- (void)webContents:(id<BrkCoreWebContents>)contents didDismissPermission:(uint64_t)promptID;
+/// The visible entry's connection changed (a new document, insecure content, a certificate decision). Read -security.
+- (void)webContentsDidChangeSecurity:(id<BrkCoreWebContents>)contents;
+/// The page opened a JavaScript dialog. NO: the shell shows none, and the page sees it dismissed.
+- (BOOL)webContents:(id<BrkCoreWebContents>)contents runDialog:(id<BrkCoreDialog>)dialog;
+/// The open dialogs of this page are gone (navigation, close); answers to them are ignored.
+- (void)webContentsCancelDialogs:(id<BrkCoreWebContents>)contents;
+/// The page started or stopped making sound (Chromium's audible state, what Chrome's tab speaker shows).
+- (void)webContents:(id<BrkCoreWebContents>)contents didChangeAudible:(BOOL)audible;
 @end
 
 NS_SWIFT_UI_ACTOR
@@ -97,11 +217,15 @@ NS_SWIFT_UI_ACTOR
 /// Chromium's input view inside nativeView; nil until the renderer's widget exists.
 @property(nonatomic, readonly, nullable) NSView* inputView;
 @property(nonatomic, readonly, nullable) NSURL* visibleURL;
+/// The main frame's committed document address (CEF's main frame URL); nil before the first commit.
+@property(nonatomic, readonly, nullable) NSURL* committedURL;
 @property(nonatomic, readonly) BOOL isLoading;
 @property(nonatomic, readonly) BOOL canGoBack;
 @property(nonatomic, readonly) BOOL canGoForward;
 @property(nonatomic) double zoomLevel;
 @property(nonatomic) BOOL audioMuted;
+/// Chromium's audible state now.
+@property(nonatomic, readonly) BOOL isAudible;
 /// SessionTabHelper's id, what chrome.tabs reports.
 @property(nonatomic, readonly) int tabID;
 - (void)loadURL:(NSURL*)url;
@@ -127,6 +251,14 @@ NS_SWIFT_UI_ACTOR
 - (void)redoEdit;
 /// Closes it now, without unload handlers. -webContentsDidClose: follows, possibly before this returns.
 - (void)close;
+/// The visible entry's connection now.
+@property(nonatomic, readonly) BrkCoreSecurity security;
+/// Writes a remembered choice into the profile's content settings for `requesting` embedded in `topLevel`: an allow (YES), a block
+/// (NO), or back to asking (nil).
+- (void)setPermission:(BrkCorePermissionKind)kinds
+     requestingOrigin:(NSURL*)requesting
+       topLevelOrigin:(NSURL*)topLevel
+              allowed:(nullable NSNumber*)allowed;
 @end
 
 /// What a popup opened by -executeExtensionAction: reports.
@@ -193,6 +325,10 @@ NS_SWIFT_UI_ACTOR
 /// Installs an unpacked extension, as "Load unpacked". Calls back with nil, or why not.
 - (void)installUnpackedExtensionAtPath:(NSString*)path
                             completion:(void (^)(NSString* _Nullable extensionID, NSString* _Nullable error))completion;
+/// Deletes every cookie of the profile (its network context's cookie manager). Calls back with how many went.
+- (void)clearCookiesWithCompletion:(void (^)(NSUInteger deleted))completion;
+/// Empties the profile's HTTP cache. Calls back when done.
+- (void)clearCacheWithCompletion:(void (^)(void))completion;
 @end
 
 NS_SWIFT_UI_ACTOR

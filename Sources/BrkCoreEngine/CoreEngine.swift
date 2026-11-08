@@ -14,12 +14,14 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     public var engineVersion: String? { runtime.application.version }
 
     private let runtime: BrkCoreRuntime
-    private let resources = BrowserResources<CorePage>()
+    let resources = BrowserResources<CorePage>()
+    let transfers = Transfers()
+    private var appearanceObservation: NSKeyValueObservation?
     private var live: [PageID: CorePage] {
         Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
     }
     private var ledger = PageLedger()
-    private var contexts = ContextLifetimes()
+    var contexts = ContextLifetimes()
     private var wanted: [PageSpec] = []
     private let reconciliation = PageReconciliation()
     private let outputs = DocumentOutputs()
@@ -35,6 +37,10 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     private struct FocusRequest { weak var window: NSWindow?; let page: PageID }
     private var focusRequests: [ObjectIdentifier: FocusRequest] = [:]
     private var running = true
+    var isRunning: Bool { running }
+    /// The clear in progress per context, and the ones asked to stop (site data, as on CEF).
+    var clearingContexts: [BrowsingContext: String] = [:]
+    var cancelledSiteClears: Set<String> = []
     private var shutdownTask: Task<ShutdownOutcome, Never>?
     private let log = Logger(subsystem: "brk", category: "core")
 
@@ -65,6 +71,29 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         }
         outputs.dismiss = { [weak self] id in guard let self else { return }; self.delegate?.engine(self, dismissOutput: id) }
         outputs.render = { [weak self] request, path, done in self?.render(request, to: path, done: done) }
+        transfers.publish = { [weak self] update in
+            guard let self else { return }
+            self.delegate?.engine(self, download: update)
+        }
+        transfers.prompt = { [weak self] prompt, reply in
+            guard let self, let delegate = self.delegate else { reply(.ownerGone); return }
+            delegate.engine(self, destination: prompt, reply: reply)
+        }
+        transfers.dismiss = { [weak self] ticket in
+            guard let self else { return }; self.delegate?.engine(self, dismissDestination: ticket)
+        }
+        transfers.acquire = { [weak self] id, browser in self?.resources.acquire(.transfer(id), browser: browser) ?? false }
+        transfers.release = { [weak self] id, browser in
+            guard let self else { return }
+            self.resources.release(.transfer(id), browser: browser)
+            self.closeIfUnowned(browser)
+        }
+        appearanceObservation = NSApplication.shared.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor in
+                guard let self, self.running else { return }
+                for page in self.live.values where page.websitePolicy.appearance == .automatic { page.refreshWebsitePolicy() }
+            }
+        }
     }
 
     // MARK: Pages
@@ -87,7 +116,13 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         for spec in pages {
             guard running, contexts.permitsWork(spec.context),
                   wanted.contains(where: { $0.id == spec.id && $0.context == spec.context }) else { continue }
-            if let page = live[spec.id] { page.setMuted(spec.muted); continue }
+            if let page = live[spec.id] {
+                page.downloadPolicy = spec.downloadPolicy
+                page.setMuted(spec.muted)
+                page.applyWebsitePolicy(spec.websitePolicy)
+                page.applyBoostPolicy(spec.boostPolicy)
+                continue
+            }
             guard let url = spec.initialURL, let browser = browser(window: spec.id.window, context: spec.context) else { continue }
             let incarnation = ledger.create(spec.id)
             let page = CorePage(spec: spec, url: url, engine: self, incarnation: incarnation, browser: browser)
@@ -129,7 +164,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     private func loadedProfile(_ id: ProfileID) -> (any BrkCoreProfile)? {
         if let loaded = profiles[id] { return loaded }
         if loading.insert(id).inserted {
-            let directory = id == .default ? "Default" : "Profile-" + id.rawValue.replacingOccurrences(of: "/", with: "_")
+            let directory = id == .default ? "Default" : ProfileDirectories.directoryName(id)
             runtime.application.loadProfile(directory) { [weak self] profile in
                 guard let self else { return }
                 self.loading.remove(id)
@@ -146,8 +181,10 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
 
     public func surface(for page: PageID) -> PageSurfaceView? { live[page]?.surface }
 
-    /// Downloads are Chromium's own on this engine for now (engine/README.md), so there is nothing of Brk's to cancel.
-    public func cancelDownload(_ id: DownloadID) {}
+    func livePage(_ id: PageID) -> CorePage? { live[id] }
+    var livePages: [CorePage] { Array(live.values) }
+
+    public func cancelDownload(_ id: DownloadID) { transfers.cancel(id) }
 
     public func perform(_ action: PageAction, on page: PageID) {
         guard running, let live = live[page] else { return }
@@ -281,17 +318,35 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         contexts.revoke(request.context)
         wanted.removeAll { $0.context == request.context }
         outputs.revoke(request.context)
+        transfers.revoke(request.context)
         for page in live.values where page.context == request.context { retire(page) }
         Task { @MainActor in
             let drained = await self.waitUntil(timeout: Metrics.persistence.shutdownTimeout.value) {
                 !self.reconciliation.isApplying && !self.resources.entries.values.contains { $0.context.context == request.context }
-                    && !self.outputs.contains(context: request.context)
+                    && !self.outputs.contains(context: request.context) && !self.transfers.contains(context: request.context)
             }
             let result: ContextDisposalResult
             if drained {
-                if case .incognito = request.context { self.incognito[request.context] = nil }
-                result = .completed(request.id, request.context, .memoryReleased)
+                switch request.context {
+                case .incognito:
+                    self.incognito[request.context] = nil
+                    result = .completed(request.id, request.context, .memoryReleased)
+                case .profile(let id):
+                    // Chromium holds the profile's folder while it runs: the next launch deletes it, as on CEF.
+                    self.profiles[id] = nil
+                    for (key, browser) in self.browsers where key.context == request.context {
+                        if browser.isAlive { browser.close() }
+                        self.browsers[key] = nil
+                    }
+                    do {
+                        try ProfileDirectories(root: self.runtime.userDataDirectory).mark(id)
+                        result = .completed(request.id, request.context, .deletionScheduledForNextLaunch)
+                    } catch {
+                        result = .failed(request.id, request.context, reason: error.localizedDescription)
+                    }
+                }
             } else {
+                self.transfers.reportTimeout(context: request.context)
                 result = .failed(request.id, request.context, reason: "Context callbacks did not drain")
             }
             self.delegate?.engine(self, contextDisposed: result)
@@ -313,6 +368,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         wanted = []
         contexts.stop()
         outputs.stop()
+        transfers.stop()
         for page in live.values { retire(page) }
         // Test instances say what the quit waits for, once a second (as CEFEngine's "fixture cef" lines).
         let traced = ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil, began = ProcessInfo.processInfo.systemUptime
@@ -323,11 +379,13 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
                 let pending = self.resources.entries.map { "\($0.key.page.item.rawValue.prefix(8)) presented=\($0.value.presented) leases=\($0.value.leases.count) closing=\($0.value.closing) closed=\($0.value.browserClosed)" }
                 FileHandle.standardError.write(Data("fixture core: waiting at +\(Int(said - began)) s: outputs empty=\(self.outputs.isEmpty) preparing=\(self.outputPreparations.count) pages=\(pending)\n".utf8))
             }
-            return !self.reconciliation.isApplying && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.resources.entries.isEmpty
+            return !self.reconciliation.isApplying && self.outputs.isEmpty && self.outputPreparations.isEmpty && self.transfers.isEmpty
+                && self.resources.entries.isEmpty
         }
         if traced { FileHandle.standardError.write(Data("fixture core: pages \(drained ? "closed" : "did not close") at +\(String(format: "%.2f", ProcessInfo.processInfo.systemUptime - began)) s\n".utf8)) }
         guard drained else {
             outputs.reportTimeout()
+            transfers.reportTimeout()
             return .timedOut(unclosed: resources.entries.keys.map(\.page).sorted())
         }
         for browser in browsers.values where browser.isAlive { browser.close() }
@@ -349,10 +407,11 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         resources.unpresent(page.incarnation)
         page.park()
         outputs.sourceGone(page.incarnation)
+        transfers.sourceGone(page.incarnation)
         closeIfUnowned(page.incarnation)
     }
 
-    private func closeIfUnowned(_ browser: BrowserToken) {
+    func closeIfUnowned(_ browser: BrowserToken) {
         guard resources.beginClose(browser), let page = resources.entries[browser]?.resource else { return }
         record(.closeRequested, page)
         page.close()
@@ -399,9 +458,17 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
 
     func pageReadyForFocus(_ page: CorePage) { restoreFocus(page) }
 
+    func permission(_ page: CorePage, prompt: SitePermissionPrompt, reply: @escaping @MainActor (SitePermission) -> Void) {
+        guard isLive(page), page.matchesPermission(prompt.target), contexts.permitsWork(page.context) else { reply(.deny); return }
+        delegate?.engine(self, permission: prompt, reply: reply) ?? reply(.deny)
+    }
+
+    func dismissPermission(_ id: String) { delegate?.engine(self, dismissPermission: id) }
+
     func pageDidClose(_ page: CorePage) {
         record(.closed, page)
         let effect = ledger.closed(page.incarnation)
+        transfers.browserClosed(page.incarnation)
         resources.unpresent(page.incarnation)
         resources.browserClosed(page.incarnation)
         switch effect {
@@ -430,20 +497,25 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         guard case .profile(let id) = context else {
             return ExtensionCatalog(context: context, extensions: [], error: "Extension management is unavailable in private windows")
         }
-        guard let profile = await ensuredProfile(id) else {
+        guard let profile = await profileWhenLoaded(id) else {
             return ExtensionCatalog(context: context, extensions: [], error: "The profile did not load")
         }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             profile.whenExtensionsReady { continuation.resume() }
         }
+        // Incognito access and commands as Chrome's own extensions page reads them (developerPrivate), when the profile has that page
+        // open, as on CEF; the action and the list are the profile's own.
+        let managed = await managerExtensionInfo(context: context)
         let values = profile.installedExtensions().map { item in
-            BrowserExtension(id: item.extensionID, name: item.name, version: item.version, enabled: item.enabled,
-                             supportsNativeAction: item.hasAction, icon: item.iconData)
+            let row = managed[item.extensionID]
+            return BrowserExtension(id: item.extensionID, name: item.name, version: item.version, enabled: item.enabled,
+                                    supportsNativeAction: item.hasAction, incognitoAllowed: row?.incognitoAllowed,
+                                    canChangeIncognito: row?.canChangeIncognito, commands: row?.commands, icon: item.iconData)
         }.sorted { ($0.name, $0.id) < ($1.name, $1.id) }
         return ExtensionCatalog(context: context, extensions: values, error: nil)
     }
 
-    private func ensuredProfile(_ id: ProfileID) async -> (any BrkCoreProfile)? {
+    func profileWhenLoaded(_ id: ProfileID) async -> (any BrkCoreProfile)? {
         let deadline = ProcessInfo.processInfo.systemUptime + 15
         while ProcessInfo.processInfo.systemUptime < deadline {
             if let profile = loadedProfile(id) { return profile }
@@ -453,7 +525,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     }
 
     public func installExtension(at directory: URL, context: BrowsingContext, in page: PageID) async -> String? {
-        guard case .profile(let id) = context, let profile = await ensuredProfile(id) else { return "Private installation is disabled" }
+        guard case .profile(let id) = context, let profile = await profileWhenLoaded(id) else { return "Private installation is disabled" }
         return await withCheckedContinuation { continuation in
             profile.installUnpackedExtension(atPath: directory.path) { _, error in continuation.resume(returning: error) }
         }
@@ -461,29 +533,52 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
 
     // MARK: BrkCoreBrowserDelegate: an extension's action popup
 
-    private var popupPanel: NSPanel?
-    private var popupObserver: NSObjectProtocol?
+    private var popupPanel: NSWindow?
+    private var popupObservers: [NSObjectProtocol] = []
     private weak var popupBrowser: (any BrkCoreBrowser)?
+    /// The user moved the popup's window; it then stays where they put it (Arc's `userHasMovedWindow`).
+    private var popupMoved = false
 
+    /// Arc 1.170's `Arc.BrowserExtensionWindow`, read from its binary (docs/chromium/ARC-ENGINE.md, "The action popup"): an NSWindow made with
+    /// the titled and closable style and buffered backing, moved by its background, a full-screen auxiliary, never a tab, a child of the
+    /// browser window, its frame remembered under one autosave name once the user moved it. Escape and losing key close it, as Chrome's bubble.
     public func browser(_ browser: any BrkCoreBrowser, didOpenExtensionPopup extensionID: String, view: NSView) {
         closePopupPanel()
-        let panel = ExtensionPopupPanel(contentRect: NSRect(x: 0, y: 0, width: 25, height: 25),
-                                        styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
-        panel.titlebarAppearsTransparent = true
-        panel.titleVisibility = .hidden
-        panel.isMovableByWindowBackground = false
-        panel.level = .floating
+        let panel = ExtensionPopupPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 300), styleMask: [.titled, .closable],
+                                        backing: .buffered, defer: false)
+        panel.isMovableByWindowBackground = true
+        panel.collectionBehavior = .fullScreenAuxiliary
+        panel.tabbingMode = .disallowed
         panel.isReleasedWhenClosed = false
+        panel.onCancel = { [weak browser] in browser?.closeExtensionPopup() }
         panel.contentView = view
+        let saved = UserDefaults.standard.string(forKey: ExtensionPopupPanel.autosaveName).map(NSPointFromString)
+        popupMoved = saved != nil
+        if let saved { panel.setFrameTopLeftPoint(saved) }
         placePopup(panel, for: browser, size: NSSize(width: 25, height: 25))
+        browser.window?.addChildWindow(panel, ordered: .above)
         panel.makeKeyAndOrderFront(nil)
         browser.focusExtensionPopup()
         popupPanel = panel
         popupBrowser = browser
-        // As Chrome's bubble: it closes when it loses focus.
-        popupObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { _ in
-            MainActor.assumeIsolated { [weak browser] in browser?.closeExtensionPopup() }
-        }
+        popupObservers = [
+            NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { _ in
+                MainActor.assumeIsolated { [weak browser] in browser?.closeExtensionPopup() }
+            },
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: panel, queue: .main) { _ in
+                MainActor.assumeIsolated { [weak browser] in browser?.closeExtensionPopup() }
+            },
+            // Posted when the user starts dragging it, not for the placement here.
+            NotificationCenter.default.addObserver(forName: NSWindow.willMoveNotification, object: panel, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.popupMoved = true }
+            },
+            NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: panel, queue: .main) { [weak self, weak panel] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let panel, self.popupMoved else { return }
+                    UserDefaults.standard.set(NSStringFromPoint(NSPoint(x: panel.frame.minX, y: panel.frame.maxY)), forKey: ExtensionPopupPanel.autosaveName)
+                }
+            },
+        ]
     }
 
     public func browser(_ browser: any BrkCoreBrowser, didResizeExtensionPopup extensionID: String, size: NSSize) {
@@ -497,23 +592,35 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     public func browser(_ browser: any BrkCoreBrowser, didCloseExtensionPopup extensionID: String) { closePopupPanel() }
 
     private func closePopupPanel() {
-        if let popupObserver { NotificationCenter.default.removeObserver(popupObserver) }
-        popupObserver = nil
-        popupPanel?.contentView = nil
-        popupPanel?.orderOut(nil)
+        for observer in popupObservers { NotificationCenter.default.removeObserver(observer) }
+        popupObservers = []
+        guard let panel = popupPanel else { return }
         popupPanel = nil
+        panel.parent?.removeChildWindow(panel)
+        panel.contentView = nil
+        panel.orderOut(nil)
     }
 
-    /// Under the owner window's top right, where Arc's toolbar opens it.
-    private func placePopup(_ panel: NSPanel, for browser: any BrkCoreBrowser, size: NSSize) {
-        let content = NSSize(width: size.width, height: size.height)
+    /// Chrome's size limits (25x25 to 800x600). Under the owner window's top right, where Brk's site controls open it, until the user moves
+    /// it; then its top left stays where they left it and only the size follows the page.
+    private func placePopup(_ panel: NSWindow, for browser: any BrkCoreBrowser, size: NSSize) {
+        let content = NSSize(width: min(max(size.width, 25), 800), height: min(max(size.height, 25), 600))
         let frame = panel.frameRect(forContentRect: NSRect(origin: .zero, size: content))
+        if popupMoved {
+            let top = panel.frame.maxY
+            panel.setFrame(NSRect(x: panel.frame.minX, y: top - frame.height, width: frame.width, height: frame.height), display: true)
+            return
+        }
         let owner = browser.window?.frame ?? NSScreen.main?.visibleFrame ?? .zero
         panel.setFrame(NSRect(x: owner.maxX - frame.width - 12, y: owner.maxY - frame.height - 48, width: frame.width, height: frame.height), display: true)
     }
 }
 
-/// Keeps key status while it hosts Chromium's popup page.
-private final class ExtensionPopupPanel: NSPanel {
+/// The window an extension's action popup shows in (Arc's `BrowserExtensionWindow` is an NSWindow too).
+private final class ExtensionPopupPanel: NSWindow {
+    /// Where the user last left it (top left). Arc keeps its frame under one defaults key, `browserExtensionWindowAutosaveFrame`.
+    static let autosaveName = "BrkExtensionPopupTopLeft"
+    var onCancel: (() -> Void)?
     override var canBecomeKey: Bool { true }
+    override func cancelOperation(_ sender: Any?) { onCancel?() }
 }

@@ -27,7 +27,8 @@ final class ImportRulesTests: XCTestCase {
         "BrkImport": ["BrkBase", "BrkDomain", "Foundation", "SQLite3", "CommonCrypto"],
         "BrkApp": ["NaturalLanguage", "PDFKit", "Carbon", "CoreServices", "UserNotifications", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "BrkImport", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "LocalAuthentication", "Security", "os"],
         "Brk": ["BrkApp", "BrkBase", "BrkCEF", "BrkCoreEngine", "BrkEngine", "AppKit", "Foundation"],
-        "BrkCoreEngine": ["PDFKit", "BrkBase", "BrkEngine", "CBrkCore", "AppKit", "Foundation", "os"],
+        // OS authorization of a site's camera, microphone, location and notifications (OSSiteAuthorization.swift, shared with BrkCEF).
+        "BrkCoreEngine": ["AVFoundation", "CoreLocation", "UserNotifications", "PDFKit", "BrkBase", "BrkEngine", "CBrkCore", "AppKit", "Foundation", "os"],
         // BrkCore.framework's interface: an Objective-C header, no Swift.
         "CBrkCore": [],
         "BrkE2E": ["PDFKit", "Vision", "ImageIO", "BrkBase", "BrkDomain", "BrkLayout", "BrkControl", "Foundation", "CoreGraphics"],
@@ -37,7 +38,8 @@ final class ImportRulesTests: XCTestCase {
     static let singleWriters: [(pattern: String, allowed: [String], why: String)] = [
         (#"\bDate\(\)|\bDate\.now\b|CFAbsoluteTimeGetCurrent"#, ["BrkApp/Clock.swift", "BrkE2E/"], "the clock is injected"),
         (#"(?<![A-Za-z.])reduce\("#, ["BrkDomain/", "BrkApp/AppStore.swift"], "AppStore is the only caller of reduce"),
-        (#"addChildWindow|canBecomeKeyWindow|method_setImplementation"#, ["BrkCEF/"], "host-window tricks stay in BrkCEF"),
+        // BrkCore's extension popup is a child of the browser window, as Arc's BrowserExtensionWindow (docs/chromium/ARC-ENGINE.md).
+        (#"addChildWindow|canBecomeKeyWindow|method_setImplementation"#, ["BrkCEF/", "BrkCoreEngine/CoreEngine.swift"], "host-window tricks stay in BrkCEF"),
         (#"CefRuntime|CefBrowser|CefChromeBrowser"#, ["BrkCEF/"], "Chromium API stays in BrkCEF"),
         (#"cornerRadius\s*=\s*[1-9]"#, [], "layout numbers live in BrkBase/Metrics.swift"),
         (#"JSONEncoder\(\)|JSONDecoder\(\)"#, ["BrkDomain/Codec.swift", "BrkDomain/BoostCodec.swift", "BrkControl/", "BrkE2E/", "BrkLocalModels/JevWire.swift", "BrkApp/ConversationFiles.swift"], "one state format, one wire format (and the decision services' wire); saved conversations are the domain's Codable records, one file each"),

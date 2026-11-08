@@ -13,7 +13,40 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     let incarnation: PageLedger.Incarnation
     let contents: any BrkCoreWebContents
     let surface: CoreSurface
-    private unowned let engine: CoreEngine
+    unowned let engine: CoreEngine
+    let isAIReader: Bool
+    /// Latest projected policy; each download freezes its own copy on its first callback.
+    var downloadPolicy: DownloadPolicy
+    var websitePolicy = WebsitePolicy()
+    var websiteStyleOwner: (document: DocumentToken, id: String)?
+    var policyWorld: (document: DocumentToken, context: Int)?
+    var permissionRequests: [String: CorePermissionRequest] = [:] { didSet { refreshWebsitePolicy() } }
+    var permissionGrants: [(document: DocumentToken, requesting: SiteOrigin, top: SiteOrigin, capabilities: Set<SiteCapability>)] = []
+    var permissionSync: [(requesting: SiteOrigin, top: SiteOrigin, capabilities: Set<SiteCapability>)] = []
+    var policyRevision: UInt64 = 0
+    var websiteError: String?
+    var autoDark: (document: DocumentToken, enabled: Bool)?
+    var frozen = false
+    var pictureInPictureDocument: DocumentToken?
+    var audible = false
+    var reportedSecurity: PageSecurity?
+    /// Changes when the page's view changes under a capture (resize, park), as `ChromePage.captureRevision`.
+    private(set) var captureRevision: UInt64 = 0
+    /// The ready document's language (`CoreEngine.reportLanguage`).
+    var detectedLanguage: String?
+    /// The URL patterns DevTools blocks for this page now, and whether its network domain is on for that.
+    var requestFilterPatterns: [String] = []
+    var requestFilterEnabled = false
+    var boostPolicy = BoostPolicy()
+    var boostRevision: UInt64 = 0
+    var boostDocument: DocumentToken?
+    var boostOwner = UUID().uuidString
+    var boostExecuted: Set<String> = []
+    var boostError: String?
+    var boostPickerGeneration: UInt64 = 0
+    var boostPickerWorld: (target: SiteTarget, id: Int, token: String)?
+    /// The JavaScript dialog shown as a sheet for this page.
+    var openDialog: (dialog: any BrkCoreDialog, alert: NSAlert)?
     private(set) var mainDocument: MainDocumentState
     private var reloadSequence = ReloadSequence()
     private var expectedReloadBrowse: URL?
@@ -36,6 +69,10 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
         self.incarnation = incarnation
         self.engine = engine
         self.browser = browser
+        isAIReader = spec.isAIReader
+        downloadPolicy = spec.downloadPolicy
+        websitePolicy = spec.websitePolicy
+        boostPolicy = spec.boostPolicy
         desiredMuted = spec.muted
         mainDocument = MainDocumentState(browser: incarnation)
         let adopted = browser.adoptWebContents(with: url)
@@ -59,6 +96,10 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
         facts.requestedReloads = requestedReloads
         facts.keyReceipts = keyReceipts
         facts.inputViewHidden = contents.inputView?.isHiddenOrHasHiddenAncestor
+        facts.websitePolicyError = websiteError
+        // Chromium's own audible state of this tab: the tab id is the target, there is no separate reader to fail.
+        facts.audioTabID = Int(contents.tabID)
+        facts.audioTargetID = "brkcore-tab-\(contents.tabID)"
         return facts
     }
 
@@ -78,12 +119,18 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     func dropFocus() { contents.setPageFocused(false) }
 
     func close() {
+        settlePermissionGrants(keeping: nil)
+        captureRevision &+= 1
         reloadSequence.cancel()
+        cancelPermissions()
+        cancelDialogs()
         surface.retire()
         contents.close()
     }
 
     func park() {
+        captureRevision &+= 1
+        cancelDialogs()
         reloadSequence.cancel()
         surface.retire()
         surface.removeFromSuperview()
@@ -96,9 +143,12 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
         prepareDocumentNavigation()
     }
 
+    /// Sound is Chromium's audible state of the tab, which it reports when it changes (a fragment step keeps a playing document audible).
     private func prepareDocumentNavigation() {
         currentProgress = 0
-        engine.pageDidEmit(self, .audioChanged(false))
+        pictureInPictureDocument = nil
+        captureRevision &+= 1
+        cancelPermissions()
         mainDocument.prepareNavigation()
     }
 
@@ -137,6 +187,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
             else { reloadSequence.cancel(); expectedReloadBrowse = nil }
         }
         if !isRedirect { currentProgress = 0 }
+        if !isRedirect { cancelPermissions(); configureRequestFilter(url) }
         emit(mainDocument.allowed(url, redirect: isRedirect))
         return true
     }
@@ -146,7 +197,10 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     }
 
     func webContents(_ contents: any BrkCoreWebContents, didStartDocument url: URL?) {
+        settlePermissionGrants(keeping: nil)
+        detectedLanguage = nil
         emit(mainDocument.started(url))
+        refreshBoosts()
         if contents.isLoading { engine.pageLoadProgress(self, progress: currentProgress) }
     }
 
@@ -154,6 +208,9 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
         setMuted(desiredMuted)
         emit(mainDocument.finished(url))
         reportZoom()
+        reportSecurity()
+        refreshWebsitePolicy()
+        engine.reportLanguage(self)
         if case .ready(let document) = mainDocument.availability, let request = reloadSequence.finished(documentSequence: document.sequence) {
             Task { @MainActor [weak self] in self?.issueReload(request) }
         }
@@ -162,7 +219,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     func webContents(_ contents: any BrkCoreWebContents, didChangeLoading isLoading: Bool, canGoBack: Bool, canGoForward: Bool) {
         engine.pageDidEmit(self, .loadingChanged(isLoading: isLoading, canGoBack: canGoBack, canGoForward: canGoForward))
         emit(mainDocument.loadingChanged(isLoading))
-        if isLoading { engine.pageLoadProgress(self, progress: currentProgress) } else { currentProgress = 0 }
+        if isLoading { engine.pageLoadProgress(self, progress: currentProgress) } else { currentProgress = 0; reportSecurity() }
     }
 
     func webContents(_ contents: any BrkCoreWebContents, didChangeProgress progress: Double) {
@@ -192,6 +249,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
 
     func webContentsRendererGone(_ contents: any BrkCoreWebContents) {
         reloadSequence.cancel()
+        cancelPermissions()
         emit(mainDocument.rendererGone())
         engine.pageDidEmit(self, .rendererGone)
     }
@@ -231,6 +289,43 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
         }
         engine.pageDidEmit(self, .openRequested(url, opening, metadata: PageOpenMetadata(userGesture: userGesture)))
     }
+
+    @objc(webContents:willDownload:)
+    func webContents(_ contents: any BrkCoreWebContents, willDownload download: any BrkCoreDownload) {
+        guard !isAIReader else { download.continue(toPath: nil); return }
+        engine.download(self, download, decide: true)
+    }
+
+    @objc(webContents:downloadDidUpdate:)
+    func webContents(_ contents: any BrkCoreWebContents, downloadDidUpdate download: any BrkCoreDownload) {
+        guard !isAIReader else { download.cancel(); return }
+        engine.download(self, download, decide: false)
+    }
+
+    @objc(webContents:requestsPermission:)
+    func webContents(_ contents: any BrkCoreWebContents, requestsPermission request: any BrkCorePermissionRequest) {
+        requestPermission(request)
+    }
+
+    @objc(webContents:didDismissPermission:)
+    func webContents(_ contents: any BrkCoreWebContents, didDismissPermission promptID: UInt64) { permissionDismissed(promptID) }
+
+    @objc(webContentsDidChangeSecurity:)
+    func webContentsDidChangeSecurity(_ contents: any BrkCoreWebContents) { reportSecurity() }
+
+    @objc(webContents:runDialog:)
+    func webContents(_ contents: any BrkCoreWebContents, run dialog: any BrkCoreDialog) -> Bool { runDialog(dialog) }
+
+    @objc(webContents:didChangeAudible:)
+    func webContents(_ contents: any BrkCoreWebContents, didChangeAudible audible: Bool) {
+        guard self.audible != audible else { return }
+        self.audible = audible
+        engine.pageDidEmit(self, .audioChanged(audible))
+        if !audible { refreshWebsitePolicy() }
+    }
+
+    @objc(webContentsCancelDialogs:)
+    func webContentsCancelDialogs(_ contents: any BrkCoreWebContents) { cancelDialogs() }
 
     /// As `ChromePage.route`: before the page the id comes from the event, after it the id is the partner's.
     private func route(_ key: BrkCoreKeyPress, before isBeforePage: Bool) -> KeyHandling {
