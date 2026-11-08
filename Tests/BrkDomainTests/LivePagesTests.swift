@@ -433,6 +433,16 @@ final class LivePagesTests: XCTestCase {
         XCTAssertTrue(candidate.text.contains("Price Watch"), "a page's title counts as said")
     }
 
+    func testChoosingAConversationInTheCommandBarOpensItsTab() throws {
+        let d = enabled()
+        let (conversation, _) = try keptPage(d)
+        d.user(.commandBar(.open(.newTab)))
+        d.user(.assist(.openConversation(conversation)))
+        XCTAssertNil(d.bar, "the bar closed")
+        XCTAssertEqual(d.view.conversations.first?.answer.conversation?.id, conversation)
+        XCTAssertEqual(d.current?.url, ConversationPage.url(conversation))
+    }
+
     func testConversationsGoIntoTheMeaningIndexByTitleAndQuestionsOnly() throws {
         let d = enabled()
         let (conversation, _) = try keptPage(d)

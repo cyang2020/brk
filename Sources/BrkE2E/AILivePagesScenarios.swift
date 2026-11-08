@@ -229,8 +229,12 @@ enum AILivePagesScenarios {
     }
     /// The hour passes on the test clock and the sweep runs; the refresh that is due starts. Waits until its outcome is
     /// newer than `after`.
+    /// Everything the clock was moved on in this run: a relaunch starts the test clock at the real time again, and the
+    /// scenario moves it on by as much, so the app's time does not go backwards.
+    nonisolated(unsafe) private static var moved: Double = 0
     private static func passTheHour(_ app: AppUnderTest, _ page: AIPageID, seconds: Double = 3_660, timeout: Double = 240) throws -> String {
         let before = outcome(app, page)?.at ?? 0
+        moved += seconds
         _ = try app.advanceClock(seconds: seconds)
         try app.waitUntil("the refresh's outcome", timeout: timeout) { (outcome(app, page)?.at ?? 0) > before }
         return outcome(app, page)?.kind ?? "none"
@@ -246,6 +250,7 @@ enum AILivePagesScenarios {
         try app.launch()
         guard case .hello(let again) = try app.send(.hello) else { throw Check(description: "no hello after the relaunch") }
         pid = again.pid
+        if moved > 0 { _ = try app.advanceClock(seconds: moved) }
     }
     /// The page's sandbox view on screen in the page's card: its frame in root coordinates.
     private static func pageCard(_ app: AppUnderTest) throws -> CGRect {
@@ -502,7 +507,15 @@ enum AILivePagesScenarios {
             }
             shot(app, prefix, "bar-conversation")
             screenCapture(app, prefix + "-bar-conversation-screen")
-            try clickScreen(centre(row!))
+            // The row's own view, under the title's middle; the click goes to its left part, clear of the hint.
+            let middle = CGPoint(x: row!.midX, y: row!.midY)
+            let rows = try app.native().actual.filter { $0.key.hasPrefix("command-bar-result") && !$0.value.hidden }
+            if let target = try rows.values.first(where: { CGRect(origin: try screen(app, $0.frame.origin), size: $0.frame.size).contains(middle) }) {
+                let onScreen = CGRect(origin: try screen(app, target.frame.origin), size: target.frame.size)
+                try clickScreen(CGPoint(x: onScreen.minX + onScreen.width * 0.3, y: onScreen.midY))
+            } else { try clickScreen(middle) }
+            app.sleep(0.8)
+            screenCapture(app, prefix + "-bar-conversation-clicked-screen")
             try app.waitUntil("the conversation's tab", timeout: 8) { try app.view().conversations.first?.answer.conversation?.id == conversation }
             return "found by “toaster is cheapest” (said in it, not in its title) and opened by a click"
         }
@@ -781,6 +794,7 @@ enum AILivePagesScenarios {
                     try key(.command, .w)
                     app.sleep(0.8)
                 }
+                moved += 4 * 86_400
                 _ = try app.advanceClock(seconds: 4 * 86_400)
                 return "opened and archived with ⌘W; the clock moved four days on"
             }

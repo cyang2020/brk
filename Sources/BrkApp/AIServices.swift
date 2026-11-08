@@ -258,13 +258,19 @@ final class AIServices {
         session.send(LivePageRefresh.prompt(run, now: Date()), turn: run.run)
     }
 
-    /// The refresh is over, one way or another: the reducer hears once, and its session and tools go.
+    /// The refresh is over, one way or another: the reducer hears once, and its tools go. A refresh stopped in the middle
+    /// (a flag, the deadline) is asked to stop first, so the agent still reports what the turn cost, then its session goes.
     private func endRefresh(_ id: AIRequestID, _ kind: AIPageRefreshOutcome.Kind, detail: String?) {
         guard let refresh = refreshes.removeValue(forKey: id) else { return }
         refresh.deadline.cancel()
         refresh.tools.stop()
         send(.aiPageRefresh(refresh.run.page, run: id, .finished(kind, detail: detail)))
-        closing.append(Task { await refresh.session.close() })
+        let running = refresh.session.currentTurn == id
+        if running { refresh.session.stop(turn: id) }
+        closing.append(Task {
+            if running { try? await Task.sleep(for: .seconds(3)) }
+            await refresh.session.close()
+        })
     }
 
     /// `Effect.aiStopRefresh`: the page is gone; nothing more is reported.

@@ -52,6 +52,7 @@ extension StoredConversation {
     public var candidate: ConversationCandidate {
         var text = messages.compactMap { _, item -> String? in
             switch item {
+            case .user(let value) where value == title: nil
             case .user(let value), .assistant(let value): value
             case .page(let page): page.title
             default: nil
