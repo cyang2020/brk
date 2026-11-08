@@ -203,7 +203,8 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
             live.reportZoom()
             DispatchQueue.main.async { [weak live] in live?.reportZoom() }
         case .recover: live.prepareNavigation(); live.contents.reloadBypassingCache(false)
-        case .toggleDevTools, .cast, .developer, .documentPictureInPicture, .media, .exitFullscreen:
+        case .media(let request): live.control(request)
+        case .toggleDevTools, .cast, .developer, .documentPictureInPicture, .exitFullscreen:
             log.notice("page action not available on this engine yet")
         }
     }

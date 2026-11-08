@@ -207,6 +207,9 @@ NS_SWIFT_UI_ACTOR
 - (void)webContentsCancelDialogs:(id<BrkCoreWebContents>)contents;
 /// The page started or stopped making sound (Chromium's audible state, what Chrome's tab speaker shows).
 - (void)webContents:(id<BrkCoreWebContents>)contents didChangeAudible:(BOOL)audible;
+/// The page's audio and video elements, its frames' included, changed. A JSON array of objects with `frame` (0: the main frame), `document`,
+/// `element`, `kind` ("audio", "video"), `paused`, `ended`, `silent` (the element is muted) and `pictureInPicture`.
+- (void)webContents:(id<BrkCoreWebContents>)contents didChangeMediaPlayers:(NSString*)json;
 @end
 
 NS_SWIFT_UI_ACTOR
@@ -253,6 +256,12 @@ NS_SWIFT_UI_ACTOR
 - (void)close;
 /// The visible entry's connection now.
 @property(nonatomic, readonly) BrkCoreSecurity security;
+/// Plays, pauses ("play", "pause"), sets the volume of ("setVolume", 0 to 1) or moves into or out of picture in picture
+/// ("enterPictureInPicture", "exitPictureInPicture") one element -webContents:didChangeMediaPlayers: named. NO when its frame is gone.
+- (BOOL)controlMediaPlayerInFrame:(int)frame
+                          element:(NSString*)element
+                        operation:(NSString*)operation
+                           volume:(double)volume;
 /// Writes a remembered choice into the profile's content settings for `requesting` embedded in `topLevel`: an allow (YES), a block
 /// (NO), or back to asking (nil).
 - (void)setPermission:(BrkCorePermissionKind)kinds

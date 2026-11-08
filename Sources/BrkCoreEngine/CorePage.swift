@@ -29,6 +29,8 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     var frozen = false
     var pictureInPictureDocument: DocumentToken?
     var audible = false
+    /// The page's audio and video elements as last read (`CoreMedia.swift`).
+    var mediaPlayers: [MediaPlayer] = []
     var reportedSecurity: PageSecurity?
     /// Changes when the page's view changes under a capture (resize, park), as `ChromePage.captureRevision`.
     private(set) var captureRevision: UInt64 = 0
@@ -199,6 +201,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     func webContents(_ contents: any BrkCoreWebContents, didStartDocument url: URL?) {
         settlePermissionGrants(keeping: nil)
         detectedLanguage = nil
+        mediaPlayers = []
         emit(mainDocument.started(url))
         refreshBoosts()
         if contents.isLoading { engine.pageLoadProgress(self, progress: currentProgress) }
@@ -323,6 +326,9 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
         engine.pageDidEmit(self, .audioChanged(audible))
         if !audible { refreshWebsitePolicy() }
     }
+
+    @objc(webContents:didChangeMediaPlayers:)
+    func webContents(_ contents: any BrkCoreWebContents, didChangeMediaPlayers json: String) { mediaPlayersChanged(json) }
 
     @objc(webContentsCancelDialogs:)
     func webContentsCancelDialogs(_ contents: any BrkCoreWebContents) { cancelDialogs() }

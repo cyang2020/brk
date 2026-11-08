@@ -30,6 +30,7 @@ extension CorePage {
     /// What keeps a hidden page running even when its site is set to suspend, as on CEF.
     func websiteOperationProtected() -> Bool {
         audible || pictureInPictureDocument == mainDocument.readyDocument && pictureInPictureDocument != nil
+            || mediaPlayers.contains(where: \.pictureInPicture)
             || engine.transfers.contains(context: context) || !permissionRequests.isEmpty
             || engine.resources.entries[incarnation]?.leases.isEmpty == false
     }
