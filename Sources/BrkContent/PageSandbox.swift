@@ -421,9 +421,23 @@ extension PageTheme {
     }
 }
 
-/// The web view with Brk's own context menu: the page's items (Keep as Tab), never WebKit's (Reload, Inspect).
+/// The web view with Brk's own context menu: the page's items (Keep as Tab), never WebKit's (Reload, Inspect). A right
+/// click or a Control-click opens it here, without asking the page: WebKit's own menu goes through the page's process
+/// and lets the page cancel it (and in the first Codex run it never opened).
 private final class SandboxWebView: WKWebView {
     var menuItems: (() -> [NSMenuItem])?
+
+    private func showMenu(_ event: NSEvent) {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        for item in menuItems?() ?? [] { menu.addItem(item) }
+        guard !menu.items.isEmpty else { return }
+        NSMenu.popUpContextMenu(menu, with: event, for: self)
+    }
+    override func rightMouseDown(with event: NSEvent) { showMenu(event) }
+    override func mouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.control) { showMenu(event) } else { super.mouseDown(with: event) }
+    }
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         menu.removeAllItems()
         for item in menuItems?() ?? [] { menu.addItem(item) }

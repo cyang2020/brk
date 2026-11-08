@@ -82,7 +82,9 @@ import Foundation
         }
     }
 
-    private func openThread() {
+    /// The request that opens the session's thread. A resumed thread is given the same sandbox, approval policy and
+    /// instructions as a new one: left out, it would run on whatever the user's own Codex settings say.
+    static func threadRequest(_ spec: AgentSpec) -> (method: String, params: [String: Any]) {
         var params: [String: Any] = ["cwd": spec.directory.path]
         if let model = spec.model { params["model"] = model }
         switch spec.access {
@@ -96,6 +98,14 @@ import Foundation
             params["sandbox"] = "workspace-write"; params["approvalPolicy"] = "untrusted"
             params["developerInstructions"] = BrkToolCatalog.rules
         }
+        guard let resume = spec.resume, spec.access != .readOnly else { return ("thread/start", params) }
+        params["threadId"] = resume
+        params["excludeTurns"] = true
+        return ("thread/resume", params)
+    }
+
+    private func openThread() {
+        let request = Self.threadRequest(spec)
         let opened: JSONRPCPeer.Reply = { [weak self] result in
             guard let self else { return }
             switch result {
@@ -107,11 +117,7 @@ import Foundation
                 if let queued = self.queued { self.queued = nil; self.send(queued) }
             }
         }
-        if let resume = spec.resume {
-            peer?.request("thread/resume", ["threadId": resume, "cwd": spec.directory.path], reply: opened)
-        } else {
-            peer?.request("thread/start", params, reply: opened)
-        }
+        peer?.request(request.method, request.params, reply: opened)
     }
 
     func send(_ text: String) {

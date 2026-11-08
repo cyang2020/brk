@@ -604,6 +604,23 @@ final class BrkToolsTests: XCTestCase {
         XCTAssertFalse(ClaudeBackend.answersItself(tool: "Read", input: ["file_path": home.path + "/.claude/skills/lark-doc/../../secret.txt"], directory: folder, home: home.path))
     }
 
+    func testAResumedCodexThreadKeepsTheSessionsSafetyRules() {
+        var browser = spec(.codex, .browser)
+        browser.resume = "thread-1"
+        let resumed = CodexBackend.threadRequest(browser)
+        XCTAssertEqual(resumed.method, "thread/resume")
+        XCTAssertEqual(resumed.params["threadId"] as? String, "thread-1")
+        XCTAssertEqual(resumed.params["approvalPolicy"] as? String, "untrusted")
+        XCTAssertEqual(resumed.params["sandbox"] as? String, "workspace-write")
+        XCTAssertEqual(resumed.params["developerInstructions"] as? String, BrkToolCatalog.rules)
+        let fresh = CodexBackend.threadRequest(spec(.codex, .browser))
+        XCTAssertEqual(fresh.method, "thread/start")
+        XCTAssertEqual(Set(fresh.params.keys).subtracting(["threadId", "excludeTurns"]), Set(resumed.params.keys).subtracting(["threadId", "excludeTurns"]))
+        var readOnly = spec(.codex, .readOnly)
+        readOnly.resume = "thread-2"
+        XCTAssertEqual(CodexBackend.threadRequest(readOnly).method, "thread/start", "a read-only thread is ephemeral and never resumed")
+    }
+
     func testCodexBrowserSessionsHaveBrksServerAndNoWebSearchOrConnectors() {
         let arguments = CodexBackend.arguments(spec(.codex, .browser))
         XCTAssertTrue(arguments.contains("mcp_servers={brk={command=\"/Applications/Brk.app/Contents/MacOS/Brk\",args=[\"--brk-tools\",\"/var/folders/x/T/brkt-1/abc\"]}}"), "\(arguments)")
