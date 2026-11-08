@@ -192,6 +192,8 @@ Brk 不自己接飞书、Notion 或邮件，这些都装在 agent 那边。理�
 
 Brk 已有 Arc 的 Space（一组 tab），这个功能不能叫 Space。暂名"AI 页面"。
 
+实现和刷新时能做什么、不能做什么，见 docs/design/ai-live-pages.md（slice E）。
+
 ## 安全与权限
 
 现在的规定是"网页文字不能进入开着工具的 agent"。新的 agent 层要求两者同时存在：飞书那个例子里，agent 要读 tab 正文，也要调用飞书工具。所以这条规定换成下面几条。

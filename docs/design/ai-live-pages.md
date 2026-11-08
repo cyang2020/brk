@@ -25,7 +25,8 @@ pinned, hidden or shown on chosen days. Brk takes the page, not an agent persona
 - **Changing the page.** Asked in the conversation ("加一个备注框"), the agent changes the kept page with
   `brk_page_update`; its tab shows the change. A refresh never changes the HTML.
 - **Shown on chosen days.** A page shown on Mondays only is out of Today on other days (unless the window shows it), is
-  still found by the command bar, and is not auto-archived while it waits for its day.
+  still found by the command bar, and is not auto-archived while it waits for its day. A page with a schedule is not
+  auto-archived either; its × archives it, and then it stops refreshing.
 - **Conversations.** Closing a conversation's row archives it like a tab. The archive's context menu on a conversation or
   a kept page has **Delete Conversation…** / **Delete Page…**, which asks first and then deletes the transcript, every page
   it made and their rows. The command bar finds conversations by title and by what was said (and by meaning, through
@@ -45,6 +46,7 @@ pinned, hidden or shown on chosen days. Brk takes the page, not an agent persona
 | Only refreshes that changed something, or stopped, write into the conversation | An hourly page would otherwise fill its conversation with "nothing new". |
 | Ticks and notes are a separate `saved` object, never part of `data` | A refresh replaces `data` whole; keeping the user's edits apart means a small model cannot lose them. The page keys them by item id. |
 | Show in Today hides the row; it stays findable and is not archived | Muse's "scheduled to appear". Archiving it on its off days would lose it from Today on its day. |
+| Auto-archive leaves a page with a schedule in Today; the user's × archives it, and an archived page stops refreshing | A page that refreshes itself is not stale. The first real run moved the clock four days on and the sweep archived the price watch, which then stopped. |
 | Delete for good only from the archive, with a sheet that says what goes | Closing a row stays reversible; deleting a transcript and its pages is not, so it is one step further away and asks. |
 | Conversation rows in the command bar: title matches first, then what was said, at most two, after the typed row | Like history: found by content, never above what the user typed. |
 

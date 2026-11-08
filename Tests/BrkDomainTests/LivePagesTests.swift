@@ -218,6 +218,22 @@ final class LivePagesTests: XCTestCase {
         XCTAssertEqual(d.view.aiPages.first?.content?.revision, 1)
     }
 
+    func testAPageThatRefreshesItselfIsNotAutoArchivedButItsRowsCloseStillArchives() throws {
+        let d = enabled()
+        let (conversation, page) = try keptPage(d)
+        d.user(.tab(.focus(d.todayIDs.last!)))
+        d.advance(.seconds(3 * 86_400))
+        let runs = refreshes(d.system(.clockTick))
+        XCTAssertEqual(runs.count, 1, "the sweep left it in Today, so its slot runs")
+        XCTAssertNotNil(pageRow(d, page))
+        XCTAssertTrue(d.state.doc.archive.contains { $0.tab.url == ConversationPage.url(conversation) }, "its conversation's row is an ordinary row and was swept")
+        d.system(.aiPageRefresh(page, run: runs[0].run, .finished(.updated, detail: nil)))
+        d.user(.tab(.close(.item(try XCTUnwrap(pageRow(d, page)).id))))
+        XCTAssertTrue(d.state.doc.archive.contains { $0.tab.url == AIPageTab.url(page) }, "the × archives it")
+        d.advance(.seconds(3_600))
+        XCTAssertEqual(refreshes(d.system(.clockTick)), [], "an archived page does not refresh")
+    }
+
     func testTheSameDataIsNoChangeAndSaysNothing() throws {
         let d = enabled()
         let (conversation, page) = try keptPage(d)

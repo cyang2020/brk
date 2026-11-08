@@ -794,17 +794,20 @@ enum AILivePagesScenarios {
 
         if wanted("weekly") {
             var weekly: AIPageID?
-            log.check("three articles read and archived, a week passes") {
+            // An earlier part's page refreshes hourly; the week's jump would run it too. It is set to Never first, so
+            // only the reading list spends a request.
+            if let page, (live(app, page)["schedule"] as? [String: Any]) != nil, let row = try pageRow(app, page) {
+                try rowMenu(app, row.id, ["Refresh", "Never"])
+            }
+            log.check("three articles read and archived") {
                 for article in ["article-sleep", "article-coffee", "article-rivers"] {
                     try open(app, article + ".html")
                     try key(.command, .w)
                     app.sleep(0.8)
                 }
-                moved += 4 * 86_400
-                _ = try app.advanceClock(seconds: 4 * 86_400)
-                return "opened and archived with ⌘W; the clock moved four days on"
+                return "opened from the command bar and archived with ⌘W"
             }
-            log.check("“每周一把我上周归档的文章整理成阅读清单” makes a weekly page from the archive") {
+            log.check("“每周一把我上周归档的文章整理成阅读清单” makes a page that refreshes every Monday, from the archive") {
                 try WindowServerKeys.ensureFrontmost(app, app.window!)
                 try key([.option, .command], .g)
                 try app.waitUntil("the question bar") { if case .commandBar? = try app.view().overlay { true } else { false } }
@@ -818,21 +821,27 @@ enum AILivePagesScenarios {
                 guard let made = pages(ai).last else { throw Check(description: "no page: \(steps(ai))") }
                 weekly = made.id
                 try expect(steps(ai).contains { $0.hasPrefix("List tabs") || $0.hasPrefix("Search tabs") }, "the archive was not read: \(steps(ai))")
-                var how = "the agent kept it with refresh"
+                var how = "the agent kept it with a weekly refresh"
                 if (live(app, made.id)["schedule"] as? [String: Any])?["weekly"] == nil {
                     guard let row = try pageRow(app, made.id) else { throw Check(description: "the agent did not keep the page") }
                     try rowMenu(app, row.id, ["Refresh", "Every Monday at 9:00"])
                     how = "the schedule was set from the row's menu"
                 }
-                let data = record(app, made.id)?["data"] as? String ?? ""
-                let titles = ["sleep", "coffee", "river"].filter { data.lowercased().contains($0) }
-                try expect(titles.count >= 2, "the reading list's data: \(short(data))")
-                return "\(how); schedule \(live(app, made.id)["schedule"] ?? "nil"); data names \(titles)"
+                // The articles were archived today, so "last week" holds none of them yet; the list may start empty.
+                return "\(how); schedule \(live(app, made.id)["schedule"] ?? "nil"); data now \(short(record(app, made.id)?["data"] as? String))"
             }
-            if let weekly { log.check("the next Monday's refresh rebuilds the list from the archive") {
-                let kind = try passTheHour(app, weekly, seconds: 7 * 86_400, timeout: 300)
-                try expect(kind == "updated" || kind == "unchanged", "the outcome: \(kind) \(outcomeDetail(app, weekly))")
-                return "outcome \(kind); data \(short(record(app, weekly)?["data"] as? String))"
+            if let weekly { log.check("a week later, Monday's refresh lists the articles archived in the week before") {
+                let home = try todayRow(app) { $0.url?.absoluteString.hasSuffix("index.html") == true }
+                try click(app, at: centre(stillFrame(app, .row(home.id))))
+                let kind = try passTheHour(app, weekly, seconds: 7 * 86_400 + 3 * 3_600, timeout: 300)
+                try expect(kind == "updated", "the outcome: \(kind) \(outcomeDetail(app, weekly))")
+                let data = record(app, weekly)?["data"] as? String ?? ""
+                let titles = ["sleep", "coffee", "river"].filter { data.lowercased().contains($0) }
+                try expect(titles.count == 3, "the reading list's data: \(short(data))")
+                try app.waitUntil("the row's mark", timeout: 6) { try pageRow(app, weekly)?.liveMark == .changed }
+                try showPage(app, weekly)
+                shot(app, prefix, "weekly-refreshed")
+                return "outcome \(kind); the list names \(titles); data \(short(data))"
             } }
         }
 
