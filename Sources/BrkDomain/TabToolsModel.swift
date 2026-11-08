@@ -205,6 +205,10 @@ enum ToastUndo: Sendable, Equatable {
     case translation(PageID)
     /// Tidy on the Today divider: the Today order before the tab groups.
     case tidy
+    /// Place New Tabs moved a new tab into a group: back to where it was in Today.
+    case placement(ItemID, parent: ItemID, index: Int)
+    /// Name with AI renamed a folder: its name before.
+    case folderName(ItemID, String)
 }
 public struct RecentTabsSnapshot: Equatable, Sendable, Codable {
     public var items: [RecentTabRow]

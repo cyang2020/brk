@@ -102,6 +102,11 @@ extension Work {
             showSpace(space.id, in: window)
         case .regroup(let id, let folder, let parent, let children):
             restoreGroupHeader(id: id, folder: folder, parent: parent, children: children)
+        case .placement(let tab, let parent, let index):
+            guard state.doc.tree[parent] != nil, state.doc.tree[tab] != nil else { return }
+            _ = moveItem(tab, to: .into(parent: parent, index: index))
+        case .folderName(let folder, let title):
+            state.doc.tree.updateFolder(folder) { $0.title = title }
         }
     }
     mutating func reveal(_ id: ItemID, in window: WindowID, focusSidebar: Bool = false) {

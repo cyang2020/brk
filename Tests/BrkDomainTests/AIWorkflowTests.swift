@@ -75,8 +75,7 @@ final class AIWorkflowTests: XCTestCase {
         _ = d.open("https://example.com/b"); let before = d.todayIDs
         let (id, task) = try request(d.user(.assist(.organizeToday)))
         guard case .tidyToday(_, let tabs) = task else { return XCTFail() }
-        let reply = "[{\"folder\":\"Reading\",\"tabs\":" + String(decoding: try JSONEncoder().encode(tabs.map { $0.id.rawValue }), as: UTF8.self) + "}]"
-        d.system(.aiResult(id, .text(reply)))
+        d.system(.aiResult(id, .reply(.groups([AIGroupPlan(folder: "Reading", tabs: tabs.map { $0.id.rawValue })]))))
         guard case .folder(let folder)? = d.view.space.today.rows.first else { return XCTFail("no Today group") }
         XCTAssertEqual(folder.children.map(\.id), before)
         // Arc's undo toast instead of an answer panel (P46: Tidy on the divider).
@@ -94,17 +93,16 @@ final class AIWorkflowTests: XCTestCase {
         let d = enabled(); d.user(.settings(.max(.tidyTabs(true)))); _ = d.open("https://example.com/b")
         let (id, _) = try request(d.user(.assist(.organizeToday)))
         let before = d.todayIDs
-        d.system(.aiResult(id, .text("[{\"folder\":\"Bad\",\"tabs\":[\"foreign\"]}]")))
+        d.system(.aiResult(id, .reply(.groups([AIGroupPlan(folder: "Bad", tabs: ["foreign"])]))))
         XCTAssertEqual(d.todayIDs, before)
         XCTAssertTrue(d.view.tabTools.toast?.text.contains("invalid") == true)
         let (second, task) = try request(d.user(.assist(.organizeToday)))
         guard case .tidyToday(_, let tabs) = task else { return XCTFail() }
-        let reply = "[{\"folder\":\"Reading\",\"tabs\":" + String(decoding: try JSONEncoder().encode(tabs.map { $0.id.rawValue }), as: UTF8.self) + "}]"
         _ = d.open("https://example.com/c")
-        d.system(.aiResult(second, .text(reply)))
+        d.system(.aiResult(second, .reply(.groups([AIGroupPlan(folder: "Reading", tabs: tabs.map { $0.id.rawValue })]))))
         XCTAssertEqual(d.todayIDs.count, 3)
         XCTAssertFalse(d.view.space.today.rows.contains { if case .folder = $0 { true } else { false } })
-        XCTAssertNil(AIValidation.plan("[{\"folder\":\"x\",\"tabs\":[\"a\",\"a\"]}]", eligible: [AITab(id: ItemID("a"), title: "", url: start)]))
+        XCTAssertNil(AIValidation.plan([AIGroupPlan(folder: "x", tabs: ["a", "a"])], eligible: [AITab(id: ItemID("a"), title: "", url: start)]))
     }
     func testBrowseHiddenPagesOwnContextAndCloseBeforeAnswer() throws {
         let d = enabled()
@@ -156,7 +154,7 @@ final class AIWorkflowTests: XCTestCase {
         d.system(.page(BrowserToken(page: reader.id, generation: 1), .browserCreated(reader.context, .ready(doc))))
         let summarize = d.system(.aiPageRead(id, reader.id, AIPageContent(document: doc, url: start, title: "Fixture", language: "en", text: "Body", nodes: [])))
         guard case .summarize? = try? request(summarize).1 else { return XCTFail("no summary asked") }
-        d.system(.aiResult(id, .text("```json\n{\"blocked\":false,\"quickSummary\":\"Synthetic page for browser comparison\",\"details\":[{\"label\":\"Purpose:\",\"icon\":\"eye\",\"info\":\"Compare browser chrome performance.\"},{\"label\":\"Visuals:\",\"icon\":\"\",\"info\":\"Colored block.\"}]}\n```")))
+        d.system(.aiResult(id, .reply(.preview(AIPreviewReply(blocked: false, quickSummary: "Synthetic page for browser comparison", details: [AIPreviewDetail(label: "Purpose:", icon: "eye", info: "Compare browser chrome performance."), AIPreviewDetail(label: "Visuals:", icon: "", info: "Colored block.")])))))
         let card = try XCTUnwrap(d.view.aiPreview)
         XCTAssertFalse(card.busy)
         XCTAssertEqual(card.title, "Synthetic page for browser comparison")
@@ -170,8 +168,8 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertTrue(shared.effects.contains(.copyToPasteboard(start.absoluteString)))
         d.user(.assist(.previewHover(false)))
         XCTAssertNil(d.view.aiPreview)
-        XCTAssertEqual(AIValidation.preview("{\"blocked\":true}")?.blocked, true)
-        XCTAssertEqual(AIValidation.preview("Title\nPurpose: To compare")?.details?.first?.label, "Purpose:")
+        XCTAssertEqual(AIValidation.preview(AIPreviewReply(blocked: true))?.blocked, true)
+        XCTAssertNil(AIValidation.preview(AIPreviewReply(blocked: false, quickSummary: "  ", details: [])))
     }
     func testInstantLinksRowOpensTheVerifiedResultsAndFailsInPlace() throws {
         let d = enabled()
@@ -181,7 +179,7 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertNil(d.view.ai)
         guard case .tab(let row)? = d.view.space.today.rows.first else { return XCTFail("no Instant Links row") }
         XCTAssertEqual(row.instant, .searching); XCTAssertEqual(row.title, "Searching the web for you…")
-        d.system(.aiResult(id, .text("https://en.wikipedia.org/wiki/Arc_(web_browser)\njavascript:alert(1)\nhttps://en.wikipedia.org/wiki/Google_Chrome")))
+        d.system(.aiResult(id, .reply(.links(["https://en.wikipedia.org/wiki/Arc_(web_browser)", "javascript:alert(1)", "https://en.wikipedia.org/wiki/Google_Chrome"]))))
         let readers = d.snapshot.pages.filter(\.isAIReader)
         XCTAssertEqual(readers.map(\.initialURL), [url("https://en.wikipedia.org/wiki/Arc_(web_browser)"), url("https://en.wikipedia.org/wiki/Google_Chrome")])
         for reader in readers {
@@ -196,23 +194,23 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertFalse(d.view.space.today.rows.contains { if case .tab(let t) = $0 { t.instant != nil } else { false } })
         // An unsafe reply leaves Arc's failed row, whose × removes it.
         let (bad, _) = try request(d.user(.assist(.instant("some site"))))
-        d.system(.aiResult(bad, .text("javascript:alert(1)")))
+        d.system(.aiResult(bad, .reply(.links(["javascript:alert(1)"]))))
         guard case .tab(let failed)? = d.view.space.today.rows.first else { return XCTFail("failed row missing") }
         XCTAssertEqual(failed.instant, .failed); XCTAssertEqual(failed.title, "Oops, something went wrong.")
         d.user(.tabTools(.bulk(.items([failed.id]), .close)))
         XCTAssertNotEqual(d.view.space.today.rows.first?.id, failed.id)
-        XCTAssertEqual(AIValidation.destinations("https://a.example/ https://a.example/ <https://b.example/x>"), [url("https://a.example/"), url("https://b.example/x")])
+        XCTAssertEqual(AIValidation.destinations(["https://a.example/", "https://a.example/", "https://b.example/x", "file:///etc/passwd"]), [url("https://a.example/"), url("https://b.example/x")])
         for value in ["file:///tmp/a", "https://u:p@example.com", "https://example.com bad", "data:text/html,x"] { XCTAssertNil(AIValidation.destination(value)) }
     }
     func testTranslationValidatesExactNodesAndPersistsOnlyProfileExclusions() throws {
         let d = enabled(), c = try content(d)
         let id = try readRequest(d.user(.assist(.translate("English"))))
         d.system(.aiPageRead(id, c.document.browser.page, c))
-        let invalid = d.system(.aiResult(id, .text("[{\"id\":9,\"text\":\"Hello\"}]")))
+        let invalid = d.system(.aiResult(id, .reply(.translation([AITextNode(id: 9, text: "Hello")]))))
         XCTAssertFalse(invalid.effects.contains { if case .aiTranslate = $0 { true } else { false } })
         let second = try readRequest(d.user(.assist(.translate("English"))))
         d.system(.aiPageRead(second, c.document.browser.page, c))
-        let valid = d.system(.aiResult(second, .text("[{\"id\":0,\"text\":\"Hello\"}]")))
+        let valid = d.system(.aiResult(second, .reply(.translation([AITextNode(id: 0, text: "Hello")]))))
         XCTAssertTrue(valid.effects.contains(.aiTranslate(second, c, [AITextNode(id: 0, text: "Hello")])))
         d.system(.aiTranslated(second, true))
         d.user(.assist(.neverTranslateLanguage))
@@ -232,7 +230,7 @@ final class AIWorkflowTests: XCTestCase {
         let id = try readRequest(menu)
         XCTAssertEqual(d.view.urlPill.translation, .translating)
         d.system(.aiPageRead(id, page, c))
-        d.system(.aiResult(id, .text("[{\"id\":0,\"text\":\"Hello\"}]")))
+        d.system(.aiResult(id, .reply(.translation([AITextNode(id: 0, text: "Hello")]))))
         d.system(.aiTranslated(id, true))
         XCTAssertNil(d.view.ai)
         XCTAssertEqual(d.view.urlPill.translation, .translated(from: "French"))
@@ -248,7 +246,7 @@ final class AIWorkflowTests: XCTestCase {
         // Choose Another Language translates again; the page's own language stays French.
         let german = try readRequest(d.user(.assist(.translate("German"))))
         d.system(.aiPageRead(german, page, c))
-        d.system(.aiResult(german, .text("[{\"id\":0,\"text\":\"Hallo\"}]")))
+        d.system(.aiResult(german, .reply(.translation([AITextNode(id: 0, text: "Hallo")]))))
         d.system(.aiTranslated(german, true))
         XCTAssertEqual(d.view.urlPill.translation, .translated(from: "French"))
         // A new document is the page's own text again.
@@ -287,7 +285,7 @@ final class AIWorkflowTests: XCTestCase {
         let (id, task) = try request(moved)
         guard case .renameTab(let renamed, _, _) = task else { return XCTFail("no rename asked") }
         XCTAssertEqual(renamed, tab)
-        d.system(.aiResult(id, .text("Sidebar Ellipsis")))
+        d.system(.aiResult(id, .reply(.text("Sidebar Ellipsis"))))
         XCTAssertEqual(d.row(tab)?.title, "Sidebar Ellipsis")
     }
     /// The Today divider's Tidy shows with more than six Today tabs and Tidy Tabs on (P46-b).
@@ -333,7 +331,7 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertFalse(d.user(.assist(.renameDownload(download))).effects.contains { if case .ai = $0 { true } else { false } })
         let t = d.download(tab, download, .terminal(.completed(FileReceipt(url: URL(fileURLWithPath: "/tmp/fixture.txt"), bytes: 8))))
         let (id, _) = try request(t)
-        let renamed = d.system(.aiResult(id, .text("Reading.txt")))
+        let renamed = d.system(.aiResult(id, .reply(.text("Reading.txt"))))
         XCTAssertTrue(renamed.effects.contains(.aiRenameDownload(download, originalPath: "/tmp/fixture.txt", filename: "Reading.txt")))
         d.system(.aiDownloadRenamed(download, originalPath: "/tmp/fixture.txt", newPath: "/tmp/Reading.txt", error: nil))
         XCTAssertEqual(d.state.doc.downloads.first?.filename, "Reading.txt")
@@ -375,7 +373,7 @@ final class AIWorkflowTests: XCTestCase {
         let other = try XCTUnwrap(d.snapshot.settings.profiles.first { $0.profile.id != .default }?.profile.id)
         let changed = d.user(.profile(.assign(.current, to: other)))
         XCTAssertTrue(changed.effects.contains(.aiCancel(id)))
-        d.system(.aiResult(id, .text("Old profile title")))
+        d.system(.aiResult(id, .reply(.text("Old profile title"))))
         XCTAssertNotEqual(d.row(tab)?.title, "Old profile title")
     }
 
@@ -395,7 +393,7 @@ final class AIWorkflowTests: XCTestCase {
         let transition = d.user(.tab(.togglePin(.item(tab))))
         let (id, _) = try request(transition)
         XCTAssertFalse(transition.effects.contains(.aiCancel(id)))
-        d.system(.aiResult(id, .text("Navigated Home")))
+        d.system(.aiResult(id, .reply(.text("Navigated Home"))))
         XCTAssertEqual(d.row(tab)?.title, "Navigated Home")
     }
 

@@ -46,7 +46,14 @@ extension Work {
             state.withTree(scope) { tree in
                 tree.updateTab(id) { tab in
                     let custom = trimmed.isEmpty ? nil : trimmed
-                    if tab.customTitle != custom { tab.customTitle = custom }
+                    // Return on the AI's name unchanged keeps it the AI's; any other commit makes the title the user's
+                    // for good, so Name Tabs never touches it again.
+                    if tab.customTitle == nil, let name = tab.aiName, custom == name.title { return }
+                    if tab.customTitle != custom {
+                        tab.customTitle = custom
+                        tab.userNamed = true
+                        tab.aiName = nil
+                    }
                 }
                 if !trimmed.isEmpty { tree.updateFolder(id) { if $0.title != trimmed { $0.title = trimmed } } }
             }
@@ -294,6 +301,8 @@ extension Work {
         }
         func link(_ tab: ItemID) -> URL? { state.displayedTab(tab, in: window)?.url }
         switch request {
+        case .todayCleanup(let space):
+            return MenuModel(entries: cleanupMenu(space, in: window))
         case .selection(let ids):
             guard let tree = state.tree(of: window) else { return MenuModel(entries: []) }
             let rows = ids.filter { tree[$0] != nil && tree[$0]?.kind != .section }
@@ -389,7 +398,10 @@ extension Work {
                     entry("Turn “\(f.title)” into Space", .tabTools(.folderToSpace(id)), enabled: scope == .global && standard),
                     entry("Copy All Links", .tabTools(.copyLinks(.items([id]))), enabled: tree.tabs(under: id).contains { link($0) != nil }), .separator,
                     entry("Change Icon…", .tabTools(.chooseIcon(id))),
-                    entry("Rename…", .item(.beginRename(.item(id)))), .separator,
+                    entry("Rename…", .item(.beginRename(.item(id))))]
+                    // Brk's Name with AI, only while its switch is on, so the menu is Arc's otherwise.
+                    + (state.doc.settings.max.enabled(.folderNames) ? [entry(AICopy.nameWithAI, .assist(.nameFolder(id)), enabled: !tree.tabs(under: id).isEmpty)] : [])
+                    + [.separator,
                     entry("Duplicate", .tabTools(.bulk(.items([id]), .duplicate(nil)))),
                     moves([id], home: role.space, scope: scope) { .item(.move(id, to: $0)) }, .separator,
                     entry("Delete", .item(.deleteFolder(id))),

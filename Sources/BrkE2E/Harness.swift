@@ -197,6 +197,8 @@ final class AppUnderTest {
             environment["BRK_AI_FIXTURE_CHILD"] = dataDirectory.appendingPathComponent("ai-fixture-child").path
             environment["BRK_TEST_AI_FOLDER"] = dataDirectory.appendingPathComponent("ai-work", isDirectory: true).path
         }
+        // The API-key path on a test instance: the Anthropic API's stand-in on the fixture server (FixtureAPI.swift).
+        if scenarioID.hasPrefix("AIKeys") { environment["BRK_AI_API_BASE_ANTHROPIC"] = site.url("api/anthropic/v1/").absoluteString }
         // A real-agent run is opt-in (`AIRealScenarios`) and spends the user's quota.
         if scenarioID.hasPrefix("AIReal") {
             environment["BRK_AI_REAL_AGENTS"] = "1"

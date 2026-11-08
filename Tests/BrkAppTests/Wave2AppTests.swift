@@ -24,12 +24,14 @@ final class Wave2AppTests: XCTestCase {
         XCTAssertNil(AIProviderSeam.provider(for: .auto, detected: []))
     }
 
-    /// every task has a prompt; the renaming prompt carries the title and url
+    /// A conversation's prompt is text; a basic task's is a schema and an input, and has no prose prompt at all.
     func test_promptsCarryTheTask() {
-        let prompt = AIPrompt.text(for: .renameTab(ItemID("t"), title: "Long title", url: URL(string: "https://example.com/")!))
-        XCTAssertTrue(prompt.contains("Long title"))
-        XCTAssertTrue(prompt.contains("https://example.com/"))
-        XCTAssertFalse(AIPrompt.text(for: .tidyToday(SpaceID("s"), tabs: [])).isEmpty)
+        let prompt = AIBasicPrompts.tabTitle(title: "Long title", url: URL(string: "https://example.com/")!)
+        XCTAssertTrue(prompt.input.contains("Long title"))
+        XCTAssertTrue(prompt.input.contains("https://example.com/"))
+        XCTAssertEqual(AIPrompt.text(for: .renameTab(ItemID("t"), title: "Long title", url: URL(string: "https://example.com/")!)), "")
+        XCTAssertEqual(AIPrompt.text(for: .tidyToday(SpaceID("s"), tabs: [])), "")
+        XCTAssertFalse(AIPrompt.text(for: .tidyToday(SpaceID("s"), tabs: [])).contains("JSON"))
         XCTAssertEqual(AIPrompt.text(for: .ask("why")), "why")
     }
 

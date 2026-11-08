@@ -177,7 +177,7 @@ final class TablistView: NSScrollView {
             case .divider:
                 divider.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
                 divider.render(canClear: space.today.kind == .today && !space.today.rows.isEmpty, clearAction: space.today.clearAction,
-                               canTidy: space.today.canTidy, tidying: space.today.tidying, palette: palette)
+                               canTidy: space.today.canTidy, tidying: space.today.tidying, cleanup: space.today.cleanup, space: space.id, palette: palette)
             case .newTab:
                 newTab.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
                 newTab.render(palette: palette, current: newTabCurrent)
@@ -517,6 +517,8 @@ final class RowView: HoverView {
     private let title = NSTextField(labelWithString: "")
     /// "Double-click to rename" under the title, on a tab just dropped on the Space name strip (Q13-h).
     private let renameHint = NSTextField(labelWithString: SidebarCopy.renameHint)
+    /// Place New Tabs' suggestion under the title ("Move to Recipes"): a click makes the move, its × drops it.
+    private let suggestion = SuggestionLine()
     /// The half of this row a held tab would take (Q15).
     private let joinSlot = NSView()
     /// Arc's `_audibilityButton`: the speaker between the icon and the title of a tab that makes sound or is muted.
@@ -575,7 +577,10 @@ final class RowView: HoverView {
         joinSlot.layer?.cornerCurve = .continuous
         joinSlot.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
         joinSlot.isHidden = true
-        for view in [background, joinSlot, icon, title, renameHint, audio, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
+        for view in [background, joinSlot, icon, title, renameHint, suggestion, audio, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
+        suggestion.isHidden = true
+        suggestion.accept = { [weak self] in if let id = self?.row?.id { self?.dispatch(.assist(.acceptSuggestion(id))) } }
+        suggestion.dismiss = { [weak self] in if let id = self?.row?.id { self?.dispatch(.assist(.dismissSuggestion(id))) } }
         peekMarker.isHidden = true
         spinner.style = .spinning
         spinner.controlSize = .small
@@ -600,6 +605,7 @@ final class RowView: HoverView {
         joinSlot.identify(.tabTool("split-join-slot-" + row.id.rawValue))
         audio.isHidden = true
         renameHint.isHidden = true
+        suggestion.isHidden = true
         renderLive(row, palette: palette)
         switch row {
         case .tab(let tab):
@@ -617,6 +623,10 @@ final class RowView: HoverView {
             title.stringValue = tab.title
             renameHint.isHidden = !tab.renameHint || renaming
             renameHint.textColor = palette.ink.text.withAlphaComponent(Draw.renameHintInk.value)
+            if let label = tab.aiSuggestion, !renaming, !tab.renameHint {
+                suggestion.isHidden = false
+                suggestion.render(label, id: tab.id, palette: palette)
+            }
             icon.render(IconContent(tab: tab), tint: palette.ink.secondary, palette: palette)
             if tab.awaitingFirstDocument { title.stringValue = SidebarCopy.untitled }
             title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
@@ -738,6 +748,11 @@ final class RowView: HoverView {
         if !renameHint.isHidden {
             title.frame.origin.y += Draw.renameHintTitleShift.value
             renameHint.frame = CGRect(x: title.frame.minX, y: Draw.renameHintTop.value, width: title.frame.width, height: renameHint.intrinsicContentSize.height)
+        }
+        if !suggestion.isHidden {
+            // The same two lines as "Double-click to rename" (Q13-h): the title moves up, the suggestion goes under it.
+            title.frame.origin.y += Draw.renameHintTitleShift.value
+            suggestion.frame = CGRect(x: title.frame.minX, y: Draw.renameHintTop.value - 2, width: max(0, g.selection.maxX - Draw.titleTrailing.value - title.frame.minX), height: suggestion.fittingSize.height)
         }
         // Arc's group header starts its title where a tab's favicon starts (no icon column).
         if case .folder(let folder)? = row, folder.group {
@@ -978,6 +993,114 @@ final class SplitSegmentView: HoverView {
     }
 }
 
+/// Place New Tabs' suggestion on a row: "→ Move to" and the destination's name in the accent colour, a small × after
+/// them. Each is one line; when the row is narrow the name is cut short with "…", never the action. Every part is a
+/// `HoverView`, so it takes the click before the row does.
+@MainActor
+final class SuggestionLine: NSView {
+    let action = SuggestionPart()
+    let name = SuggestionPart()
+    let close = SuggestionPart()
+    var accept: (() -> Void)? { didSet { action.action = accept; name.action = accept } }
+    var dismiss: (() -> Void)? { didSet { close.action = dismiss } }
+    static let closeWidth: CGFloat = 14
+    static let gap: CGFloat = 3
+    /// The labels draw their text 2 points in from each side; this makes the space after "Move to" a word space.
+    static let wordGap: CGFloat = -1
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        for part in [action, name, close] { addSubview(part) }
+        close.toolTip = "Dismiss suggestion"
+    }
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+
+    func render(_ label: AISuggestionLabel, id: ItemID, palette: Palette) {
+        action.text("→ " + label.action, color: palette.focusColor)
+        name.text(label.name, color: palette.focusColor)
+        toolTip = label.text
+        close.glyph.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Dismiss suggestion")?
+            .withSymbolConfiguration(.init(pointSize: Draw.renameHintFont.value - 2, weight: .semibold))
+        close.glyph.contentTintColor = palette.ink.secondary
+        identify(.tabTool("ai-suggestion-line-" + id.rawValue))
+        action.identify(.tabTool("ai-suggestion-" + id.rawValue))
+        name.identify(.tabTool("ai-suggestion-name-" + id.rawValue))
+        close.identify(.tabTool("ai-suggestion-dismiss-" + id.rawValue))
+        action.setAccessibilityLabel(label.text)
+        name.setAccessibilityLabel(label.text)
+        close.setAccessibilityLabel("Dismiss suggestion")
+        needsLayout = true
+    }
+
+    override var fittingSize: NSSize {
+        NSSize(width: action.natural.width + Self.wordGap + name.natural.width + Self.gap + Self.closeWidth, height: max(action.natural.height, 14))
+    }
+
+    override func layout() {
+        super.layout()
+        let actionWidth = min(action.natural.width, bounds.width - Self.closeWidth - Self.gap)
+        action.frame = CGRect(x: 0, y: 0, width: max(0, actionWidth), height: bounds.height)
+        let room = bounds.width - action.frame.maxX - Self.wordGap - Self.gap - Self.closeWidth
+        name.frame = CGRect(x: action.frame.maxX + Self.wordGap, y: 0, width: max(0, min(name.natural.width, room)), height: bounds.height)
+        close.frame = CGRect(x: name.frame.maxX + Self.gap, y: 0, width: Self.closeWidth, height: bounds.height)
+    }
+}
+
+/// One clickable part of a suggestion: a one-line label or a glyph, acting on mouse up inside it.
+@MainActor
+final class SuggestionPart: HoverView {
+    let label = NSTextField(labelWithString: "")
+    let glyph = NSImageView()
+    var action: (() -> Void)?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        label.isSelectable = false
+        label.usesSingleLineMode = true
+        label.maximumNumberOfLines = 1
+        label.cell?.wraps = false
+        label.cell?.truncatesLastVisibleLine = true
+        label.lineBreakMode = .byTruncatingTail
+        addSubview(label)
+        addSubview(glyph)
+        setAccessibilityRole(.button)
+    }
+
+    /// The text on one line, cut with "…" at its end when the part is narrower than it.
+    func text(_ value: String, color: NSColor) {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byTruncatingTail
+        label.attributedStringValue = NSAttributedString(string: value, attributes: [.font: NSFont.systemFont(ofSize: Draw.renameHintFont.value, weight: .medium),
+                                                                                     .foregroundColor: color, .paragraphStyle: style])
+        needsLayout = true
+    }
+
+    /// The width and height the text takes on one line.
+    var natural: CGSize {
+        let size = label.attributedStringValue.size()
+        return CGSize(width: ceil(size.width) + 4, height: ceil(size.height))
+    }
+
+    /// The text does not fit and ends in "…".
+    var isTruncated: Bool { bounds.width < natural.width }
+
+    override func layout() {
+        super.layout()
+        label.frame = bounds
+        glyph.frame = bounds
+    }
+
+    override func stateChanged() { alphaValue = isPressed ? 0.6 : 1 }
+    override func mouseDown(with event: NSEvent) { isPressed = true }
+    override func mouseUp(with event: NSEvent) {
+        isPressed = false
+        if bounds.contains(local(event)) { action?() }
+    }
+    override func accessibilityPerformPress() -> Bool { action?(); return true }
+}
+
 /// Arc's Peek marker at the trailing end of the row a Peek was opened from: the peeked page's icon in a
 /// TabCellBackgroundChild box the size of the row's hover button.
 @MainActor
@@ -1022,6 +1145,10 @@ final class DividerRowView: HoverView {
     /// tabs, a bar between them.
     private let tidy: TidyButton
     private let tidyBar = NSView()
+    /// Brk's Suggest Tabs to Close: the duplicate and long-unvisited Today tabs, listed in a menu, left of Tidy.
+    private let cleanup: CleanupButton
+    private var space: SpaceID?
+    private var cleanupCount = 0
     private var palette: Palette?
     private var canClear = false
     private var canTidy = false, tidying = false
@@ -1031,22 +1158,34 @@ final class DividerRowView: HoverView {
     init(dispatch: @escaping Dispatch) {
         clear = ClearButton { dispatch(.tab(.clearToday)) }
         tidy = TidyButton { dispatch(.assist(.organizeToday)) }
+        weak var owner: DividerRowView?
+        cleanup = CleanupButton { point in
+            guard let space = owner?.space else { return }
+            dispatch(.sidebar(.popupMenu(.todayCleanup(space), at: point)))
+        }
         super.init(frame: .zero)
+        owner = self
         line.wantsLayer = true
         tidyBar.wantsLayer = true
         addSubview(line)
         addSubview(clear)
         addSubview(tidyBar)
         addSubview(tidy)
+        addSubview(cleanup)
         clear.identify(.todayClear)
         tidy.identify(.todayTidy)
+        cleanup.identify(.tabTool("today-cleanup"))
     }
 
-    func render(canClear: Bool, clearAction: TodayClearAction = .clearOthers, canTidy: Bool = false, tidying: Bool = false, palette: Palette) {
+    func render(canClear: Bool, clearAction: TodayClearAction = .clearOthers, canTidy: Bool = false, tidying: Bool = false, cleanup count: Int = 0, space: SpaceID? = nil, palette: Palette) {
         self.palette = palette
         self.canClear = canClear
         self.canTidy = canTidy
         self.tidying = tidying
+        self.space = space
+        cleanupCount = count
+        cleanup.render(count: count, palette: palette)
+        cleanup.isHidden = count == 0
         line.layer?.backgroundColor = palette.color(palette.tokens.separator).cgColor
         tidyBar.layer?.backgroundColor = palette.color(palette.tokens.separator).cgColor
         clear.render(clearAction, palette: palette)
@@ -1078,13 +1217,78 @@ final class DividerRowView: HoverView {
         let tidyShown = tidy.alphaValue > 0 && !tidy.isHidden
         tidyBar.isHidden = !tidyShown || clear.isHidden
         if tidyShown { end = tidy.frame.minX - gaps[0] }
+        let cleanupSize = cleanup.fittingSize
+        let cleanupRight = tidy.isHidden ? (clear.isHidden ? right : tidyBar.frame.minX - gaps[2]) : tidy.frame.minX - gaps[0]
+        cleanup.frame = CGRect(x: cleanupRight - cleanupSize.width, y: (bounds.height - cleanupSize.height) / 2, width: cleanupSize.width, height: cleanupSize.height)
+        if cleanup.alphaValue > 0 && !cleanup.isHidden { end = cleanup.frame.minX - gaps[0] }
         line.frame = CGRect(x: inset, y: (bounds.height - hairline) / 2, width: max(0, end - inset), height: hairline)
     }
 
     override func stateChanged() {
-        clear.alphaValue = canClear && (sidebarHovered || isHovered || clear.isHovered || tidy.isHovered) ? 1 : 0
-        tidy.alphaValue = canTidy && (isHovered || clear.isHovered || tidy.isHovered || tidying) ? 1 : 0
+        let hovering = isHovered || clear.isHovered || tidy.isHovered || cleanup.isHovered
+        clear.alphaValue = canClear && (sidebarHovered || hovering) ? 1 : 0
+        tidy.alphaValue = canTidy && (hovering || tidying) ? 1 : 0
+        cleanup.alphaValue = cleanupCount > 0 && hovering ? 1 : 0
         needsLayout = true
+    }
+}
+
+/// Brk's cleanup list beside Tidy: a stack glyph and how many Today tabs it lists, in Clear's colours; a click opens the
+/// list as a menu under it.
+@MainActor
+final class CleanupButton: HoverView {
+    private let glyph = NSImageView()
+    private let label = NSTextField(labelWithString: "")
+    private let action: (CGPoint) -> Void
+    private var palette: Palette?
+
+    init(action: @escaping (CGPoint) -> Void) {
+        self.action = action
+        super.init(frame: .zero)
+        label.font = .systemFont(ofSize: Draw.captionFont.value, weight: .semibold)
+        label.isSelectable = false
+        glyph.imageScaling = .scaleProportionallyUpOrDown
+        addSubview(glyph)
+        addSubview(label)
+        toolTip = AICopy.cleanupTooltip
+        setAccessibilityLabel(AICopy.cleanupTooltip)
+        setAccessibilityRole(.button)
+    }
+
+    override var fittingSize: NSSize {
+        let g = Draw.tidyGlyph.value[1], text = label.intrinsicContentSize
+        return NSSize(width: g + Draw.tidyGaps.value[1] + label.cellWidth, height: max(g, text.height))
+    }
+
+    func render(count: Int, palette: Palette) {
+        self.palette = palette
+        label.stringValue = "\(count)"
+        stateChanged()
+    }
+
+    override func layout() {
+        super.layout()
+        let g = Draw.tidyGlyph.value[1], text = label.intrinsicContentSize
+        glyph.frame = CGRect(x: 0, y: (bounds.height - g) / 2, width: g, height: g)
+        label.frame = CGRect(x: bounds.width - label.cellWidth, y: (bounds.height - text.height) / 2, width: label.cellWidth, height: text.height)
+    }
+
+    override func stateChanged() {
+        guard let palette else { return }
+        let color = isHovered ? palette.color(palette.tokens.foregroundStrong) : palette.clearInk
+        label.textColor = color
+        glyph.image = NSImage(systemSymbolName: "rectangle.stack.badge.minus", accessibilityDescription: AICopy.cleanupTooltip)
+        glyph.contentTintColor = color
+        (superview as? HoverView)?.stateChanged()
+    }
+
+    override func mouseDown(with event: NSEvent) { isPressed = true }
+
+    override func mouseUp(with event: NSEvent) {
+        isPressed = false
+        guard bounds.contains(local(event)) else { return }
+        // The menu opens under the button, as a pop-up button's does.
+        action(rootPoint(of: CGPoint(x: bounds.minX, y: isFlipped ? bounds.maxY : bounds.minY)))
     }
 }
 

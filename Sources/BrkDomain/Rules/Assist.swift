@@ -120,6 +120,9 @@ extension Work {
             }
             let id = startAI(.ask(q), purpose: .browse(q), title: q, window: window, run: false)
             makeAIHidden(id, urls: sources)
+        case .nameFolder(let folder): nameFolder(folder, in: window)
+        case .acceptSuggestion(let tab): acceptSuggestion(tab, in: window)
+        case .dismissSuggestion(let tab): state.session.ai.basic.suggestions[tab] = nil
         case .renameDownload(let id):
             guard aiEnabled(.downloadRename, window), let download = state.doc.downloads.first(where: { $0.id == id }),
                   state.libraryContext(in: window) == .profile(download.profile), download.state == .finished else { return }
@@ -443,67 +446,84 @@ extension Work {
     mutating func aiResult(_ id: AIRequestID, _ outcome: AIOutcome) {
         guard let task = state.session.pendingAI.removeValue(forKey: id) else { return }
         let background = state.session.ai.backgroundWindows.removeValue(forKey: id)
-        if let context = state.session.ai.backgroundContexts.removeValue(forKey: id), backgroundAIContext(task) != context { return }
-        guard case .text(let text) = outcome else {
-            let reason: String? = switch outcome {
-            case .unavailable: "No selected local AI tool is available. Choose an installed provider in Settings → Max and sign in to it in Terminal."
-            case .failed(let reason): reason
-            default: nil
+        if let context = state.session.ai.backgroundContexts.removeValue(forKey: id), backgroundAIContext(task) != context {
+            basicFailed(id, task, "The tab or download changed.", in: nil)
+            return
+        }
+        func fail(_ reason: String) {
+            completeAI(id, text: reason)
+            backgroundFailed(task, reason, in: background)
+            basicFailed(id, task, reason, in: background)
+        }
+        switch outcome {
+        case .unavailable: fail("No selected local AI tool is available. Choose an installed provider in Settings → Max and sign in to it in Terminal.")
+        case .failed(let reason): fail(reason)
+        case .text(let text):
+            // Only a conversation answers in prose; a basic task always comes back in its schema.
+            guard !task.isBasic else { fail(Self.wrongShape); return }
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { fail("The AI tool returned no answer. Check its sign-in in Terminal, then retry."); return }
+            switch task {
+            case .browse(_, let pages):
+                let answer = String(text.prefix(60_000))
+                guard AIValidation.citations(answer, sourceCount: pages.count) else {
+                    completeAI(id, text: "The tool did not cite the selected sources correctly. Retry Browse for Me or open the sources below."); return
+                }
+                completeAI(id, text: answer, answered: true)
+            default:
+                completeAI(id, text: String(text.prefix(60_000)), success: true, answered: true)
             }
-            if let reason { completeAI(id, text: reason); backgroundFailed(task, reason, in: background) }
-            return
+        case .reply(let reply):
+            if let reason = basicReply(id, task, reply, background: background) { fail(reason) }
         }
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            let reason = "The AI tool returned no answer. Check its sign-in in Terminal, then retry."
-            completeAI(id, text: reason); backgroundFailed(task, reason, in: background)
-            return
-        }
-        switch task {
-        case .renameTab(let tab, _, let url):
-            let title = String(text.split(whereSeparator: \.isNewline).first ?? "").trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)
-            guard !title.isEmpty, let scope = state.locate(tab), state.tab(tab)?.pinnedURL == url, state.tab(tab)?.customTitle == nil else { return }
-            state.withTree(scope) { $0.updateTab(tab) { $0.customTitle = String(title) } }
-        case .renameDownload(let download, let original):
+    }
+    static let wrongShape = "The AI tool's answer did not match what Brk asked for. Nothing was changed."
+
+    /// A basic task's answer, already in its schema's shape; checked against the browser before anything changes.
+    /// Returns why it failed, for the caller to say; nil when the answer was applied or quietly dropped.
+    private mutating func basicReply(_ id: AIRequestID, _ task: AITask, _ reply: AIReply, background: WindowID?) -> String? {
+        switch (task, reply) {
+        case (.renameTab(let tab, _, let url), .text(let text)):
+            guard let title = AIValidation.name(text, limit: 60), let scope = state.locate(tab), state.tab(tab)?.pinnedURL == url, state.tab(tab)?.customTitle == nil else { return nil }
+            state.withTree(scope) { $0.updateTab(tab) { $0.customTitle = title } }
+        case (.renameDownload(let download, let original), .text(let text)):
             guard let value = state.doc.downloads.first(where: { $0.id == download }), value.state == .finished,
                   value.filename == original, let path = value.path,
                   let name = AIValidation.filename(text, original: original) else {
-                let reason = "The tool returned an unsafe filename, or the download changed. No file was renamed."
-                completeAI(id, text: reason); backgroundFailed(task, reason, in: background); return
+                return "The tool returned an unsafe filename, or the download changed. No file was renamed."
             }
             if let background { state.session.ai.renamingDownloads[download] = background }
             effects.append(.aiRenameDownload(download, originalPath: path, filename: name))
-        case .instant:
-            let urls = AIValidation.destinations(text)
-            guard !urls.isEmpty else { completeAI(id, text: "The tool did not propose a safe web address."); return }
+        case (.instant, .links(let links)):
+            let urls = AIValidation.destinations(links)
+            guard !urls.isEmpty else { completeAI(id, text: "The tool did not propose a safe web address."); return nil }
             makeAIHidden(id, urls: urls)
-        case .tidyToday(let space, let tabs):
-            guard let request = state.session.ai.requests[id], eligibleAITabs(space, in: request.window) == tabs,
-                  let plan = AIValidation.plan(text, eligible: tabs) else { completeAI(id, text: "The plan was invalid or Today changed. No tabs were moved. Retry Organize Today Tabs."); return }
+        case (.tidyToday(let space, let tabs), .groups(let groups)):
+            // Ids, not titles: Name Tabs may rename a tab while the plan is being made.
+            guard let request = state.session.ai.requests[id], eligibleAITabs(space, in: request.window).map(\.id) == tabs.map(\.id),
+                  let plan = AIValidation.plan(groups, eligible: tabs) else { completeAI(id, text: "The plan was invalid or Today changed. No tabs were moved. Retry Organize Today Tabs."); return nil }
             applyAIOrganize(id, space: space, tabs: tabs, plan: plan)
-        case .translate(_, let content):
-            guard let nodes = AIReplyCodec.nodes(text),
-                  nodes.count == content.nodes.count, Set(nodes.map(\.id)).count == nodes.count,
+        case (.translate(_, let content), .translation(let nodes)):
+            guard nodes.count == content.nodes.count, Set(nodes.map(\.id)).count == nodes.count,
                   Set(nodes.map(\.id)) == Set(content.nodes.map(\.id)), nodes.allSatisfy({ $0.text.count <= 4000 }),
-                  state.session.ai.requests[id] != nil else { completeAI(id, text: "The tool returned an invalid translation. The page was left unchanged."); return }
+                  state.session.ai.requests[id] != nil else { completeAI(id, text: "The tool returned an invalid translation. The page was left unchanged."); return nil }
             state.session.ai.requests[id]?.translated = nodes
             effects.append(.aiTranslate(id, content, nodes))
-        case .browse(_, let pages):
-            let answer = String(text.prefix(60_000))
-            guard AIValidation.citations(answer, sourceCount: pages.count) else {
-                completeAI(id, text: "The tool did not cite the selected sources correctly. Retry Browse for Me or open the sources below."); return
-            }
-            completeAI(id, text: answer, answered: true)
-        case .ask, .pageQuestion:
-            // A panel turn is an answer; the `translate` prefix's row takes it as its success.
-            completeAI(id, text: String(text.prefix(60_000)), success: true, answered: true)
-        case .summarize:
-            guard let request = state.session.ai.requests[id], state.session.ai.previews[request.window]?.request == id else { completeAI(id, text: ""); return }
-            guard let reply = AIValidation.preview(text) else { completeAI(id, text: "No preview available"); return }
-            if reply.blocked == true { completeAI(id, text: "No preview available"); return }
-            state.session.ai.previews[request.window]?.title = reply.quickSummary ?? ""
-            state.session.ai.previews[request.window]?.details = reply.details ?? []
+        case (.summarize, .preview(let answer)):
+            guard let request = state.session.ai.requests[id], state.session.ai.previews[request.window]?.request == id else { completeAI(id, text: ""); return nil }
+            guard let card = AIValidation.preview(answer), card.blocked != true else { completeAI(id, text: AICopy.noPreview); return nil }
+            state.session.ai.previews[request.window]?.title = card.quickSummary ?? ""
+            state.session.ai.previews[request.window]?.details = card.details ?? []
             completeAI(id, text: "", success: true)
+        case (.translateText, .text(let text)):
+            completeAI(id, text: String(text.prefix(60_000)), success: true, answered: true)
+        case (.nameTabs, .tabNames(let names)): applyTabNames(id, names)
+        case (.nameFolder, .text(let name)): applyFolderName(id, name, in: background)
+        case (.decide(let request, _), .decision(let answers)):
+            guard request.accepts(answers) else { return Self.wrongShape }
+            applyDecision(id, answers)
+        default: return Self.wrongShape
         }
+        return nil
     }
     /// Tidy Tab Titles and Tidy Downloads run in the background: a failure says so in the window it came from, or the
     /// person would never learn why nothing was renamed.
@@ -619,7 +639,7 @@ extension Work {
               current.answer == nil, current.failure == nil, state.session.windows[window]?.barTranslationRequest == nil,
               state.doc.windows[window]?.kind != .incognito, state.doc.settings.max.enabled(.translation),
               case .text(let source, let target)? = QuickTranslation.parse(text), source.count <= 2000 else { return }
-        let request = startAI(.ask(QuickTranslation.prompt(source, target: target)), purpose: .barTranslation, title: source, window: window)
+        let request = startAI(.translateText(source, target: target), purpose: .barTranslation, title: source, window: window)
         state.session.windows[window]?.barTranslationRequest = request
     }
 
@@ -680,6 +700,9 @@ extension Work {
             switch task {
             case .renameTab(let tab, _, let url): valid = state.doc.settings.max.titlesOn && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.tab(tab)?.pinnedURL == url && state.tab(tab)?.customTitle == nil && (state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites)
             case .renameDownload(let download, _): valid = state.doc.settings.max.enabled(.downloadRename) && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.doc.downloads.contains { $0.id == download && $0.state == .finished && state.doc.profiles[$0.profile] != nil }
+            case .nameTabs: valid = state.doc.settings.max.enabled(.tabNames)
+            case .nameFolder(let folder, _): valid = state.doc.settings.max.enabled(.folderNames) && state.doc.tree[folder] != nil
+            case .decide(_, let feature): valid = state.doc.settings.max.enabled(feature)
             default: valid = true
             }
             if !valid || providerChanged {
@@ -735,6 +758,7 @@ extension Work {
         for (page, translation) in state.session.ai.translations where state.session.live[page]?.document != .ready(translation.document) {
             state.session.ai.translations[page] = nil
         }
+        reconcileBasic(from: previous)
         // Rows whose search is gone (a cancelled request) go with it; failed rows stay until their × is clicked.
         for (window, rows) in state.session.ai.instantRows {
             let kept = rows.filter { $0.failed || state.session.ai.requests[$0.request] != nil }

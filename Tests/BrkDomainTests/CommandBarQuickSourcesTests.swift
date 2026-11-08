@@ -436,11 +436,11 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertEqual(d.bar?.translation, BarTranslation(text: "你好世界", target: "English"))
         let due = d.system(.barTranslationDue(d.window, "你好世界"))
         let (id, task) = try XCTUnwrap(aiEffects(due).first)
-        guard case .ask(let prompt) = task else { return XCTFail("\(task)") }
-        XCTAssertTrue(prompt.contains("你好世界") && prompt.contains("English"), prompt)
+        guard case .translateText(let text, let target) = task else { return XCTFail("\(task)") }
+        XCTAssertEqual(text, "你好世界"); XCTAssertEqual(target, "English")
         XCTAssertNotNil(d.bar, "the bar stays open")
         XCTAssertNil(d.view.ai, "the answer panel stays out of it")
-        d.system(.aiResult(id, .text(" Hello, world \n")))
+        d.system(.aiResult(id, .reply(.text(" Hello, world \n"))))
         XCTAssertEqual(d.bar?.translation?.answer, "Hello, world")
         XCTAssertNil(d.view.ai)
         XCTAssertEqual(d.user(.commandBar(.copyAnswer("Hello, world"))).effects, [.copyToPasteboard("Hello, world")])
@@ -457,7 +457,7 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertEqual(d.bar?.translation?.text, "hello there")
         XCTAssertNil(d.bar?.translation?.answer)
         // The old agent's late answer lands nowhere.
-        d.system(.aiResult(id, .text("old")))
+        d.system(.aiResult(id, .reply(.text("old"))))
         XCTAssertNil(d.bar?.translation?.answer)
         // A pause for a text since changed does nothing.
         XCTAssertEqual(aiEffects(d.system(.barTranslationDue(d.window, "hello"))).count, 0)

@@ -69,8 +69,9 @@ extension Work {
 extension AppState {
     /// Arc's "Tab Group Context Menu".
     func groupMenu(_ id: ItemID, folder: Folder, tree: SidebarTree, links: Bool) -> [MenuEntry] {
-        [
-            .action(title: "Rename Group…", command: .item(.beginRename(.item(id))), enabled: true),
+        [.action(title: "Rename Group…", command: .item(.beginRename(.item(id))), enabled: true)]
+        + (doc.settings.max.enabled(.folderNames) ? [.action(title: AICopy.nameWithAI, command: .assist(.nameFolder(id)), enabled: !tree.tabs(under: id).isEmpty)] : [])
+        + [
             .action(title: "Remove Group Header", command: .tabTools(.removeGroupHeader(id)), enabled: true), .separator,
             .action(title: "Copy All Links", command: .tabTools(.copyLinks(.items([id]))), enabled: links), .separator,
             .action(title: "Close Tab Group", command: .tabTools(.closeGroup(id)), enabled: !tree.tabs(under: id).isEmpty),

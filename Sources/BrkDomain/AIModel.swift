@@ -3,6 +3,8 @@ import Foundation
 
 public enum AIFeature: String, CaseIterable, Hashable, Sendable, Codable {
     case commandBar, askPage, linkPreviews, downloadRename, instantLinks, browse, translation
+    /// Brk's basic AI layer (docs/design/ai-native.md, 基础 AI 功能), switched in the Max pane's agent card.
+    case tabNames, folderNames, tabPlacement, tabCleanup
     /// The switch's name where the person finds it: the Max pane's row titles (P38-max-list), More Settings' rows.
     public var title: String {
         switch self {
@@ -13,8 +15,14 @@ public enum AIFeature: String, CaseIterable, Hashable, Sendable, Codable {
         case .instantLinks: "Instant Links"
         case .browse: "Browse for Me"
         case .translation: "Translate Pages"
+        case .tabNames: "Name Tabs"
+        case .folderNames: "Name Groups and Folders"
+        case .tabPlacement: "Place New Tabs"
+        case .tabCleanup: "Suggest Tabs to Close"
         }
     }
+    /// The basic layer's switches, in the agent card's order.
+    public static let basicLayer: [AIFeature] = [.tabNames, .folderNames, .tabPlacement, .tabCleanup]
     /// Brk's own three are switched in Advanced → More Settings…; Arc's are in the Max pane.
     public var inMoreSettings: Bool { [.askPage, .browse, .translation].contains(self) }
     /// Where the switch is, as a message says it, and the pane a link opens.
@@ -46,6 +54,11 @@ public enum AIIntent: Hashable, Sendable, Codable {
     case translate(String)
     case organizeToday, undoOrganize
     case renameDownload(DownloadID)
+    /// A folder's or group's Name with AI (right click).
+    case nameFolder(ItemID)
+    /// The suggestion under a new tab's title: its move, or its ×.
+    case acceptSuggestion(ItemID)
+    case dismissSuggestion(ItemID)
     case cancel, dismiss
     case neverTranslateSite, neverTranslateLanguage
     /// The translation popover's Use Original (P50-e): the page's own text comes back, "Translated back to French!
@@ -295,12 +308,40 @@ struct AISession: Equatable, Sendable {
     var turnText: [AIRequestID: Int] = [:]
     /// A background request's window (Tidy Tab Titles, Tidy Downloads): where its result or failure is told.
     var backgroundWindows: [AIRequestID: WindowID] = [:]
+    /// Name Tabs, Place New Tabs and the folder names (Rules/AssistBasic.swift).
+    var basic = AIBasicSession()
+    /// Which services have a key in the Keychain and their last Test (`SystemEvent.aiKeys`).
+    var keys: [AIService: AIKeyStatus] = [:]
+    /// JevK5 on this Mac can answer decisions now (reported with the keys).
+    var localDecisions = false
     /// A download Max is renaming in the background, and the window that started it.
     var renamingDownloads: [DownloadID: WindowID] = [:]
 }
 public struct AIGroupPlan: Hashable, Sendable, Codable {
     public let folder: String
     public let tabs: [String]
+    public init(folder: String, tabs: [String]) { self.folder = folder; self.tabs = tabs }
+}
+/// A basic task's answer in its schema's shape (`AITask.isBasic`). The agent's CLI checked it against the schema; the
+/// reducer still checks it against the browser (ids, lengths, the tab not changed meanwhile).
+public enum AIReply: Hashable, Sendable, Codable {
+    /// One line: a tab or folder name, a filename, a translation.
+    case text(String)
+    /// `nameTabs`: a name per tab id.
+    case tabNames([String: String])
+    /// `tidyToday`: the groups, each named.
+    case groups([AIGroupPlan])
+    case preview(AIPreviewReply)
+    /// `instant`: the proposed addresses, not yet checked.
+    case links([String])
+    case translation([AITextNode])
+    case decision(DecisionAnswers)
+}
+/// A tab's name from Name Tabs, and the site it was made for: a tab that moves to another site is named again.
+public struct AITabName: Hashable, Sendable, Codable {
+    public var title: String
+    public var host: String
+    public init(title: String, host: String) { self.title = title; self.host = host }
 }
 /// Language codes and names for translation: a page's `lang` ("fr", "fr-CA"), the system's, the popover's
 /// "Translated from French." and the Options menu's Choose Another Language list (Chromium's translate languages,
@@ -369,43 +410,24 @@ public enum AIValidation {
               let url = c.url else { return nil }
         return url
     }
-    /// Instant Links: the tool's addresses, one per line (or separated by spaces), the safe ones, at most six, each once.
-    public static func destinations(_ text: String) -> [URL] {
+    /// Instant Links: the tool's addresses, the safe ones, at most six, each once.
+    public static func destinations(_ links: [String]) -> [URL] {
         var out: [URL] = []
-        for part in text.split(whereSeparator: \.isWhitespace) {
-            var token = String(part).trimmingCharacters(in: CharacterSet(charactersIn: "<>[],;\"'"))
-            // A closing parenthesis ends the address only when it opened none (Arc_(web_browser) keeps its own).
-            while token.hasSuffix(")"), token.filter({ $0 == ")" }).count > token.filter({ $0 == "(" }).count { token.removeLast() }
-            if token.hasPrefix("("), token.filter({ $0 == "(" }).count > token.filter({ $0 == ")" }).count { token.removeFirst() }
-            guard out.count < 6, let url = destination(token), !out.contains(url) else { continue }
+        for link in links {
+            guard out.count < 6, let url = destination(link), !out.contains(url) else { continue }
             out.append(url)
         }
         return out
     }
-    /// The preview card's reply: Arc's JSON (`AIPreviewReply`, inside a code block or not), else plain lines, the
-    /// first the title and each "Label: info" after it a detail. Details with an unknown symbol get a dot.
-    public static func preview(_ text: String) -> AIPreviewReply? {
-        var body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if body.hasPrefix("```") {
-            body = body.split(separator: "\n", omittingEmptySubsequences: false).dropFirst().filter { !$0.hasPrefix("```") }.joined(separator: "\n")
+    /// The preview card's answer, trimmed to what the card shows: a summary up to 120 characters and up to four
+    /// details; a detail with an unknown symbol gets a dot.
+    public static func preview(_ reply: AIPreviewReply) -> AIPreviewReply? {
+        var reply = reply
+        reply.quickSummary = reply.quickSummary.map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120)) }
+        reply.details = Array((reply.details ?? []).filter { !$0.info.trimmingCharacters(in: .whitespaces).isEmpty }.prefix(4)).map {
+            AIPreviewDetail(label: String($0.label.prefix(40)), icon: $0.icon.isEmpty || $0.icon.count > 60 ? "circle.fill" : $0.icon, info: String($0.info.prefix(160)))
         }
-        func clean(_ details: [AIPreviewDetail]) -> [AIPreviewDetail] {
-            Array(details.filter { !$0.info.trimmingCharacters(in: .whitespaces).isEmpty }.prefix(4)).map {
-                AIPreviewDetail(label: String($0.label.prefix(40)), icon: $0.icon.isEmpty || $0.icon.count > 60 ? "circle.fill" : $0.icon, info: String($0.info.prefix(160)))
-            }
-        }
-        if var reply = AIReplyCodec.preview(body) {
-            reply.quickSummary = reply.quickSummary.map { String($0.prefix(120)) }
-            reply.details = clean(reply.details ?? [])
-            return reply.blocked == true || reply.quickSummary?.isEmpty == false || reply.details?.isEmpty == false ? reply : nil
-        }
-        let lines = body.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        guard let first = lines.first, first.count <= 200 else { return nil }
-        let details = lines.dropFirst().compactMap { line -> AIPreviewDetail? in
-            let parts = line.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-            return parts.count == 2 ? AIPreviewDetail(label: parts[0] + ":", icon: "circle.fill", info: parts[1]) : nil
-        }
-        return AIPreviewReply(blocked: false, quickSummary: first, details: clean(details))
+        return reply.blocked == true || reply.quickSummary?.isEmpty == false || reply.details?.isEmpty == false ? reply : nil
     }
     public static func citations(_ text: String, sourceCount: Int) -> Bool {
         guard sourceCount > 0, let pattern = try? NSRegularExpression(pattern: #"\[(\d+)\]"#) else { return false }
@@ -415,12 +437,12 @@ public enum AIValidation {
             return (1...sourceCount).contains(number)
         }
     }
-    public static func plan(_ text: String, eligible: [AITab]) -> [AIGroupPlan]? {
-        guard text.utf8.count <= 32_768, let groups = AIReplyCodec.groups(text),
-              (1...12).contains(groups.count),
+    public static func plan(_ groups: [AIGroupPlan], eligible: [AITab]) -> [AIGroupPlan]? {
+        guard (1...12).contains(groups.count),
               groups.allSatisfy({ !$0.folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.folder.count <= 60 && !$0.tabs.isEmpty }) else { return nil }
+        // Every id must be one Brk sent, once; a tab a small model left out stays in Today ungrouped.
         let ids = groups.flatMap(\.tabs)
-        guard Set(ids).count == ids.count, Set(ids) == Set(eligible.map { $0.id.rawValue }) else { return nil }
+        guard Set(ids).count == ids.count, Set(ids).isSubset(of: Set(eligible.map { $0.id.rawValue })) else { return nil }
         return groups
     }
     /// Why this folder cannot be a session's working folder, nil when it can. Home and every folder above it hold

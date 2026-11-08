@@ -19,7 +19,24 @@ final class AIServices {
     private var turns: [AIRequestID: AIRequestID] = [:]
     private var closing: [Task<Void, Never>] = []
     private var refreshing: [AIProviderKind: Task<Void, Never>] = [:]
-    init(engine: any WebEngine, send: @escaping (SystemEvent) -> Void) { self.engine = engine; self.send = send }
+    /// The basic layer: one-shot tasks in a schema, on the subscription or a key (AIBasic.swift).
+    let basic = AIBasicChannel(keys: .shared)
+    private var wakeTask: Task<Void, Never>?
+    init(engine: any WebEngine, send: @escaping (SystemEvent) -> Void) {
+        self.engine = engine
+        self.send = send
+        basic.keys.onChange = { [weak self] statuses in self?.send(.aiKeys(statuses, localDecisions: self?.basic.localDecisions?.isAvailable == true)) }
+        basic.onUsage = { [weak self] key, count in self?.send(.aiUsage(key, count)) }
+    }
+
+    /// The reducer's pause (Name Tabs waits for pages to settle).
+    func wake(after milliseconds: Int) {
+        wakeTask?.cancel()
+        wakeTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(milliseconds)) } catch { return }
+            self?.send(.aiBasicTick)
+        }
+    }
 
     private func start(_ id: AIRequestID, _ operation: @escaping @MainActor () async -> Void) {
         guard !stopping else { return }
@@ -37,6 +54,15 @@ final class AIServices {
         if opening.remove(id) != nil {
             if let failure = makeSession(id, folder: nil, choice: choice, max: max) { send(.aiResult(id, failure)); return }
             turn(conversation: id, turn: id, task: task)
+            return
+        }
+        if task.isBasic {
+            start(id) { [weak self] in
+                guard let self else { return }
+                let result = await basic.answer(task, context: AIBasicContext(max: max, choice: choice))
+                guard !Task.isCancelled else { return }
+                send(.aiResult(id, result))
+            }
             return
         }
         start(id) { [weak self] in
@@ -158,6 +184,7 @@ final class AIServices {
 
     /// Asks each installed agent about itself: signed in or not, version, models and efforts. Nothing goes to a model.
     func refreshAgents(detected: [AIProviderKind]) {
+        basic.keys.report()
         guard !stopping, refreshing.isEmpty else { return }
         let mode = AIProviderSeam.mode
         guard mode != .none else { return }
@@ -244,6 +271,8 @@ final class AIServices {
     }
     func cancelAll() {
         stopping = true
+        wakeTask?.cancel()
+        basic.stop()
         for task in tasks.values.flatMap({ $0.values }) { task.cancel() }
         for task in deadlines.values { task.cancel() }
         for task in hovers.values { task.cancel() }

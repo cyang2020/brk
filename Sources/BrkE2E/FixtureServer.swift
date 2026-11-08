@@ -84,6 +84,7 @@ final class FixtureServer: @unchecked Sendable {
         var path = target
         if let query = path.firstIndex(of: "?") { path = String(path[..<query]) }
         countLock.withLock { counts[path, default: 0] += 1 }
+        if path.hasPrefix("/api/") { serveAPI(fd, method: String(parts[0]), path: path, request: request); return }
         if path.hasPrefix("/transfer-") {
             let post = path.contains("post")
             let query = URLComponents(string: target)?.queryItems ?? []

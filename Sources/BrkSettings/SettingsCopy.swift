@@ -242,7 +242,7 @@ public enum SettingsCopy {
     }
     /// Replaces Arc's "Max features require that we send data to our AI partners." (user decision: local tools).
     public static var maxPrivacy: String {
-        "Max runs a coding agent installed on this Mac (claude, codex, gemini, cursor-agent or opencode) with your own signed-in account. The selected agent may send your question and requested page text to its service. No API key is required."
+        "Max works two ways, chosen per service under Accounts. With your subscription, it runs a coding agent signed in on this Mac (claude, codex, gemini, cursor-agent or opencode) and uses that account's plan. With your own API key (Anthropic, OpenAI, or TypeSafe for decisions), \(Product.name) calls that service directly and the service bills you per token; the key stays in your Keychain. Either way your question and the page text a feature needs go to the service you chose; basic features use a small model and send only titles, addresses or the page being previewed or translated."
     }
     public static let aiProvider = "AI provider:"
 

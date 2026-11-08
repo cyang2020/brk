@@ -57,6 +57,10 @@ public enum Effect: Hashable, Sendable {
     /// Swap a translated page between the translation and its own text (Use Original, ⌘Z after it).
     case aiShowTranslation(DocumentToken, translated: Bool)
     case aiRenameDownload(DownloadID, originalPath: String, filename: String)
+    /// Wake the reducer after a pause (`SystemEvent.aiBasicTick`): Name Tabs waits for pages to settle.
+    case aiBasicTimer(milliseconds: Int)
+    /// The key's Test: list the models the service's key may use; the answer is `SystemEvent.aiKeys`.
+    case aiTestKey(AIService)
     /// Fetch the default engine's OpenSearch suggestions for `query` (BrkApp debounces by
     /// Metrics.commandBar.suggestionDebounce); the answer is `SystemEvent.suggestions(window, query:, results)`.
     case fetchSuggestions(WindowID, query: String, url: URL)
