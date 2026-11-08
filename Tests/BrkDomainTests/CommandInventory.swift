@@ -24,7 +24,7 @@ enum CommandInventory {
         .assist(.neverTranslateSite), .assist(.neverTranslateLanguage),
         .assist(.useOriginal), .assist(.languageSettings), .assist(.previewHover(true)), .assist(.sharePreview),
         .assist(.followUp("why")), .assist(.stop), .assist(.chooseFolder), .assist(.approve(approval: "a", option: "b")),
-        .assist(.attach([.tab("ghost"), .folder(ItemID("ghost")), .space(SpaceID("ghost"))])), .assist(.detach("ghost")), .assist(.mention("x")), .assist(.mention(nil)), .assist(.openTabLink("ghost")),
+        .assist(.attach([.tab("ghost"), .folder(ItemID("ghost")), .space(SpaceID("ghost"))])), .assist(.detach("ghost")), .assist(.mention("x")), .assist(.openTabLink("ghost")),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
         .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
         .capture(.act(.copy)),

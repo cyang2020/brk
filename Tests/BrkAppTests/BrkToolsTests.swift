@@ -185,7 +185,7 @@ final class BrkToolsTests: XCTestCase {
         XCTAssertEqual(endpoint.command(executable: URL(fileURLWithPath: "/A/Brk")).arguments, ["--brk-tools", endpoint.base])
         XCTAssertFalse(endpoint.command(executable: URL(fileURLWithPath: "/A/Brk")).arguments.joined().contains(endpoint.token), "the token is never on a command line")
         XCTAssertTrue(BrkToolEndpoint.same(endpoint.token, endpoint.token))
-        XCTAssertFalse(BrkToolEndpoint.same(endpoint.token, String(endpoint.token.dropLast()) + "0"))
+        XCTAssertFalse(BrkToolEndpoint.same(endpoint.token, String(endpoint.token.dropLast()) + (endpoint.token.last == "0" ? "1" : "0")))
         XCTAssertFalse(BrkToolEndpoint.same(endpoint.token, ""))
         // A folder others can open is refused.
         let open = FileManager.default.temporaryDirectory.appendingPathComponent("brkt-open-" + UUID().uuidString.prefix(8))

@@ -37,7 +37,8 @@ import os
     private(set) var flagged = false
     private(set) var grants: Set<Grant> = []
     private var checked: [String: PageInjectionVerdict] = [:]
-    private var texts: [String: (content: AIPageContent, at: Date)] = [:]
+    /// Recent reads, for paging through a text without reading it again; `at` is system uptime.
+    private var texts: [String: (content: AIPageContent, at: TimeInterval)] = [:]
     private var reads: [String: CheckedContinuation<AgentReadOutcome, Never>] = [:]
     private var acts: [String: CheckedContinuation<AgentActOutcome, Never>] = [:]
     private var approvals: [String: (continuation: CheckedContinuation<String?, Never>, grant: Grant?)] = [:]
@@ -111,9 +112,9 @@ import os
 
     /// One tool call. The log says which tool and how it ended, never what a page says.
     func call(_ name: String, _ arguments: [String: Any]) async -> BrkToolResult {
-        let started = Date()
+        let started = ProcessInfo.processInfo.systemUptime
         let result = await perform(name, arguments)
-        let milliseconds = Int(Date().timeIntervalSince(started) * 1000)
+        let milliseconds = Int((ProcessInfo.processInfo.systemUptime - started) * 1000)
         if result.isError {
             Self.log.notice("\(name, privacy: .public) failed after \(milliseconds) ms: \(result.body["error"] as? String ?? "", privacy: .public)")
         } else {
@@ -252,10 +253,10 @@ import os
 
     /// A tab's text: from this conversation's last read of it when it is recent (paging), else read now and checked.
     private func pageText(_ facts: AgentTabFacts, fresh: Bool) async -> Result<AIPageContent, ReadError> {
-        if !fresh, let cached = texts[facts.id], Date().timeIntervalSince(cached.at) < 300 { return .success(cached.content) }
+        if !fresh, let cached = texts[facts.id], ProcessInfo.processInfo.systemUptime - cached.at < 300 { return .success(cached.content) }
         switch await read(facts.id, part: .text) {
         case .content(let content):
-            texts[facts.id] = (content, Date())
+            texts[facts.id] = (content, ProcessInfo.processInfo.systemUptime)
             await check(facts, text: content.title + "\n" + content.text, url: content.url)
             return .success(content)
         case .failed(let reason): return .failure(ReadError(message: reason))
