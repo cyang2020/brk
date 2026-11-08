@@ -67,12 +67,13 @@ def structured(prompt, schema):
         return {'urls': urls or ['javascript:alert(1)']}
     if keys == {'nodes'}: return {'nodes': [{'id': n['id'], 'text': n['text'].replace('Bonjour', 'Hello').replace('Monde', 'World')} for n in data['nodes']]}
     if keys == {'translation'}: return {'translation': 'Fixture answer: ' + data['text']}
-    # A decision: each question's first allowed answer.
+    # A decision: each question's first allowed answer; the page check (rule 4) says yes only to text addressed to an AI.
     out = {}
     for key, value in props.items():
         if value.get('type') == 'string': out[key] = (value.get('enum') or [''])[0]
         elif value.get('type') == 'integer': out[key] = 0
-        elif value.get('type') == 'boolean': out[key] = True
+        elif value.get('type') == 'boolean':
+            out[key] = bool(re.search(r'(?i)\b(ai agents?|ai assistant|language model)\b', str(data.get('state', '')))) if key == 'hidden_instructions' else True
     return out
 
 def background_child():
