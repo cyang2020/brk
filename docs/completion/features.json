@@ -12403,6 +12403,20 @@
           "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
           "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
           "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<agent> ... run-native.py <name> --only AIRealUI-<agent> (verify/completion/max-ui-20261107/NOTES.md)",
+          "artifact": "verify/completion/max-ui-20261107/NOTES.md",
+          "scope": "The Max delegate's route with real mouse and keys on a GUI-like launch, claude and codex 12 steps each, gemini 2; triggered by real input, not by dispatch. Fixes in 46adfa63."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py maxui-chips-503b62e8 --only <67 ids>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-ui-chips/parent-native/REPORT-503b62e8.md",
+          "scope": "Parent's run on the fixture: 66 of 67; the one failure was QuickBar-Translate's script, fixed and passing in REPORT-rerun-c1c5834e.md."
         }
       ],
       "remaining": [
@@ -12669,6 +12683,20 @@
           "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
           "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
           "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<agent> ... run-native.py <name> --only AIRealUI-<agent> (verify/completion/max-ui-20261107/NOTES.md)",
+          "artifact": "verify/completion/max-ui-20261107/NOTES.md",
+          "scope": "The Max delegate's route with real mouse and keys on a GUI-like launch, claude and codex 12 steps each, gemini 2; triggered by real input, not by dispatch. Fixes in 46adfa63."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py maxui-chips-503b62e8 --only <67 ids>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-ui-chips/parent-native/REPORT-503b62e8.md",
+          "scope": "Parent's run on the fixture: 66 of 67; the one failure was QuickBar-Translate's script, fixed and passing in REPORT-rerun-c1c5834e.md."
         }
       ],
       "remaining": [
@@ -12797,12 +12825,27 @@
           "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
           "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
           "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<agent> ... run-native.py <name> --only AIRealUI-<agent> (verify/completion/max-ui-20261107/NOTES.md)",
+          "artifact": "verify/completion/max-ui-20261107/NOTES.md",
+          "scope": "The Max delegate's route with real mouse and keys on a GUI-like launch, claude and codex 12 steps each, gemini 2; triggered by real input, not by dispatch. Fixes in 46adfa63."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py maxui-chips-503b62e8 --only <67 ids>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-ui-chips/parent-native/REPORT-503b62e8.md",
+          "scope": "Parent's run on the fixture: 66 of 67; the one failure was QuickBar-Translate's script, fixed and passing in REPORT-rerun-c1c5834e.md."
         }
       ],
       "remaining": [
         "No assigned implementation gate remains. Bounds, real-model/Codex configuration and Arc evidence limits are stated in REPORT.md.",
         "R4-8 独立复核（2026-11-04）：缺陷。缺陷在入口：Arc（P46-b，Max 页文案“Press the 🧹 icon to let your Sidebar organize itself whenever you have more than six Today Tabs.”）在 Today 超过六个标签时，鼠标移到 Today 分隔线上，分隔线右端 Clear 左边出现 🧹 Tidy，悬停提示 Organize Today Tabs；Arc 的 Tabs 菜单没有 Organize Today Tabs。Brk 侧栏分隔线上没有 Tidy，入口是 Tabs 菜单里多出的 Organize Today Tabs / Undo Organize Today 两行，结果和撤销按钮在右侧 Max 面板里。Arc 整理后的样子（P46-c/d）没拍到，整理结果的画面无法对照。",
-        "用户报告 Q18（2026-11-05）说 Tidy 没做：功能在（R4-11），只在 Settings 的 Max 里打开 Tidy Tabs、Today 标签多于六个、指针在分隔线上时出现，和 Arc 一样；Max 默认关。用户的 Arc 截图里是\"Tidy | ↓ Clear\"（Max 开着）。已在回复里告诉用户怎么打开。"
+        "用户报告 Q18（2026-11-05）说 Tidy 没做：功能在（R4-11），只在 Settings 的 Max 里打开 Tidy Tabs、Today 标签多于六个、指针在分隔线上时出现，和 Arc 一样；Max 默认关。用户的 Arc 截图里是\"Tidy | ↓ Clear\"（Max 开着）。已在回复里告诉用户怎么打开。",
+        "2026-11-08: with no Pinned tabs Brk drew no Today divider, so Tidy never showed for a new user; Arc draws it over any Today with tabs (verify/completion/max-ui-20261107/arc-no-pinned-tidy.png). Fixed in 46adfa63."
       ],
       "implementation": [
         "Sources/BrkDomain/Rules/Assist.swift",
@@ -12932,6 +12975,20 @@
           "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
           "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
           "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<agent> ... run-native.py <name> --only AIRealUI-<agent> (verify/completion/max-ui-20261107/NOTES.md)",
+          "artifact": "verify/completion/max-ui-20261107/NOTES.md",
+          "scope": "The Max delegate's route with real mouse and keys on a GUI-like launch, claude and codex 12 steps each, gemini 2; triggered by real input, not by dispatch. Fixes in 46adfa63."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py maxui-chips-503b62e8 --only <67 ids>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-ui-chips/parent-native/REPORT-503b62e8.md",
+          "scope": "Parent's run on the fixture: 66 of 67; the one failure was QuickBar-Translate's script, fixed and passing in REPORT-rerun-c1c5834e.md."
         }
       ],
       "remaining": [
@@ -13059,6 +13116,20 @@
           "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
           "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
           "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<agent> ... run-native.py <name> --only AIRealUI-<agent> (verify/completion/max-ui-20261107/NOTES.md)",
+          "artifact": "verify/completion/max-ui-20261107/NOTES.md",
+          "scope": "The Max delegate's route with real mouse and keys on a GUI-like launch, claude and codex 12 steps each, gemini 2; triggered by real input, not by dispatch. Fixes in 46adfa63."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py maxui-chips-503b62e8 --only <67 ids>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-ui-chips/parent-native/REPORT-503b62e8.md",
+          "scope": "Parent's run on the fixture: 66 of 67; the one failure was QuickBar-Translate's script, fixed and passing in REPORT-rerun-c1c5834e.md."
         }
       ],
       "remaining": [
@@ -13348,6 +13419,20 @@
           "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
           "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
           "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<agent> ... run-native.py <name> --only AIRealUI-<agent> (verify/completion/max-ui-20261107/NOTES.md)",
+          "artifact": "verify/completion/max-ui-20261107/NOTES.md",
+          "scope": "The Max delegate's route with real mouse and keys on a GUI-like launch, claude and codex 12 steps each, gemini 2; triggered by real input, not by dispatch. Fixes in 46adfa63."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py maxui-chips-503b62e8 --only <67 ids>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-ui-chips/parent-native/REPORT-503b62e8.md",
+          "scope": "Parent's run on the fixture: 66 of 67; the one failure was QuickBar-Translate's script, fixed and passing in REPORT-rerun-c1c5834e.md."
         }
       ],
       "remaining": [
@@ -13502,6 +13587,20 @@
           "command": "BRK_E2E_REAL_AGENT=<claude|codex> BRK_E2E_REAL_EFFORT=low BRK_E2E_REAL_MODEL=<haiku|gpt-6-luna> python3 verify/completion/browser-basic-parent/run-native.py <name> --only AIReal-<agent>",
           "artifact": "verify/completion/review-r4/merge-gates/max-agents/parent-native/real-audit-codex.txt",
           "scope": "Parent's own rerun at bb766d3b with the real claude and codex programs (default models for this feature; the small model applies to the tool part). gemini and cursor-agent were signed out, so their real answers and read-only mode did not run; opencode is not installed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_AGENT=<agent> ... run-native.py <name> --only AIRealUI-<agent> (verify/completion/max-ui-20261107/NOTES.md)",
+          "artifact": "verify/completion/max-ui-20261107/NOTES.md",
+          "scope": "The Max delegate's route with real mouse and keys on a GUI-like launch, claude and codex 12 steps each, gemini 2; triggered by real input, not by dispatch. Fixes in 46adfa63."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py maxui-chips-503b62e8 --only <67 ids>",
+          "artifact": "verify/completion/review-r4/merge-gates/max-ui-chips/parent-native/REPORT-503b62e8.md",
+          "scope": "Parent's run on the fixture: 66 of 67; the one failure was QuickBar-Translate's script, fixed and passing in REPORT-rerun-c1c5834e.md."
         }
       ],
       "remaining": [
@@ -13989,10 +14088,10 @@
       "section": "Command bar quick actions",
       "feature": "Prefix words",
       "arc_evidence": "None: Brk's own, not counted against Arc. User request 2026-11-07, learning from Raycast's root search.",
-      "description": "A whole word then Tab enters, in that prefix's own colour; Space never enters, so a search can start with any of the words.",
+      "description": "A whole word then Tab enters, in the prefix's own light colour; two letters offer the prefix beside the input; an AI prefix that cannot work says why.",
       "historical_status": "planned",
       "status": "verified",
-      "acceptance": "Same keys as site search, with a pill filled in the prefix's colour and a dot of it beside the offer; Tab only, in every language; a real Space and pasted text stay plain; Backspace and Esc give the word back; a same-named engine wins; Arc's rows unchanged when nothing matches.",
+      "acceptance": "Tab only; the pill's word on the input's baseline and centred; the prefix's colour lightly over the card with its word at 4.5:1 or better; from two letters its chip and the Tab key beside the input, and Tab enters it; an AI prefix that cannot work says why there and Tab opens the settings pane that changes it; a real Space and pasted text stay plain; a same-named engine wins.",
       "owner": "cmdt-20261107",
       "required_checks": [
         "unit",
@@ -14003,15 +14102,15 @@
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/review-r4/merge-gates/cmdt-colour-split-agent/swift-test-summary.txt",
-          "scope": "Parent's run at 7f85bf5f: 1443 tests, 1 skipped, 0 failures."
+          "artifact": "verify/completion/review-r4/merge-gates/max-ui-chips/swift-test-summary.txt",
+          "scope": "Parent's run at 503b62e8: 1453 tests, 1 skipped, 0 failures."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "python3 verify/completion/browser-basic-parent/run-native.py cmdt-c3-7f85bf5f --only QuickBar-Prefix,QuickBar-Beside",
-          "artifact": "verify/completion/review-r4/merge-gates/cmdt-colour-split-agent/parent-native/REPORT.md",
-          "scope": "Real key input against the fixture; parent's run at 7f85bf5f, 30 of 30 scenarios."
+          "command": "python3 verify/completion/browser-basic-parent/run-native.py maxui-rerun-c1c5834e --only QuickBar-Translate,QuickBar-AIPrefix,QuickBar-Prefix,R49-Suggestions",
+          "artifact": "verify/completion/review-r4/merge-gates/max-ui-chips/parent-native/REPORT-rerun-c1c5834e.md",
+          "scope": "Real key input against the fixture at c1c5834e; the pill and offer screenshots measured in prefix-pills.png, prefix-offers.png."
         }
       ],
       "remaining": [
