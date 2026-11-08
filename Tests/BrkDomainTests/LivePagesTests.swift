@@ -450,6 +450,18 @@ final class LivePagesTests: XCTestCase {
         XCTAssertTrue(candidate.text.contains("Price Watch"), "a page's title counts as said")
     }
 
+    func testTheTabToolsListNoArchivedConversationOrPage() throws {
+        let d = enabled()
+        let (conversation, page) = try keptPage(d)
+        for url in [ConversationPage.url(conversation), AIPageTab.url(page)] {
+            d.user(.tab(.close(.item(try XCTUnwrap(d.allTabRows.first { $0.url == url }).id))))
+        }
+        XCTAssertTrue(d.state.doc.archive.contains { $0.tab.url == ConversationPage.url(conversation) })
+        let archived = d.state.agentArchivedTabs(profile: .default)
+        XCTAssertFalse(archived.contains { NativePages.shows($0.url) }, "\(archived.map(\.url))")
+        XCTAssertFalse(d.state.agentHistory(profile: .default).contains { NativePages.shows($0.url) })
+    }
+
     func testChoosingAConversationInTheCommandBarOpensItsTab() throws {
         let d = enabled()
         let (conversation, _) = try keptPage(d)

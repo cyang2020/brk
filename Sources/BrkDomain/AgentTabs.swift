@@ -95,7 +95,9 @@ extension AppState {
     /// The profile's archived tabs, newest first.
     public func agentArchivedTabs(profile: ProfileID) -> [AgentTabFacts] {
         doc.archive.compactMap { entry in
-            guard archivedProfile(entry) == profile else { return nil }
+            // Archived conversations and kept pages have their own tools, as open ones do; their titles are the user's
+            // own words, which the injection check can take for instructions (claude-weekly-5).
+            guard archivedProfile(entry) == profile, !NativePages.shows(entry.tab.url) else { return nil }
             let space = entry.fromSpace.flatMap { doc.spaces[$0] != nil ? $0 : nil }
             return AgentTabFacts(id: AgentTabID.archivePrefix + entry.id.rawValue, title: entry.tab.displayTitle, url: entry.tab.url, place: .archive,
                                  space: space, spaceTitle: space.map(displayTitle(of:)), folders: [], folder: nil, split: nil, profile: profile,
@@ -106,7 +108,7 @@ extension AppState {
     /// The profile's history, newest first.
     public func agentHistory(profile: ProfileID) -> [AgentTabFacts] {
         doc.history.compactMap { visit in
-            guard visit.profile == profile else { return nil }
+            guard visit.profile == profile, !NativePages.shows(visit.url) else { return nil }
             return AgentTabFacts(id: AgentTabID.historyPrefix + visit.id.rawValue, title: visit.title, url: visit.url, place: .history, space: nil,
                                  spaceTitle: nil, folders: [], folder: nil, split: nil, profile: profile, shown: false, loaded: false, at: visit.visitedAt)
         }
