@@ -363,7 +363,9 @@ enum AIBasicRealUIScenarios {
             }
             shot(app, "bar-translation")
             let failure = try barTranslation()?.failure
-            try key([], .escape)
+            // Escape leaves the prefix, a second one closes the bar.
+            for _ in 0..<3 where try app.view().overlay != nil { try key([], .escape) }
+            try app.waitUntil("the bar closed") { try app.view().overlay == nil }
             try expect(answer != nil, "failed: \(failure ?? "")")
             return "\"\(answer!)\""
         } }
