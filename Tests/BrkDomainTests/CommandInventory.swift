@@ -71,7 +71,7 @@ enum CommandInventory {
         .settings(.max(.provider(.off))), .settings(.advanced(.soundEffects(false))), .settings(.openPane(.links)), .settings(.closeWindow),
         .settings(.openBrowserPage(.passwords, profile: .default)),
         .library(.open(.archive)), .library(.close), .library(.openHistory), .library(.cancelDownload(download)), .library(.revealDownload(download)),
-        .library(.removeHistoryVisit(HistoryVisitID("ghost"))), .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory),
+        .library(.removeHistoryVisit(HistoryVisitID("ghost"))), .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory), .library(.historySearch("x")),
         .window(.openInFolder(item)), .window(.newBlank), .window(.toggleStayOnTop), .window(.new), .window(.newIncognito), .window(.newLittle(example)), .window(.openIn(.current)),
         .peek(.email), .peek(.open(example)), .peek(.close), .peek(.openAsTab), .peek(.openInSplit),
         .profile(.create(name: "Work", icon: nil)), .profile(.rename(profile, name: "x")), .profile(.delete(profile)),
@@ -140,7 +140,7 @@ enum CommandInventory {
         .window(WindowID("ghost"), .geometry(bounds: .zero, contentSize: .zero)), .window(WindowID("ghost"), .modifiersChanged(held: [])),
         .window(WindowID("ghost"), .closed),
         .externalURL(example), .suggestions(WindowID("ghost"), query: "x", ["xy"]), .aiProvidersDetected([.claude]),
-        .localResults(WindowID("ghost"), LocalResults(query: "x", apps: [], files: [])), .barTranslationDue(WindowID("ghost"), "x"), .definition(WindowID("ghost"), BarDefinition(word: "x", text: nil)), .currencyRates(CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1])),
+        .localResults(WindowID("ghost"), LocalResults(query: "x", apps: [], files: [])), .meaningResults(WindowID("ghost"), MeaningResults(text: "x", scope: .commandBar, hits: [])), .barTranslationDue(WindowID("ghost"), "x"), .definition(WindowID("ghost"), BarDefinition(word: "x", text: nil)), .currencyRates(CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1])),
         .globalShortcut(.registered(KeyChord([.option, .command], .n))),
         .aiResult(AIRequestID("ghost"), .unavailable),
         .aiPartial(AIRequestID("ghost"), "partial"), .aiPageRead(AIRequestID("ghost"), siteTarget.document.browser.page, nil),
@@ -460,6 +460,7 @@ enum CommandInventory {
             case .removeHistoryVisit: "removeHistoryVisit"
             case .removeHistory: "removeHistory"
             case .clearHistory: "clearHistory"
+            case .historySearch: "historySearch"
             }
         case .window(let c):
             switch c {
@@ -584,6 +585,7 @@ enum CommandInventory {
         case .externalURL: "externalURL"
         case .suggestions: "suggestions"
         case .localResults: "localResults"
+        case .meaningResults: "meaningResults"
         case .barTranslationDue: "barTranslationDue"
         case .definition: "definition"
         case .currencyRates: "currencyRates"

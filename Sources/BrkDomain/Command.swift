@@ -549,6 +549,8 @@ public enum LibraryCommand: Hashable, Sendable, Codable {
     case removeHistoryVisit(HistoryVisitID)
     case removeHistory(URL)
     case clearHistory
+    /// The History page's search field changed: with the search model ready, its text is also searched by meaning.
+    case historySearch(String)
 }
 
 /// Window commands. The dispatching window is the one the command came from; a new window takes its space.
@@ -638,6 +640,8 @@ public enum SystemEvent: Sendable, Equatable {
     case suggestions(WindowID, query: String, [String])
     /// The file and app sources answered `Effect.searchLocal`; the bar shows it only while its text is still the answer's.
     case localResults(WindowID, LocalResults)
+    /// The local search model's matches for a text the bar or the History page asked about (`Effect.searchByMeaning`).
+    case meaningResults(WindowID, MeaningResults)
     /// The dictionary answered `Effect.lookUpWord`.
     case definition(WindowID, BarDefinition)
     /// The pause after typing under the `translate` prefix is over (`Effect.barTranslationDue`) for this text.

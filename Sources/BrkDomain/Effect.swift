@@ -77,6 +77,9 @@ public enum Effect: Hashable, Sendable {
     case fetchSuggestions(WindowID, query: String, url: URL)
     /// Look for a file and app by name (BrkApp debounces like the suggestions); the answer is `SystemEvent.localResults`.
     case searchLocal(WindowID, LocalSearchRequest)
+    /// Ask the local search model about a text (BrkApp debounces; only sent while the model is ready); the answer is
+    /// `SystemEvent.meaningResults`.
+    case searchByMeaning(WindowID, MeaningQuery)
     /// A text to translate under the `translate` prefix: after a pause in typing the answer is
     /// `SystemEvent.barTranslationDue`. Any later key cancels it.
     case barTranslationDue(WindowID, String)
