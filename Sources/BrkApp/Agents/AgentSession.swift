@@ -22,7 +22,7 @@ import Foundation
     private let output: @MainActor (Output) -> Void
     private var backend: (any AgentBackend)?
     private var resume: String?
-    private var ownsDirectory: Bool { spec.access == .readOnly }
+    private var ownsDirectory: Bool { spec.access != .tools }
     private(set) var currentTurn: AIRequestID?
     private var text = ""
     private var flushScheduled = false

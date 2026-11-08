@@ -1,13 +1,23 @@
 import BrkDomain
 import Foundation
 
-/// What a session may do. Anything carrying page or link text runs `.readOnly`; `.tools` exists only because the user
-/// chose a folder and asked for it.
+/// What a session may do. A page question carries page text in its prompt and runs `.readOnly`; `.tools` exists only
+/// because the user chose a folder and asked for it, and gets no page text; `.browser` is the panel's conversation with
+/// Brk's tab tools, where page text comes in through those tools and every other tool asks every time.
 enum AgentAccess: Equatable, Sendable {
     /// Tools off, or the agent's strictest read-only mode, in an empty folder Brk made for this session.
     case readOnly
     /// Tools on in the user's folder, every approval the agent asks for goes to the panel.
     case tools
+    /// Brk's tab tools without asking; the agent's own tools and skills on, each use asked in the panel whatever the
+    /// user's own allow rules say. In an empty folder Brk made for this session.
+    case browser
+}
+
+/// The MCP server an agent starts for Brk's tab tools (`BrkToolEndpoint.command`).
+struct AgentToolsLink: Equatable, Sendable {
+    let command: String
+    let arguments: [String]
 }
 
 struct AgentSpec: Sendable {
@@ -19,6 +29,10 @@ struct AgentSpec: Sendable {
     let directory: URL
     /// The agent's own session id to continue, when an earlier process of this conversation had to be ended.
     var resume: String? = nil
+    /// Brk's tab tools, for a `.browser` session.
+    var tools: AgentToolsLink? = nil
+    /// The user's subscription (the CLI's own sign-in) or an API key for this process only.
+    var account: AIAccountChoice = .subscription
 }
 
 /// How a turn ended.

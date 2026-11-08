@@ -22,14 +22,19 @@ enum AgentEnvironment {
         return out
     }
 
-    /// What an agent's process gets: this process's environment with the full PATH, without API keys (the user's
-    /// decision: agents run on the account they are signed in to) and without what a parent agent set for itself.
-    static func forAgent(_ kind: AIProviderKind, base: [String: String] = ProcessInfo.processInfo.environment) -> [String: String] {
+    /// Keys Brk's own environment may carry; an agent never inherits one. Only the key the user chose in Brk goes in.
+    static let inheritedKeys: Set<String> = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "CODEX_API_KEY", AIAccountWiring.openAIVariable, "CLAUDECODE"]
+
+    /// What an agent's process gets: this process's environment with the full PATH, without inherited API keys and
+    /// without what a parent agent set for itself; with the user's own key for this service when they chose one in Brk
+    /// (`AIAccounts`), else nothing, and the CLI uses its own sign-in.
+    static func forAgent(_ kind: AIProviderKind, account: AIAccountChoice = .subscription, base: [String: String] = ProcessInfo.processInfo.environment) -> [String: String] {
         var environment = base.filter { key, _ in
-            if ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CLAUDECODE"].contains(key) { return false }
+            if inheritedKeys.contains(key) { return false }
             if key.hasPrefix("CLAUDE_") { return key == "CLAUDE_CONFIG_DIR" }
             return true
         }
+        environment.merge(AIAccountWiring.environment(kind, account: account)) { _, chosen in chosen }
         environment["PATH"] = searchPath(environment: base).joined(separator: ":")
         // Brk never starts a sign-in: an agent that would open a browser to sign in reports that instead.
         switch kind {

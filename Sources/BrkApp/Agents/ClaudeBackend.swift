@@ -36,8 +36,46 @@ import Foundation
         case .tools:
             arguments += ["--permission-prompt-tool", "stdio", "--permission-mode", "default"]
             if let resume = spec.resume { arguments += ["--resume", resume] }
+        case .browser:
+            // The user's settings still load, so their skills do (dropping the user source drops ~/.claude/skills too).
+            // What would let a tool through without the panel is overridden from the command line: an ask rule for every
+            // built-in tool beats their allow rules (deny, then ask, then allow), no hook runs (a PermissionRequest hook
+            // could answer for the user), and no MCP server but Brk's loads. Checked on claude 2.1.318: with
+            // `Bash(python3:*)` allowed in ~/.claude/settings.json, `python3 -c …` reached Brk as `can_use_tool`.
+            arguments += ["--permission-prompt-tool", "stdio", "--permission-mode", "default", "--strict-mcp-config",
+                          "--tools", Self.browserTools.joined(separator: ","), "--settings", Self.browserSettings,
+                          "--append-system-prompt", BrkToolCatalog.rules]
+            if let tools = spec.tools { arguments += ["--mcp-config", Self.mcpConfig(tools), "--allowedTools", "mcp__\(BrkToolCatalog.server)"] }
+            if let resume = spec.resume { arguments += ["--resume", resume] }
         }
         return arguments
+    }
+
+    /// The built-in tools a browser session has: enough for skills (which read their files and run their CLIs) and the
+    /// web. Subagents, scheduling and the rest stay out.
+    static let browserTools = ["Bash", "Read", "Write", "Edit", "Skill", "WebFetch", "WebSearch"]
+
+    static var browserSettings: String {
+        let settings: [String: Any] = ["disableAllHooks": true, "permissions": ["ask": browserTools]]
+        return String(decoding: try! JSONSerialization.data(withJSONObject: settings, options: [.sortedKeys]), as: UTF8.self)
+    }
+
+    static func mcpConfig(_ tools: AgentToolsLink) -> String {
+        let config: [String: Any] = ["mcpServers": [BrkToolCatalog.server: ["type": "stdio", "command": tools.command, "args": tools.arguments]]]
+        return String(decoding: try! JSONSerialization.data(withJSONObject: config, options: [.sortedKeys, .withoutEscapingSlashes]), as: UTF8.self)
+    }
+
+    /// In a browser session, what Brk answers itself instead of asking: Brk's own tools (their approvals are Brk's), a
+    /// skill being loaded, and reading a file of an installed skill or of the session's own empty folder. A skill's
+    /// instructions are not the user's data; what a skill then runs asks like anything else.
+    static func answersItself(tool: String, input: [String: Any], directory: URL, home: String = NSHomeDirectory()) -> Bool {
+        if tool.hasPrefix("mcp__\(BrkToolCatalog.server)__") || tool == "Skill" { return true }
+        guard tool == "Read", let path = input["file_path"] as? String, path.hasPrefix("/") else { return false }
+        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
+        let roots = [home + "/.claude/skills", home + "/.claude/plugins", directory.path].map {
+            URL(fileURLWithPath: $0).resolvingSymlinksInPath().standardizedFileURL.path
+        }
+        return roots.contains { resolved.hasPrefix($0 + "/") }
     }
 
     func start() throws {
@@ -125,9 +163,15 @@ import Foundation
                 return
             }
             pendingApprovals[id] = (request["tool_use_id"] as? String ?? "", input, request["permission_suggestions"] as? [[String: Any]] ?? [], tool)
-            events?(.approval(AIAgentApproval(id: id, title: Self.title(tool: tool, input: input), detail: Self.detail(tool: tool, input: input), options: [
-                .init(id: "once", title: "Allow", kind: .allowOnce), .init(id: "session", title: "Allow for Session", kind: .allowSession), .init(id: "deny", title: "Deny", kind: .deny),
-            ])))
+            if spec.access == .browser, Self.answersItself(tool: tool, input: input, directory: spec.directory) {
+                answer(approval: id, option: "once")
+                return
+            }
+            // A browser session asks every time: no rule for the rest of the session.
+            let options: [AIAgentApproval.Option] = spec.access == .browser
+                ? [.init(id: "once", title: "Allow", kind: .allowOnce), .init(id: "deny", title: "Deny", kind: .deny)]
+                : [.init(id: "once", title: "Allow", kind: .allowOnce), .init(id: "session", title: "Allow for Session", kind: .allowSession), .init(id: "deny", title: "Deny", kind: .deny)]
+            events?(.approval(AIAgentApproval(id: id, title: Self.title(tool: tool, input: input), detail: Self.detail(tool: tool, input: input), options: options)))
         case "control_cancel_request":
             if let id = object["request_id"] as? String, pendingApprovals.removeValue(forKey: id) != nil { events?(.approvalClosed(id)) }
         case "system":
@@ -214,7 +258,8 @@ import Foundation
         case "WebSearch": return "Search the web: " + AgentCopy.oneLine(text("query") ?? "")
         case "Task": return "Start a helper: " + AgentCopy.oneLine(text("description") ?? "")
         case "TodoWrite": return "Update the task list"
-        default: return tool
+        case "Skill": return "Use the skill " + (text("skill") ?? text("name") ?? "")
+        default: return BrkToolCatalog.stepTitle(tool) ?? tool
         }
     }
 
