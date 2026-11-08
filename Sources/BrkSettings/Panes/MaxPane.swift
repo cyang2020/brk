@@ -20,7 +20,7 @@ struct MaxPane: View {
     private var on: Bool { Self.isOn(max.settings) }
 
     static func isOn(_ settings: MaxSettings) -> Bool {
-        settings.provider != .off && MaxFeature.allCases.contains { $0.isOn(settings) }
+        settings.provider != .off && (MaxFeature.allCases.contains { $0.isOn(settings) } || AIFeature.basicLayer.contains(where: settings.enabled))
     }
 
     private func send(_ setting: MaxSetting) { context.dispatch(.settings(.max(setting))) }
@@ -35,7 +35,10 @@ struct MaxPane: View {
                     .padding(.top, M.introTop.value)
                 enableCard.padding(.top, CardMetrics.introToCard.value)
                 agentCard.padding(.top, M.cardGap.value)
+                BasicFeaturesCard(context: context).padding(.top, M.cardGap.value)
                 SettingsCard { rows(MaxFeature.allCases) }.padding(.top, M.cardGap.value)
+                AccountsCard(context: context).padding(.top, M.cardGap.value)
+                UsageCard(context: context).padding(.top, M.cardGap.value)
                 footer.padding(.top, M.footerTop.value)
             }
             .frame(width: Metrics.settings.contentWidth.value, alignment: .leading)
@@ -147,10 +150,41 @@ struct MaxPane: View {
                     }
                 }
             }
+            if let kind, AIAgentOptions.basicDefault(kind) != nil {
+                basicRows(kind, status: status)
+            }
             if let status {
                 CardDivider()
                 SettingsLabel(text: SettingsCopy.agentStatus(status), field: "agentStatus-\(status.kind.rawValue)", secondary: true)
                     .padding(CardMetrics.rowPadding.value)
+            }
+            CardDivider()
+            SettingsLabel(text: MaxBasicCopy.basicRoute(max.basicRoute), field: "basicRoute", secondary: true)
+                .padding(CardMetrics.rowPadding.value)
+        }
+    }
+
+    /// The small model for the basic features, apart from the conversation's: Haiku 5.5 or gpt-6-luna unless chosen.
+    @ViewBuilder private func basicRows(_ kind: AIProviderKind, status: AIAgentStatus?) -> some View {
+        let chosen = max.settings.basic(kind)
+        let listed = status?.models ?? []
+        // The default small model is offered even before the agent lists its models (or when it does not list it).
+        let models = (chosen?.model).map { model in listed.contains { $0.id == model } ? listed : [AIAgentModel(id: model, name: model)] + listed } ?? listed
+        let efforts = models.first { $0.id == chosen?.model }?.efforts ?? []
+        CardDivider()
+        CardRow {
+            CardLabel(MaxBasicCopy.basicModel)
+        } trailing: {
+            SettingsPopUp<String>(field: "basicModel", entries: models.map { .option($0.name, $0.id) },
+                                  selected: chosen?.model ?? "", width: .selected(minimum: M.agentPopup.value)) { send(.basicModel(kind, $0)) }
+        }
+        if !efforts.isEmpty {
+            CardDivider()
+            CardRow {
+                CardLabel(MaxBasicCopy.basicEffort)
+            } trailing: {
+                SettingsPopUp<String>(field: "basicEffort", entries: [.option(MaxCopy.agentDefault, "")] + efforts.map { .option($0, $0) },
+                                      selected: chosen?.effort ?? "", width: .selected(minimum: M.agentPopup.value)) { send(.basicEffort(kind, $0.isEmpty ? nil : $0)) }
             }
         }
     }
@@ -235,8 +269,8 @@ enum MaxCopy {
     static let turnOff = "Turn Off Max"
     static var autoEnable: String { "Automatically enable future \(Product.name) Max features" }
     static let provider = "Local AI tool"
-    /// Arc: "Max features require that we send data to our AI partners."; Brk sends it to the local tool.
-    static let footer = "Max features require that we send data to your local AI tool."
+    /// Arc: "Max features require that we send data to our AI partners."; Brk sends it to the service the user chose.
+    static let footer = "Max features require that we send data to the AI service you chose."
     static let notSignedIn = " (not signed in)"
     static let notInstalled = " (not installed)"
     static let model = "Model"

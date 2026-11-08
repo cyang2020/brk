@@ -152,6 +152,7 @@ extension Tab {
     /// Electron reducer cases that assert on it port unchanged).
     var displayTitle: String {
         if let custom = customTitle, !custom.isEmpty { return custom }
+        if let name = aiName?.title, !name.isEmpty { return name }
         if !title.isEmpty { return TitleRules.shorten(title, url: url) }
         if let url { return displayURL(url) }
         return "New Tab"

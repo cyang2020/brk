@@ -94,7 +94,7 @@ final class MaxRouteTests: XCTestCase {
         d.download(tab, download, .receiving(TransferProgress(received: 0, total: nil)))
         let finished = d.download(tab, download, .terminal(.completed(FileReceipt(url: URL(fileURLWithPath: "/tmp/scan_0001_FINAL.txt"), bytes: 8))))
         let (id, _) = try request(finished)
-        d.system(.aiResult(id, .text("Travel report.txt")))
+        d.system(.aiResult(id, .reply(.text("Travel report.txt"))))
         d.system(.aiDownloadRenamed(download, originalPath: "/tmp/scan_0001_FINAL.txt", newPath: "/tmp/Travel report.txt", error: nil))
         XCTAssertEqual(d.view.tabTools.toast?.text, "Download renamed to:")
         XCTAssertEqual(d.view.tabTools.toast?.subtitle, "Travel report.txt")

@@ -34,6 +34,8 @@ public final class SettingsHost: NSView {
     var defaultBrowserCheck: @MainActor () -> Bool = SettingsHost.appIsDefaultBrowser
     /// The Download Location menu's "Other…": a folder panel starting at the current folder; nil when cancelled.
     var chooseFolder: @MainActor (String?) -> String? = SettingsHost.runFolderPanel
+    /// The app's Keychain store for API keys (Max → Accounts).
+    public var storeKey: @MainActor (AIService, String?) -> Void = { _, _ in }
     private var keyObserver: NSObjectProtocol?
 
     public init(dispatch: @escaping Dispatch) {
@@ -117,7 +119,8 @@ public final class SettingsHost: NSView {
     private func update() {
         let context = settings.map { settings in
             PaneContext(settings: settings, dispatch: dispatch, isDefaultBrowser: isDefaultBrowser,
-                        chooseFolder: { [weak self] current in self?.chooseFolder(current) ?? nil }, size: paneSize)
+                        chooseFolder: { [weak self] current in self?.chooseFolder(current) ?? nil },
+                        storeKey: { [weak self] service, key in self?.storeKey(service, key) }, size: paneSize)
         }
         controller.rootView = SettingsRootView(context: context, pane: shownPane)
         toolbar.show(shownPane)
@@ -197,6 +200,8 @@ struct PaneContext {
     let dispatch: Dispatch
     let isDefaultBrowser: Bool
     let chooseFolder: @MainActor (String?) -> String?
+    /// Saves a service's API key in the Keychain, or removes it for nil. The key never goes through a command.
+    var storeKey: @MainActor (AIService, String?) -> Void = { _, _ in }
     /// The pane's area under the toolbar (panes that fill the window, like Profiles and Shortcuts, lay out in it).
     var size: CGSize = CardMetrics.paneSize
 }

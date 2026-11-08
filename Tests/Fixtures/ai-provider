@@ -46,6 +46,35 @@ def answer_text(prompt):
         return '\n'.join(urls) if urls else 'javascript:alert(1)'
     return 'Fixture answer to: ' + prompt
 
+def structured(prompt, schema):
+    """A basic task's answer object (Brk passes `--json-schema` or `outputSchema`), told apart by the schema's fields;
+    the prompt is the task's input JSON."""
+    data = json.loads(prompt)
+    props = schema.get('properties') or {}
+    keys = set(props)
+    if keys == {'names'}:
+        if 'id' in props['names']['items']['properties']:
+            return {'names': [{'id': t['id'], 'name': 'Named ' + ' '.join(t['title'].split()[:2])} for t in data['tabs']]}
+        return {'names': [{'group': g['group'], 'name': 'Group ' + str(g['group'] + 1)} for g in data['groups']]}
+    if keys == {'title'}: return {'title': 'Fixture Tab'}
+    if keys == {'name'}: return {'name': 'Fixture Folder'}
+    if keys == {'groups'}: return {'groups': [{'name': 'Reading', 'tabs': [t['id'] for t in data['tabs']]}]}
+    if keys == {'blocked', 'quickSummary', 'details'}:
+        return {'blocked': False, 'quickSummary': 'Fixture preview: ' + data['title'][:60], 'details': [{'label': 'Text:', 'icon': 'text.alignleft', 'info': data['text'][:60]}]}
+    if keys == {'filename'}: return {'filename': 'Reading.' + data['filename'].split('.')[-1]}
+    if keys == {'urls'}:
+        urls = [w for w in data['query'].replace(',', ' ').split() if w.startswith('http')]
+        return {'urls': urls or ['javascript:alert(1)']}
+    if keys == {'nodes'}: return {'nodes': [{'id': n['id'], 'text': n['text'].replace('Bonjour', 'Hello').replace('Monde', 'World')} for n in data['nodes']]}
+    if keys == {'translation'}: return {'translation': 'Fixture answer: ' + data['text']}
+    # A decision: each question's first allowed answer.
+    out = {}
+    for key, value in props.items():
+        if value.get('type') == 'string': out[key] = (value.get('enum') or [''])[0]
+        elif value.get('type') == 'integer': out[key] = 0
+        elif value.get('type') == 'boolean': out[key] = True
+    return out
+
 def background_child():
     """A command an agent ran, in a process group of its own: only a stop that walks the tree finds it."""
     # Its parent never waits for it; without this a stopped child stays as a zombie that still answers kill(pid, 0).
@@ -74,6 +103,12 @@ def claude():
         # The model the agent really runs, as a full id: what is chosen, else the fixture's own default.
         chosen = sys.argv[sys.argv.index('--model') + 1] if '--model' in sys.argv else 'fixture-opus'
         put({'type': 'system', 'subtype': 'init', 'session_id': session, 'model': 'claude-' + chosen})
+        if '--json-schema' in sys.argv:
+            obj = structured(prompt, json.loads(sys.argv[sys.argv.index('--json-schema') + 1]))
+            put({'type': 'assistant', 'parent_tool_use_id': None, 'message': {'content': [{'type': 'tool_use', 'id': 'toolu_so', 'name': 'StructuredOutput', 'input': obj}]}})
+            put({'type': 'result', 'subtype': 'success', 'is_error': False, 'result': json.dumps(obj), 'structured_output': obj, 'session_id': session,
+                 'usage': {'input_tokens': 2, 'cache_creation_input_tokens': 100, 'cache_read_input_tokens': 50, 'output_tokens': 20}})
+            return
         if prompt == 'fixture:stream':
             text('first\n'); time.sleep(2); text('second\n'); result('first\nsecond\n')
         elif prompt == 'fixture:hang': hang_ignoring_term()
@@ -134,8 +169,13 @@ def codex():
     def delta(t): note('item/agentMessage/delta', threadId=thread, turnId=turn_id, itemId='m', delta=t)
     def done(status='completed', error=None):
         note('turn/completed', threadId=thread, turn={'id': turn_id, 'status': status, 'error': error})
-    def turn(prompt):
+    def turn(prompt, schema=None):
         log(prompt)
+        if schema is not None:
+            text = json.dumps(structured(prompt, schema))
+            note('thread/tokenUsage/updated', threadId=thread, turnId=turn_id, tokenUsage={'last': {'inputTokens': 300, 'cachedInputTokens': 200, 'outputTokens': 20}})
+            note('item/completed', threadId=thread, turnId=turn_id, item={'type': 'agentMessage', 'id': 'm', 'text': text, 'phase': 'final_answer'})
+            done(); return
         if prompt == 'fixture:stream':
             delta('first\n'); time.sleep(2); delta('second\n'); done()
         elif prompt == 'fixture:hang': hang_ignoring_term()
@@ -172,7 +212,7 @@ def codex():
         elif method == 'turn/start':
             turn_id = 'turn-' + str(rid)
             put({'id': rid, 'result': {'turn': {'id': turn_id, 'status': 'inProgress'}}})
-            turn(params['input'][0]['text'])
+            turn(params['input'][0]['text'], params.get('outputSchema'))
         elif method == 'turn/interrupt':
             put({'id': rid, 'result': {}})
             pending.clear()

@@ -213,6 +213,9 @@ enum CommandInventory {
             case .organizeToday: "organizeToday"
             case .undoOrganize: "undoOrganize"
             case .renameDownload: "renameDownload"
+            case .nameFolder: "nameFolder"
+            case .acceptSuggestion: "acceptSuggestion"
+            case .dismissSuggestion: "dismissSuggestion"
             case .cancel: "cancel"
             case .dismiss: "dismiss"
             case .neverTranslateSite: "neverTranslateSite"
@@ -589,6 +592,9 @@ enum CommandInventory {
         case .aiAgents: "aiAgents"
         case .aiAgentsWanted: "aiAgentsWanted"
         case .aiFolderChosen: "aiFolderChosen"
+        case .aiKeys: "aiKeys"
+        case .aiUsage: "aiUsage"
+        case .aiBasicTick: "aiBasicTick"
         }
     }
 

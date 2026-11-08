@@ -11,8 +11,7 @@ final class AIGroupContractTests: XCTestCase {
         let children = d.todayIDs
         let transition = d.user(.assist(.organizeToday))
         let request = try XCTUnwrap(transition.effects.compactMap { if case .ai(let id, _, _) = $0 { id } else { nil } }.first)
-        let ids = children.map { "\"\($0.rawValue)\"" }.joined(separator: ",")
-        d.system(.aiResult(request, .text("[{\"folder\":\"Reading\",\"tabs\":[\(ids)]}]")))
+        d.system(.aiResult(request, .reply(.groups([AIGroupPlan(folder: "Reading", tabs: children.map(\.rawValue))]))))
         guard case .folder(let group)? = d.view.space.today.rows.first else { throw MissingGroup() }
         if pinned { d.user(.item(.move(group.id, to: .into(parent: d.view.space.pinned.root, index: 0)))) }
         return (d, group.id, children)

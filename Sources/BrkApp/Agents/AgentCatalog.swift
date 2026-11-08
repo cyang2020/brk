@@ -231,6 +231,7 @@ import Foundation
         case .text(let text): return text
         case .failed(let message): throw AgentRunError(message: message)
         case .unavailable: throw AgentRunError(message: AgentCopy.missing(kind))
+        case .reply: throw AgentRunError(message: AIRouteError.wrongShape)
         }
     }
 }

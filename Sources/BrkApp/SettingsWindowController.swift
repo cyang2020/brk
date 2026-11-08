@@ -23,6 +23,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     init(send: @escaping @MainActor (Command) -> Void) {
         self.send = send
         host = SettingsHost(dispatch: send)
+        host.storeKey = { service, key in AIKeyStore.shared.store(service, key) }
         window = NSWindow(contentRect: CGRect(origin: .zero, size: Metrics.settings.windowSize.value),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()

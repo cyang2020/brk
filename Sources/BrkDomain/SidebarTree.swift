@@ -88,6 +88,10 @@ struct Tab: Sendable, Equatable, Codable {
     /// User-chosen icon shown instead of the favicon (Arc: `SidebarCustomIcon`).
     var icon: CustomIcon?
     var muted: Bool = false
+    /// Name Tabs' short name and the site it was made for; shown when there is no `customTitle`.
+    var aiName: AITabName? = nil
+    /// The user renamed this tab by hand at some point: Name Tabs leaves it alone for good.
+    var userNamed: Bool = false
 
     init(url: URL?, title: String, customTitle: String? = nil, favicon: URL? = nil, pinnedURL: URL? = nil,
          lastActiveAt: Instant, icon: CustomIcon? = nil) {

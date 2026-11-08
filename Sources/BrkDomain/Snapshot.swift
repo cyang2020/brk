@@ -202,6 +202,8 @@ public struct SectionSnapshot: Sendable, Equatable, Codable {
     public var tidying: Bool = false
     /// Today only: Max's Tidy Tabs is on, however many tabs there are; Arc keeps the divider row taller (P45-a, P46-a).
     public var tidyEnabled: Bool = false
+    /// Today only, Suggest Tabs to Close on: how many duplicate or long-unvisited Today tabs the button beside Tidy lists.
+    public var cleanup: Int = 0
 }
 
 /// The link under the pointer as Arc's capsule shows it: the address without "http://".
@@ -301,6 +303,8 @@ public struct TabRow: Sendable, Equatable, Codable {
     public var peekFavicon: URL? = nil
     /// The row shows "Double-click to rename" under its title (dropped on the Space name strip, Q13-h).
     public var renameHint: Bool = false
+    /// Place New Tabs' one-click suggestion under the title ("Move to Recipes"); nil when there is none.
+    public var aiSuggestion: String? = nil
     /// An Instant Links row, not a tab (Arc's `instantLinks` sidebar item, P48-a): Max's flower and "Searching the
     /// web for you…", or "Oops, something went wrong." when nothing opened.
     public var instant: InstantRowState? = nil
@@ -723,6 +727,30 @@ public struct MaxSnapshot: Sendable, Equatable, Codable {
     public var askProvider: String? = nil
     /// What each agent said about itself, in `AIProviderKind.allCases` order; only asked for while the card is open.
     public var agents: [AIAgentStatus] = []
+    /// Which services have a key in the Keychain, and their last Test. Never the keys.
+    public var keys: [AIService: AIKeyStatus] = [:]
+    /// Where the basic features run now, and who answers decisions.
+    public var basicRoute: AIBasicRoute = .unavailable("")
+    public var decisionRoute: AIDecisionRoute = .textModel(.unavailable(""))
+
+    public init(settings: MaxSettings, detected: [AIProviderKind], active: AIProviderKind?, askProvider: String? = nil, agents: [AIAgentStatus] = []) {
+        self.settings = settings; self.detected = detected; self.active = active; self.askProvider = askProvider; self.agents = agents
+    }
+
+    private enum CodingKeys: String, CodingKey { case settings, detected, active, askProvider, agents, keys, basicRoute, decisionRoute }
+
+    /// A snapshot written before the basic layer's fields still reads.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        settings = try c.decode(MaxSettings.self, forKey: .settings)
+        detected = try c.decode([AIProviderKind].self, forKey: .detected)
+        active = try c.decodeIfPresent(AIProviderKind.self, forKey: .active)
+        askProvider = try c.decodeIfPresent(String.self, forKey: .askProvider)
+        agents = try c.decodeIfPresent([AIAgentStatus].self, forKey: .agents) ?? []
+        keys = try c.decodeIfPresent([AIService: AIKeyStatus].self, forKey: .keys) ?? [:]
+        basicRoute = try c.decodeIfPresent(AIBasicRoute.self, forKey: .basicRoute) ?? .unavailable("")
+        decisionRoute = try c.decodeIfPresent(AIDecisionRoute.self, forKey: .decisionRoute) ?? .textModel(.unavailable(""))
+    }
 }
 
 public struct ProfileDeletionRow: Sendable, Equatable, Codable {

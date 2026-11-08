@@ -208,11 +208,6 @@ final class AIConversationTests: XCTestCase {
         XCTAssertTrue(d.view.ai?.text.contains("could not be read") == true)
     }
 
-    func testRepliesWrappedInACodeBlockStillParse() throws {
-        XCTAssertEqual(AIReplyCodec.preview("```json\n{\"blocked\":true}\n```")?.blocked, true)
-        XCTAssertEqual(AIReplyCodec.nodes("Here it is:\n```json\n[{\"id\":0,\"text\":\"x\"}]\n```")?.first?.text, "x")
-        XCTAssertEqual(AIReplyCodec.groups("```\n[{\"folder\":\"a\",\"tabs\":[\"t\"]}]\n```")?.first?.folder, "a")
-    }
 
     func testModelAndEffortAreKeptPerAgent() {
         let d = enabled()

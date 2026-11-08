@@ -298,6 +298,8 @@ struct StoredDocV3: Codable {
         var lastActiveAt: Instant
         var icon: CustomIcon?
         var muted: Bool?
+        var aiName: AITabName?
+        var userNamed: Bool?
     }
     struct StoredFolder: Codable { var title: String, collapsed: Bool, icon: CustomIcon?; var group: Bool?; var liveRepository: String? }
     struct StoredSplit: Codable {
@@ -611,7 +613,7 @@ struct StoredDocV3: Codable {
 extension StoredDocV3.StoredTab {
     init(_ tab: Tab) {
         self.init(url: tab.url, title: tab.title, customTitle: tab.customTitle, favicon: tab.favicon, pinnedURL: tab.pinnedURL,
-                  lastActiveAt: tab.lastActiveAt, icon: tab.icon, muted: tab.muted)
+                  lastActiveAt: tab.lastActiveAt, icon: tab.icon, muted: tab.muted, aiName: tab.aiName, userNamed: tab.userNamed ? true : nil)
     }
 }
 
@@ -620,6 +622,8 @@ extension Tab {
         self.init(url: stored.url, title: stored.title, customTitle: stored.customTitle, favicon: stored.favicon,
                   pinnedURL: stored.pinnedURL, lastActiveAt: stored.lastActiveAt, icon: stored.icon)
         muted = stored.muted ?? false
+        aiName = stored.aiName
+        userNamed = stored.userNamed ?? false
     }
 }
 
@@ -798,31 +802,12 @@ extension StateCodec {
 }
 
 /// The local CLI wire format shares the codec boundary; it is unrelated to persisted browser state.
+/// What Brk sends a local tool about a page or a translation: plain JSON, built by Brk. Answers come back in the CLI's
+/// or the API's structured output, never as text to parse.
 public enum AIReplyCodec {
-    public static func groups(_ text: String) -> [AIGroupPlan]? {
-        guard let data = json(text) else { return nil }
-        return try? JSONDecoder().decode([AIGroupPlan].self, from: data)
-    }
-    public static func nodes(_ text: String) -> [AITextNode]? {
-        guard let data = json(text) else { return nil }
-        return try? JSONDecoder().decode([AITextNode].self, from: data)
-    }
-    /// The 5-Second Preview card's answer (`AIPreviewReply`), nil when it is not that JSON.
-    public static func preview(_ text: String) -> AIPreviewReply? {
-        guard let data = json(text) else { return nil }
-        return try? JSONDecoder().decode(AIPreviewReply.self, from: data)
-    }
-    /// The JSON in an agent's reply: real agents sometimes wrap it in a code block or a sentence, though asked not to.
-    private static func json(_ text: String) -> Data? {
-        var body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if body.hasPrefix("```") || body.contains("\n```") {
-            let lines = body.split(separator: "\n", omittingEmptySubsequences: false)
-            if let open = lines.firstIndex(where: { $0.hasPrefix("```") }),
-               let close = lines[(open + 1)...].firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "```" }) {
-                body = lines[(open + 1)..<close].joined(separator: "\n")
-            }
-        }
-        return body.data(using: .utf8)
+    /// A route's structured output in its schema's Swift shape; nil when it does not fit.
+    public static func decode<T: Decodable>(_ type: T.Type, from data: Data) -> T? {
+        try? JSONDecoder().decode(type, from: data)
     }
     public static func nodesJSON(_ nodes: [AITextNode]) throws -> String {
         String(decoding: try JSONEncoder().encode(nodes), as: UTF8.self)

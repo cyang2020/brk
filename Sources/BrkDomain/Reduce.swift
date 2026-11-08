@@ -167,7 +167,7 @@ struct Work {
             switch event {
             case .imageImported(let window, _, _, _, _, _), .shared(let window, _, _), .failed(let window, _, _): begin(window: window)
             }
-        case .boost, .currencyRates, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .aiConversation, .aiAgents, .aiAgentsWanted, .aiFolderChosen: begin(window: nil)
+        case .boost, .currencyRates, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .aiConversation, .aiAgents, .aiAgentsWanted, .aiFolderChosen, .aiKeys, .aiUsage, .aiBasicTick: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -237,6 +237,11 @@ struct Work {
             let max = state.doc.settings.max
             if max.provider != .off, max.tidyTabs || max.renamePinnedTabs || AIFeature.allCases.contains(where: max.enabled) { effects.append(.aiRefreshAgents) }
         case .aiFolderChosen(let window, let folder): aiFolderChosen(folder, in: window)
+        case .aiKeys(let keys, let local):
+            state.session.ai.keys = keys
+            state.session.ai.localDecisions = local
+        case .aiUsage(let key, let count): recordUsage(key, count)
+        case .aiBasicTick: aiBasicTick()
         }
     }
 

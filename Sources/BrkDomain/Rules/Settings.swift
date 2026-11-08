@@ -164,6 +164,33 @@ extension Work {
                 state.doc.settings.max.agentOptions = options.isEmpty ? nil : options
             case .refreshAgents:
                 effects.append(.aiRefreshAgents)
+            case .basicModel(let agent, let model):
+                var options = state.doc.settings.max.basicOptions ?? [:]
+                var chosen = options[agent] ?? AIAgentOptions.basicDefault(agent) ?? AIAgentOptions()
+                chosen.model = model ?? AIAgentOptions.basicDefault(agent)?.model
+                if let effort = chosen.effort, let listed = state.session.ai.agents[agent]?.models.first(where: { $0.id == chosen.model }), !listed.efforts.isEmpty, !listed.efforts.contains(effort) {
+                    chosen.effort = AIAgentOptions.basicDefault(agent)?.effort
+                }
+                options[agent] = chosen == AIAgentOptions.basicDefault(agent) ? nil : chosen
+                state.doc.settings.max.basicOptions = options.isEmpty ? nil : options
+            case .basicEffort(let agent, let effort):
+                var options = state.doc.settings.max.basicOptions ?? [:]
+                var chosen = options[agent] ?? AIAgentOptions.basicDefault(agent) ?? AIAgentOptions()
+                chosen.effort = effort
+                options[agent] = chosen == AIAgentOptions.basicDefault(agent) ? nil : chosen
+                state.doc.settings.max.basicOptions = options.isEmpty ? nil : options
+            case .account(let service, let way):
+                var accounts = state.doc.settings.max.accounts ?? [:]
+                accounts[service] = way == service.defaultWay ? nil : way
+                state.doc.settings.max.accounts = accounts.isEmpty ? nil : accounts
+            case .decisions(let choice):
+                state.doc.settings.max.decisions = choice == .automatic ? nil : choice
+            case .testKey(let service):
+                guard state.session.ai.keys[service]?.stored == true else { return }
+                state.session.ai.keys[service]?.test = .testing
+                effects.append(.aiTestKey(service))
+            case .resetUsage:
+                state.doc.settings.max.usage = nil
             }
         case .advanced(let setting):
             switch setting {

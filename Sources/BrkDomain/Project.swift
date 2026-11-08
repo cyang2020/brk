@@ -127,8 +127,14 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
         },
         engines: SearchEngine.builtIn.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
         shortcuts: shortcuts,
-        max: MaxSnapshot(settings: doc.settings.max, detected: state.session.detectedAI, active: active, askProvider: state.askProviderName,
-                         agents: AIProviderKind.allCases.map { state.session.ai.agents[$0] ?? AIAgentStatus(kind: $0, state: state.session.detectedAI.contains($0) ? .checking : .missing) }),
+        max: {
+            var max = MaxSnapshot(settings: doc.settings.max, detected: state.session.detectedAI, active: active, askProvider: state.askProviderName,
+                                  agents: AIProviderKind.allCases.map { state.session.ai.agents[$0] ?? AIAgentStatus(kind: $0, state: state.session.detectedAI.contains($0) ? .checking : .missing) })
+            max.keys = state.session.ai.keys
+            max.basicRoute = state.basicRoute
+            max.decisionRoute = AIDecisionRoute.resolve(doc.settings.max, keys: state.storedKeys, localReady: state.session.ai.localDecisions, basic: max.basicRoute)
+            return max
+        }(),
         advanced: doc.settings.advanced,
         tabPreferences: TabPreferenceSnapshot(includeFavoritesInNumbers: doc.tabPreferences.includeFavoritesInNumbers, hoverPreviews: doc.tabPreferences.hoverPreviews),
         littleArcShortcut: state.session.globalShortcut
@@ -174,6 +180,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         row.mediaPlayers = state.session.live[PageID(window: id, item: tab)]?.mediaPlayers ?? []
         row.mediaError = state.session.live[PageID(window: id, item: tab)]?.mediaError
         row.renameHint = session.renameHint == tab
+        row.aiSuggestion = state.session.ai.basic.suggestions[tab]?.title
         if tab == focusedPane, case .peek(_, let peeked)? = session.overlay, kind != .scratch {
             row.peeking = true
             row.peekFavicon = state.displayedTab(peeked, in: id)?.favicon
@@ -260,6 +267,10 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         spaceSnapshot.today.tidyEnabled = true
         spaceSnapshot.today.canTidy = todayTabs > 6
         spaceSnapshot.today.tidying = state.session.ai.tidying.contains(id)
+    }
+    if doc.kind == .standard, state.doc.settings.max.enabled(.tabCleanup) {
+        let found = AICleanup.candidates(tree: tree, space: space, now: ctx.now, threshold: state.doc.settings.profiles[space.profile]?.autoArchive ?? .default)
+        spaceSnapshot.today.cleanup = found.duplicates.count + found.stale.count
     }
     if space.pinnedCollapsed, let shown, tree.role(of: shown.id)?.kind == .pinned,
        let row = rows(under: space.pinnedRoot, .pinned).flatMap({ flattenRows($0) }).first(where: { $0.id == shown.id }) {

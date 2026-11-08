@@ -586,6 +586,8 @@ public final class AppStore {
             case .aiHover(let window, let url, let document): aiServices.hover(window, url: url, document: document)
             case .aiShowTranslation(let document, let translated): aiServices.showTranslation(document, translated: translated)
             case .aiRenameDownload(let id, let path, let name): aiServices.rename(id, path: path, filename: name)
+            case .aiBasicTimer(let milliseconds): aiServices.wake(after: milliseconds)
+            case .aiTestKey(let service): aiServices.basic.keys.test(service)
             case .fetchSuggestions(let window, let query, let url):
                 suggestions.fetch(window, query: query, url: url)
             case .searchLocal(let window, let request): localSearch.search(window, request)

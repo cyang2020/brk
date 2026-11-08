@@ -316,6 +316,8 @@ public enum PopupMenuRequest: Hashable, Sendable, Codable {
     /// The … of a card on the Library's Spaces page (and the card's right-click; P30-c): the space's menu as Arc shows
     /// it there, its New Folder and Live Folders acting on the card's space and Delete Space asking first.
     case spaceCard(SpaceID)
+    /// The cleanup button beside Tidy: the space's duplicate and long-unvisited Today tabs.
+    case todayCleanup(SpaceID)
 }
 
 /// What a Library Spaces card's New Folder and Live Folders rows do to the card's space (`SpaceCommand.inSpace`).
@@ -503,6 +505,15 @@ public enum MaxSetting: Hashable, Sendable, Codable {
     case agentEffort(AIProviderKind, String?)
     /// The Max pane appeared: ask each installed agent about itself.
     case refreshAgents
+    /// The basic features' model and effort for an agent (the agent card's Basic Features Model); nil is the default.
+    case basicModel(AIProviderKind, String?)
+    case basicEffort(AIProviderKind, String?)
+    /// A service's way to pay: the signed-in subscription or an API key.
+    case account(AIService, AIAccountWay)
+    case decisions(AIDecisionChoice)
+    /// The key's Test: one request that lists the models it can use.
+    case testKey(AIService)
+    case resetUsage
 }
 
 public enum AdvancedSetting: Hashable, Sendable, Codable {
@@ -652,6 +663,13 @@ public enum SystemEvent: Sendable, Equatable {
     case aiAgents([AIAgentStatus])
     /// The folder the user chose for a session with tools on (nil: the panel was cancelled).
     case aiFolderChosen(WindowID, String?)
+    /// Which services have a key in the Keychain, and what the last test of each said (never the keys); whether JevK5
+    /// on this Mac can answer decisions.
+    case aiKeys([AIService: AIKeyStatus], localDecisions: Bool)
+    /// A basic request's tokens and approximate cost.
+    case aiUsage(AIUsageKey, AIUsageCount)
+    /// The pause before naming tabs is over (`Effect.aiBasicTimer`).
+    case aiBasicTick
     // Later: case liveFolder(ItemID, [URL])   -- a live folder fetch finished.
 }
 

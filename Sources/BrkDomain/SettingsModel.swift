@@ -214,6 +214,16 @@ public struct MaxSettings: Hashable, Sendable, Codable {
     public var autoEnableFutureFeatures: Bool? = nil
     /// The model and effort the user picked per agent; nothing stored means the agent's own default.
     public var agentOptions: [AIProviderKind: AIAgentOptions]? = nil
+    /// The model and effort for the basic features (names, Tidy, previews, downloads, translation, decisions), per
+    /// agent, apart from the conversation's; nothing stored means `AIAgentOptions.basicDefault`.
+    public var basicOptions: [AIProviderKind: AIAgentOptions]? = nil
+    /// Per service, the signed-in subscription or an API key (docs/design/ai-native.md, 账号：订阅或 API key). Nothing
+    /// stored is `AIService.defaultWay`. The key itself is in the Keychain, never here.
+    public var accounts: [AIService: AIAccountWay]? = nil
+    /// Which backend answers decisions; nil is `.automatic`.
+    public var decisions: AIDecisionChoice? = nil
+    /// This month's use of the basic features, per feature and route. Counts only; no prompt text.
+    public var usage: AIUsageLedger? = nil
 
     public static let `default` = MaxSettings(provider: .auto, renamePinnedTabs: false, tidyTabs: false)
 
@@ -230,6 +240,117 @@ public struct AIAgentOptions: Hashable, Sendable, Codable {
     public var model: String?
     public var effort: String?
     public init(model: String? = nil, effort: String? = nil) { self.model = model; self.effort = effort }
+
+    /// The small models T3 Code names threads with: one-shot work does not need the conversation's model. Only Claude
+    /// and Codex return answers in a schema; the other agents have no basic channel.
+    public static func basicDefault(_ kind: AIProviderKind) -> AIAgentOptions? {
+        switch kind {
+        case .claude: AIAgentOptions(model: "claude-haiku-5-5")
+        case .codex: AIAgentOptions(model: "gpt-6-luna", effort: "low")
+        case .gemini, .cursor, .opencode: nil
+        }
+    }
+}
+
+/// A service the user can pay with a subscription (a signed-in CLI) or an API key. TypeSafe has only keys and answers
+/// decisions only.
+public enum AIService: String, Hashable, Sendable, Codable, CaseIterable {
+    case anthropic, openai, typesafe
+    public var displayName: String {
+        switch self {
+        case .anthropic: "Anthropic"
+        case .openai: "OpenAI"
+        case .typesafe: "TypeSafe"
+        }
+    }
+    /// The agent whose subscription this service is; nil for TypeSafe.
+    public var agent: AIProviderKind? {
+        switch self {
+        case .anthropic: .claude
+        case .openai: .codex
+        case .typesafe: nil
+        }
+    }
+    public static func of(_ kind: AIProviderKind) -> AIService? {
+        switch kind {
+        case .claude: .anthropic
+        case .codex: .openai
+        case .gemini, .cursor, .opencode: nil
+        }
+    }
+    public var defaultWay: AIAccountWay { self == .typesafe ? .apiKey : .subscription }
+}
+
+public enum AIAccountWay: String, Hashable, Sendable, Codable, CaseIterable { case subscription, apiKey }
+
+/// Whether a service has a key in the Keychain and what its last Test said. The key is never part of this.
+public struct AIKeyStatus: Hashable, Sendable, Codable {
+    public var stored: Bool
+    public var test: AIKeyTest?
+    public init(stored: Bool, test: AIKeyTest? = nil) { self.stored = stored; self.test = test }
+}
+public enum AIKeyTest: Hashable, Sendable, Codable {
+    case testing
+    /// The key works; the models it may use, as the service listed them.
+    case works(models: [String])
+    case failed(String)
+}
+
+/// Which backend answers decisions (choose, score, yes/no). Automatic is JevK5 on this Mac when it is ready, else the
+/// basic-features text model (no probabilities, so its answers only suggest).
+public enum AIDecisionChoice: String, Hashable, Sendable, Codable, CaseIterable {
+    case automatic
+    /// OpenAI's Decisions API with the OpenAI key.
+    case openai
+    /// TypeSafe's Jev with the TypeSafe key.
+    case jev
+    /// Always the basic-features text model.
+    case textModel
+}
+
+/// What a basic request cost, as its service reported it.
+public struct AIUsageCount: Hashable, Sendable, Codable {
+    public var requests: Int
+    public var inputTokens: Int
+    public var outputTokens: Int
+    /// Input tokens read from the service's cache, included in `inputTokens`.
+    public var cachedTokens: Int
+    /// Approximate dollars, for API-key use; nil when the price is not known.
+    public var cost: Double?
+    public init(requests: Int = 1, inputTokens: Int = 0, outputTokens: Int = 0, cachedTokens: Int = 0, cost: Double? = nil) {
+        self.requests = requests; self.inputTokens = inputTokens; self.outputTokens = outputTokens; self.cachedTokens = cachedTokens; self.cost = cost
+    }
+    public static func + (a: AIUsageCount, b: AIUsageCount) -> AIUsageCount {
+        AIUsageCount(requests: a.requests + b.requests, inputTokens: a.inputTokens + b.inputTokens, outputTokens: a.outputTokens + b.outputTokens,
+                     cachedTokens: a.cachedTokens + b.cachedTokens, cost: a.cost == nil && b.cost == nil ? nil : (a.cost ?? 0) + (b.cost ?? 0))
+    }
+}
+
+/// One line of the usage table: a feature on one route ("Name Tabs", Anthropic, API key).
+public struct AIUsageKey: Hashable, Sendable, Codable, Comparable {
+    public var feature: String
+    public var service: AIService
+    public var way: AIAccountWay
+    public init(feature: String, service: AIService, way: AIAccountWay) { self.feature = feature; self.service = service; self.way = way }
+    public static func < (a: AIUsageKey, b: AIUsageKey) -> Bool {
+        (a.feature, a.service.rawValue, a.way.rawValue) < (b.feature, b.service.rawValue, b.way.rawValue)
+    }
+}
+
+/// The current month's counts ("2026-11"); a new month starts the table again.
+public struct AIUsageLedger: Hashable, Sendable, Codable {
+    public var month: String
+    public var rows: [AIUsageKey: AIUsageCount]
+    public init(month: String, rows: [AIUsageKey: AIUsageCount] = [:]) { self.month = month; self.rows = rows }
+}
+
+extension MaxSettings {
+    public func way(_ service: AIService) -> AIAccountWay { accounts?[service] ?? service.defaultWay }
+
+    /// The basic features' model and effort for an agent: the user's pick, else the small default.
+    public func basic(_ kind: AIProviderKind) -> AIAgentOptions? {
+        basicOptions?[kind] ?? AIAgentOptions.basicDefault(kind)
+    }
 }
 
 /// Which local agent answers AI requests. `.auto` takes the first of `AIProviderKind.allCases` that is installed and,
@@ -418,6 +539,22 @@ public enum AITask: Hashable, Sendable, Codable {
     case instant(String)
     case browse(String, [AIPageContent])
     case translate(target: String, content: AIPageContent)
+    /// Short names for tabs (Brk's Name Tabs), several in one request; the outcome is `AIReply.tabNames`.
+    case nameTabs([AITab])
+    /// A name for a folder or group from the tabs in it; the outcome is `AIReply.text`.
+    case nameFolder(ItemID, tabs: [AITab])
+    /// The command bar's `translate` prefix: the text in `target`; the outcome is `AIReply.text`.
+    case translateText(String, target: String)
+    /// A decision (`DecisionRequest`) for a feature; the outcome is `AIReply.decision`.
+    case decide(DecisionRequest, feature: AIFeature)
+
+    /// One-shot work for the basic-features model, answered in a schema. The others are conversations.
+    public var isBasic: Bool {
+        switch self {
+        case .ask, .pageQuestion, .browse: false
+        default: true
+        }
+    }
 }
 
 public struct AITab: Hashable, Sendable, Codable {
@@ -432,7 +569,10 @@ public struct AITab: Hashable, Sendable, Codable {
 }
 
 public enum AIOutcome: Hashable, Sendable, Codable {
+    /// A conversation's answer.
     case text(String)
+    /// A basic task's answer, already in its schema's shape.
+    case reply(AIReply)
     /// No provider: `.off`, or `.auto` found neither `claude` nor `codex` on PATH.
     case unavailable
     case failed(String)
