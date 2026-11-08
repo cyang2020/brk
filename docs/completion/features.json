@@ -14426,6 +14426,415 @@
         "The first real search asked for the Desktop folder (verify/visual-pairs/run-20261103/cmdt/shots/permission-prompt-desktop.png). Changed to the home scope with nothing touching a file, not yet checked on the real home folder; that run can show the question again, so it waits for the user's yes. Until then ordinary typing does not ask the index on the real path; only the file prefix does."
       ],
       "reference_tools": []
+    },
+    {
+      "id": "B013",
+      "section": "AI basic layer",
+      "feature": "Basic-features channel",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "One-shot AI tasks (names, Tidy, previews, download names, translation) answered in a JSON schema by a separate small model: Claude Code --json-schema or Codex app-server outputSchema on the subscription, or the Anthropic or OpenAI API with structured output on a key.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "No prompt-only JSON: every one-shot task reads structured_output or the API's schema-bound answer; the small model is chosen apart from the conversation model.",
+      "owner": "ai-native-a-basic-layer",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-w1/run-native.py <name> --only <ids>",
+          "artifact": "verify/ai-native/merge-gate-w1/fixture-1/REPORT.md",
+          "scope": "19 earlier AI scenarios on the structured path, AIKeysUI, sidebar and tab-tools scenarios: pass in fixture-1; AIAgent* 13 of 13 in fixture-2."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_BASIC_AGENT=claude ... --only AIRealUIBasic-claude",
+          "artifact": "verify/ai-native/merge-gate-w1/real-basic-claude/shots/real-basic-claude.txt",
+          "scope": "Real Claude (Haiku 5.5), real clicks and keys from a new user's state; slice A also passed it on real Codex (gpt-6-luna), verify/ai-native/a-basic-layer/real-basic-codex-2."
+        }
+      ]
+    },
+    {
+      "id": "B014",
+      "section": "AI basic layer",
+      "feature": "Accounts: subscription or API key",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "Per service (Anthropic, OpenAI; TypeSafe for decisions) the user picks the signed-in CLI or an API key kept in the Keychain; Test lists the key's models; monthly usage per feature; agent sessions run on the key only inside the processes Brk starts.",
+      "historical_status": "planned",
+      "status": "implemented",
+      "acceptance": "Keys only in the Keychain, never in state.json or logs; the CLI's own login is never touched.",
+      "owner": "ai-native-a-basic-layer",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-w1/run-native.py <name> --only <ids>",
+          "artifact": "verify/ai-native/a-basic-layer/keys-ui-2/REPORT.md",
+          "scope": "Through the real Settings window against a local stand-in in Anthropic's documented format; no real key was available, so no paid turn on any service has run."
+        }
+      ]
+    },
+    {
+      "id": "B015",
+      "section": "AI basic layer",
+      "feature": "Name Tabs",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "Every Today and Pinned tab gets a short AI name after it loads and again on another site; a title the user typed is never touched; batched, at most two requests at a time.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Names arrive for new tabs; a hand title survives; turning the switch off removes AI names.",
+      "owner": "ai-native-a-basic-layer",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_BASIC_AGENT=claude ... --only AIRealUIBasic-claude",
+          "artifact": "verify/ai-native/merge-gate-w1/real-basic-claude/shots/real-basic-claude.txt",
+          "scope": "Real Claude (Haiku 5.5), real clicks and keys from a new user's state; slice A also passed it on real Codex (gpt-6-luna), verify/ai-native/a-basic-layer/real-basic-codex-2."
+        }
+      ]
+    },
+    {
+      "id": "B016",
+      "section": "AI basic layer",
+      "feature": "Group and folder names",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "Tidy groups Today in one small-model call and names the groups; Name with AI on a folder's right-click menu.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Groups and names from the model, with undo.",
+      "owner": "ai-native-a-basic-layer",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_BASIC_AGENT=claude ... --only AIRealUIBasic-claude",
+          "artifact": "verify/ai-native/merge-gate-w1/real-basic-claude/shots/real-basic-claude.txt",
+          "scope": "Real Claude (Haiku 5.5), real clicks and keys from a new user's state; slice A also passed it on real Codex (gpt-6-luna), verify/ai-native/a-basic-layer/real-basic-codex-2."
+        }
+      ]
+    },
+    {
+      "id": "B017",
+      "section": "AI basic layer",
+      "feature": "Place New Tabs",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "A new tab gets a one-line suggestion of a group in its Space (another Space is only suggested); acts with undo only on a sure probability from a decision backend.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "The suggestion names its group; the click moves the tab.",
+      "owner": "ai-native-a-basic-layer",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_BASIC_AGENT=claude ... --only AIRealUIBasic-claude",
+          "artifact": "verify/ai-native/merge-gate-w1/real-basic-claude/shots/real-basic-claude.txt",
+          "scope": "Real Claude (Haiku 5.5), real clicks and keys from a new user's state; slice A also passed it on real Codex (gpt-6-luna), verify/ai-native/a-basic-layer/real-basic-codex-2."
+        }
+      ]
+    },
+    {
+      "id": "B018",
+      "section": "AI basic layer",
+      "feature": "Suggest Tabs to Close",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "A cleanup button beside Tidy lists duplicates (address rule, then embeddings and a yes/no) and tabs not shown lately, with Close or Archive.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Nothing closes on its own.",
+      "owner": "ai-native-a-basic-layer",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_BASIC_AGENT=claude ... --only AIRealUIBasic-claude",
+          "artifact": "verify/ai-native/merge-gate-w1/real-basic-claude/shots/real-basic-claude.txt",
+          "scope": "Real Claude (Haiku 5.5), real clicks and keys from a new user's state; slice A also passed it on real Codex (gpt-6-luna), verify/ai-native/a-basic-layer/real-basic-codex-2."
+        }
+      ]
+    },
+    {
+      "id": "B019",
+      "section": "AI basic layer",
+      "feature": "Decisions",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "Jev's request shape (choice, score, yes/no with probabilities) answered by the small text model (suggest only), JevK5 on this Mac, OpenAI Decisions or TypeSafe Jev with a key.",
+      "historical_status": "planned",
+      "status": "implemented",
+      "acceptance": "No probability never acts; hosted backends untested without keys.",
+      "owner": "ai-native-a-basic-layer",
+      "required_checks": [
+        "unit"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        }
+      ]
+    },
+    {
+      "id": "B020",
+      "section": "AI local models",
+      "feature": "On This Mac",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "Optional EmbeddingGemma 2 and JevK5 downloads with consent, progress, checksum and Remove; each model in a llama.cpp helper process on a private socket that ends with Brk.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Every feature works without them.",
+      "owner": "ai-native-b-local-models",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock -- python3 -I verify/ai-native/merge-gate-w1/probe.py",
+          "artifact": "verify/ai-native/merge-gate-w1/probe-out/log.txt",
+          "scope": "Settings → Max → On This Mac on a real launch: download with consent, checksum, index, Clear History, relaunch, SIGKILL leaves no helper, Remove."
+        }
+      ]
+    },
+    {
+      "id": "B021",
+      "section": "AI local models",
+      "feature": "Search by meaning index",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "Tabs, archive and history indexed on this Mac (ids and numbers only), cleared with history and with the model.",
+      "historical_status": "planned",
+      "status": "implemented",
+      "acceptance": "The command-bar row for it is not wired yet.",
+      "owner": "ai-native-b-local-models",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock -- python3 -I verify/ai-native/merge-gate-w1/probe.py",
+          "artifact": "verify/ai-native/merge-gate-w1/probe-out/log.txt",
+          "scope": "Settings → Max → On This Mac on a real launch: download with consent, checksum, index, Clear History, relaunch, SIGKILL leaves no helper, Remove."
+        }
+      ]
+    },
+    {
+      "id": "B022",
+      "section": "AI agent",
+      "feature": "Brk's tab tools in agent sessions",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "Nine brk_tab_* MCP tools (list, search, read, open, focus, close, move, group, split) over a per-conversation socket and token; system prompt rules in T3's style; answers name tabs by link.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Reads need no approval; close and move ask once per conversation; only the conversation's profile.",
+      "owner": "ai-native-c-agent-tools",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-w1/run-native.py <name> --only <ids>",
+          "artifact": "verify/ai-native/merge-gate-w1/fixture-1/REPORT.md",
+          "scope": "19 earlier AI scenarios on the structured path, AIKeysUI, sidebar and tab-tools scenarios: pass in fixture-1; AIAgent* 13 of 13 in fixture-2."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_TABS_AGENT=claude BRK_E2E_REAL_TABS_MODEL=haiku ... --only AIRealTabs-claude",
+          "artifact": "verify/ai-native/merge-gate-w1/real-tabs-claude/shots/real-tabs-claude.txt",
+          "scope": "Real Claude (Haiku 5.5), real clicks, drags and keys; slice C also passed cheapest and link on real Codex (verify/ai-native/c-agent-tools/codex-final)."
+        }
+      ]
+    },
+    {
+      "id": "B023",
+      "section": "AI agent",
+      "feature": "Giving tabs to the agent",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "Ask AI on tab, folder, selection and Space menus; drops of tabs, folders and Spaces onto the panel; @ in the input; chips with ×.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Real drags and keys put chips in the input; the agent reads them through the tools.",
+      "owner": "ai-native-c-agent-tools",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_TABS_AGENT=claude BRK_E2E_REAL_TABS_MODEL=haiku ... --only AIRealTabs-claude",
+          "artifact": "verify/ai-native/merge-gate-w1/real-tabs-claude/shots/real-tabs-claude.txt",
+          "scope": "Real Claude (Haiku 5.5), real clicks, drags and keys; slice C also passed cheapest and link on real Codex (verify/ai-native/c-agent-tools/codex-final)."
+        }
+      ]
+    },
+    {
+      "id": "B024",
+      "section": "AI agent",
+      "feature": "Safety for tab sessions",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "Once page text is in, every non-Brk tool asks each time and the user's allow rules do not apply (skills still load); a new address asks before it opens; a flagged page makes every tool ask.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "The Feishu example asks before lark-cli creates a document; the injection page is flagged and its request ignored.",
+      "owner": "ai-native-c-agent-tools",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_TABS_AGENT=claude BRK_E2E_REAL_TABS_MODEL=haiku ... --only AIRealTabs-claude",
+          "artifact": "verify/ai-native/merge-gate-w1/real-tabs-claude/shots/real-tabs-claude.txt",
+          "scope": "Real Claude (Haiku 5.5), real clicks, drags and keys; slice C also passed cheapest and link on real Codex (verify/ai-native/c-agent-tools/codex-final)."
+        }
+      ]
+    },
+    {
+      "id": "B025",
+      "section": "AI agent",
+      "feature": "Answers with tab links and tables",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "Markdown tables render as tables; tab links in answers show their tab; answers follow the language of the user's message.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "A Chinese question gets a Chinese answer with working tab links.",
+      "owner": "ai-native-c-agent-tools",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-w1/README.md",
+          "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_TABS_AGENT=claude BRK_E2E_REAL_TABS_MODEL=haiku ... --only AIRealTabs-claude",
+          "artifact": "verify/ai-native/merge-gate-w1/real-tabs-claude/shots/real-tabs-claude.txt",
+          "scope": "Real Claude (Haiku 5.5), real clicks, drags and keys; slice C also passed cheapest and link on real Codex (verify/ai-native/c-agent-tools/codex-final)."
+        }
+      ]
     }
   ]
 }
