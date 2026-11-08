@@ -20,6 +20,9 @@ public struct Suggestion: Equatable, Sendable {
         case ask
         /// Brk's own, beyond Arc (`LocalSources`): a file by name, an app, an emoji, one form of a colour.
         case file, app, emoji, color
+        /// Brk's own: a tab, an archived tab or a visited page the local search model found by meaning
+        /// (`CommandBarSnapshot.meaning`).
+        case meaning
     }
     public let kind: Kind
     public let title: String
@@ -94,6 +97,8 @@ public enum Suggest {
     /// mode or a bar that fills an empty pane: a quick answer (`QuickAnswers`) leads when the text can only be that
     /// question, else sits right under the typed row so Return still searches; apps and files take the last two rows at
     /// most (never the top hit, never the typed row) while `bar.local` answers exactly this text, in `createsTab` bars only.
+    /// Pages the local search model found by meaning (`bar.meaning`, for exactly this text) take up to two of the last
+    /// rows before the files and apps, never one another row already shows.
     /// A `prefix` (`QuickPrefixes`) has the whole list to itself, like site search: the user asked for it with Tab.
     public static func rank(query: String, bar: CommandBarSnapshot, appName: String, siteSearch: SearchEngineCandidate? = nil, prefix: QuickPrefix? = nil,
                             resolve: ((String) -> URL?)? = nil, completing: String? = nil,
@@ -210,7 +215,7 @@ public enum Suggest {
         if !bar.fillsPane, let color = QuickColors.parse(text) {
             rows.insert(contentsOf: colorRows(color), at: QuickColors.leads(text) ? 0 : rows.firstIndex { $0.kind == .openTyped }.map { $0 + 1 } ?? rows.count)
         }
-        rows = withLocalRows(rows, text, isAddress: isAddress, bar: bar, limit: limit)
+        rows = withLastRows(rows, meaningRows(text, isAddress: isAddress, shown: rows, bar: bar) + localRows(text, isAddress: isAddress, bar: bar), limit: limit)
         // An exact phrase like "left half": its row low down. Nothing else about the window reaches ordinary queries.
         if bar.createsTab, let placement = WindowSnap.exact(text) { rows = withLastRows(rows, [placementRow(placement)], limit: limit) }
         return Array(rows.prefix(limit))
@@ -382,12 +387,37 @@ public enum Suggest {
         Suggestion(kind: .action, title: title, subtitle: subtitle, symbol: "sparkles", favicon: nil, hint: "Return", command: command)
     }
 
-    /// Apps, then files, in the last places: they replace what would be cut last, and the typed row and anything above
-    /// it stay.
-    private static func withLocalRows(_ rows: [Suggestion], _ text: String, isAddress: Bool, bar: CommandBarSnapshot, limit: Int) -> [Suggestion] {
-        guard bar.createsTab, !isAddress, text.count >= LocalSources.inlineMinLength, let local = bar.local, local.query == text, local.scope == .filesAndApps else { return rows }
-        let found = Array((local.apps.map(appRow) + local.files.map(fileRow)).prefix(inlineLocalCap))
-        return withLastRows(rows, found, limit: limit)
+    /// Apps, then files, for the last places.
+    private static func localRows(_ text: String, isAddress: Bool, bar: CommandBarSnapshot) -> [Suggestion] {
+        guard bar.createsTab, !isAddress, text.count >= LocalSources.inlineMinLength, let local = bar.local, local.query == text, local.scope == .filesAndApps else { return [] }
+        return Array((local.apps.map(appRow) + local.files.map(fileRow)).prefix(inlineLocalCap))
+    }
+
+    /// The most rows found by meaning among the others.
+    private static let meaningCap = 2
+
+    /// The search model's pages for exactly this text, best first, without the focused tab and without a page another
+    /// row already offers. An open tab switches to it like Switch to Tab; an archived tab or a visit opens its address.
+    private static func meaningRows(_ text: String, isAddress: Bool, shown: [Suggestion], bar: CommandBarSnapshot) -> [Suggestion] {
+        guard !isAddress, !bar.fillsPane, let meaning = bar.meaning, meaning.text == text else { return [] }
+        var taken = Set<String>()
+        for row in shown {
+            switch row.command {
+            case .tab(.focus(let id)): if let tab = bar.tabs.first(where: { $0.tab == id }) { taken.insert(tab.url.absoluteString) }
+            case .commandBar(.submit(let address)): taken.insert(address)
+            default: break
+            }
+        }
+        if let focused = bar.tabs.first(where: \.isFocused) { taken.insert(focused.url.absoluteString) }
+        var rows: [Suggestion] = []
+        for found in meaning.rows where rows.count < meaningCap && taken.insert(found.url.absoluteString).inserted {
+            let open = found.tab.flatMap { id in bar.tabs.first { $0.tab == id } }
+            let title = found.title.isEmpty ? displayURL(found.url) : found.title
+            rows.append(Suggestion(kind: .meaning, title: title, subtitle: nil, symbol: "sparkle.magnifyingglass", favicon: nil,
+                                   hint: open != nil ? OverlayCopy.switchToTab : found.place == .archive ? OverlayCopy.archived : nil,
+                                   command: open.map { .tab(.focus($0.tab)) } ?? .commandBar(.submit(found.url.absoluteString))))
+        }
+        return rows
     }
 
     /// `found` in the last places: they replace what would be cut last, and the typed row and anything above it stay.
@@ -692,6 +722,7 @@ extension OverlayCopy {
     static let copyEmoji = "Copy Emoji"
     static let copyColor = "Copy Color"
     static let openDictionary = "Open Dictionary"
+    static let archived = "Archived"
     static func noDefinition(_ word: String) -> String { "No definition for \(word)" }
     static func translatePage(_ target: String) -> String { "Translate this page to \(target)" }
     static func translating(_ target: String) -> String { "Translating to \(target)…" }

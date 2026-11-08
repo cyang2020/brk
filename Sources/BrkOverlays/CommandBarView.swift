@@ -780,7 +780,8 @@ final class ResultRowView: NSView {
         self.suggestion = suggestion
         self.captions = captions
         // The Ask row lays out like Switch to Tab: the caption and the arrow square (P49).
-        isSwitch = suggestion.kind == .switchToTab || suggestion.kind == .ask
+        // So does a tab found by meaning: it switches to that tab.
+        isSwitch = suggestion.kind == .switchToTab || suggestion.kind == .ask || (suggestion.kind == .meaning && suggestion.hint == OverlayCopy.switchToTab)
         let symbol = suggestion.kind == .ask ? ArcGlyphs.flower(size: OverlayMetrics.commandBar.iconSize.value, lineWidth: 1.2)
             : NSImage(systemSymbolName: suggestion.symbol ?? "globe", accessibilityDescription: nil)
         icon.symbolConfiguration = .init(pointSize: OverlayMetrics.commandBar.symbolPointSize.value, weight: .medium)

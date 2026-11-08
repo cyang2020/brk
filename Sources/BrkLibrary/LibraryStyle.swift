@@ -422,6 +422,8 @@ public enum LibraryCopy {
     static let historyEmpty = "Your browsing history appears here"
     static let otherDevicesEmpty = "Tabs from other devices appear here. Brk does not sync tabs between devices."
     static let noHistoryResults = "No search results found"
+    /// The last card of a search, the visits the local search model found that the words did not (Brk's own).
+    static let foundByMeaning = "Found by meaning"
     static let moreFromSite = "More from this site"
     static let clearHistoryConfirm = "Clear this profile's browsing history?"
     static let clear = "Clear"

@@ -177,7 +177,7 @@ public final class WindowRootView: NSView {
         content.isHidden = snapshot.dialog == .newSpace
         let historyCard = frames.cards.first { if case .history = $0.content { true } else { false } }
         let historyPage: PageID? = if case .history(let page)? = historyCard?.content { page } else { nil }
-        history.render(snapshot.history, page: historyPage, in: historyCard?.rect, scheme: palette.scheme, now: snapshot.now)
+        history.render(snapshot.history, page: historyPage, in: historyCard?.rect, scheme: palette.scheme, now: snapshot.now, meaning: snapshot.historyMeaning)
         history.layer?.cornerRadius = historyCard?.cornerRadius ?? 0
         // One board at a time: the focused card's Easel, else the first card showing one.
         let easelCards = frames.cards.filter { if case .easel = $0.content { true } else { false } }

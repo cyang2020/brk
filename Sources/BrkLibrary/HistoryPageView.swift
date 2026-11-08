@@ -13,6 +13,9 @@ import BrkUIKit
 /// visit opens it in a new tab; ⋮ offers More from this site and Remove from history; checked visits can be deleted
 /// together. Delete browsing data asks inline, then clears this profile's history (`.library(.clearHistory)`).
 ///
+/// Brk's own addition: with the local search model ready, the search text is also searched by meaning
+/// (`.library(.historySearch)`), and the visits it finds that the words did not are a last card, "Found by meaning".
+///
 /// Public surface (what BrkContent's root may call): `init(dispatch:)`, `render`.
 @MainActor
 public final class HistoryPageView: NSView {
@@ -35,6 +38,7 @@ public final class HistoryPageView: NSView {
     let confirmCancel = NSButton(title: LibraryCopy.cancel, target: nil, action: nil)
     let confirmClear = NSButton(title: LibraryCopy.clear, target: nil, action: nil)
     private var rows: [HistoryRow] = []
+    private var meaning: HistoryMeaning?
     private var page: PageID?
     private var scheme: Scheme?
     private var now = Instant(milliseconds: 0)
@@ -55,7 +59,11 @@ public final class HistoryPageView: NSView {
         logo.image = LibraryIcon.symbol("clock.arrow.circlepath", size: LibraryDraw.history.logoSize.value - 2, weight: .medium)
         logo.imageScaling = .scaleProportionallyUpOrDown
         heading.font = .systemFont(ofSize: LibraryDraw.history.titleFont.value)
-        searchField.onChange = { [weak self] in self?.rebuild() }
+        searchField.onChange = { [weak self] in
+            guard let self else { return }
+            rebuild()
+            dispatch(.library(.historySearch(query)))
+        }
         for (index, item) in [(LibraryCopy.brkHistory, "clock.arrow.circlepath", false), (LibraryCopy.otherDevices, "laptopcomputer.and.iphone", false),
                               (LibraryCopy.deleteBrowsingData, "trash", true)].enumerated() {
             let nav = HistoryNavItem(title: item.0, symbol: item.1, external: item.2)
@@ -96,7 +104,7 @@ public final class HistoryPageView: NSView {
 
     /// Shows `rows` (nil hides the page) in `frame`, the History card's rect in the root's coordinates. A new page
     /// clears the search, the checks and the question; the same page keeps them and the scroll position.
-    public func render(_ rows: [HistoryRow]?, page: PageID?, in frame: CGRect?, scheme: Scheme, now: Instant) {
+    public func render(_ rows: [HistoryRow]?, page: PageID?, in frame: CGRect?, scheme: Scheme, now: Instant, meaning: HistoryMeaning? = nil) {
         guard let rows, let page, let frame else {
             isHidden = true
             self.page = nil
@@ -109,9 +117,10 @@ public final class HistoryPageView: NSView {
             setConfirming(false)
             showingOtherDevices = false
         }
-        let changed = reopened || rows != self.rows || scheme != self.scheme || isHidden
+        let changed = reopened || rows != self.rows || scheme != self.scheme || isHidden || meaning != self.meaning
             || calendar.startOfDay(for: LibraryDays.date(now)) != calendar.startOfDay(for: LibraryDays.date(self.now))
         self.rows = rows
+        self.meaning = meaning
         self.page = page
         self.now = now
         if self.frame != frame { self.frame = frame }
@@ -228,14 +237,28 @@ public final class HistoryPageView: NSView {
         }
     }
 
+    /// The search model's visits for exactly the search text that the words did not find, best first, each address once
+    /// at its latest visit; indices into the projected list like the day cards'.
+    func meaningVisits(excluding listed: Set<URL>) -> [(offset: Int, element: HistoryRow)] {
+        guard !query.isEmpty, let meaning, meaning.text == query else { return [] }
+        var seen = listed
+        return meaning.rows.compactMap { found in
+            guard seen.insert(found.url).inserted, let index = rows.firstIndex(where: { $0.id != nil && $0.id == found.id }) ?? rows.firstIndex(where: { $0.url == found.url }) else { return nil }
+            return (index, rows[index])
+        }
+    }
+
     func rebuild() {
         list.subviews.forEach { $0.removeFromSuperview() }
         for (index, nav) in navItems.enumerated() {
             nav.render(selected: index == (showingOtherDevices ? 1 : 0), colors: colors)
         }
         if !showingOtherDevices {
-            for day in days() {
+            let days = days()
+            let found = meaningVisits(excluding: Set(days.flatMap { $0.visits.map(\.element.url) }))
+            for day in days + (found.isEmpty ? [] : [(title: LibraryCopy.foundByMeaning, visits: found)]) {
                 list.addSubview(HistoryDayCard(title: day.title, visits: day.visits, selected: selected, colors: colors, calendar: calendar,
+                                               breaks: day.title != LibraryCopy.foundByMeaning,
                                                open: { [weak self] url in self?.dispatch(.commandBar(.submit(url.absoluteString))) },
                                                toggle: { [weak self] index in self?.toggle(index) },
                                                remove: { [weak self] row in self?.removals(row).forEach { self?.dispatch($0) } },
@@ -481,7 +504,8 @@ final class HistoryDayCard: NSView {
     let height: Double
     private var placed: [(NSView, Double, Double)] = []
 
-    init(title: String, visits: [(offset: Int, element: HistoryRow)], selected: Set<Int>, colors: HistoryColors, calendar: Calendar,
+    /// `breaks` false: visits in another order than time (the matches by meaning), so no break lines.
+    init(title: String, visits: [(offset: Int, element: HistoryRow)], selected: Set<Int>, colors: HistoryColors, calendar: Calendar, breaks: Bool = true,
          open: @escaping (URL) -> Void, toggle: @escaping (Int) -> Void, remove: @escaping (HistoryRow) -> Void, search: @escaping (String) -> Void) {
         let h = LibraryDraw.history
         var y = h.dayHeaderHeight.value
@@ -493,7 +517,7 @@ final class HistoryDayCard: NSView {
         var previous: Instant?
         let gap = Int64(h.gapMinutes.value * 60_000)
         for visit in visits {
-            if let previous, previous.milliseconds - visit.element.visitedAt.milliseconds > gap {
+            if breaks, let previous, previous.milliseconds - visit.element.visitedAt.milliseconds > gap {
                 let line = HistoryGapView(colors: colors)
                 placed.append((line, y, h.gapHeight.value))
                 y += h.gapHeight.value
