@@ -664,57 +664,107 @@ final class QuickSourceRowsTests: XCTestCase {
     }
 
     /// Each prefix is told apart at a glance, and its name stays legible on its colour.
-    func testEveryPrefixHasItsOwnColourWithLegibleWhiteText() {
-        func channel(_ value: Double) -> Double { value <= 0.03928 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4) }
+    /// Each prefix is told apart at a glance, its colour lies lightly over the card, and its word reads at 4.5:1 on it in
+    /// light and dark bars.
+    func testEveryPrefixHasItsOwnColourAndItsWordReads() {
         for prefix in QuickPrefixes.all {
-            let luminance = 0.2126 * channel(Double(prefix.tint.red)) + 0.7152 * channel(Double(prefix.tint.green)) + 0.0722 * channel(Double(prefix.tint.blue))
-            XCTAssertGreaterThanOrEqual(1.05 / (luminance + 0.05), 4.5, prefix.title)
+            for dark in [false, true] {
+                let card = dark ? QuickChipColors.darkCard : QuickChipColors.lightCard
+                let fill = QuickChipColors.mix(card, prefix.tint, dark ? QuickChipColors.fillAlpha.dark : QuickChipColors.fillAlpha.light)
+                let text = QuickChipColors.text(prefix.tint, on: fill, dark: dark)
+                XCTAssertGreaterThanOrEqual(QuickChipColors.contrast(text, fill), 4.5, "\(prefix.title) dark: \(dark)")
+            }
         }
         XCTAssertEqual(Set(QuickPrefixes.all.map(\.tint)).count, QuickPrefixes.all.count)
     }
 
-    func testAPrefixsPillWearsItsColourAndAnEnginesStaysAsItWas() {
+    private func srgb(_ color: CGColor?) -> [CGFloat] {
+        color?.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil)?.components ?? []
+    }
+
+    func testAPrefixsPillWearsItsColourLightlyAndAnEnginesStaysAsItWas() {
         let sink = Box()
         var snapshot = bar()
         snapshot.siteSearch = [bing]
         let plain = view(snapshot, sink)
-        let accessory = plain.sitePill.layer?.backgroundColor
         enterWord("emoji", into: plain)
         let tint = try! XCTUnwrap(plain.prefix?.tint)
-        let filled = try! XCTUnwrap(plain.sitePill.layer?.backgroundColor?.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil)?.components)
+        let filled = srgb(plain.sitePill.layer?.backgroundColor)
         XCTAssertEqual(filled[0], CGFloat(tint.red), accuracy: 0.01)
         XCTAssertEqual(filled[1], CGFloat(tint.green), accuracy: 0.01)
         XCTAssertEqual(filled[2], CGFloat(tint.blue), accuracy: 0.01)
-        XCTAssertEqual(plain.siteLabel.textColor, .white)
+        XCTAssertEqual(filled[3], CGFloat(QuickChipColors.fillAlpha.light), accuracy: 0.01, "the card shows through")
+        let word = QuickChipColors.of(tint, dark: false).text
+        XCTAssertEqual(plain.sitePill.label.textColor, word)
         press(#selector(NSResponder.cancelOperation(_:)), plain)
-        XCTAssertEqual(plain.sitePill.layer?.backgroundColor, accessory, "leaving gives the pill its colour back")
+        XCTAssertTrue(plain.sitePill.isHidden)
         let site = view(snapshot, sink)
         typeKeys("bing ", into: site)
         XCTAssertEqual(site.siteSearch?.id, bing.id)
-        XCTAssertEqual(site.sitePill.layer?.backgroundColor, accessory, "a search engine's pill stays Arc's")
+        XCTAssertEqual(srgb(site.sitePill.layer?.backgroundColor)[3], 0.04, accuracy: 0.005, "a search engine's pill stays Arc's grey")
     }
 
-    func testTheColourShowsBesideAPrefixsOfferOnly() {
+    /// The pill's word stands on the input's baseline and in the middle of the pill across; the offer's word is level with Tab.
+    func testThePillsWordIsOnTheInputsLineAndCentred() {
+        let sink = Box()
+        for word in ["emoji", "summarize", "calc", "分屏"] {
+            var snapshot = bar()
+            snapshot.actions = [.addSplitView]
+            snapshot.askPageOn = true
+            snapshot.askProvider = "Claude"
+            snapshot.askAgentFound = true
+            let bar = view(snapshot, sink)
+            enterWord(word, into: bar)
+            bar.layoutSubtreeIfNeeded()
+            let pill = bar.sitePill, label = pill.label
+            let pillBaseline = pill.frame.minY + label.frame.minY + label.firstBaselineOffsetFromTop
+            let inputBaseline = bar.input.frame.minY + bar.input.firstBaselineOffsetFromTop
+            XCTAssertEqual(pillBaseline, inputBaseline, accuracy: 0.01, word)
+            XCTAssertEqual(label.frame.midX, pill.bounds.midX, accuracy: 0.01, "\(word): centred across")
+            // The capitals sit in the middle of the pill.
+            let font = try! XCTUnwrap(label.font)
+            XCTAssertEqual(label.frame.minY + label.firstBaselineOffsetFromTop - font.capHeight / 2, pill.bounds.midY, accuracy: 0.01, word)
+        }
+    }
+
+    func testAPrefixOnOfferShowsAsItsChipBesideTab() {
         let sink = Box()
         var snapshot = bar()
         snapshot.siteSearch = [bing]
         let offered = view(snapshot, sink)
-        XCTAssertTrue(offered.offerDot.isHidden)
-        type("emoji", into: offered)
+        XCTAssertTrue(offered.offerChip.isHidden)
+        type("em", into: offered)
         offered.layoutSubtreeIfNeeded()
-        XCTAssertFalse(offered.offerDot.isHidden, "Emoji is on offer")
-        type("bing", into: offered)
+        XCTAssertFalse(offered.offerChip.isHidden, "Emoji is on offer")
+        XCTAssertEqual(offered.offerChip.title, "Emoji")
+        XCTAssertEqual(srgb(offered.offerChip.layer?.backgroundColor)[3], CGFloat(QuickChipColors.fillAlpha.light), accuracy: 0.01)
+        type("bi", into: offered)
         offered.layoutSubtreeIfNeeded()
-        XCTAssertTrue(offered.offerDot.isHidden, "an engine's offer has none")
+        XCTAssertNotNil(offered.offer)
+        XCTAssertTrue(offered.offerChip.isHidden, "an engine's offer is Arc's words")
+    }
+
+    /// Part of the tool's name offers the tool's prefix, and Tab enters what is offered.
+    func testPartOfTheToolsNameOffersItsPrefixAndTabEntersIt() {
+        let sink = Box()
+        var snapshot = tabBar()
+        snapshot.agentsFound = ["claude"]
+        let bar = view(snapshot, sink)
+        type("cl", into: bar)
+        XCTAssertEqual(bar.prefixOffer?.title, "Claude")
+        sink.sent.removeAll()
+        press(#selector(NSResponder.insertTab(_:)), bar)
+        XCTAssertEqual(bar.prefix?.title, "Claude")
+        XCTAssertFalse(sink.sent.contains(.assist(.open(.question))))
     }
 
     func testPartOfAWordIsOfferedBesideTheInputOnlyWithoutASiteSearchOffer() {
         let sink = Box()
         let plain = view(bar(), sink)
+        type("f", into: plain)
+        XCTAssertNil(plain.prefixOffer, "one letter")
         type("fi", into: plain)
-        XCTAssertNil(plain.prefixOffer, "two letters")
-        type("fil", into: plain)
-        XCTAssertEqual(plain.prefixOffer?.action, .files)
+        XCTAssertEqual(plain.prefixOffer?.action, .files, "two letters, as Arc offers a site search")
         press(#selector(NSResponder.insertTab(_:)), plain)
         XCTAssertEqual(plain.prefix?.action, .files, "Tab enters what is offered")
 

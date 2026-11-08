@@ -243,7 +243,11 @@ enum AIScenarios {
         try openBar(app)
         try app.type(String(provider.prefix(3)))
         try app.press("tab")
-        try app.waitUntil("question mode after \(provider) and Tab") { if case .commandBar(let bar)? = try app.view().overlay { return bar.aiMode == .question }; return false }
+        // Arc opens its question mode; where Brk offers the tool's own prefix beside the input, Tab enters that, which asks the same tool.
+        try app.waitUntil("question mode or the tool's prefix after \(provider) and Tab") {
+            if case .commandBar(let bar)? = try app.view().overlay, bar.aiMode == .question { return true }
+            return try app.native().actual[ViewID.commandBarPill.identifier].map { !$0.hidden } ?? false
+        }
         try app.press("escape")
     }
     /// The URL pill's second line with text highlighted (Shared Quotes on): Share Quote in place of Translation

@@ -745,11 +745,14 @@ enum QuickBarScenarios {
 
             // Each prefix's colour, for the eye: the pill and the offer beside the word.
             for feature in [AIFeature.commandBar, .askPage, .translation] { try app.dispatch(.settings(.max(.feature(feature, true)))) }
-            try open(app)
-            try type(app, "cla")
-            app.sleep(0.2)
-            _ = try app.screenshot("offer-colour")
-            try dismiss(app)
+            // Two letters offer the prefix, as its chip beside the Tab key.
+            for partial in ["cl", "sp", "tr", "em", "de"] {
+                try open(app)
+                try type(app, partial)
+                app.sleep(0.25)
+                _ = try app.screenshot("offer-" + partial)
+                try dismiss(app)
+            }
             for word in ["claude", "gpt", "gemini", "cursor", "ask", "page", "summarize", "split", "window", "translate", "define", "color", "file", "app", "emoji", "calc"] {
                 try open(app)
                 try type(app, word)

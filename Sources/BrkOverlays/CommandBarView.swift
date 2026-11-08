@@ -77,13 +77,13 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     private(set) var offer: SearchEngineCandidate?
     /// The prefix Tab would enter, shown there when no engine is on offer.
     private(set) var prefixOffer: QuickPrefix?
-    let sitePill = NSView()
-    let siteLabel = NSTextField(labelWithString: "")
+    /// The pill before the input: a prefix's, in its colour, or a search engine's, in Arc's grey.
+    let sitePill = QuickChip()
     private let leadingIcon = NSImageView()
     private let info = InfoButton()
     private let offerLabel = NSTextField(labelWithString: "")
-    /// A prefix's colour beside its offer, so the word shows what Tab will enter.
-    let offerDot = NSView()
+    /// A prefix on offer, as the chip Tab will put before the input.
+    let offerChip = QuickChip()
     private let keyCap = NSView()
     private let keyLabel = NSTextField(labelWithString: OverlayCopy.siteSearchKey)
     private(set) var results: [Suggestion] = []
@@ -123,18 +123,13 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         card.layer?.cornerRadius = OverlayMetrics.commandBar.cornerRadius.value
         card.layer?.borderWidth = 0.5
         hairline.wantsLayer = true
-        sitePill.wantsLayer = true
-        sitePill.layer?.cornerCurve = .continuous
-        sitePill.layer?.cornerRadius = OverlayMetrics.commandBar.hintRadius.value
         sitePill.isHidden = true
-        siteLabel.font = .systemFont(ofSize: OverlayMetrics.commandBar.titleFontSize.value, weight: .medium)
-        sitePill.addSubview(siteLabel)
         leadingIcon.imageScaling = .scaleProportionallyUpOrDown
         offerLabel.font = .systemFont(ofSize: OverlayMetrics.commandBar.titleFontSize.value, weight: .medium)
         offerLabel.lineBreakMode = .byTruncatingTail
-        offerDot.wantsLayer = true
-        offerDot.layer?.cornerRadius = OverlayMetrics.commandBar.offerDotSize.value / 2
-        offerDot.isHidden = true
+        offerChip.isHidden = true
+        offerChip.font = .systemFont(ofSize: OverlayMetrics.commandBar.titleFontSize.value, weight: .semibold)
+        offerChip.padding = OverlayMetrics.commandBar.chipPadding.value
         keyCap.wantsLayer = true
         keyCap.layer?.cornerCurve = .continuous
         keyCap.layer?.cornerRadius = OverlayMetrics.commandBar.hintRadius.value
@@ -154,7 +149,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         backdropTint.wantsLayer = true
         backdrop.addSubview(backdropTint)
         sitePill.identify(.commandBarPill)
-        for view in [backdrop, leadingIcon, sitePill, input, info, offerDot, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
+        for view in [backdrop, leadingIcon, sitePill, input, info, offerChip, offerLabel, keyCap, hairline] as [NSView] { card.addSubview(view) }
         addSubview(card)
         applyColors(.light, style: .centered, primary: RGBA(1, 1, 1), spaceless: false)
     }
@@ -291,14 +286,14 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             return true
         case #selector(NSResponder.insertTab(_:)), #selector(NSResponder.insertBacktab(_:)):
             // Tab never leaves the bar; with a site-search offer beside the input it enters site search; after the local
-            // tool's name it asks the tool (Arc: start typing "ChatGPT", hit Tab); any other text in a new-tab bar goes to
-            // the tool as a question (Brk's own, as Raycast's Quick AI). A prefix's whole word comes before the tool's name,
-            // a part-typed one after it.
+            // tool's name it asks the tool (Arc: start typing "ChatGPT", hit Tab), through the tool's prefix where Brk offers
+            // one; any other text in a new-tab bar goes to the tool as a question (Brk's own, as Raycast's Quick AI).
             guard pill == nil, let bar else { return true }
             if let offer { enter(.site(offer), namedBy: typed) }
             else if let whole = QuickPrefixes.entry(named: typed, in: bar) { enter(.prefix(whole), namedBy: typed) }
-            else if Suggest.asksProvider(typed, bar: bar) { dispatch(.assist(.open(.question))) }
+            // What is on offer beside the input is what Tab does: part of the tool's name offers the tool's own prefix.
             else if let prefixOffer { enter(.prefix(prefixOffer), namedBy: typed) }
+            else if Suggest.asksProvider(typed, bar: bar) { dispatch(.assist(.open(.question))) }
             else if let question = Suggest.tabQuestion(typed, completing: completion, bar: bar, resolve: resolve) { dispatch(.assist(.ask(question))) }
             return true
         case #selector(NSResponder.deleteBackward(_:)) where pill != nil && input.stringValue.isEmpty:
@@ -393,20 +388,30 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         rerank(keepHighlight: false)
     }
 
-    /// A prefix wears its own colour; a search engine's pill stays Arc's.
+    private var isDark: Bool { look?.0 == .dark }
+
+    /// A prefix wears its own colour, lightly; a search engine's pill stays Arc's grey.
     private func applyPillColors() {
+        let o = OverlayMetrics.commandBar
         if let tint = prefix?.tint {
-            sitePill.layer?.backgroundColor = tint.pillColor.cgColor
-            siteLabel.textColor = .white
+            let chip = QuickChipColors.of(tint, dark: isDark)
+            sitePill.paint(fill: chip.fill, stroke: chip.stroke, text: chip.text, radius: o.chipRadius.value)
+            sitePill.font = .systemFont(ofSize: o.chipFontSize.value, weight: .semibold)
+            sitePill.padding = o.chipPadding.value
         } else {
-            sitePill.layer?.backgroundColor = colors.accessory.cgColor
-            siteLabel.textColor = colors.accessoryText
+            sitePill.paint(fill: colors.accessory, stroke: nil, text: colors.accessoryText, radius: o.hintRadius.value)
+            sitePill.font = .systemFont(ofSize: o.titleFontSize.value, weight: .medium)
+            sitePill.padding = o.hintPadding.value
+        }
+        if let tint = prefixOffer?.tint {
+            let chip = QuickChipColors.of(tint, dark: isDark)
+            offerChip.paint(fill: chip.fill, stroke: chip.stroke, text: chip.text, radius: o.chipRadius.value)
         }
     }
 
     private func applySiteSearchLook() {
         sitePill.isHidden = pill == nil
-        siteLabel.stringValue = pill?.title ?? ""
+        sitePill.title = pill?.title ?? ""
         applyPillColors()
         let placeholder = siteSearch.map { OverlayCopy.siteSearchPlaceholder($0.name) } ?? prefix?.placeholder ?? (bar?.aiMode.map(Self.aiPlaceholder) ?? Copy.urlPlaceholder)
         input.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
@@ -498,22 +503,24 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         let side = o.accessorySize.value
 
         // The accessory at the input row's right: the site-search offer and its Tab key, else ⓘ.
+        // An engine's offer is Arc's words; a prefix's is its chip.
+        let chipOffer = offer == nil ? prefixOffer : nil
         let offered = offer.map { "\(OverlayCopy.searchVerb) \($0.name)" } ?? prefixOffer?.title
-        offerLabel.isHidden = offered == nil
+        offerLabel.isHidden = offer == nil
+        offerChip.isHidden = chipOffer == nil
         keyCap.isHidden = offered == nil
         info.isHidden = offered != nil || bar?.aiMode != nil || fillsWindow
-        offerLabel.stringValue = offered ?? ""
+        offerLabel.stringValue = offer.map { "\(OverlayCopy.searchVerb) \($0.name)" } ?? ""
+        offerChip.title = chipOffer?.title ?? ""
+        if chipOffer != nil { applyPillColors() }
         // A label draws its text 2 in from each side of its frame.
         func width(_ label: NSTextField) -> CGFloat {
             ceil((label.stringValue as NSString).size(withAttributes: [.font: label.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width)
         }
-        let offerWidth = width(offerLabel) + 4
+        let offerWidth = chipOffer != nil ? offerChip.fittingWidth : width(offerLabel) + 4
         // Half points, as Arc's 30.5 pt Tab key.
         let keyWidth = (((keyLabel.stringValue as NSString).size(withAttributes: [.font: keyLabel.font ?? .systemFont(ofSize: o.titleFontSize.value)]).width + 2 * o.keyPadding.value) * 2).rounded(.up) / 2
-        let offerTint = offer == nil ? prefixOffer?.tint : nil
-        offerDot.isHidden = offerTint == nil
-        let dotWidth = offerTint == nil ? 0 : o.offerDotSize.value + o.offerDotGap.value
-        let accessoryWidth = offered != nil ? dotWidth + offerWidth + o.keyGap.value + keyWidth : (info.isHidden ? 0 : side)
+        let accessoryWidth = offered != nil ? offerWidth + o.keyGap.value + keyWidth : (info.isHidden ? 0 : side)
 
         // Over the pill the card is 350 wide unless the input row needs more (P02-c: 359 for "Search Google Docs").
         let font = input.font ?? .systemFont(ofSize: o.attachedInputFontSize.value)
@@ -535,14 +542,15 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             let keyHeight = keyLabel.intrinsicContentSize.height
             // The whole key: a centred label keeps 4 on each side, so a frame about the text's width draws it right of centre.
             keyLabel.frame = CGRect(x: 0, y: ((side - keyHeight) / 2).rounded(), width: keyWidth, height: keyHeight)
-            let offerHeight = offerLabel.intrinsicContentSize.height
-            offerLabel.frame = CGRect(x: keyCap.frame.minX - o.keyGap.value - offerWidth, y: (mid - offerHeight / 2).rounded(), width: offerWidth, height: offerHeight)
-            accessoryLeft = offerLabel.frame.minX
-            if let offerTint {
-                let dot = o.offerDotSize.value
-                offerDot.frame = CGRect(x: offerLabel.frame.minX - o.offerDotGap.value - dot, y: (mid - dot / 2).rounded(), width: dot, height: dot)
-                offerDot.layer?.backgroundColor = offerTint.pillColor.cgColor
-                accessoryLeft = offerDot.frame.minX
+            if chipOffer != nil {
+                // As tall as the Tab key and level with it.
+                offerChip.frame = CGRect(x: keyCap.frame.minX - o.keyGap.value - offerWidth, y: keyCap.frame.minY, width: offerWidth, height: side)
+                offerChip.baseline = nil
+                accessoryLeft = offerChip.frame.minX
+            } else {
+                let offerHeight = offerLabel.intrinsicContentSize.height
+                offerLabel.frame = CGRect(x: keyCap.frame.minX - o.keyGap.value - offerWidth, y: (mid - offerHeight / 2).rounded(), width: offerWidth, height: offerHeight)
+                accessoryLeft = offerLabel.frame.minX
             }
         } else if !info.isHidden {
             info.frame = CGRect(x: right - side, y: (mid - side / 2).rounded(), width: side, height: side)
@@ -551,17 +559,19 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
         // NSTextField draws its text 2 in from its frame.
         let fieldHeight = input.intrinsicContentSize.height
+        // P21-a, Q01-a: the centered bar's text sits half a point above the row's middle.
+        let fieldY = (mid - fieldHeight / 2).rounded() - (attached ? 0 : o.inputRaise.value)
         var fieldX = o.textX.value - 2
         if !sitePill.isHidden {
-            let labelSize = siteLabel.intrinsicContentSize
-            let pill = CGSize(width: ceil(labelSize.width) + 2 * o.hintPadding.value, height: max(o.hintHeight.value, ceil(labelSize.height) + 4))
-            sitePill.frame = CGRect(x: o.iconCentreX.value - iconSide / 2, y: (mid - pill.height / 2).rounded(), width: pill.width, height: pill.height)
-            // The room goes to the right of the text, which keeps its place: the measured width alone can cut the last letter ("Emoji").
-            siteLabel.frame = CGRect(x: o.hintPadding.value, y: ((pill.height - labelSize.height) / 2).rounded(), width: ceil(labelSize.width) + o.hintTextSlack.value, height: labelSize.height)
+            // The pill's word stands on the input's baseline, and the pill sits around its capitals.
+            let inputBaseline = fieldY + input.firstBaselineOffsetFromTop
+            let height = prefix != nil ? o.chipHeight.value : o.hintHeight.value
+            let inPill = sitePill.centredBaseline(height: height)
+            sitePill.frame = CGRect(x: o.iconCentreX.value - iconSide / 2, y: inputBaseline - inPill, width: sitePill.fittingWidth, height: height)
+            sitePill.baseline = inPill
             fieldX = sitePill.frame.maxX + m.stackSpacing.value
         }
-        // P21-a, Q01-a: the centered bar's text sits half a point above the row's middle.
-        input.frame = CGRect(x: fieldX, y: (mid - fieldHeight / 2).rounded() - (attached ? 0 : o.inputRaise.value), width: max(40, accessoryLeft - o.offerGap.value - fieldX + 2), height: fieldHeight)
+        input.frame = CGRect(x: fieldX, y: fieldY, width: max(40, accessoryLeft - o.offerGap.value - fieldX + 2), height: fieldHeight)
 
         let scale = window?.backingScaleFactor ?? 2
         hairline.isHidden = attached || results.isEmpty
@@ -913,10 +923,6 @@ extension NSShadow {
 /// A plain container with top-left origin, like every BrkUI container.
 final class FlippedView: NSView {
     override var isFlipped: Bool { true }
-}
-
-private extension RGBA {
-    var pillColor: NSColor { NSColor(srgbRed: red, green: green, blue: blue, alpha: alpha) }
 }
 
 /// The pictures of Brk's own rows: the system's icon for an app, once per path, for a kind of file, or an emoji drawn at

@@ -27,7 +27,7 @@ public struct QuickPrefix: Hashable, Sendable, Codable {
     public let words: [String]
     public let action: QuickPrefixAction
     public let placeholder: String
-    /// The pill's fill, with white text on it, in light and dark alike: this prefix at a glance.
+    /// This prefix at a glance: the hue of its chip, which the bar lays lightly over its card with the text in a deeper shade.
     public let tint: RGBA
 
     init(_ title: String, _ words: [String], _ action: QuickPrefixAction, _ placeholder: String, _ tint: UInt32) {
@@ -43,22 +43,22 @@ public enum QuickPrefixes {
     /// The one table: name, the words that enter it, what it does, its placeholder, its colour. A site-search engine of the same name
     /// or keyword wins over a word here (`CommandBarView`).
     public static let all: [QuickPrefix] = [
-        QuickPrefix("Claude", ["claude"], .askAgent("claude"), "Ask Claude…", 0xB8573A),
-        QuickPrefix("Codex", ["codex", "gpt"], .askAgent("codex"), "Ask Codex…", 0x0B7F63),
-        QuickPrefix("Gemini", ["gemini"], .askAgent("gemini"), "Ask Gemini…", 0x1A73E8),
-        QuickPrefix("Cursor", ["cursor"], .askAgent("cursor"), "Ask Cursor…", 0x4A4A52),
-        QuickPrefix("Ask", ["ask", "ai", "问"], .ask, "Ask the local AI…", 0x7C3AED),
-        QuickPrefix("Page", ["page", "问页面"], .askPage, "Ask about this page…", 0x0E7490),
-        QuickPrefix("Summarize", ["summarize", "总结"], .summarize, "Summarize this page…", 0x0F766E),
-        QuickPrefix("Split", ["split", "分屏"], .split, "Open in a new pane…", 0x2563EB),
-        QuickPrefix("Window", ["window", "窗口"], .window, "Place this window…", 0x4338CA),
-        QuickPrefix("Translate", ["translate", "tr", "翻译"], .translate, "Translate… (to ja, 到日文, page)", 0xDB2777),
-        QuickPrefix("Define", ["define", "def", "查"], .define, "Look up a word…", 0x92400E),
-        QuickPrefix("Color", ["color", "colour", "颜色"], .color, "A colour: #ff5500, tomato…", 0xC026D3),
-        QuickPrefix("Files", ["file", "文件"], .files, "Find a file by name…", 0x0369A1),
-        QuickPrefix("Apps", ["app", "应用"], .apps, "Open an app…", 0x475569),
-        QuickPrefix("Emoji", ["emoji", "表情"], .emoji, "Find an emoji…", 0xB45309),
-        QuickPrefix("Calculate", ["calc", "=", "算"], .calculate, "Calculate…", 0x15803D),
+        QuickPrefix("Claude", ["claude"], .askAgent("claude"), "Ask Claude…", 0xD97757),
+        QuickPrefix("Codex", ["codex", "gpt"], .askAgent("codex"), "Ask Codex…", 0x10A37F),
+        QuickPrefix("Gemini", ["gemini"], .askAgent("gemini"), "Ask Gemini…", 0x4285F4),
+        QuickPrefix("Cursor", ["cursor"], .askAgent("cursor"), "Ask Cursor…", 0x6E6E78),
+        QuickPrefix("Ask", ["ask", "ai", "问"], .ask, "Ask the local AI…", 0x8B5CF6),
+        QuickPrefix("Page", ["page", "问页面"], .askPage, "Ask about this page…", 0x0EA5E9),
+        QuickPrefix("Summarize", ["summarize", "总结"], .summarize, "Summarize this page…", 0x14B8A6),
+        QuickPrefix("Split", ["split", "分屏"], .split, "Open in a new pane…", 0x6366F1),
+        QuickPrefix("Window", ["window", "窗口"], .window, "Place this window…", 0x64748B),
+        QuickPrefix("Translate", ["translate", "tr", "翻译"], .translate, "Translate… (to ja, 到日文, page)", 0xEC4899),
+        QuickPrefix("Define", ["define", "def", "查"], .define, "Look up a word…", 0xC2410C),
+        QuickPrefix("Color", ["color", "colour", "颜色"], .color, "A colour: #ff5500, tomato…", 0xD946EF),
+        QuickPrefix("Files", ["file", "文件"], .files, "Find a file by name…", 0x3B82F6),
+        QuickPrefix("Apps", ["app", "应用"], .apps, "Open an app…", 0x78716C),
+        QuickPrefix("Emoji", ["emoji", "表情"], .emoji, "Find an emoji…", 0xF59E0B),
+        QuickPrefix("Calculate", ["calc", "=", "算"], .calculate, "Calculate…", 0x22C55E),
     ]
 
     /// The prefix whose whole word this is, nil when there is none or it cannot work here now, so the word stays plain text.
@@ -68,15 +68,14 @@ public enum QuickPrefixes {
         return all.first { prefix in prefix.isActive(in: bar) && prefix.words.contains { fold($0) == needle } }
     }
 
-    /// The prefix to offer beside the input, with the Tab key: for three letters of a word at least, or for a whole word
-    /// of any length.
+    /// The prefix to offer beside the input, with the Tab key: from two letters of a word, as Arc offers a site search.
     public static func offer(for typed: String, in bar: CommandBarSnapshot) -> QuickPrefix? {
         let needle = fold(typed)
         guard !needle.isEmpty, !needle.contains(where: \.isWhitespace), accepts(bar) else { return nil }
         return all.first { prefix in
             prefix.isActive(in: bar) && prefix.words.contains { word in
                 let word = fold(word)
-                return word.hasPrefix(needle) && (needle.count >= 3 || word == needle)
+                return word.hasPrefix(needle) && (needle.count >= 2 || word == needle)
             }
         }
     }
