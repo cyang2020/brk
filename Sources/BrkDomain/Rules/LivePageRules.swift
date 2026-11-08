@@ -48,6 +48,7 @@ extension Work {
                 guard record.dataShape != nil else { return "This page has no data to refresh. Render it with `data` (and a `dataSchema`) first." }
                 // The first refresh is at the next slot after now.
                 if live.schedule != schedule { live.lastRun = ctx.now }
+                if let agent = state.doc.conversations[record.conversation]?.agent, state.session.ai.agents[agent] == nil { effects.append(.aiRefreshAgents) }
             }
             live.schedule = schedule
         case .weekdays(let days): live.weekdays = AIPageWeekdays.normalized(days)
@@ -93,7 +94,11 @@ extension Work {
         guard let conversation = state.doc.conversations[record.conversation], let agent = conversation.agent else {
             return notNow("The conversation that made this page is gone.")
         }
-        guard state.session.ai.agents[agent]?.state == .ready else { return notNow("\(agent.displayName) is not ready.") }
+        guard state.session.ai.agents[agent]?.state == .ready else {
+            // Nothing has asked the agents about themselves yet in this launch: ask now; the next check finds the answer.
+            if state.session.ai.agents[agent] == nil { effects.append(.aiRefreshAgents) }
+            return notNow("\(agent.displayName) is not ready.")
+        }
         guard let shape = record.dataShape, let schema = AIPageShape.text(shape) else { return notNow("This page has no data to refresh.") }
         guard let window = state.doc.windows.keys.sorted().first(where: {
             state.doc.windows[$0]?.kind == .standard && state.libraryContext(in: $0) == .profile(record.profile)

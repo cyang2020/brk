@@ -135,11 +135,26 @@ enum AILivePagesScenarios {
         return try XCTUnwrapValue(last)
     }
     private static func clickControl(_ app: AppUnderTest, _ name: String) throws { try click(app, at: centre(stillFrame(app, .aiControl(name)))) }
-    /// A menu item by its title once Accessibility lists it; a submenu's item after hovering its parent.
+    /// A menu item by its title once Accessibility lists it; a submenu's item after hovering its parent. Accessibility
+    /// does not always list a sidebar menu opened over a page (fixture-1: the menu was up, no AXMenuItem anywhere), so
+    /// then the menu is worked with the keyboard, as a person can: type an item's name to select it, → into a submenu,
+    /// Return on the last.
     private static func chooseMenu(_ path: [String]) throws {
+        var found: CGRect?
+        let listed = (try? app!.waitUntil("“\(path[0])” in the menu", timeout: 2) { found = NativeSystemInput.frame(pid: pid, title: path[0], roles: ["AXMenuItem"]); return found != nil }) != nil
+        guard listed else {
+            for (index, title) in path.enumerated() {
+                try type(title.filter { codes[$0] != nil })
+                usleep(300_000)
+                try key([], index < path.count - 1 ? .rightArrow : .returnKey)
+                usleep(400_000)
+            }
+            return
+        }
         for (index, title) in path.enumerated() {
-            var found: CGRect?
-            try app!.waitUntil("“\(title)” in the menu", timeout: 6) { found = NativeSystemInput.frame(pid: pid, title: title, roles: ["AXMenuItem"]); return found != nil }
+            if index > 0 {
+                try app!.waitUntil("“\(title)” in the menu", timeout: 6) { found = NativeSystemInput.frame(pid: pid, title: title, roles: ["AXMenuItem"]); return found != nil }
+            }
             if index < path.count - 1 {
                 try mouse(.mouseMoved, at: centre(found!)); usleep(600_000)
             } else { try clickScreen(centre(found!)) }
@@ -245,8 +260,12 @@ enum AILivePagesScenarios {
         try app.waitUntil("the page's card shows it", timeout: 8) { try app.view().aiPages.first?.content?.id == page }
         app.sleep(1.5)
     }
+    nonisolated(unsafe) private static var menus = 0
     private static func rowMenu(_ app: AppUnderTest, _ row: ItemID, _ path: [String]) throws {
         try click(app, at: centre(stillFrame(app, .row(row))), right: true)
+        app.sleep(0.4)
+        menus += 1
+        screenCapture(app, "row-menu-\(menus)-screen")
         try chooseMenu(path)
         app.sleep(0.6)
     }
@@ -347,6 +366,7 @@ enum AILivePagesScenarios {
             return "row “\(row.title)”; schedule \(live(app, page)["schedule"] ?? "nil"); tooltip “\(try pageRow(app, page)?.sourceStatus ?? "")”"
         }
 
+        if ProcessInfo.processInfo.environment["BRK_E2E_LIVE_FIXTURE_STOP"] == "menu" { log.write("stopped after the menu"); return }
         log.check("the kettle's price changes, the hour passes: the refresh writes it and marks the row") {
             app.site.replace(in: "/shop-kettle.html", "€39.00", with: "€34.50")
             // Away from the page, so the mark stays until the user looks.
@@ -472,20 +492,19 @@ enum AILivePagesScenarios {
             try key(.command, .t)
             try app.waitUntil("the command bar") { if case .commandBar? = try app.view().overlay { true } else { false } }
             try type("toaster is cheapest")
-            app.sleep(1)
-            shot(app, prefix, "bar-conversation")
-            try key([], .downArrow)
-            var chosen = false
-            for _ in 0..<6 {
-                guard case .commandBar? = try app.view().overlay else { break }
-                // The row is chosen with the arrow keys, then Return; which row it is depends on what else matches.
-                try key([], .returnKey)
-                chosen = true
-                break
+            // The bar's row with the conversation's title (the sidebar shows the same title; the bar's is inside the bar).
+            let bar = try XCTUnwrapValue(try app.native().actual[ViewID.commandBar.identifier]?.frame)
+            let barOnScreen = CGRect(origin: try screen(app, bar.origin), size: bar.size)
+            var row: CGRect?
+            try app.waitUntil("the conversation's row in the bar", timeout: 6) {
+                row = NativeSystemInput.staticTexts(pid: pid).first { $0.text.hasPrefix("Watch these three shops (fixture)") && barOnScreen.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }?.frame
+                return row != nil
             }
-            try expect(chosen, "the bar closed before Return")
+            shot(app, prefix, "bar-conversation")
+            screenCapture(app, prefix + "-bar-conversation-screen")
+            try clickScreen(centre(row!))
             try app.waitUntil("the conversation's tab", timeout: 8) { try app.view().conversations.first?.answer.conversation?.id == conversation }
-            return "found and opened"
+            return "found by “toaster is cheapest” (said in it, not in its title) and opened by a click"
         }
 
         log.check("closing the conversation's row archives it; the archive deletes it for good after asking") {
