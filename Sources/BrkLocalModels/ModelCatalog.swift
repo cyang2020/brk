@@ -52,7 +52,7 @@ public enum ModelCatalog {
         license: "Apache 2.0",
         source: URL(string: "https://huggingface.co/google/embeddinggemma-2")!,
         serverArguments: ["--embeddings", "--pooling", "mean", "-c", "4096", "-ub", "2048", "-b", "2048", "-np", "4", "--cache-ram", "0", "--no-webui"],
-        residentMB: 560,
+        residentMB: 500,
         languages: "100+ languages, Chinese included")
 
     /// JevK5 v0.3 4B, Q4_K_M GGUF (allebee/jevk5, Apache-2.0). Q8_0 gives the same answer as bf16 more often (229 against
@@ -70,7 +70,7 @@ public enum ModelCatalog {
         serverArguments: ["-c", "8192", "-np", "1", "--cache-ram", "0", "--no-webui"],
         temperature: 1.22,
         knockoutTemperature: 0.93,
-        residentMB: 3_000,
+        residentMB: 3_200,
         languages: "English only")
 
     public static let jevK5Q8 = LocalModel(
@@ -86,7 +86,7 @@ public enum ModelCatalog {
         serverArguments: jevK5Q4.serverArguments,
         temperature: 1.22,
         knockoutTemperature: 0.93,
-        residentMB: 4_800,
+        residentMB: 4_300,
         languages: "English only")
 
     public static let all: [LocalModel] = [embeddingGemma2, jevK5Q4, jevK5Q8]
