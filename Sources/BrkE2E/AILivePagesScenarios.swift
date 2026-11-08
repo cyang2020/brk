@@ -493,6 +493,7 @@ enum AILivePagesScenarios {
             return "hidden on \(AIPageWeekdays.name(today)), found by the bar, shown again"
         }
 
+        if ProcessInfo.processInfo.environment["BRK_E2E_LIVE_FIXTURE_FROM"] == "bar" { log.write("(probe)") }
         log.check("the command bar finds the conversation by what was said, and opens its tab") {
             try key(.command, .t)
             try app.waitUntil("the command bar") { if case .commandBar? = try app.view().overlay { true } else { false } }
@@ -500,15 +501,23 @@ enum AILivePagesScenarios {
             // The bar's row with the conversation's title (the sidebar shows the same title; the bar's is inside the bar).
             let bar = try XCTUnwrapValue(try app.native().actual[ViewID.commandBar.identifier]?.frame)
             let barOnScreen = CGRect(origin: try screen(app, bar.origin), size: bar.size)
-            var row: CGRect?
-            try app.waitUntil("the conversation's row in the bar", timeout: 6) {
+            // Its place once it holds still: the engine's suggestions arrive after the bar's own rows and push it down
+            // (probe-bar-1 clicked where it had been, on the Ask row).
+            var row: CGRect?, last: CGRect?
+            try app.waitUntil("the conversation's row in the bar, still", timeout: 8) {
                 row = NativeSystemInput.staticTexts(pid: pid).first { $0.text.hasPrefix("Watch these three shops (fixture)") && barOnScreen.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }?.frame
-                return row != nil
+                defer { last = row }
+                usleep(400_000)
+                return row != nil && row == last
             }
             shot(app, prefix, "bar-conversation")
             screenCapture(app, prefix + "-bar-conversation-screen")
+            let matches = NativeSystemInput.staticTexts(pid: pid).filter { $0.text.hasPrefix("Watch these three shops") || $0.text.hasPrefix("toaster is cheapest") }
+            log.write("  bar \(barOnScreen); texts " + matches.map { "“\($0.text.prefix(40))” \($0.frame)" }.joined(separator: "; "))
             // On the title's first words: inside the conversation's row whatever the rows around it.
-            try clickScreen(CGPoint(x: row!.minX + 12, y: row!.midY))
+            let point = CGPoint(x: row!.minX + 12, y: row!.midY)
+            log.write("  click \(point)")
+            try clickScreen(point)
             app.sleep(0.8)
             screenCapture(app, prefix + "-bar-conversation-clicked-screen")
             try app.waitUntil("the conversation's tab", timeout: 8) { try app.view().conversations.first?.answer.conversation?.id == conversation }
