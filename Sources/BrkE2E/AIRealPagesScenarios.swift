@@ -121,25 +121,38 @@ enum AIRealPagesScenarios {
         try clickScreen(centre(found!))
     }
     /// Scrolls the panel's or tab's transcript with the wheel, as a person would, until the view is in its visible part
-    /// and no other window covers its middle (a system dialog sat over part of the screen in the Codex run).
-    private static func reveal(_ app: AppUnderTest, _ id: ViewID, in container: ViewID) throws {
-        for _ in 0..<30 {
+    /// and no other window covers its middle. A system dialog sat over part of the screen in the Codex runs; when the
+    /// transcript cannot scroll the view out from under it one way, it tries the other. False when it stays covered.
+    private static func reveal(_ app: AppUnderTest, _ id: ViewID, in container: ViewID) throws -> Bool {
+        var flipped = false, last: CGRect?
+        for _ in 0..<40 {
             let facts = try app.native()
             guard let target = facts.actual[id.identifier]?.frame, let box = facts.actual[container.identifier]?.frame else { throw Check(description: "no \(id.identifier)") }
             let inside = target.minY >= box.minY + 8 && target.maxY <= box.maxY - 8
             let middle = try screen(app, centre(target))
             let covered = inside && PhysicalPointer.frontmost(at: middle)?.pid != pid
-            if inside, !covered { return }
-            // Out of sight: toward it. Covered: move it up past whatever is in front.
-            let up = covered || target.minY >= box.minY + 8
+            if inside, !covered { return true }
+            if covered, target == last { if flipped { return false }; flipped = true }
+            last = target
+            let up = covered ? !flipped : target.minY >= box.minY + 8
             let point = try screen(app, CGPoint(x: box.midX, y: box.minY + 40))
             try mouse(.mouseMoved, at: point); usleep(100_000)
-            guard let wheel = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: up ? -60 : 60, wheel2: 0, wheel3: 0) else { return }
+            guard let wheel = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: up ? -60 : 60, wheel2: 0, wheel3: 0) else { return false }
             wheel.location = point
             wheel.post(tap: .cghidEventTap)
             usleep(250_000)
         }
-        throw Check(description: "\(id.identifier) stayed out of sight or covered")
+        return false
+    }
+    /// A point of `rect` (root coordinates) where Brk's own window is in front.
+    private static func uncovered(_ app: AppUnderTest, _ rect: CGRect) throws -> CGPoint? {
+        for row in 1...4 {
+            for column in 1...6 {
+                let point = CGPoint(x: rect.minX + rect.width * CGFloat(column) / 7, y: rect.minY + rect.height * CGFloat(row) / 5)
+                if PhysicalPointer.frontmost(at: try screen(app, point))?.pid == pid { return point }
+            }
+        }
+        return nil
     }
     private static func clickAX(identifier: String, _ what: String) throws {
         var found: CGRect?
@@ -329,9 +342,20 @@ enum AIRealPagesScenarios {
         } }
 
         if wanted("keep"), let page { log.check("Keep as Tab under the page, clicked, opens the page as a tab") {
-            try reveal(app, .aiControl("keep-" + page.rawValue), in: .aiControl("transcript"))
-            shot(app, "keep-button")
-            try clickControl(app, "keep-" + page.rawValue)
+            let path: String
+            if try reveal(app, .aiControl("keep-" + page.rawValue), in: .aiControl("transcript")) {
+                shot(app, "keep-button")
+                try clickControl(app, "keep-" + page.rawValue)
+                path = "the button under the page"
+            } else {
+                // The page's own menu has the same item.
+                let rect = try pageOnScreen(app, page)
+                guard let point = try uncovered(app, rect) else { throw Check(description: "the page and its button are both covered") }
+                try click(app, at: point, right: true)
+                shot(app, "keep-menu")
+                try chooseMenu("Keep as Tab")
+                path = "the page's context menu (the button sat under a system dialog)"
+            }
             try app.waitUntil("the page's tab shown", timeout: 8) { try app.view().aiPages.first?.content?.id == page }
             app.sleep(1.5)
             shot(app, "page-tab")
@@ -339,7 +363,7 @@ enum AIRealPagesScenarios {
             try expect(!card.hidden && card.frame.height > 200, "the page card: \(card)")
             let row = try todayRow(app) { $0.url == AIPageTab.url(page) }
             try expect(row.status == .current, "the page's row is not the shown one")
-            return "row “\(row.title)”, card \(Int(card.frame.width))×\(Int(card.frame.height))"
+            return "by \(path); row “\(row.title)”, card \(Int(card.frame.width))×\(Int(card.frame.height))"
         } }
 
         if wanted("relaunch"), let conversation, let page { log.check("⌘Q and a relaunch bring the conversation's tab and the page's tab back") {
