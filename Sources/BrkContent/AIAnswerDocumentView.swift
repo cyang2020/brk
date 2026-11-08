@@ -78,6 +78,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         text.linkTextAttributes = [.foregroundColor: NSColor.linkColor, .cursor: NSCursor.pointingHand]
         text.delegate = self
         text.setAccessibilityIdentifier(style == .panel ? "ai-answer" : "ai-tab-answer")
+        scroll.identify(.aiControl(style == .panel ? "transcript" : "tab-transcript"))
         scroll.documentView = text; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.drawsBackground = false
         progress.style = .spinning; progress.controlSize = .small; progress.isDisplayedWhenStopped = false
         close.setAccessibilityIdentifier("ai-close")
@@ -90,6 +91,7 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         pages.onEvent = { [weak self] page, event in
             if case .link(let url) = event { self?.send(.pageLink(page, url)) }
         }
+        pages.onKeep = { [weak self] page in self?.send(.keepPage(page)) }
         pages.onHeight = { [weak self] in
             guard let self, let answer = self.answer else { return }
             self.rendered = []
@@ -326,16 +328,8 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
 
     private static func isPage(_ item: AIConversationItem) -> Bool { if case .page = item { true } else { false } }
 
-    /// A page in the transcript: the page, then a caption with its title and Keep as Tab (or Show Tab once kept).
-    private func pageRow(_ page: AIPageSnapshot, width: CGFloat) -> NSAttributedString {
-        let out = NSMutableAttributedString(attributedString: pages.attachment(page, width: width))
-        let small: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: Metrics.ai.stepFont.value), .foregroundColor: NSColor.secondaryLabelColor]
-        out.append(NSAttributedString(string: "\n" + AgentCopyText.oneLine(page.title, limit: 80) + "  ·  ", attributes: small))
-        var link = small
-        link[.link] = URL(string: "brk-keep://page/" + page.id.rawValue)
-        out.append(NSAttributedString(string: page.kept ? "Show Tab" : "Keep as Tab", attributes: link))
-        return out
-    }
+    /// A page in the transcript: the page and its caption row (title, Keep as Tab), one attachment.
+    private func pageRow(_ page: AIPageSnapshot, width: CGFloat) -> NSAttributedString { pages.attachment(page, width: width) }
 
     private static var body: [NSAttributedString.Key: Any] {
         [.font: NSFont.systemFont(ofSize: Metrics.ai.bodyFont.value), .foregroundColor: NSColor.labelColor]
@@ -346,7 +340,6 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         guard let address, let url = URL(string: address) else { return true }
         if let tab = AgentTabLink.id(url) { send(.openTabLink(tab)) }
         else if let conversation = ConversationPage.id(of: url) { send(.openConversation(conversation)) }
-        else if url.scheme == "brk-keep", url.host == "page" { send(.keepPage(AIPageID(url.lastPathComponent))) }
         else if ["http", "https"].contains(url.scheme?.lowercased()) { dispatch(.commandBar(.submit(url.absoluteString))) }
         return true
     }

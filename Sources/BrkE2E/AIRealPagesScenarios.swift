@@ -31,7 +31,7 @@ enum AIRealPagesScenarios {
         }
         func check(_ name: String, _ body: () throws -> String) {
             let start = Date()
-            do { write("PASS \(name) (\(String(format: "%.1f", Date().timeIntervalSince(start))) s): \(try body())") }
+            do { let result = try body(); write("PASS \(name) (\(String(format: "%.1f", Date().timeIntervalSince(start))) s): \(result)") }
             catch { failures += 1; write("FAIL \(name) (\(String(format: "%.1f", Date().timeIntervalSince(start))) s): \(error)") }
         }
     }
@@ -120,11 +120,20 @@ enum AIRealPagesScenarios {
         try app!.waitUntil("“\(title)” in the menu", timeout: 6) { found = NativeSystemInput.frame(pid: pid, title: title, roles: ["AXMenuItem"]); return found != nil }
         try clickScreen(centre(found!))
     }
-    /// A link in an answer's text, by its words, with a real click near its start.
-    private static func clickLink(_ title: String) throws {
-        var found: CGRect?
-        try app!.waitUntil("the link “\(title)”", timeout: 8) { found = NativeSystemInput.frame(pid: pid, title: title, roles: ["AXLink"]); return found != nil }
-        try clickScreen(CGPoint(x: found!.minX + min(16, found!.width / 2), y: found!.midY))
+    /// Scrolls the panel's or tab's transcript with the wheel, as a person would, until the view is in its visible part.
+    private static func reveal(_ app: AppUnderTest, _ id: ViewID, in container: ViewID) throws {
+        for _ in 0..<20 {
+            let facts = try app.native()
+            guard let target = facts.actual[id.identifier]?.frame, let box = facts.actual[container.identifier]?.frame else { throw Check(description: "no \(id.identifier)") }
+            if target.minY >= box.minY + 8, target.maxY <= box.maxY - 8 { return }
+            let point = try screen(app, CGPoint(x: box.midX, y: box.midY))
+            try mouse(.mouseMoved, at: point); usleep(100_000)
+            guard let wheel = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: target.minY < box.minY ? 60 : -60, wheel2: 0, wheel3: 0) else { return }
+            wheel.location = point
+            wheel.post(tap: .cghidEventTap)
+            usleep(250_000)
+        }
+        throw Check(description: "\(id.identifier) stayed out of sight")
     }
     private static func clickAX(identifier: String, _ what: String) throws {
         var found: CGRect?
@@ -314,7 +323,9 @@ enum AIRealPagesScenarios {
         } }
 
         if wanted("keep"), let page { log.check("Keep as Tab under the page, clicked, opens the page as a tab") {
-            try clickLink("Keep as Tab")
+            try reveal(app, .aiControl("keep-" + page.rawValue), in: .aiControl("transcript"))
+            shot(app, "keep-button")
+            try clickControl(app, "keep-" + page.rawValue)
             try app.waitUntil("the page's tab shown", timeout: 8) { try app.view().aiPages.first?.content?.id == page }
             app.sleep(1.5)
             shot(app, "page-tab")

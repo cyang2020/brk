@@ -21,12 +21,59 @@ final class PageAttachmentCell: NSTextAttachmentCell {
     override func wantsToTrackMouse() -> Bool { false }
 }
 
-/// The pages of one transcript: a sandboxed view for each page item, placed over its attachment, kept while the page
-/// stays in the transcript. A page's own height, once it reports one, wins over the one it was rendered with.
+/// The row under a page in a transcript: its title, and Keep as Tab (Show Tab once kept).
+@MainActor
+final class PageCaptionView: NSView {
+    private let title = NSTextField(labelWithString: "")
+    let keep = NSButton(title: "Keep as Tab", target: nil, action: nil)
+    var onKeep: (() -> Void)?
+
+    init(page: AIPageID) {
+        super.init(frame: .zero)
+        title.font = .systemFont(ofSize: Metrics.ai.stepFont.value)
+        title.textColor = .secondaryLabelColor
+        title.lineBreakMode = .byTruncatingTail
+        title.usesSingleLineMode = true
+        title.cell?.wraps = false
+        keep.isBordered = false
+        keep.font = .systemFont(ofSize: Metrics.ai.stepFont.value, weight: .medium)
+        keep.contentTintColor = .linkColor
+        keep.target = self
+        keep.action = #selector(pressed)
+        keep.identify(.aiControl("keep-" + page.rawValue))
+        keep.toolTip = "Keep this page as a tab in the sidebar, with its data and this conversation."
+        addSubview(title)
+        addSubview(keep)
+    }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
+    override var isFlipped: Bool { true }
+    @objc private func pressed() { onKeep?() }
+
+    func show(_ page: AIPageSnapshot) {
+        title.stringValue = page.title
+        keep.title = page.kept ? "Show Tab" : "Keep as Tab"
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let width = ceil(keep.intrinsicContentSize.width) + 8
+        keep.frame = CGRect(x: bounds.width - width, y: 0, width: width, height: bounds.height)
+        title.frame = CGRect(x: 0, y: (bounds.height - 16) / 2, width: max(0, keep.frame.minX - 8), height: 16)
+    }
+}
+
+/// The pages of one transcript: a sandboxed view for each page item, placed over its attachment with its caption row
+/// under it, kept while the page stays in the transcript. A page's own height, once it reports one, wins over the one
+/// it was rendered with.
 @MainActor
 final class TranscriptPages {
     private weak var text: NSTextView?
     private var views: [AIPageID: PageSandboxView] = [:]
+    private var captions: [AIPageID: PageCaptionView] = [:]
+    var onKeep: ((AIPageID) -> Void)?
+    /// The caption row under each page.
+    static let captionHeight: CGFloat = 26
     private var heights: [AIPageID: Int] = [:]
     var theme: PageTheme?
     var onEvent: ((AIPageID, PageSandboxEvent) -> Void)?
@@ -40,7 +87,7 @@ final class TranscriptPages {
 
     /// The attachment for `page`, `width` wide; the same object while its size stays, so unchanged text compares equal.
     func attachment(_ page: AIPageSnapshot, width: CGFloat) -> NSAttributedString {
-        let size = NSSize(width: max(40, width.rounded(.down)), height: CGFloat(AIPageLimits.height(heights[page.id] ?? page.height)))
+        let size = NSSize(width: max(40, width.rounded(.down)), height: CGFloat(AIPageLimits.height(heights[page.id] ?? page.height)) + Self.captionHeight)
         if let cached = cache[page.id], cached.size == size { return cached.text }
         let attachment = NSTextAttachment()
         attachment.attachmentCell = PageAttachmentCell(page: page.id, size: size)
@@ -65,11 +112,21 @@ final class TranscriptPages {
             rect.size = cell.size
             let view = views[page.id] ?? make(page)
             if view.superview !== text { text.addSubview(view) }
-            view.frame = rect
+            view.frame = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - Self.captionHeight)
+            let caption = captions[page.id] ?? {
+                let made = PageCaptionView(page: page.id)
+                made.onKeep = { [weak self] in self?.onKeep?(page.id) }
+                captions[page.id] = made
+                return made
+            }()
+            if caption.superview !== text { text.addSubview(caption) }
+            caption.frame = CGRect(x: rect.minX, y: rect.maxY - Self.captionHeight, width: rect.width, height: Self.captionHeight)
+            caption.show(page)
         }
         for (id, view) in views where !seen.contains(id) {
             view.removeFromSuperview()
             views[id] = nil
+            captions.removeValue(forKey: id)?.removeFromSuperview()
             cache[id] = nil
         }
     }
@@ -81,7 +138,9 @@ final class TranscriptPages {
 
     func removeAll() {
         for view in views.values { view.removeFromSuperview() }
+        for caption in captions.values { caption.removeFromSuperview() }
         views = [:]
+        captions = [:]
     }
 
     private func make(_ page: AIPageSnapshot) -> PageSandboxView {
