@@ -15,8 +15,11 @@ import Vision
 /// since it spends the user's quota (about fifteen small-model requests). Results go to real-basic-<agent>.txt.
 enum AIBasicRealUIScenarios {
     static var all: [Scenario] {
-        guard let name = ProcessInfo.processInfo.environment["BRK_E2E_REAL_BASIC_AGENT"], let choice = AIProviderChoice(rawValue: name), choice.kind != nil else { return [] }
-        return [Scenario("AIRealUIBasic-\(name)", "real \(name) on its small model, real input: Max pane, Name Tabs, Tidy names, Name with AI, Place New Tabs, cleanup, translate, preview, usage",
+        // The API-key path through the settings window on the fixture's Anthropic stand-in: no real key, no quota.
+        let keys = Scenario("AIKeysUI", "an API key typed into Settings → Max, saved, tested, chosen; tab names over the API; never in state.json",
+                            cefOnly: "native settings, real input") { try keyRoute($0) }
+        guard let name = ProcessInfo.processInfo.environment["BRK_E2E_REAL_BASIC_AGENT"], let choice = AIProviderChoice(rawValue: name), choice.kind != nil else { return [keys] }
+        return [keys, Scenario("AIRealUIBasic-\(name)", "real \(name) on its small model, real input: Max pane, Name Tabs, Tidy names, Name with AI, Place New Tabs, cleanup, translate, preview, usage",
                          cefOnly: "real agent, real input") { try route($0, choice) }]
     }
 
@@ -204,6 +207,86 @@ enum AIBasicRealUIScenarios {
     private static func wanted(_ part: String) -> Bool {
         guard let parts = ProcessInfo.processInfo.environment["BRK_E2E_REAL_BASIC_PART"], !parts.isEmpty else { return true }
         return parts.split(separator: ",").contains { $0 == part }
+    }
+
+    // MARK: The API-key route
+
+    /// Scrolls the visible settings window by wheel lines at its middle (negative: down the pane).
+    private static func scrollSettings(_ app: AppUnderTest, lines: Int32, times: Int) throws {
+        guard let window = try app.native().appWindows.first(where: { $0.className == "NSWindow" && $0.isVisible }),
+              let info = (CGWindowListCopyWindowInfo([.optionIncludingWindow], CGWindowID(window.number)) as? [[String: Any]])?.first,
+              let bounds = info[kCGWindowBounds as String] as? [String: Double] else { throw Check(description: "no settings window") }
+        let center = CGPoint(x: (bounds["X"] ?? 0) + (bounds["Width"] ?? 0) / 2, y: (bounds["Y"] ?? 0) + (bounds["Height"] ?? 0) / 2)
+        try mouse(center, [.mouseMoved])
+        for _ in 0..<times {
+            let event = CGEvent(scrollWheelEvent2Source: CGEventSource(stateID: .hidSystemState), units: .line, wheelCount: 1, wheel1: lines, wheel2: 0, wheel3: 0)
+            event?.location = center; event?.post(tap: .cghidEventTap); usleep(40_000)
+        }
+        app.sleep(0.6)
+    }
+
+    private static func keyRoute(_ app: AppUnderTest) throws {
+        guard WindowServerKeys.allowed else { throw Check(description: "posting events is not allowed for this runner") }
+        guard case .hello(let hello) = try app.send(.hello) else { throw Check(description: "no hello") }
+        pid = hello.pid
+        Self.app = app
+        func field(_ name: String) -> String { ViewID.settingsField(name).identifier }
+        func stateFile() throws -> String {
+            try app.flush()
+            return String(decoding: try Data(contentsOf: app.dataDirectory.appendingPathComponent("state.json")), as: UTF8.self)
+        }
+        try WindowServerKeys.ensureFrontmost(app, app.window!)
+        try key(.command, .comma)
+        try click(title: "Max", "the Max tab")
+        app.sleep(1)
+        try click(identifier: field("enableMax"), "Turn On Max")
+        try app.waitUntil("Max on") { try settings(app).max.settings.isOn }
+        try scrollSettings(app, lines: -8, times: 14)
+        // A wrong key: saved, and its Test says the service refused it.
+        try click(identifier: field("key-anthropic"), "the Anthropic key field")
+        try type("sk-ant-wrong")
+        try click(identifier: field("key-save-anthropic"), "Save")
+        try app.waitUntil("the key saved") { try settings(app).max.keys[.anthropic]?.stored == true }
+        try click(identifier: field("key-test-anthropic"), "Test")
+        try app.waitUntil("the test failed", timeout: 15) { if case .failed? = try settings(app).max.keys[.anthropic]?.test { true } else { false } }
+        guard case .failed(let refusal)? = try settings(app).max.keys[.anthropic]?.test else { throw Check(description: "no failure") }
+        try expect(refusal.contains("refused (401)"), "the wrong key's test says \(refusal)")
+        // The right one replaces it; Test lists its models.
+        try click(identifier: field("key-anthropic"), "the Anthropic key field")
+        try type(FixtureServer.apiKey)
+        try key([], .returnKey)
+        try app.waitUntil("the new key saved") { try settings(app).max.keys[.anthropic]?.test == nil }
+        try click(identifier: field("key-test-anthropic"), "Test")
+        try app.waitUntil("the key works", timeout: 15) { if case .works? = try settings(app).max.keys[.anthropic]?.test { true } else { false } }
+        guard case .works(let models)? = try settings(app).max.keys[.anthropic]?.test else { throw Check(description: "no models") }
+        try expect(models.contains("claude-haiku-5-5"), "models \(models)")
+        // Anthropic now runs on the key.
+        try choose(popUp: field("account-anthropic"), typing: "API", "the Anthropic pop-up")
+        try app.waitUntil("the key chosen") { try settings(app).max.settings.way(.anthropic) == .apiKey }
+        try app.waitUntil("the route on the key") { try settings(app).max.basicRoute == .api(.anthropic, model: "claude-haiku-5-5", effort: nil) }
+        app.sleep(0.5)
+        if let number = try settingsWindow(app) { capture(app, "keys-accounts", window: number) }
+        var file = try stateFile()
+        try expect(!file.contains("sk-ant") && !file.lowercased().contains("apikey"), "state.json holds key text")
+        try key(.command, .w)
+        // Name Tabs goes over the API.
+        let soup = try open(app, app.site.url("basic-soup.html"))
+        try app.waitUntil("a name from the API", timeout: 30) { try tabs(app).first { $0.id == soup.id }?.title.hasPrefix("Keyed ") == true }
+        shot(app, "keys-name")
+        let usage = try settings(app).max.settings.usage?.rows ?? [:]
+        let row = usage.first { $0.key.feature == AIFeature.tabNames.title && $0.key.service == .anthropic && $0.key.way == .apiKey }
+        try expect(row?.value.cost != nil, "usage on the key: \(usage)")
+        // Remove: the key goes and Anthropic is back on the subscription.
+        try key(.command, .comma)
+        try click(title: "Max", "the Max tab")
+        app.sleep(0.8)
+        try scrollSettings(app, lines: -8, times: 14)
+        try click(identifier: field("key-remove-anthropic"), "Remove")
+        try app.waitUntil("the key removed") { try settings(app).max.keys[.anthropic]?.stored == false }
+        try app.waitUntil("the route off the key") { if case .api = try settings(app).max.basicRoute { false } else { true } }
+        file = try stateFile()
+        try expect(!file.contains("sk-ant") && !file.lowercased().contains("apikey"), "state.json holds key text after Remove")
+        try key(.command, .w)
     }
 
     // MARK: The route

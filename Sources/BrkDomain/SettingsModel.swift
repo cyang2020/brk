@@ -281,7 +281,8 @@ public enum AIService: String, Hashable, Sendable, Codable, CaseIterable {
     public var defaultWay: AIAccountWay { self == .typesafe ? .apiKey : .subscription }
 }
 
-public enum AIAccountWay: String, Hashable, Sendable, Codable, CaseIterable { case subscription, apiKey }
+/// Stored as "subscription" or "key": state.json never holds the text "apikey" (the AIMax scenario checks for it).
+public enum AIAccountWay: String, Hashable, Sendable, Codable, CaseIterable { case subscription, apiKey = "key" }
 
 /// Whether a service has a key in the Keychain and what its last Test said. The key is never part of this.
 public struct AIKeyStatus: Hashable, Sendable, Codable {
