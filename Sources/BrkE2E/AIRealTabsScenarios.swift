@@ -321,6 +321,25 @@ enum AIRealTabsScenarios {
             return "picked “\(chip.title)”, then removed it"
         } }
 
+        if wanted("space") { log.check("a Space's dock icon dragged onto the panel becomes one chip") {
+            if try app.view().ai?.conversation?.tabs != true || app.view().ai?.conversation?.ended == true {
+                try click(app, at: centre(frame(app, .row(try todayTab(app, "shop-kettle.html")))))
+                try click(app, at: centre(frame(app, .row(try todayTab(app, "shop-kettle.html")))), right: true)
+                try chooseMenu("Ask AI")
+            }
+            try app.waitUntil("an open conversation") { try app.view().ai?.conversation?.ended == false && app.view().ai?.busy == false }
+            let space = try app.view().space.id
+            let from = centre(try frame(app, .dockSpace(space))), to = centre(try frame(app, .aiControl("input")))
+            try PhysicalPointer.drag(app, through: [from, CGPoint(x: from.x + 20, y: from.y - 60), CGPoint(x: to.x, y: to.y - 80), to], window: app.window!) {
+                shot(app, "space-drag-over-panel")
+            }
+            try app.waitUntil("the Space's chip") { try app.view().ai?.conversation?.attached.contains { $0.kind == .space && $0.id == space.rawValue } == true }
+            let chip = try XCTUnwrapValue(try app.view().ai?.conversation?.attached.first { $0.kind == .space })
+            shot(app, "space-chip")
+            try expect(try app.view().space.id == space, "the drag moved to another Space")
+            return "chip “\(chip.title)” with \(chip.tabs.count) tabs"
+        } }
+
         if wanted("feishu") { log.check("drag three tabs onto the panel, “帮我把这几个 tabs 总结一下 变成一个飞书文档”") {
             try closePanel(app)
             let tabs = try ["kettle", "toaster", "blender"].map { try todayTab(app, "shop-\($0).html") }

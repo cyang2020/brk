@@ -89,6 +89,12 @@ public final class WindowRootView: NSView {
             content?.endDrop()
             aiAnswer?.showDropTarget(false)
         }
+        sidebar.panelSpaceDrop = { [weak aiAnswer] space, point in
+            guard let aiAnswer, !aiAnswer.isHidden, aiAnswer.frame.contains(point) else { aiAnswer?.showDropTarget(false); return nil }
+            aiAnswer.showDropTarget(true)
+            return .assist(.attach([.space(space)]))
+        }
+        sidebar.panelDropEnded = { [weak aiAnswer] in aiAnswer?.showDropTarget(false) }
         sidebar.panelDrop = { [weak content, weak aiAnswer] item, kind, point in
             guard let aiAnswer, !aiAnswer.isHidden, aiAnswer.frame.contains(point) else { aiAnswer?.showDropTarget(false); return nil }
             // The page under the panel shows no drop slot while the panel takes the drop.
