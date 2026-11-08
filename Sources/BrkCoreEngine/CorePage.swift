@@ -29,6 +29,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     var frozen = false
     var pictureInPictureDocument: DocumentToken?
     var audible = false
+    let contextMenu = CoreContextMenu()
     /// The page's audio and video elements as last read (`CoreMedia.swift`).
     var mediaPlayers: [MediaPlayer] = []
     var reportedSecurity: PageSecurity?
@@ -132,6 +133,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
 
     func park() {
         captureRevision &+= 1
+        contextMenu.cancel()
         cancelDialogs()
         reloadSequence.cancel()
         surface.retire()
@@ -329,6 +331,11 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
 
     @objc(webContents:didChangeMediaPlayers:)
     func webContents(_ contents: any BrkCoreWebContents, didChangeMediaPlayers json: String) { mediaPlayersChanged(json) }
+
+    @objc(webContents:runContextMenu:info:)
+    func webContents(_ contents: any BrkCoreWebContents, runContextMenu items: [[String: Any]], info: [String: Any]) -> Int {
+        runContextMenu(items, info: info)
+    }
 
     @objc(webContentsCancelDialogs:)
     func webContentsCancelDialogs(_ contents: any BrkCoreWebContents) { cancelDialogs() }

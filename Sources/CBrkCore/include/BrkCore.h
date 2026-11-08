@@ -210,6 +210,12 @@ NS_SWIFT_UI_ACTOR
 /// The page's audio and video elements, its frames' included, changed. A JSON array of objects with `frame` (0: the main frame), `document`,
 /// `element`, `kind` ("audio", "video"), `paused`, `ended`, `silent` (the element is muted) and `pictureInPicture`.
 - (void)webContents:(id<BrkCoreWebContents>)contents didChangeMediaPlayers:(NSString*)json;
+/// Chrome's context menu for the page: its rows (dictionaries with `title`, `command`, `enabled`, `checked`, `children`, or `separator`) and
+/// what was clicked (`x`, `y` in the page's view, top-left origin; `linkURL`; `editable`; `mediaType` "none", "image", "video", "audio",
+/// "other"; `selection`). Show it now and answer the chosen row's `command`, or -1. Chrome runs the command.
+- (NSInteger)webContents:(id<BrkCoreWebContents>)contents
+          runContextMenu:(NSArray<NSDictionary<NSString*, id>*>*)items
+                    info:(NSDictionary<NSString*, id>*)info;
 @end
 
 NS_SWIFT_UI_ACTOR
