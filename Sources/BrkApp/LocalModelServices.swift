@@ -23,9 +23,15 @@ final class LocalModelServices {
     private var running: Task<Void, Never>?
     private var again = false
     private var corpus: @Sendable () -> [ProfileID: [SearchCorpusItem]] = { [:] }
+    private var duplicateScopes: () -> [DuplicateScope] = { [] }
     private var lastReported: LocalModelsSnapshot?
     private var indexed: [ProfileID: Int] = [:]
+    /// Candidate pairs already posted this session (each tab and its address), so a "no" is not asked again.
+    private var askedPairs: Set<String> = []
+    private var lastDecisionUsable: Bool?
     let debounce: Duration
+    /// Called when JevK5 becomes usable or stops being usable (the decision route reads it).
+    var onDecisionAvailability: (@MainActor () -> Void)?
 
     init(models: LocalModels, debounce: Duration = .seconds(3), send: @escaping @MainActor (Input) -> Void) {
         self.models = models
@@ -65,6 +71,8 @@ final class LocalModelServices {
 
     /// Sends the card's state when it changed.
     func report() {
+        let usable = models.status(.decision).usable
+        if usable != lastDecisionUsable { lastDecisionUsable = usable; onDecisionAvailability?() }
         let snapshot = Self.snapshot(models, indexed: indexed.isEmpty ? nil : indexed.values.reduce(0, +))
         guard snapshot != lastReported else { return }
         lastReported = snapshot
@@ -104,9 +112,11 @@ final class LocalModelServices {
 
     // MARK: The index
 
-    /// The store calls this after every state change; the pass itself runs `debounce` later.
-    func stateChanged(corpus: @escaping @Sendable () -> [ProfileID: [SearchCorpusItem]]) {
+    /// The store calls this after every state change; the pass itself runs `debounce` later, and the near-duplicate
+    /// search after it.
+    func stateChanged(corpus: @escaping @Sendable () -> [ProfileID: [SearchCorpusItem]], duplicates: @escaping () -> [DuplicateScope] = { [] }) {
         self.corpus = corpus
+        self.duplicateScopes = duplicates
         scheduleIndexing()
     }
 
@@ -162,7 +172,7 @@ final class LocalModelServices {
         running = nil
         indexed = counts
         report()
-        if again { again = false; startPass() }
+        if again { again = false; startPass() } else { Task { await postDuplicateCandidates() } }
     }
 
     nonisolated static func kind(_ kind: SearchCorpusItem.Kind) -> IndexEntry.Kind {
@@ -173,28 +183,139 @@ final class LocalModelServices {
         }
     }
 
-    // MARK: For features (the command bar and Tidy call these once slice A's wiring lands)
+    // MARK: For features
 
-    /// The best matches for `query` in a profile's index, best first, or nil when the search model is not usable.
-    func search(_ query: String, profile: ProfileID, limit: Int = 8) async -> [SearchHit]? {
+    /// The best matches for `query` in a profile's index, best first, at least `minimum` similar; nil when the search
+    /// model is not usable.
+    func search(_ query: String, profile: ProfileID, limit: Int = 8, kinds: Set<IndexEntry.Kind> = Set(IndexEntry.Kind.allCases),
+                minimum: Float = Float(MeaningSearch.minimumScore)) async -> [SearchHit]? {
         guard let embedder = models.embedder else { return nil }
         let index = models.index(profile: profile.rawValue)
         guard let vector = try? await embedder.embed([.query(query)]).first else { return nil }
-        return await index.search(vector, limit: limit, minimum: 0.5)
+        return await index.search(vector, limit: limit, kinds: kinds, minimum: minimum)
     }
 
     /// Tidy's first cut: groups of tab indices by meaning, biggest first, or nil without the search model. Titles are
     /// embedded alone at 768 dimensions, the form measured best for grouping.
     func clusters(titles: [String]) async -> [[Int]]? {
+        guard let found = try? await embedClusters(titles) else { return nil }
+        return found.groups
+    }
+
+    private func embedClusters(_ titles: [String]) async throws -> (vectors: [[Float]], groups: [[Int]])? {
         guard var embedder = models.embedder, !titles.isEmpty else { return nil }
         embedder.dimensions = 768
-        guard let vectors = try? await embedder.embed(titles.map { .document(title: nil, text: $0) }) else { return nil }
-        return EmbeddingGroups.clusters(vectors)
+        let vectors = try await embedder.embed(titles.map { .document(title: nil, text: $0) })
+        return (vectors, EmbeddingGroups.clusters(vectors))
     }
 
     /// The decider when the decision model is usable.
     var decider: LocalDecider? { models.decider }
 
-    /// JevK5 behind slice A's `DecisionBackend`, for `AIBasicChannel.localDecisions` once that channel is merged.
+    /// JevK5 behind slice A's `DecisionBackend`: the basic channel's `localDecisions`.
     lazy var decisionBackend = LocalDecisionBackend(models: models)
+
+    // MARK: Near duplicates
+
+    /// After an index pass: pairs of one Space's tabs at 0.92 or more by meaning whose addresses the address rule does
+    /// not already call the same (that rule lists those by itself), posted for the yes/no question. The Today tab is
+    /// the copy offered for closing beside a pinned one, else the one shown less recently. Each pair once a session.
+    func postDuplicateCandidates() async {
+        guard models.status(.search).usable else { return }
+        let scopes = duplicateScopes()
+        var vectors: [ItemID: [Float]] = [:]
+        for scope in scopes {
+            let index = models.index(profile: scope.profile.rawValue)
+            for entry in scope.entries { vectors[entry.id] = await index.vector(for: "tab:" + entry.id.rawValue) }
+        }
+        let pairs = Self.duplicatePairs(scopes, vectors: vectors, asked: &askedPairs)
+        var start = 0
+        while start < pairs.count {
+            send(.system(.aiDuplicateCandidates(Array(pairs[start..<min(start + 8, pairs.count)]))))
+            start += 8
+        }
+    }
+}
+
+extension LocalModelServices {
+    /// The candidate pairs of `postDuplicateCandidates` from each tab's vector (tabs without one are left out).
+    nonisolated static func duplicatePairs(_ scopes: [DuplicateScope], vectors: [ItemID: [Float]], asked: inout Set<String>) -> [AIDuplicatePair] {
+        var pairs: [AIDuplicatePair] = []
+        for scope in scopes {
+            let entries = scope.entries.filter { vectors[$0.id] != nil }
+            for (i, j, similarity) in EmbeddingGroups.duplicateCandidates(entries.map { vectors[$0.id]! }) {
+                let x = entries[i], y = entries[j]
+                guard !(x.pinned && y.pinned), AICleanup.addressKey(x.url) != AICleanup.addressKey(y.url) else { continue }
+                let (copy, keep) = x.pinned ? (y, x) : y.pinned ? (x, y) : x.lastActiveAt <= y.lastActiveAt ? (x, y) : (y, x)
+                let key = [x.id.rawValue + "|" + x.url.absoluteString, y.id.rawValue + "|" + y.url.absoluteString].sorted().joined(separator: "\u{1F}")
+                guard asked.insert(key).inserted else { continue }
+                pairs.append(AIDuplicatePair(a: copy.id, b: keep.id, similarity: Double(similarity)))
+            }
+        }
+        return pairs
+    }
+}
+
+// MARK: Tidy without a text model
+
+extension LocalModelServices: TabClustering {
+    var isAvailable: Bool { models.status(.search).usable }
+
+    /// The clusters of two tabs or more, biggest first, each led by the tab closest to its centre (its name comes from
+    /// that tab, `AIBasicChannel.groupName`). Tabs like no other stay out.
+    func clusters(_ tabs: [AITab]) async throws -> [[ItemID]] {
+        guard let found = try await embedClusters(tabs.map(\.title)) else { throw AIRouteError.message(AICopy.noBasicRoute) }
+        return found.groups.filter { $0.count >= 2 }.map { members in
+            let center = VectorMath.centroid(members.map { found.vectors[$0] })
+            let lead = members.max { VectorMath.dot(found.vectors[$0], center) < VectorMath.dot(found.vectors[$1], center) } ?? members[0]
+            return [tabs[lead].id] + members.filter { $0 != lead }.map { tabs[$0].id }
+        }
+    }
+}
+
+// MARK: Place New Tabs on JevK5
+
+extension LocalModelServices: LocalDecisionPreparing {
+    /// Slice B's measured placement (112 of 121 tabs with JevK5 Q4): the five groups whose tabs are nearest the new tab
+    /// by meaning, worded as the benchmark asked (bench/run.py `placement`), "none of these" kept; `JevNoneRule` then
+    /// answers none only at 0.95 or more. Without the search model every group is kept.
+    static let placementShortlist = 5
+    static let placementInstructions = "A new tab was opened in the user's browser. Which of the user's existing tab groups does it belong in? Choose none when no group is about the same topic."
+    static let placementNone = "None of these groups: the tab's topic is not one of them."
+
+    func prepare(_ request: DecisionRequest, hint: AIDecisionHint) async -> DecisionRequest {
+        guard case .placement(let key, let subject, let members, let profile) = hint,
+              case .choice(_, let options, let none)? = request.questions[key] else { return request }
+        var names = options.map(\.name)
+        if names.count > Self.placementShortlist, let nearest = await nearestGroups(subject, members: members, among: names, profile: profile) {
+            names = nearest
+        }
+        var asked = request
+        asked.state = .string("New tab\nTitle: \(subject.title)\nAddress: \(subject.url.absoluteString.prefix(120))")
+        let listed = names.map { name in
+            DecisionOption(name, "Group “\(name)”, which holds tabs like: " + (members[name] ?? []).prefix(3).map(\.title).joined(separator: "; "))
+        }
+        asked.questions[key] = .choice(Self.placementInstructions, options: listed, none: none == nil ? nil : Self.placementNone)
+        return asked
+    }
+
+    /// The groups closest to the new tab, closest first: the centroid of each group's tabs, read from the index where
+    /// it has them (the title and host) and embedded the same way where it does not yet.
+    private func nearestGroups(_ subject: AITab, members: [String: [AITab]], among names: [String], profile: ProfileID) async -> [String]? {
+        guard let embedder = models.embedder else { return nil }
+        let index = models.index(profile: profile.rawValue)
+        var vectors: [String: [[Float]]] = [:]
+        var missing: [(name: String, tab: AITab)] = []
+        for name in names {
+            for tab in members[name] ?? [] {
+                if let vector = await index.vector(for: "tab:" + tab.id.rawValue) { vectors[name, default: []].append(vector) }
+                else { missing.append((name, tab)) }
+            }
+        }
+        func text(_ tab: AITab) -> EmbeddingText { IndexEntry(kind: .tab, id: tab.id.rawValue, title: tab.title, url: tab.url.absoluteString).text }
+        guard let embedded = try? await embedder.embed([text(subject)] + missing.map { text($0.tab) }), let target = embedded.first else { return nil }
+        for (offset, item) in missing.enumerated() { vectors[item.name, default: []].append(embedded[offset + 1]) }
+        let ranked = EmbeddingGroups.nearest(target, groups: names.map { (id: $0, vectors: vectors[$0] ?? []) }, limit: Self.placementShortlist)
+        return ranked.isEmpty ? nil : ranked.map(\.id)
+    }
 }

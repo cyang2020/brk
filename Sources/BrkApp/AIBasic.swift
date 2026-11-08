@@ -1,6 +1,7 @@
 import BrkBase
 import BrkDomain
 import Foundation
+import NaturalLanguage
 
 // The basic layer's channel (docs/design/ai-native.md, 基础 AI 功能 and 怎么拿到结构化结果): every one-shot task is
 // a prompt with a JSON schema, answered by the basic-features model on the route the user chose (`AIBasicRoute`):
@@ -147,10 +148,23 @@ enum AIBasicPrompts {
 
 /// Tidy's grouping without a text model. One text-model request groups and names (Haiku agreed with hand labels at
 /// 0.84 to 0.93, embeddings alone at 0.54 to 0.62; slice B, 2026-11-08), so slice B's embedding clusters are used
-/// only when there is no agent and no key; the groups are then named after the site most of their tabs share.
+/// only when there is no agent and no key (`AIBasicChannel.groupName` names them).
 @MainActor protocol TabClustering: AnyObject {
-    /// Each inner list a group of the given tabs' ids; every tab in exactly one group.
+    /// The groups among the given tabs' ids, each with its most typical tab first; a tab in at most one group, and a
+    /// tab like no other in none (it stays in Today).
     func clusters(_ tabs: [AITab]) async throws -> [[ItemID]]
+    /// Whether `clusters` can run now (the search model is ready).
+    var isAvailable: Bool { get }
+}
+
+extension TabClustering {
+    var isAvailable: Bool { true }
+}
+
+/// What a local decision model needs before it reads a request (slice B's measured form): Place New Tabs' five
+/// nearest groups by meaning.
+@MainActor protocol LocalDecisionPreparing: AnyObject {
+    func prepare(_ request: DecisionRequest, hint: AIDecisionHint) async -> DecisionRequest
 }
 
 /// What the channel needs from the app for one request: the settings and what was found on this Mac.
@@ -165,6 +179,7 @@ struct AIBasicContext {
     /// Slice B's local runtime registers here: JevK5 for decisions, embeddings for Tidy's groups.
     var localDecisions: (any DecisionBackend)? { didSet { keys.report() } }
     var clustering: (any TabClustering)?
+    var localPreparing: (any LocalDecisionPreparing)?
     var onUsage: (@MainActor (AIUsageKey, AIUsageCount) -> Void)?
     private var running = 0
     private var waiting: [(background: Bool, start: CheckedContinuation<Void, Never>)] = []
@@ -285,8 +300,8 @@ struct AIBasicContext {
                 }
                 try await flush()
                 return .reply(.translation(translated))
-            case .decide(let request, let feature):
-                return .reply(.decision(try await decide(request, feature: feature, context: context, route: route)))
+            case .decide(let request, let feature, let hint):
+                return .reply(.decision(try await decide(request, usage: feature.title, hint: hint, context: context, route: route)))
             case .ask, .pageQuestion, .browse:
                 return .failed("This request is a conversation, not a basic task.")
             }
@@ -296,16 +311,70 @@ struct AIBasicContext {
     }
 
     private func tidy(_ tabs: [AITab], route: AIBasicRoute, run: (StructuredPrompt) async throws -> StructuredAnswer) async throws -> [AIGroupPlan] {
-        guard case .unavailable = route, let clustering else { return try AIBasicPrompts.groups(try await run(AIBasicPrompts.tidy(tabs))) }
+        guard case .unavailable = route, let clustering, clustering.isAvailable else { return try AIBasicPrompts.groups(try await run(AIBasicPrompts.tidy(tabs))) }
         let byID = Dictionary(uniqueKeysWithValues: tabs.map { ($0.id, $0) })
-        let groups = try await clustering.clusters(tabs).map { $0.compactMap { byID[$0] } }.filter { !$0.isEmpty }
-        return groups.map { AIGroupPlan(folder: Self.siteName($0), tabs: $0.map(\.id.rawValue)) }
+        let groups = try await clustering.clusters(tabs).map { $0.compactMap { byID[$0] } }.filter { $0.count >= 2 }.prefix(12)
+        guard !groups.isEmpty else { throw AIRouteError.message(AICopy.nothingAlike) }
+        var used: [String: Int] = [:]
+        return groups.map { group in
+            var name = Self.groupName(group)
+            used[name, default: 0] += 1
+            if let n = used[name], n > 1 { name += " \(n)" }
+            return AIGroupPlan(folder: name, tabs: group.map(\.id.rawValue))
+        }
     }
 
-    /// A group's name without a text model: the site most of its tabs share ("recipes.example" → "Recipes").
+    /// A group's name without a text model: the site most of its tabs share, else a word at least half of their titles
+    /// hold, else the start of its most typical tab's title (the first, `TabClustering`).
+    static func groupName(_ tabs: [AITab]) -> String {
+        let site = siteName(tabs)
+        guard site == "Tabs", let first = tabs.first else { return site }
+        if let word = sharedWord(tabs) { return word }
+        let head = titleHead(first.title)
+        guard !head.isEmpty else { return site }
+        return head.count > 28 ? String(head.prefix(27)).trimmingCharacters(in: .whitespaces) + "…" : head
+    }
+
+    /// A title without the part that names its site or explains it ("Redis 持久化：RDB… - 知乎" → "Redis 持久化").
+    static func titleHead(_ title: String) -> String {
+        var head = title
+        for separator in [" - ", " | ", " — ", " – ", "：", ": ", "_"] {
+            if let range = head.range(of: separator), head.distance(from: head.startIndex, to: range.lowerBound) >= 2 { head = String(head[..<range.lowerBound]) }
+        }
+        return head.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static let littleWords: Set<String> = ["the", "and", "with", "for", "from", "your", "you", "how", "what", "why", "this", "that", "are", "was",
+                                                    "our", "its", "into", "about", "best", "new", "怎么", "什么", "如何", "一个", "我们", "你的", "推荐"]
+
+    /// The word most titles of the group hold, when at least half of them (and two) do: "Recipe", "索引". Words come from
+    /// the titles' heads by Apple's word tokenizer, which also splits Chinese; little words and numbers do not count.
+    static func sharedWord(_ tabs: [AITab]) -> String? {
+        guard tabs.count >= 2 else { return nil }
+        var counts: [String: (titles: Int, form: String)] = [:]
+        for tab in tabs {
+            let head = titleHead(tab.title)
+            let tokenizer = NLTokenizer(unit: .word)
+            tokenizer.string = head
+            var seen = Set<String>()
+            tokenizer.enumerateTokens(in: head.startIndex..<head.endIndex) { range, _ in
+                let word = String(head[range]), key = word.lowercased()
+                let wide = word.unicodeScalars.contains { $0.value >= 0x2E80 }
+                guard word.count >= (wide ? 2 : 3), !littleWords.contains(key), !word.allSatisfy(\.isNumber), seen.insert(key).inserted else { return true }
+                counts[key, default: (0, word)].titles += 1
+                return true
+            }
+        }
+        let needed = max(2, (tabs.count + 1) / 2)
+        let best = counts.filter { $0.value.titles >= needed }.max { ($0.value.titles, $0.key.count, $1.key) < ($1.value.titles, $1.key.count, $0.key) }
+        return best.map { $0.value.form.prefix(1).uppercased() + $0.value.form.dropFirst() }
+    }
+
+    /// The site most of a group's tabs share ("recipes.example" → "Recipes"), else "Tabs". An address by number or
+    /// localhost names no site.
     static func siteName(_ tabs: [AITab]) -> String {
         let sites = tabs.compactMap { tab -> String? in
-            guard let host = tab.url.host?.lowercased() else { return nil }
+            guard let host = tab.url.host?.lowercased(), host != "localhost", !host.allSatisfy({ $0.isNumber || $0 == "." || $0 == ":" }) else { return nil }
             let labels = host.split(separator: ".").filter { !["www", "m"].contains($0) }
             return labels.count >= 2 ? String(labels[labels.count - 2]) : labels.first.map(String.init)
         }
@@ -332,20 +401,26 @@ struct AIBasicContext {
         AIDecisionRoute.resolve(context.max.settings, keys: keys.stored, localReady: localDecisions?.isAvailable == true, basic: basic, yesNo: yesNo)
     }
 
-    private func decide(_ request: DecisionRequest, feature: AIFeature, context: AIBasicContext, route basic: AIBasicRoute) async throws -> DecisionAnswers {
+    /// A decision on the route the Max pane's Decisions setting and this Mac give it; `usage` is the usage table's line.
+    /// `forcing` takes another route than the setting's (the page check sends a long page to the text model);
+    /// `background` false puts a text-model request ahead of background work.
+    func decide(_ request: DecisionRequest, usage: String, hint: AIDecisionHint? = nil, context: AIBasicContext, route basic: AIBasicRoute,
+                forcing: AIDecisionRoute? = nil, background: Bool = true) async throws -> DecisionAnswers {
         if let problem = request.problem { throw AIRouteError.message("Brk asked a malformed question (\(problem)).") }
-        decisionFeature = feature.title
+        decisionFeature = usage
         let yesNo = request.questions.values.allSatisfy { if case .noul = $0 { true } else { false } }
-        let route = decisionRoute(context, basic: basic, yesNo: yesNo)
+        let route = forcing ?? decisionRoute(context, basic: basic, yesNo: yesNo)
         let answers: DecisionAnswers
         switch route {
         case .local:
             guard let local = localDecisions else { throw AIRouteError.message("JevK5 is not ready on this Mac.") }
-            answers = try await local.decide(request)
+            var asked = request
+            if let hint, let localPreparing { asked = await localPreparing.prepare(request, hint: hint) }
+            answers = try await local.decide(asked)
         case .openai: answers = try await openaiDecisions.decide(request)
         case .jev: answers = try await jev.decide(request)
         case .textModel(let text):
-            let answer = try await run(AIBasicPrompts.decision(request), route: text, feature: feature.title, background: true)
+            let answer = try await run(AIBasicPrompts.decision(request), route: text, feature: usage, background: background)
             answers = try AIBasicPrompts.decision(answer, request: request, backend: (text.model ?? "text model") + " (no probabilities)")
         }
         // Probabilities from a backend that should give none are dropped: only those may act.
@@ -372,7 +447,7 @@ struct AIBasicContext {
         case .renameDownload: AIFeature.downloadRename.title
         case .instant: AIFeature.instantLinks.title
         case .translate, .translateText: AIFeature.translation.title
-        case .decide(_, let feature): feature.title
+        case .decide(_, let feature, _): feature.title
         case .ask, .pageQuestion, .browse: "Conversations"
         }
     }
