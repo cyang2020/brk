@@ -14594,7 +14594,7 @@
       "section": "AI basic layer",
       "feature": "Suggest Tabs to Close",
       "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
-      "description": "A cleanup button beside Tidy lists duplicates (address rule, then embeddings and a yes/no) and tabs not shown lately, with Close or Archive.",
+      "description": "A cleanup button beside Tidy lists duplicates (address rule, then embeddings and a yes/no) and tabs not shown lately, with Close or Archive. Near-duplicates by meaning: embeddings at 0.92 or more, then a yes/no answered by JevK5 when it is downloaded.",
       "historical_status": "planned",
       "status": "verified",
       "acceptance": "Nothing closes on its own.",
@@ -14617,6 +14617,20 @@
           "command": "BRK_E2E_REAL_BASIC_AGENT=claude ... --only AIRealUIBasic-claude",
           "artifact": "verify/ai-native/merge-gate-w1/real-basic-claude/shots/real-basic-claude.txt",
           "scope": "Real Claude (Haiku 5.5), real clicks and keys from a new user's state; slice A also passed it on real Codex (gpt-6-luna), verify/ai-native/a-basic-layer/real-basic-codex-2."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LOCAL=1 python3 verify/ai-native/merge-gate-b2/run-native.py <name> --only AIRealLocal-none",
+          "artifact": "verify/ai-native/merge-gate-b2/real-local-none/shots/real-local-none.txt",
+          "scope": "Real launch, no agent and no key, models downloaded: Tidy, placement, duplicates, search by meaning in the bar and History."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LOCAL=1 python3 verify/ai-native/merge-gate-b2/run-native.py <name> --only AIRealLocal-claude",
+          "artifact": "verify/ai-native/merge-gate-b2/real-local-claude/shots/real-local-claude.txt",
+          "scope": "Real launch with Claude (Haiku 5.5) and the models: text model for choices, JevK5 for yes/no, @ by meaning, the page check."
         }
       ]
     },
@@ -14627,11 +14641,12 @@
       "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
       "description": "Jev's request shape (choice, score, yes/no with probabilities) answered by the small text model (suggest only), JevK5 on this Mac, OpenAI Decisions or TypeSafe Jev with a key.",
       "historical_status": "planned",
-      "status": "implemented",
-      "acceptance": "No probability never acts; hosted backends untested without keys.",
+      "status": "verified",
+      "acceptance": "No probability never acts. Verified on the text-model and JevK5 routes; the hosted backends (OpenAI Decisions, TypeSafe Jev) are untested without keys.",
       "owner": "ai-native-a-basic-layer",
       "required_checks": [
-        "unit"
+        "unit",
+        "native"
       ],
       "verification": [
         {
@@ -14640,6 +14655,27 @@
           "command": "swift test",
           "artifact": "verify/ai-native/merge-gate-w1/README.md",
           "scope": "Parent's run on the merged tree: 1563 tests, 3 skipped, 0 failures."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-b2/README.md",
+          "scope": "Parent's run at cf04c1ef: 1590 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LOCAL=1 python3 verify/ai-native/merge-gate-b2/run-native.py <name> --only AIRealLocal-none",
+          "artifact": "verify/ai-native/merge-gate-b2/real-local-none/shots/real-local-none.txt",
+          "scope": "Real launch, no agent and no key, models downloaded: Tidy, placement, duplicates, search by meaning in the bar and History."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LOCAL=1 python3 verify/ai-native/merge-gate-b2/run-native.py <name> --only AIRealLocal-claude",
+          "artifact": "verify/ai-native/merge-gate-b2/real-local-claude/shots/real-local-claude.txt",
+          "scope": "Real launch with Claude (Haiku 5.5) and the models: text model for choices, JevK5 for yes/no, @ by meaning, the page check."
         }
       ]
     },
@@ -14648,7 +14684,7 @@
       "section": "AI local models",
       "feature": "On This Mac",
       "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
-      "description": "Optional EmbeddingGemma 2 and JevK5 downloads with consent, progress, checksum and Remove; each model in a llama.cpp helper process on a private socket that ends with Brk.",
+      "description": "Optional EmbeddingGemma 2 and JevK5 downloads with consent, progress, checksum and Remove; each model in a llama.cpp helper process on a private socket that ends with Brk. JevK5 is English only by its model card; measured as good on Chinese tab titles (verify/ai-native/b-local-models).",
       "historical_status": "planned",
       "status": "verified",
       "acceptance": "Every feature works without them.",
@@ -14679,10 +14715,10 @@
       "section": "AI local models",
       "feature": "Search by meaning index",
       "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
-      "description": "Tabs, archive and history indexed on this Mac (ids and numbers only), cleared with history and with the model.",
+      "description": "Tabs, archive and history indexed on this Mac (ids and numbers only), cleared with history and with the model; the command bar, History and @ find pages by meaning.",
       "historical_status": "planned",
-      "status": "implemented",
-      "acceptance": "The command-bar row for it is not wired yet.",
+      "status": "verified",
+      "acceptance": "The command bar, History and @ find pages by meaning; without the model nothing changes.",
       "owner": "ai-native-b-local-models",
       "required_checks": [
         "unit",
@@ -14702,6 +14738,27 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock -- python3 -I verify/ai-native/merge-gate-w1/probe.py",
           "artifact": "verify/ai-native/merge-gate-w1/probe-out/log.txt",
           "scope": "Settings → Max → On This Mac on a real launch: download with consent, checksum, index, Clear History, relaunch, SIGKILL leaves no helper, Remove."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-b2/README.md",
+          "scope": "Parent's run at cf04c1ef: 1590 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LOCAL=1 python3 verify/ai-native/merge-gate-b2/run-native.py <name> --only AIRealLocal-none",
+          "artifact": "verify/ai-native/merge-gate-b2/real-local-none/shots/real-local-none.txt",
+          "scope": "Real launch, no agent and no key, models downloaded: Tidy, placement, duplicates, search by meaning in the bar and History."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LOCAL=1 python3 verify/ai-native/merge-gate-b2/run-native.py <name> --only AIRealLocal-claude",
+          "artifact": "verify/ai-native/merge-gate-b2/real-local-claude/shots/real-local-claude.txt",
+          "scope": "Real launch with Claude (Haiku 5.5) and the models: text model for choices, JevK5 for yes/no, @ by meaning, the page check."
         }
       ]
     },
@@ -14779,7 +14836,7 @@
       "section": "AI agent",
       "feature": "Safety for tab sessions",
       "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
-      "description": "Once page text is in, every non-Brk tool asks each time and the user's allow rules do not apply (skills still load); a new address asks before it opens; a flagged page makes every tool ask.",
+      "description": "Once page text is in, every non-Brk tool asks each time and the user's allow rules do not apply (skills still load); a new address asks before it opens; a flagged page makes every tool ask. The page check runs the phrase patterns first, then asks the decision model (JevK5 when downloaded, else the small text model); a failed or slow check flags the page.",
       "historical_status": "planned",
       "status": "verified",
       "acceptance": "The Feishu example asks before lark-cli creates a document; the injection page is flagged and its request ignored.",
@@ -14802,6 +14859,13 @@
           "command": "BRK_E2E_REAL_TABS_AGENT=claude BRK_E2E_REAL_TABS_MODEL=haiku ... --only AIRealTabs-claude",
           "artifact": "verify/ai-native/merge-gate-w1/real-tabs-claude/shots/real-tabs-claude.txt",
           "scope": "Real Claude (Haiku 5.5), real clicks, drags and keys; slice C also passed cheapest and link on real Codex (verify/ai-native/c-agent-tools/codex-final)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LOCAL=1 python3 verify/ai-native/merge-gate-b2/run-native.py <name> --only AIRealLocal-claude",
+          "artifact": "verify/ai-native/merge-gate-b2/real-local-claude/shots/real-local-claude.txt",
+          "scope": "Real launch with Claude (Haiku 5.5) and the models: text model for choices, JevK5 for yes/no, @ by meaning, the page check."
         }
       ]
     },
@@ -14833,6 +14897,37 @@
           "command": "BRK_E2E_REAL_TABS_AGENT=claude BRK_E2E_REAL_TABS_MODEL=haiku ... --only AIRealTabs-claude",
           "artifact": "verify/ai-native/merge-gate-w1/real-tabs-claude/shots/real-tabs-claude.txt",
           "scope": "Real Claude (Haiku 5.5), real clicks, drags and keys; slice C also passed cheapest and link on real Codex (verify/ai-native/c-agent-tools/codex-final)."
+        }
+      ]
+    },
+    {
+      "id": "B026",
+      "section": "AI local models",
+      "feature": "Basic features with no agent and no key",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md).",
+      "description": "With the local models downloaded and no Claude, Codex or key: Tidy groups with the search model and names groups from shared sites or words, placement and duplicates use JevK5, search by meaning works.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "No request goes to a text model; every step works through the real UI.",
+      "owner": "ai-native-b2-local-wiring",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-b2/README.md",
+          "scope": "Parent's run at cf04c1ef: 1590 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LOCAL=1 python3 verify/ai-native/merge-gate-b2/run-native.py <name> --only AIRealLocal-none",
+          "artifact": "verify/ai-native/merge-gate-b2/real-local-none/shots/real-local-none.txt",
+          "scope": "Real launch, no agent and no key, models downloaded: Tidy, placement, duplicates, search by meaning in the bar and History."
         }
       ]
     }
