@@ -120,20 +120,25 @@ enum AIRealPagesScenarios {
         try app!.waitUntil("“\(title)” in the menu", timeout: 6) { found = NativeSystemInput.frame(pid: pid, title: title, roles: ["AXMenuItem"]); return found != nil }
         try clickScreen(centre(found!))
     }
-    /// Scrolls the panel's or tab's transcript with the wheel, as a person would, until the view is in its visible part.
+    /// Scrolls the panel's or tab's transcript with the wheel, as a person would, until the view is in its visible part
+    /// and no other window covers its middle (a system dialog sat over part of the screen in the Codex run).
     private static func reveal(_ app: AppUnderTest, _ id: ViewID, in container: ViewID) throws {
-        for _ in 0..<20 {
+        for _ in 0..<30 {
             let facts = try app.native()
             guard let target = facts.actual[id.identifier]?.frame, let box = facts.actual[container.identifier]?.frame else { throw Check(description: "no \(id.identifier)") }
-            if target.minY >= box.minY + 8, target.maxY <= box.maxY - 8 { return }
-            let point = try screen(app, CGPoint(x: box.midX, y: box.midY))
+            let inside = target.minY >= box.minY + 8 && target.maxY <= box.maxY - 8
+            let covered = inside && PhysicalPointer.frontmost(at: try screen(app, centre(target)))?.pid != pid
+            if inside, !covered { return }
+            // Out of sight: toward it. Covered: move it up past whatever is in front.
+            let up = covered || target.minY >= box.minY + 8
+            let point = try screen(app, CGPoint(x: box.midX, y: box.minY + 40))
             try mouse(.mouseMoved, at: point); usleep(100_000)
-            guard let wheel = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: target.minY < box.minY ? 60 : -60, wheel2: 0, wheel3: 0) else { return }
+            guard let wheel = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: up ? -60 : 60, wheel2: 0, wheel3: 0) else { return }
             wheel.location = point
             wheel.post(tap: .cghidEventTap)
             usleep(250_000)
         }
-        throw Check(description: "\(id.identifier) stayed out of sight")
+        throw Check(description: "\(id.identifier) stayed out of sight or covered")
     }
     private static func clickAX(identifier: String, _ what: String) throws {
         var found: CGRect?
