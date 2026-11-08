@@ -95,6 +95,16 @@ public enum MeaningSearch {
 }
 
 extension AppState {
+    /// A tab as the sidebar shows it, from the saved state only: the title the user gave it, else the one its page last
+    /// showed in a window (a page's title is kept in the window's slot, not in the tab), else the tab's own; and the
+    /// address the page is on. What the index embeds and the duplicate question reads.
+    func shownPage(of id: ItemID, _ tab: Tab) -> (title: String, url: URL?) {
+        let slot = doc.windows.keys.sorted().lazy.compactMap { self.doc.windows[$0]?.slots[id] }.first
+        let observed = slot?.observedTitle.flatMap { $0.isEmpty ? nil : $0 }
+        let title = tab.customTitle?.isEmpty == false ? tab.customTitle! : observed ?? tab.title
+        return (title, slot?.committedURL ?? tab.url ?? tab.pinnedURL)
+    }
+
     /// The search model is downloaded and this copy of Brk can run it.
     public var searchModelReady: Bool {
         guard let row = session.localModels.row(.search) else { return false }
@@ -126,8 +136,11 @@ extension AppState {
         switch kind {
         case "tab":
             let id = ItemID(raw)
-            guard let item = doc.tree.items[id], case .tab(let tab) = item.body, let url = tab.url ?? tab.pinnedURL,
-                  case .profile(let owner) = browsingContext(of: id), owner == profile else { return nil }
+            guard let item = doc.tree.items[id], case .tab(var tab) = item.body, case .profile(let owner) = browsingContext(of: id), owner == profile else { return nil }
+            let shown = shownPage(of: id, tab)
+            guard let url = shown.url else { return nil }
+            tab.title = shown.title
+            tab.url = url
             return MeaningCandidate(place: .tab, title: tab.displayTitle, url: url, tab: id)
         case "archive":
             guard let entry = doc.archive.first(where: { $0.id.rawValue == raw }), let url = entry.tab.url ?? entry.tab.pinnedURL,
@@ -214,8 +227,11 @@ extension AppState {
             guard let space = doc.spaces[id] else { return nil }
             func entries(_ root: ItemID, pinned: Bool) -> [DuplicateScope.Entry] {
                 doc.tree.tabs(under: root).compactMap { tab in
-                    guard case .tab(let value)? = doc.tree.items[tab]?.body, let url = value.url, AICleanup.addressKey(url) != nil else { return nil }
-                    return DuplicateScope.Entry(id: tab, title: value.displayTitle, url: url, pinned: pinned, lastActiveAt: value.lastActiveAt)
+                    guard case .tab(let value)? = doc.tree.items[tab]?.body else { return nil }
+                    let shown = shownPage(of: tab, value)
+                    // A tab whose page has shown no title yet reads as its site alone, like every other such tab.
+                    guard !shown.title.isEmpty, let url = shown.url, AICleanup.addressKey(url) != nil else { return nil }
+                    return DuplicateScope.Entry(id: tab, title: shown.title, url: url, pinned: pinned, lastActiveAt: value.lastActiveAt)
                 }
             }
             let all = entries(space.pinnedRoot, pinned: true) + entries(space.todayRoot, pinned: false)

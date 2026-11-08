@@ -122,3 +122,27 @@ final class LocalWiringDomainTests: XCTestCase {
         XCTAssertEqual(Set(members["Recipes"]?.map(\.id) ?? []), [soup, salad])
     }
 }
+
+final class LocalWiringShownTitleTests: XCTestCase {
+    /// Found on the real route: a page's title is kept in its window's slot, so the index read every open tab under its
+    /// stored title, mostly empty, and all of them looked alike to the model.
+    func testTheIndexAndTheDuplicateScopesReadTheTitleTheSidebarShows() throws {
+        let d = Driver()
+        let soup = d.open("https://recipes.example/soup"), salad = d.open("https://recipes.example/salad")
+        d.page(soup, .titleChanged("Chicken noodle soup"))
+        d.page(salad, .titleChanged("Greek salad"))
+        d.user(.settings(.max(.tidyTabs(true))))
+        guard case .ai(let tidy, .tidyToday, _)? = d.user(.assist(.organizeToday)).effects.first(where: { if case .ai = $0 { true } else { false } }) else { return XCTFail("no Tidy") }
+        d.system(.aiResult(tidy, .reply(.groups([AIGroupPlan(folder: "Recipes", tabs: [soup.rawValue, salad.rawValue])]))))
+        let tabs = (d.state.searchCorpus()[.default] ?? []).filter { $0.kind == .tab }
+        XCTAssertEqual(tabs.first { $0.id == soup.rawValue }?.title, "Chicken noodle soup")
+        XCTAssertEqual(tabs.first { $0.id == salad.rawValue }?.title, "Greek salad")
+        d.user(.settings(.max(.feature(.tabCleanup, true))))
+        d.system(.aiKeys([:], localDecisions: true))
+        let entries = d.state.duplicateScopes().flatMap(\.entries)
+        XCTAssertEqual(entries.first { $0.id == soup }?.title, "Chicken noodle soup")
+        let rows = d.state.meaningCandidates(MeaningResults(text: "x", scope: .commandBar, hits: [MeaningHit(key: "tab:" + soup.rawValue, score: 0.9)]), profile: .default)
+        XCTAssertEqual(rows.first?.title, "Chicken noodle soup")
+        XCTAssertEqual(rows.first?.tab, soup, "a tab inside a group")
+    }
+}
