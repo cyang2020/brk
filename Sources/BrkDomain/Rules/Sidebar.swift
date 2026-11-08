@@ -258,6 +258,34 @@ extension Work {
     /// - plus button: New Tab, New Folder, New Space, the live folder sources.
     /// Share is a file export (user decision), so each Share row writes the same document the old Export rows did.
     func menuModel(for request: PopupMenuRequest, in window: WindowID) -> MenuModel {
+        var model = arcMenuModel(for: request, in: window)
+        // Brk's own row goes after all of Arc's, so Arc's rows keep their order; it shows only while the panel's
+        // conversation can be used.
+        if !model.entries.isEmpty, let sources = askAISources(for: request, in: window), !sources.isEmpty {
+            model.entries += [.separator, .action(title: "Ask AI", command: .assist(.attach(sources)), enabled: true)]
+        }
+        return model
+    }
+
+    private func askAISources(for request: PopupMenuRequest, in window: WindowID) -> [AIAttachmentSource]? {
+        guard state.doc.settings.max.enabled(.commandBar), state.agentProfile(in: window) != nil else { return nil }
+        func source(_ id: ItemID) -> AIAttachmentSource? {
+            guard state.locate(id) == .global, let node = state.doc.tree[id] else { return nil }
+            switch node.body {
+            case .tab, .split: return .tab(id.rawValue)
+            case .folder: return .folder(id)
+            case .section: return nil
+            }
+        }
+        switch request {
+        case .selection(let ids): return ids.compactMap(source)
+        case .item(let id): return source(id).map { [$0] }
+        case .space(let id), .spaceControls(let id): return state.doc.spaces[id] == nil ? nil : [.space(id)]
+        default: return nil
+        }
+    }
+
+    private func arcMenuModel(for request: PopupMenuRequest, in window: WindowID) -> MenuModel {
         func entry(_ title: String, _ command: Command, enabled: Bool = true) -> MenuEntry {
             .action(title: title, command: command, enabled: enabled)
         }
@@ -314,7 +342,7 @@ extension Work {
                 entry("Archive Tabs Below", .tabTools(.bulk(.below(rows[n - 1]), .archive)), enabled: false),
             ])
         case .spaceControls(let id):
-            var model = menuModel(for: .space(id), in: window)
+            var model = arcMenuModel(for: .space(id), in: window)
             model.entries = model.entries.map { entry in
                 if case .action(let title, .space(.delete(let id)), let enabled) = entry {
                     return .action(title: title, command: .space(.requestDelete(id)), enabled: enabled)
