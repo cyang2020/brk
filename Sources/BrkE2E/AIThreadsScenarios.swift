@@ -33,7 +33,7 @@ enum AIThreadsScenarios {
 
     // MARK: Helpers
 
-    private final class Log {
+    final class Log {
         let url: URL
         var failures: [String] = []
         init(_ app: AppUnderTest) {
@@ -52,7 +52,7 @@ enum AIThreadsScenarios {
         }
     }
 
-    private static func prepare(_ app: AppUnderTest, names: Bool = false) throws {
+    static func prepare(_ app: AppUnderTest, names: Bool = false) throws {
         // The basic layer would start small-model requests of its own; only Name Tabs where a scenario asks for it.
         for feature in AIFeature.allCases {
             let on = !AIFeature.basicLayer.contains(feature) || (names && feature == .tabNames)
@@ -63,13 +63,13 @@ enum AIThreadsScenarios {
         try AIPanelLookScenarios.clearOfSystemDialogs(app)
     }
 
-    private static func screen(_ app: AppUnderTest, _ point: CGPoint) throws -> CGPoint {
+    static func screen(_ app: AppUnderTest, _ point: CGPoint) throws -> CGPoint {
         let facts = try app.native()
         let top = CGDisplayBounds(CGMainDisplayID()).height - facts.windowFrame.maxY
         return CGPoint(x: facts.windowFrame.minX + point.x, y: top + point.y)
     }
     /// A control's frame once two reads 0.2 s apart agree.
-    private static func still(_ app: AppUnderTest, _ id: ViewID) throws -> CGRect {
+    static func still(_ app: AppUnderTest, _ id: ViewID) throws -> CGRect {
         var last: CGRect?
         for _ in 0..<25 {
             let now = try visible(app.native(), id).frame
@@ -79,15 +79,15 @@ enum AIThreadsScenarios {
         }
         return try XCTUnwrapValue(last)
     }
-    private static func click(_ app: AppUnderTest, _ id: ViewID) throws {
+    static func click(_ app: AppUnderTest, _ id: ViewID) throws {
         let frame = try still(app, id)
         try PhysicalPointer.click(app, at: try screen(app, CGPoint(x: frame.midX, y: frame.midY)), window: app.window!)
         usleep(350_000)
     }
-    private static func shown(_ app: AppUnderTest, _ id: ViewID) throws -> Bool { isShown(try app.native(), id) }
-    private static func shot(_ app: AppUnderTest, _ name: String) { _ = try? app.screenshot(app.scenarioID + "-" + name) }
-    private static func panel(_ app: AppUnderTest) throws -> AIPanelSnapshot? { try app.view().aiPanel }
-    private static func rows(_ app: AppUnderTest) throws -> [AIThreadRow] { try panel(app)?.groups.flatMap(\.rows) ?? [] }
+    static func shown(_ app: AppUnderTest, _ id: ViewID) throws -> Bool { isShown(try app.native(), id) }
+    static func shot(_ app: AppUnderTest, _ name: String) { _ = try? app.screenshot(app.scenarioID + "-" + name) }
+    static func panel(_ app: AppUnderTest) throws -> AIPanelSnapshot? { try app.view().aiPanel }
+    static func rows(_ app: AppUnderTest) throws -> [AIThreadRow] { try panel(app)?.groups.flatMap(\.rows) ?? [] }
 
     private static func ask(_ app: AppUnderTest, _ text: String, answer: String? = nil) throws -> AIRequestID {
         try app.dispatch(.assist(.ask(text)))
@@ -109,7 +109,7 @@ enum AIThreadsScenarios {
         event.flags = flags; event.post(tap: .cghidEventTap); usleep(15_000)
     }
     /// Real key codes at the window server, into whatever has the keys: lower-case ASCII only.
-    private static func type(_ text: String, enter: Bool = false) throws {
+    static func type(_ text: String, enter: Bool = false) throws {
         for character in text {
             guard let (code, shifted) = codes[character] else { throw Check(description: "no key for \(character)") }
             if shifted { post(56, true, .maskShift) }
@@ -119,7 +119,7 @@ enum AIThreadsScenarios {
         if enter { post(36, true, []); post(36, false, []) }
         usleep(200_000)
     }
-    private static func key(_ modifiers: Modifiers, _ key: Key) throws {
+    static func key(_ modifiers: Modifiers, _ key: Key) throws {
         try NativeSystemInput.postSystemWide(KeyChord(modifiers, key))
         usleep(250_000)
     }
@@ -241,7 +241,7 @@ enum AIThreadsScenarios {
 
     // MARK: Waiting elsewhere
 
-    private static func pending(_ app: AppUnderTest) throws -> AIAgentApproval? {
+    static func pending(_ app: AppUnderTest) throws -> AIAgentApproval? {
         try app.view().ai?.conversation?.items.lazy.compactMap { item -> AIAgentApproval? in if case .approval(let a) = item, a.answer == nil { a } else { nil } }.first
     }
 
@@ -379,7 +379,7 @@ enum AIThreadsScenarios {
 
     // MARK: Library
 
-    private static func library(_ app: AppUnderTest) throws -> LibraryConversationsSnapshot? {
+    static func library(_ app: AppUnderTest) throws -> LibraryConversationsSnapshot? {
         if case .library(let l)? = try app.view().overlay { return l.conversations }
         return nil
     }
@@ -622,6 +622,131 @@ enum AIThreadsScenarios {
             app.sleep(0.4)
             shot(app, "dark-approval-open")
             return try set("light", here: light, other: dark)
+        }
+        try log.finish()
+    }
+}
+
+/// The conversation lists on a real agent (docs/design/ai-threads.md, "验收": 用真实的 Claude 在两个 Space 各开一个对话): a
+/// question about a shop page in one Space, named by the small model; a question in a second Space whose agent asks to
+/// run a command; from the first Space the strip, the ring and the count; the strip's click, Allow, and all three gone;
+/// the Library's search. Real clicks and keys, Chinese pasted as an input method leaves it. Opt-in:
+/// BRK_E2E_REAL_THREADS_AGENT=claude (BRK_E2E_REAL_THREADS_MODEL: a word of the model's name, default haiku). Results:
+/// AIRealThreads-<agent>.txt beside the shots.
+enum AIRealThreadsScenarios {
+    static var all: [Scenario] {
+        guard let name = ProcessInfo.processInfo.environment["BRK_E2E_REAL_THREADS_AGENT"], let choice = AIProviderChoice(rawValue: name), choice.kind != nil else { return [] }
+        return [Scenario("AIRealThreads-\(name)", "real \(name): conversations in two Spaces, the cross-Space strip, ring and count, Allow from the strip, the AI name, the Library's search",
+                         cefOnly: "real agent, real input") { try route($0, choice) }]
+    }
+
+    private static func paste(_ text: String) throws {
+        func shell(_ path: String, _ input: String?) -> String {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: path)
+            process.environment = ["LANG": "en_US.UTF-8", "LC_ALL": "en_US.UTF-8"]
+            let output = Pipe(), feed = Pipe()
+            process.standardOutput = output; process.standardInput = feed
+            guard (try? process.run()) != nil else { return "" }
+            if let input { feed.fileHandleForWriting.write(Data(input.utf8)) }
+            try? feed.fileHandleForWriting.close()
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return String(decoding: data, as: UTF8.self)
+        }
+        let saved = shell("/usr/bin/pbpaste", nil)
+        _ = shell("/usr/bin/pbcopy", text)
+        defer { _ = shell("/usr/bin/pbcopy", saved) }
+        try AIThreadsScenarios.key(.command, .v)
+        usleep(300_000)
+    }
+
+    private static func send(_ app: AppUnderTest, _ text: String, input: ViewID) throws {
+        try AIThreadsScenarios.click(app, input)
+        try paste(text)
+        try NativeSystemInput.postSystemWide(KeyChord([], .returnKey))
+        usleep(400_000)
+    }
+
+    private static func route(_ app: AppUnderTest, _ choice: AIProviderChoice) throws {
+        let log = AIThreadsScenarios.Log(app)
+        let kind = choice.kind!
+        try AIThreadsScenarios.prepare(app, names: true)
+        try app.dispatch(.settings(.max(.provider(choice))))
+        try app.dispatch(.settings(.openPane(.max)))
+        var models: [AIAgentModel] = []
+        try app.waitUntil("the agent reported", timeout: 60) {
+            guard case .settings(let settings) = try app.send(.settings), let status = settings.max.agents.first(where: { $0.kind == kind }), status.state == .ready else { return false }
+            models = status.models
+            return true
+        }
+        let word = ProcessInfo.processInfo.environment["BRK_E2E_REAL_THREADS_MODEL"] ?? "haiku"
+        let model = models.first { $0.id.lowercased().contains(word) || $0.name.lowercased().contains(word) }
+        try app.dispatch(.settings(.max(.agentModel(kind, model?.id))))
+        try app.dispatch(.settings(.max(.basicModel(kind, model?.id))))
+        try app.dispatch(.settings(.closeWindow))
+        log.write("model \(model?.id ?? "default") of \(models.map(\.id))")
+        let home = try app.view().space.id
+        try app.dispatch(.space(.update(home, title: "购物", icon: nil, theme: nil)))
+        try app.dispatch(.commandBar(.open(.newTab)))
+        try app.dispatch(.commandBar(.submit(app.site.url("shop-kettle.html").absoluteString)))
+        app.sleep(2)
+        var shopping = AIRequestID("")
+        log.check("a question in 购物, answered, then named by the small model") {
+            try app.dispatch(.assist(.newConversation))
+            try app.waitUntil("a new conversation") { try app.view().ai?.conversation?.fresh == true }
+            try send(app, "这个页面上的商品叫什么、多少钱？一句话回答。", input: .aiControl("input"))
+            try app.waitUntil("the answer", timeout: 180) { try app.view().ai?.busy == false && app.view().ai?.conversation?.items.contains { if case .assistant = $0 { true } else { false } } == true }
+            shopping = try XCTUnwrapValue(try app.view().ai?.conversation?.id)
+            try app.waitUntil("the AI name", timeout: 90) { try app.view().ai?.name.map { $0 != "这个页面上的商品叫什么、多少钱？一句话回答。" } == true }
+            AIThreadsScenarios.shot(app, "1-named")
+            return "named “\(try app.view().ai?.name ?? "")”"
+        }
+        let work = try createSpace(app, title: "工作")
+        var waiting = AIRequestID("")
+        log.check("a question in 工作 whose agent asks to run a command") {
+            try app.waitUntil("工作's list") { try app.view().aiPanel?.space == work }
+            try send(app, "请用 Bash 工具运行 echo brk-threads，然后告诉我输出。", input: .aiControl("list-input"))
+            try app.waitUntil("the approval", timeout: 180) { try AIThreadsScenarios.pending(app) != nil }
+            waiting = try XCTUnwrapValue(try app.view().ai?.conversation?.id)
+            AIThreadsScenarios.shot(app, "2-approval")
+            return "waits: “\(try AIThreadsScenarios.pending(app)?.title ?? "")”"
+        }
+        log.check("from 购物: the strip, the ring and the count") {
+            try AIThreadsScenarios.click(app, .dockSpace(home))
+            try app.waitUntil("购物 with its conversation", timeout: 8) { try app.view().space.id == home && app.view().ai?.conversation?.id == shopping }
+            try expect(try AIThreadsScenarios.shown(app, .aiControl("list-badge")), "no count on the list icon")
+            try AIThreadsScenarios.click(app, .aiControl("list"))
+            try app.waitUntil("the strip", timeout: 6) { try AIThreadsScenarios.shown(app, .aiControl("strip-\(waiting.rawValue)")) }
+            try expect(try app.view().dock.first { $0.id == work }?.attention == true, "工作's dot has no ring")
+            AIThreadsScenarios.shot(app, "3-strip")
+            let strip = try XCTUnwrapValue(try app.view().aiPanel?.strips.first)
+            return "strip “\(strip.spaceTitle) · \(strip.title) · \(strip.detail)”, ring, count \(try app.view().aiPanel?.waiting ?? 0)"
+        }
+        log.check("the strip's click, Allow, and nothing waits any more") {
+            try AIThreadsScenarios.click(app, .aiControl("strip-\(waiting.rawValue)"))
+            try app.waitUntil("工作 with the approval", timeout: 8) { try app.view().space.id == work && AIThreadsScenarios.shown(app, .aiControl("approval-allowOnce")) }
+            try AIThreadsScenarios.click(app, .aiControl("approval-allowOnce"))
+            try app.waitUntil("the reply", timeout: 180) { try app.view().ai?.busy == false }
+            let said = try app.view().ai?.conversation?.items.compactMap { if case .assistant(let t) = $0 { t } else { nil } }.joined(separator: " ") ?? ""
+            try AIThreadsScenarios.click(app, .dockSpace(home))
+            try app.waitUntil("nothing waits", timeout: 8) {
+                let v = try app.view()
+                return v.space.id == home && v.aiPanel?.waiting == 0 && v.dock.first { $0.id == work }?.attention == false
+            }
+            AIThreadsScenarios.shot(app, "4-cleared")
+            return "reply: “\(said.prefix(120))”"
+        }
+        log.check("the Library finds the 工作 conversation by what was said") {
+            try AIThreadsScenarios.click(app, .dockLibrary)
+            try app.waitUntil("the Library") { if case .library? = try app.view().overlay { true } else { false } }
+            try AIThreadsScenarios.click(app, .libraryPage(.conversations))
+            try app.waitUntil("both conversations", timeout: 6) { Set(try AIThreadsScenarios.library(app)?.rows.map(\.id) ?? []) == [shopping, waiting] }
+            try AIThreadsScenarios.click(app, .aiControl("library-search"))
+            try AIThreadsScenarios.type("brk-threads")
+            try app.waitUntil("found", timeout: 6) { try AIThreadsScenarios.library(app)?.rows.map(\.id) == [waiting] }
+            AIThreadsScenarios.shot(app, "5-library")
+            return "“brk-threads” → \(waiting.rawValue)"
         }
         try log.finish()
     }
