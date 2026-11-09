@@ -57,6 +57,19 @@ public enum AIWords {
 
     public static func stopped(_ language: AILanguage) -> String { language == .zh ? "已停止。" : "Stopped." }
 
+    /// One of Brk's notices written before the user's first message, in the system's language, written again in the
+    /// language of that message; any other text as it is.
+    public static func reword(_ text: String, to language: AILanguage) -> String {
+        for from in [AILanguage.zh, .en] where from != language {
+            if text == cannotReadTabs(from) { return cannotReadTabs(language) }
+            let working = workingIn("\u{0}", from).components(separatedBy: "\u{0}")
+            if working.count == 2, text.hasPrefix(working[0]), text.hasSuffix(working[1]), text.count > working[0].count + working[1].count {
+                return workingIn(String(text.dropFirst(working[0].count).dropLast(working[1].count)), language)
+            }
+        }
+        return text
+    }
+
     public static func agentChanged(_ language: AILanguage) -> String {
         language == .zh ? "Max 换了 agent。再问一次，就是和新的 agent 说话。" : "Max's agent changed. Ask again to talk to the new one."
     }

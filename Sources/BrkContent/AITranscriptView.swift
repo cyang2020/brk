@@ -21,11 +21,16 @@ enum AITranscriptRow: Equatable {
         var rows: [AITranscriptRow] = []
         if let conversation = answer.conversation {
             var run: [AIConversationItem] = []
+            // A page made in the middle of a run of steps shows after the run: one line for the steps, then the page.
+            var held: [AIPageSnapshot] = []
             func flush() {
-                guard let first = run.first else { return }
-                let key: String = switch first { case .step(let step): step.id; case .approval(let approval): approval.id; default: "run" }
-                rows.append(.steps(key: key, items: run))
-                run = []
+                if let first = run.first {
+                    let key: String = switch first { case .step(let step): step.id; case .approval(let approval): approval.id; default: "run" }
+                    rows.append(.steps(key: key, items: run))
+                    run = []
+                }
+                rows += held.map(AITranscriptRow.page)
+                held = []
             }
             for item in conversation.items {
                 switch item {
@@ -39,8 +44,8 @@ enum AITranscriptRow: Equatable {
                     if !trimmed.isEmpty { flush(); rows.append(.answer(trimmed)) }
                 case .notice(let text): flush(); rows.append(.notice(text))
                 case .page(let ref):
-                    flush()
-                    if let page = answer.pages.first(where: { $0.id == ref.id }) { rows.append(.page(page)) }
+                    guard let page = answer.pages.first(where: { $0.id == ref.id }) else { continue }
+                    if run.isEmpty { flush(); rows.append(.page(page)) } else { held.append(page) }
                 }
             }
             flush()
@@ -414,7 +419,7 @@ final class AINoticeView: NSView {
 @MainActor
 final class AIPageRowView: NSView, AITranscriptPart {
     let page: AIPageID
-    private let card = NSView()
+    private let card = AIFlippedView()
     private let shadowBack = NSView()
     private let title = aiLabel(Metrics.ai.stepFont.value, weight: .semibold)
     private let schedule = aiLabel(Metrics.ai.noticeFont.value)
@@ -477,7 +482,7 @@ final class AIPageRowView: NSView, AITranscriptPart {
         return shadow
     }
 
-    func height(width: CGFloat) -> CGFloat { Metrics.ai.pageHeaderHeight.value + pageHeight }
+    func height(width: CGFloat) -> CGFloat { Metrics.ai.pageHeaderHeight.value + pageHeight + Metrics.ai.pageInset.value.height * 2 }
 
     override func layout() {
         super.layout()
@@ -492,7 +497,8 @@ final class AIPageRowView: NSView, AITranscriptPart {
         title.frame = CGRect(x: pad, y: y, width: titleWidth, height: lineHeight)
         schedule.frame = CGRect(x: title.frame.maxX + 4, y: y + 1, width: max(0, room - titleWidth - 4), height: lineHeight)
         rule.frame = CGRect(x: 0, y: header - 1, width: bounds.width, height: 1)
-        sandbox?.frame = CGRect(x: 0, y: header, width: bounds.width, height: max(0, bounds.height - header))
+        let inset = m.pageInset.value
+        sandbox?.frame = CGRect(x: inset.width, y: header + inset.height, width: max(0, bounds.width - inset.width * 2), height: max(0, bounds.height - header - inset.height * 2))
     }
 }
 
@@ -530,4 +536,9 @@ final class AIActionsView: NSView, AITranscriptPart {
             button.frame = CGRect(x: 0, y: CGFloat(i) * (m.buttonHeight.value + m.gap.value / 2), width: bounds.width, height: m.buttonHeight.value)
         }
     }
+}
+
+/// A plain container with its origin at the top left, like every BrkUI container.
+final class AIFlippedView: NSView {
+    override var isFlipped: Bool { true }
 }

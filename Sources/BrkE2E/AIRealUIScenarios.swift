@@ -386,6 +386,9 @@ enum AIRealUIScenarios {
             try bar(app, "say ok")
             try key([], .tab)
             _ = try answer(app)
+            // Work in a Folder… is in the composer's + menu.
+            try click(app, .aiControl("plus"))
+            try app.waitUntil("the + menu", timeout: 5) { try app.native().actual[ViewID.aiControl("folder").identifier]?.hidden == false }
             try click(app, .aiControl("folder"))
             try choosePanelFolder(app, work)
             try app.waitUntil("a session in the folder", timeout: 20) { try app.view().ai?.conversation?.folder != nil }
@@ -405,6 +408,8 @@ enum AIRealUIScenarios {
                 // The default model has no quota left: the panel's Agent… leads to the model, the next message uses it.
                 notes.append("default model: \(limit)")
                 shot(app, "folder-limit")
+                try click(app, .aiControl("plus"))
+                try app.waitUntil("the + menu", timeout: 5) { try app.native().actual[ViewID.aiControl("agent-settings").identifier]?.hidden == false }
                 try click(app, .aiControl("agent-settings"))
                 try choose(popUp: ViewID.settingsField("agentModel").identifier, typing: "Haiku", "the model pop-up")
                 try key(.command, .w)

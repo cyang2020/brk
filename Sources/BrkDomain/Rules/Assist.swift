@@ -266,7 +266,7 @@ extension Work {
             // first request, as a question from the command bar would be.
             let id = conversation.id
             conversation.fresh = false
-            conversation.items.append(.user(q))
+            appendUserMessage(q, to: &conversation)
             let attached = takeAttachments(&conversation)
             answer.conversation = conversation
             answer.title = q
@@ -286,7 +286,7 @@ extension Work {
         let turn = AIRequestID(ctx.newID())
         state.session.ai.requests[turn] = AIRequest(window: window, context: state.libraryContext(in: window), task: .ask(q), purpose: .followUp)
         state.session.pendingAI[turn] = .ask(q)
-        conversation.items.append(.user(q))
+        appendUserMessage(q, to: &conversation)
         let attached = conversation.tabs ? takeAttachments(&conversation) : []
         state.session.ai.turnText[conversation.id] = 0
         if conversation.dormant {

@@ -221,7 +221,7 @@ public final class AppStore {
                 // Where the conversation shows now: its tab's reading column, else the panel's reading width at the
                 // panel's widest (a narrower window lays the page out again at its width).
                 let inTab = self?.snapshot.windows[window]?.conversations.contains { $0.answer.conversation?.id == conversation } == true
-                return Int(inTab ? Metrics.ai.tabColumnWidth.value : AIPanelLayout.readingWidth(panelWidth: Metrics.ai.width.value))
+                return Int(AIPanelLayout.pageWidth(readingWidth: inTab ? Metrics.ai.tabColumnWidth.value : AIPanelLayout.readingWidth(panelWidth: Metrics.ai.width.value)))
             })
     }
 

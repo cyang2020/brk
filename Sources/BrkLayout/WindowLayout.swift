@@ -125,8 +125,11 @@ public enum AIPanelLayout {
         return CGRect(x: contentSize.width - width, y: top, width: width, height: max(0, contentSize.height - top))
     }
 
-    /// How wide the panel's text and pages are: the column less its inset on both sides.
+    /// How wide the panel's text is: the column less its inset on both sides.
     public static func readingWidth(panelWidth: Double) -> Double { max(0, panelWidth - Metrics.ai.columnInset.value * 2) }
+
+    /// How wide a page in a reply is laid out: its card, `readingWidth` wide (or a tab's column), less the card's inset.
+    public static func pageWidth(readingWidth: Double) -> Double { max(0, readingWidth - Metrics.ai.pageInset.value.width * 2) }
 }
 
 /// The Library (Arc: `HomeButton`). Owner: F5. While it is open its panel replaces the sidebar at the window's left

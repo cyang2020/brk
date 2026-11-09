@@ -316,7 +316,7 @@ enum AIRealTabsScenarios {
             try app.waitUntil("the picked chip") { try (app.view().ai?.conversation?.attached.count ?? 0) == before + 1 }
             let chip = try XCTUnwrapValue(try app.view().ai?.conversation?.attached.last)
             shot(app, "mention-chip")
-            try clickControl(app, "chip-" + chip.id)
+            try clickControl(app, "chip-remove-" + chip.id)
             try app.waitUntil("the chip removed") { try (app.view().ai?.conversation?.attached.count ?? 0) == before }
             return "picked “\(chip.title)”, then removed it"
         } }

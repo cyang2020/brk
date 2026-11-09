@@ -158,6 +158,16 @@ extension Work {
 
     /// The language Brk's own words take in a conversation with these items (`AILanguage.of`).
     func aiLanguage(_ items: [AIConversationItem]) -> AILanguage { AILanguage.of(items, system: ctx.systemLanguage) }
+
+    /// The user's message goes into the transcript. The first one sets the conversation's language: Brk's notices from
+    /// before it, written in the system's language, are written again in that one (`AIWords.reword`).
+    func appendUserMessage(_ text: String, to conversation: inout AIConversationSnapshot) {
+        let first = !conversation.items.contains { if case .user = $0 { true } else { false } }
+        if first, let language = AILanguage.of(text: text), language != aiLanguage(conversation.items) {
+            conversation.items = conversation.items.map { if case .notice(let notice) = $0 { .notice(AIWords.reword(notice, to: language)) } else { $0 } }
+        }
+        conversation.items.append(.user(text))
+    }
 }
 
 /// The @ list's plain matching: words of the query in the title, then in the address. A search by meaning adds its own

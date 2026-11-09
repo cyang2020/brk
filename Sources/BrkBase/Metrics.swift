@@ -646,6 +646,7 @@ public struct AIMetrics: MetricGroup {
     public let itemRadius = Metric(8.0, .guess("the step line's and approval card's corners, as the URL pill's fill"))
     public let noticeHeight = Metric(20.0, .guess("the centred notice pill"))
     public let pageHeaderHeight = Metric(30.0, .guess("a page card's title row"))
+    public let pageInset = Metric(CGSize(width: 10, height: 6), .guess("a page inside its card: the title row's own margin at the sides"))
     public let composerPadding = Metric(8.0, .guess("the composer's inside margin"))
     public let composerMaxLines = Metric(6, .guess("the composer grows to this many lines, then scrolls"))
     public let sendSize = Metric(24.0, .guess("the round send and stop button"))

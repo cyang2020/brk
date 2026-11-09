@@ -445,7 +445,9 @@ final class AIApprovalView: NSView {
         setAccessibilityIdentifier("ai-approval")
         sentence.font = .systemFont(ofSize: Metrics.ai.bodyFont.value, weight: .medium)
         sentence.maximumNumberOfLines = 3
-        sentence.lineBreakMode = .byTruncatingTail
+        // Wrapping (a truncating break would keep it to one line), the third line cut if it must be.
+        sentence.lineBreakMode = .byCharWrapping
+        sentence.cell?.truncatesLastVisibleLine = true
         sentence.drawsBackground = false
         detail.font = .monospacedSystemFont(ofSize: Metrics.ai.stepFont.value - 1, weight: .regular)
         detail.maximumNumberOfLines = 10

@@ -66,6 +66,16 @@ final class AIPanelWordsTests: XCTestCase {
         XCTAssertTrue(notices[0].hasPrefix("附上 "), "\(notices)")
     }
 
+    func testAFoldersFirstNoticeTakesTheLanguageOfTheFirstMessage() throws {
+        let d = enabled()
+        d.system(.aiFolderChosen(d.window, "/tmp/project"))
+        XCTAssertEqual(d.view.ai?.conversation?.items, [.notice(AIWords.workingIn("/tmp/project", .en))], "before the user writes: the system's language")
+        d.user(.assist(.followUp("看看这个文件夹里有什么")))
+        XCTAssertEqual(d.view.ai?.conversation?.items.first, .notice(AIWords.workingIn("/tmp/project", .zh)))
+        XCTAssertEqual(AIWords.reword("Something the agent said.", to: .zh), "Something the agent said.")
+        XCTAssertEqual(AIWords.reword(AIWords.cannotReadTabs(.zh), to: .en), AIWords.cannotReadTabs(.en))
+    }
+
     func testNewConversationPutsTheShownOneAwayAndStartsAFreshOne() throws {
         let d = enabled()
         let a = d.open("https://a.example/")
