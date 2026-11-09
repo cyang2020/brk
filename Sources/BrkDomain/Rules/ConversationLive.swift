@@ -156,10 +156,6 @@ extension AppState {
         }
     }
 
-    /// A conversation's turn runs, in a panel or out of sight.
-    func conversationBusy(_ id: AIRequestID) -> Bool {
-        session.ai.host(ofConversation: id).flatMap { session.ai[host: $0]?.busy } ?? false
-    }
 }
 
 extension Work {

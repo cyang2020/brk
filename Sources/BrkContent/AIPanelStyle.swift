@@ -4,8 +4,8 @@ import BrkDomain
 import BrkLayout
 import BrkUIKit
 
-/// Every color the AI panel and the conversation tab paint with, from the window's Space theme (docs/design/ai-panel.md,
-/// the table under "改法"). Each part copies a part of the sidebar: messages and the composer are the current tab's row,
+/// Every color the AI panel, the Library's conversation preview and a kept page's caption row paint with, from the window's
+/// Space theme (docs/design/ai-panel.md, the table under "改法"). Each part copies a part of the sidebar: messages and the composer are the current tab's row,
 /// the step line, notices, chips and @ rows the URL pill's fill, secondary text the "Today" header, lines the sidebar's
 /// separator, pages the web card; the send button, links and the new-data dot are the Space's own color
 /// (`Palette.focusColor`). Nothing is a system color, so a new Space, color or scheme changes the panel with it.
@@ -19,7 +19,7 @@ struct AIPanelStyle: Equatable {
     let accent: NSColor
     /// The arrow on the send button: white on the light shade, dark on the light one a dark theme gets.
     let onAccent: NSColor
-    /// The web card's color: pages and the conversation tab's background.
+    /// The web card's color: pages, and the background of the Library's preview and a kept page's card (`onCard`).
     let card: NSColor
     let cardText: NSColor
 
@@ -46,9 +46,9 @@ struct AIPanelStyle: Equatable {
     var item: NSColor { color(tokens.itemBackground) }
     var itemHover: NSColor { color(tokens.itemHover) }
     var separator: NSColor { color(tokens.separator) }
-    /// A user message's fill: the current tab's row on the Space's background; on the tab's white card the URL pill's.
+    /// A user message's fill: the current tab's row on the Space's background; on a white card the URL pill's.
     var bubble: NSColor { onCard ? item : color(tokens.tabCurrent) }
-    /// The composer's fill: the current tab's row, or the card's own color with a hairline on the tab.
+    /// The composer's fill: the current tab's row, or the card's own color on a card.
     var composer: NSColor { onCard ? card : color(tokens.tabCurrent) }
     /// The current row's shadow line under its lower edge; none on a dark theme (its token is clear).
     var shadow: NSShadow? {
