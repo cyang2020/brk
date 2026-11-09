@@ -15154,6 +15154,258 @@
           "scope": "AIPagesFixture: saved conversation relaunched, a chart kept as a tab from its right-click menu, a link inside the chart asks before it opens."
         }
       ]
+    },
+    {
+      "id": "B034",
+      "section": "AI agent",
+      "feature": "AI pages that refresh themselves",
+      "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md, docs/design/ai-live-pages.md).",
+      "description": "A kept page refreshes every hour, every day at a time or every week on a day and time, set by the agent from the user's words (brk_page_save refresh) or from the row's Refresh menu; Refresh Now; Refresh With the small basic model (default) or the conversation's model. A refresh continues the page's conversation as a fresh restricted session and replaces the page's data through brk_page_update_data, checked against the shape the page declared; HTML changes only through brk_page_update when the user asks. A slot missed while Brk was closed runs once at the next launch. Tokens go to the Usage card's Live Page Refresh line. A page with a schedule is not auto-archived.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "盯着这三个商品页的价格，每小时更新一次: a shop's price changes, the hour passes, the page shows the new price; 每周一把我上周归档的文章整理成阅读清单: Monday's refresh lists the week's archived articles.",
+      "owner": "ai-native-e-live-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test --filter LivePagesTests",
+          "artifact": "Tests/BrkDomainTests/LivePagesTests.swift",
+          "scope": "Slots, catch-up once, model choice, data checked against the shape, Max off, no data to refresh, the row's menu."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/e-live-pages/run-native.py <name> --only AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/e-live-pages/README.md",
+          "scope": "Real Claude (Haiku 5.5) and Codex (gpt-6-luna), real input, the user's two examples."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-e/README.md",
+          "scope": "Parent's run at c01421d4: 1668 tests, 9 skipped, 0 failures; LivePagesTests 29 of 29 at 7e682e99."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/merge-gate-e/run-native.py <name> --only AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-e/real-live-claude-2/shots/real-live-claude.txt",
+          "scope": "Parent's rerun at 7e682e99: 10 of 10 on real Claude (Haiku 5.5)."
+        }
+      ]
+    },
+    {
+      "id": "B035",
+      "section": "AI agent",
+      "feature": "Unattended refresh safety",
+      "arc_evidence": "None: Brk's own, not counted against Arc (docs/design/ai-native.md 安全与权限, docs/design/ai-live-pages.md).",
+      "description": "A refresh session has Brk's brk_tab_list, brk_tab_search, brk_tab_read, brk_page_source_read and brk_page_update_data only. Claude: no built-in tool, no settings file, hook, skill or other MCP server, dontAsk. Codex: read-only sandbox, approval never, no shell, web search, apps, plugins, hooks or other MCP server. brk_page_source_read loads only an address the page listed when it was made that the profile has visited, fresh out of sight; anything else is refused without asking. Everything read, titles included, goes through the injection check; a flag stops the refresh, keeps the data and marks the row.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "A refresh lists five tools, is refused brk_tab_open and an unlisted address, and a shop page with an instruction to an AI stops it with the data unchanged.",
+      "owner": "ai-native-e-live-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test --filter LivePageRefreshTests",
+          "artifact": "Tests/BrkAppTests/LivePageRefreshTests.swift",
+          "scope": "Command lines, the tool list, refusals by name, unlisted and unvisited addresses, a flagged read and a flagged title, the data tool's shape check."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/e-live-pages/run-native.py <name> --only AIAgentLivePages",
+          "artifact": "verify/ai-native/e-live-pages/README.md",
+          "scope": "The fixture agent speaking MCP to Brk's bridge: five tools listed, brk_tab_open and an unlisted address refused, an injected shop page stops a refresh."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-e/README.md",
+          "scope": "Parent's run at c01421d4: 1668 tests, 9 skipped, 0 failures; LivePagesTests 29 of 29 at 7e682e99."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/merge-gate-e/run-native.py <name> --only AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-e/real-live-claude-2/shots/real-live-claude.txt",
+          "scope": "Parent's rerun at 7e682e99: 10 of 10 on real Claude (Haiku 5.5)."
+        }
+      ]
+    },
+    {
+      "id": "B036",
+      "section": "AI agent",
+      "feature": "New-data mark on a live page's row",
+      "arc_evidence": "None: Brk's own row mark (Arc's rows have no unread mark).",
+      "description": "A dot in the Space's colour at the row's trailing end when a refresh changed the data since the user last looked, the warning sign when the last refresh was stopped or failed; the row's tooltip gives the schedule and the last refresh; showing the page clears the mark; a refreshing row shows its loading state.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "After a refresh with new data the row has the dot; showing the page clears it.",
+      "owner": "ai-native-e-live-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-e/README.md",
+          "scope": "Parent's run at c01421d4: 1668 tests, 9 skipped, 0 failures; LivePagesTests 29 of 29 at 7e682e99."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/merge-gate-e/run-native.py <name> --only AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-e/real-live-claude-2/shots/real-live-claude.txt",
+          "scope": "Parent's rerun at 7e682e99: 10 of 10 on real Claude (Haiku 5.5)."
+        }
+      ]
+    },
+    {
+      "id": "B037",
+      "section": "AI agent",
+      "feature": "Ticks and notes inside an AI page",
+      "arc_evidence": "None: Brk's own.",
+      "description": "window.brk.save(object) is the one page-world message that changes anything: a JSON object of at most 64 KB that fits the page's saveSchema (or any object), at most 60 a minute, answered so the page's promise settles; kept with the page and read back as window.brk.saved; a refresh reads it and never writes it; a preview saves nothing.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Tick an item and type a note in a page; quit and relaunch; they are still there and the next refresh keeps them.",
+      "owner": "ai-native-e-live-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test --filter PageSandboxTests",
+          "artifact": "Tests/BrkContentTests/PageSandboxTests.swift",
+          "scope": "Real WebKit: the save's checks, caps and rate, the direct handler post, no other handler, no navigation, a preview saves nothing."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-e/README.md",
+          "scope": "Parent's run at c01421d4: 1668 tests, 9 skipped, 0 failures; LivePagesTests 29 of 29 at 7e682e99."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/merge-gate-e/run-native.py <name> --only AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-e/real-live-claude-2/shots/real-live-claude.txt",
+          "scope": "Parent's rerun at 7e682e99: 10 of 10 on real Claude (Haiku 5.5)."
+        }
+      ]
+    },
+    {
+      "id": "B038",
+      "section": "AI agent",
+      "feature": "Show an AI page in Today on chosen days",
+      "arc_evidence": "None: Brk's own (after Muse Spaces' scheduled pages).",
+      "description": "Show in Today ▸ Every Day, Weekdays, Weekends or chosen days (also brk_page_save showOn): on other days the row is out of Today unless the window shows it, the command bar still finds it, and auto-archive leaves it alone.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Unticking today's day takes the row out of Today; the command bar still switches to it.",
+      "owner": "ai-native-e-live-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-e/README.md",
+          "scope": "Parent's run at c01421d4: 1668 tests, 9 skipped, 0 failures; LivePagesTests 29 of 29 at 7e682e99."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/merge-gate-e/run-native.py <name> --only AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-e/real-live-claude-2/shots/real-live-claude.txt",
+          "scope": "Parent's rerun at 7e682e99: 10 of 10 on real Claude (Haiku 5.5)."
+        }
+      ]
+    },
+    {
+      "id": "B039",
+      "section": "AI agent",
+      "feature": "Delete a conversation or AI page for good",
+      "arc_evidence": "None: Brk's own.",
+      "description": "Closing a conversation's row archives it like a tab. In the Library's archive, Delete Conversation… or Delete Page… asks in a sheet, then deletes the transcript, every page it made, their files and their rows.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "After Delete, the conversation's and its page's files are gone and the kept page's row with them.",
+      "owner": "ai-native-e-live-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-e/README.md",
+          "scope": "Parent's run at c01421d4: 1668 tests, 9 skipped, 0 failures; LivePagesTests 29 of 29 at 7e682e99."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/merge-gate-e/run-native.py <name> --only AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-e/real-live-claude-2/shots/real-live-claude.txt",
+          "scope": "Parent's rerun at 7e682e99: 10 of 10 on real Claude (Haiku 5.5)."
+        }
+      ]
+    },
+    {
+      "id": "B040",
+      "section": "AI agent",
+      "feature": "Find conversations in the command bar",
+      "arc_evidence": "None: Brk's own.",
+      "description": "The command bar lists saved conversations whose title has the typed text, then those where it was said (with a snippet), at most two, after the typed row; with the search model on this Mac, conversations are found by meaning too (title and the user's own messages in the index). Choosing one opens its tab.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Typing words said in a conversation lists it; a click opens its tab.",
+      "owner": "ai-native-e-live-pages",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-e/README.md",
+          "scope": "Parent's run at c01421d4: 1668 tests, 9 skipped, 0 failures; LivePagesTests 29 of 29 at 7e682e99."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/merge-gate-e/run-native.py <name> --only AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-e/real-live-claude-2/shots/real-live-claude.txt",
+          "scope": "Parent's rerun at 7e682e99: 10 of 10 on real Claude (Haiku 5.5)."
+        }
+      ]
     }
   ]
 }
