@@ -685,8 +685,14 @@ enum AILivePagesScenarios {
         try key([], .returnKey)
         try app.waitUntil("the turn started", timeout: 15) { try answer(app, place)?.busy == true }
     }
-    /// The AX frames of the page's checkboxes and text fields: WebKit lists a page's controls to Accessibility.
-    private static func pageControls(_ role: String) -> [CGRect] { axNodes(role).map(\.frame) }
+    /// The AX frames of the page's checkboxes and text fields: WebKit lists a page's controls to Accessibility. Only
+    /// those inside the page's card on screen: the transcript's copy of the page lists its own (real-live-claude-1 typed
+    /// its second note into the first field of that copy's list).
+    private static func pageControls(_ role: String) -> [CGRect] {
+        guard let app, let card = try? pageCard(app), let origin = try? screen(app, card.origin) else { return axNodes(role).map(\.frame) }
+        let shown = CGRect(origin: origin, size: card.size)
+        return axNodes(role).map(\.frame).filter { shown.contains(CGPoint(x: $0.midX, y: $0.midY)) }
+    }
     private static func axNodes(_ role: String) -> [(frame: CGRect, value: String)] { NativeSystemInput.elements(pid: pid, role: role) }
 
     private static func realRoute(_ app: AppUnderTest, _ choice: AIProviderChoice) throws {
