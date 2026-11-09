@@ -235,6 +235,45 @@ final class LivePagesTests: XCTestCase {
         XCTAssertEqual(refreshes(d.system(.clockTick)), [], "an archived page does not refresh")
     }
 
+    func testAnHourlyAndAWeeklyPageDueAtOnceBothRefreshWithoutWaitingForEachOther() throws {
+        let d = enabled()
+        let (conversation, hourly) = try keptPage(d)
+        let weekly = AIPageID("page-2")
+        d.system(.aiConversation(conversation, .page(AIPageRecord(id: weekly, title: "Reading List", html: URL(fileURLWithPath: "/tmp/brk-test-pages/page-2.html"), height: 300,
+                                                                  data: #"{"items":[{"id":"a","price":1}]}"#, conversation: conversation, profile: .default,
+                                                                  createdAt: T0, readPages: true, schema: schema))))
+        let kept = d.system(.agentAct(AgentActRequest(call: "w", window: d.window, act: .keepPage(weekly, title: nil, conversation: conversation,
+                                                                                               live: [.schedule(.weekly(weekday: 2, hour: 9, minute: 0))]))))
+        XCTAssertTrue(kept.effects.contains { if case .agentActDone("w", .done) = $0 { true } else { false } })
+        d.user(.tab(.focus(d.todayIDs.last!)))
+        // A week on (Monday 28 September, 14:13): the hourly slot and the weekly one have both passed.
+        d.advance(.seconds(7 * 86_400))
+        let runs = refreshes(d.system(.clockTick))
+        XCTAssertEqual(Set(runs.map(\.page)), [hourly, weekly], "both start on the same tick")
+        XCTAssertEqual(Set(runs.map(\.run)).count, 2)
+        XCTAssertNotNil(pageRow(d, hourly), "the sweep left both in Today")
+        XCTAssertNotNil(pageRow(d, weekly))
+        XCTAssertTrue(pageRow(d, hourly)?.loading == true && pageRow(d, weekly)?.loading == true)
+        let hourlyRun = try XCTUnwrap(runs.first { $0.page == hourly }), weeklyRun = try XCTUnwrap(runs.first { $0.page == weekly })
+        // Each run's data goes to its own page only; one finishing does not end the other.
+        d.system(.aiPageRefresh(hourly, run: weeklyRun.run, .data(#"{"items":[{"id":"kettle","price":1}]}"#)))
+        XCTAssertEqual(d.state.savedPages[hourly]?.data, #"{"items":[{"id":"kettle","price":39}]}"#, "another page's run cannot write here")
+        d.system(.aiPageRefresh(hourly, run: hourlyRun.run, .data(#"{"items":[{"id":"kettle","price":30}]}"#)))
+        d.system(.aiPageRefresh(hourly, run: hourlyRun.run, .finished(.updated, detail: nil)))
+        XCTAssertTrue(pageRow(d, weekly)?.loading == true, "the weekly run goes on")
+        XCTAssertEqual(refreshes(d.system(.clockTick)), [], "neither starts again while one still runs")
+        d.system(.aiPageRefresh(weekly, run: weeklyRun.run, .data(#"{"items":[{"id":"b","price":2}]}"#)))
+        d.system(.aiPageRefresh(weekly, run: weeklyRun.run, .finished(.updated, detail: nil)))
+        XCTAssertEqual(d.state.savedPages[hourly]?.live?.outcome?.kind, .updated)
+        XCTAssertEqual(d.state.savedPages[weekly]?.live?.outcome?.kind, .updated)
+        XCTAssertEqual(pageRow(d, hourly)?.liveMark, .changed)
+        XCTAssertEqual(pageRow(d, weekly)?.liveMark, .changed)
+        d.advance(.seconds(60))
+        XCTAssertEqual(refreshes(d.system(.clockTick)), [], "both took their latest slot")
+        d.advance(.seconds(3_600))
+        XCTAssertEqual(refreshes(d.system(.clockTick)).map(\.page), [hourly], "the next hour is the hourly page's alone")
+    }
+
     func testTheSameDataIsNoChangeAndSaysNothing() throws {
         let d = enabled()
         let (conversation, page) = try keptPage(d)

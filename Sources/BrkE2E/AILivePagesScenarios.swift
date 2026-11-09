@@ -238,6 +238,10 @@ enum AILivePagesScenarios {
         try app.waitUntil("the refresh's outcome", timeout: timeout) { (outcome(app, page)?.at ?? 0) > before }
         return outcome(app, page)?.kind ?? "none"
     }
+    /// Until no page in `pages` is refreshing (their rows' loading state), up to `timeout` seconds.
+    private static func waitForIdle(_ app: AppUnderTest, _ pages: [AIPageID], timeout: Double = 300) throws {
+        try app.waitUntil("no refresh running", timeout: timeout) { try pages.allSatisfy { try pageRow(app, $0)?.loading != true } }
+    }
     private static func quitAndRelaunch(_ app: AppUnderTest) throws {
         try WindowServerKeys.ensureFrontmost(app, app.window!)
         try key(.command, .q)
@@ -785,11 +789,8 @@ enum AILivePagesScenarios {
 
         if wanted("weekly") {
             var weekly: AIPageID?
-            // An earlier part's page refreshes hourly; the week's jump would run it too. It is set to Never first, so
-            // only the reading list spends a request.
-            if let page, (live(app, page)["schedule"] as? [String: Any]) != nil, let row = try pageRow(app, page) {
-                try rowMenu(app, row.id, ["Refresh", "Never"])
-            }
+            // The price watch, when an earlier part made it, keeps refreshing every hour: each jump below has it due
+            // together with the reading list, as a user with both pages would.
             log.check("three articles read and archived") {
                 for article in ["article-sleep", "article-coffee", "article-rivers"] {
                     try open(app, article + ".html")
@@ -822,17 +823,35 @@ enum AILivePagesScenarios {
                 return "\(how); schedule \(live(app, made.id)["schedule"] ?? "nil"); data now \(short(record(app, made.id)?["data"] as? String))"
             }
             if let weekly { log.check("mid-week a fourth article is archived; Monday's refresh lists what was archived in the week before") {
-                // Three days on. The page was made on a Monday before 9:00, so that morning's slot passed meanwhile and
-                // runs once now (claude-weekly-3 and codex-3 read the list while this run was still going).
+                // Three days on. Whether the page's first slot came meanwhile depends on the time of day by Brk's clock
+                // when it was made: before Monday 9:00 it did, and runs once now; after, the first slot is next Monday
+                // (merge-gate-e's full run made it at 10:44 and waited here for a run that rightly never came). Either
+                // way the step goes on once nothing refreshes.
                 try lookAway(app)
-                let catchUp = try passTheHour(app, weekly, seconds: 3 * 86_400, timeout: 300)
-                log.write("  the slot missed during the three days ran once: \(catchUp)")
+                let before = outcome(app, weekly)?.at ?? 0
+                moved += 3 * 86_400
+                _ = try app.advanceClock(seconds: 3 * 86_400)
+                try waitForIdle(app, [weekly, page].compactMap { $0 })
+                log.write("  three days on: the reading list \((outcome(app, weekly)?.at ?? 0) > before ? "ran its missed slot once (\(outcome(app, weekly)?.kind ?? "?"))" : "had no slot yet")"
+                          + (page.map { "; the price watch \(outcome(app, $0)?.kind ?? "none")" } ?? ""))
                 try open(app, "article-tea.html")
                 try key(.command, .w)
                 app.sleep(0.8)
                 try lookAway(app)
-                // Then to the next Monday, past 9:00.
-                let kind = try passTheHour(app, weekly, seconds: 4 * 86_400 + 3 * 3_600, timeout: 300)
+                // Then to the next Monday at 10:00 by Brk's clock, whatever time it is now: the reading list's slot and,
+                // when there is one, the price watch's hour are due together.
+                let now = try app.advanceClock(seconds: 0)
+                let date = Date(timeIntervalSince1970: Double(now.milliseconds) / 1000)
+                let monday = try XCTUnwrapValue(Calendar.current.nextDate(after: date, matching: DateComponents(hour: 10, minute: 0, weekday: 2), matchingPolicy: .nextTime))
+                let priceBefore = page.flatMap { outcome(app, $0)?.at } ?? 0
+                let kind = try passTheHour(app, weekly, seconds: monday.timeIntervalSince(date) + 60, timeout: 300)
+                if let page {
+                    try waitForIdle(app, [page])
+                    let price = outcome(app, page)
+                    try expect((price?.at ?? 0) > priceBefore, "the price watch, due at the same time, did not refresh")
+                    log.write("  the price watch, due at the same time, refreshed too: \(price?.kind ?? "?"); its row is in Today: \(try pageRow(app, page) != nil)")
+                    try expect(try pageRow(app, page) != nil, "the price watch's row left Today")
+                }
                 try expect(kind == "updated", "the outcome: \(kind) \(outcomeDetail(app, weekly))")
                 let data = record(app, weekly)?["data"] as? String ?? ""
                 let titles = ["sleep", "coffee", "river", "tea"].filter { data.lowercased().contains($0) }
