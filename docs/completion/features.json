@@ -15283,8 +15283,8 @@
       "arc_evidence": "None: Brk's own.",
       "description": "window.brk.save(object) is the one page-world message that changes anything: a JSON object of at most 64 KB that fits the page's saveSchema (or any object), at most 60 a minute, answered so the page's promise settles; kept with the page and read back as window.brk.saved; a refresh reads it and never writes it; a preview saves nothing.",
       "historical_status": "planned",
-      "status": "verified",
-      "acceptance": "Tick an item and type a note in a page; quit and relaunch; they are still there and the next refresh keeps them.",
+      "status": "partial",
+      "acceptance": "Tick an item and type a note in a page; quit and relaunch; they are still there and the next refresh keeps them. Gap found at the parent's gate: a typed note is kept only when the agent-written page saves on input; in real-live-claude-2 the tick was saved and the note was not. Follow-up: Brk saves pending edits when a page is hidden or Brk quits, and the scenario checks the note text.",
       "owner": "ai-native-e-live-pages",
       "required_checks": [
         "unit",
