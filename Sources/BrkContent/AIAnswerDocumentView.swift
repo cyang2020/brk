@@ -1,56 +1,52 @@
 import AppKit
 import BrkBase
 import BrkDomain
+import BrkLayout
 import BrkUIKit
 
-/// Where a conversation is drawn: the Max panel beside the page, or its own tab, filling the card.
+/// Where a conversation is drawn: the AI panel at the window's right edge, or its own tab, filling the card.
 enum AIDocumentStyle { case panel, tab }
 
-/// A conversation with the user's local agent: in the Max panel beside the page, or full size in the conversation's tab.
-/// Live text, the steps the agent takes, the approvals it asks for, the pages it renders, follow-ups and Stop. Arc has
-/// no such view; it follows Brk's own panel style and T3 Code's behaviour. Source buttons open through Brk in the same
-/// browsing context.
+/// A conversation with the user's local agent (docs/design/ai-panel.md). In the panel it is a column at the window's
+/// right edge (`WindowFrames.aiPanel`) drawn straight on the Space's background, with no fill, border or shadow of its
+/// own; in the conversation's tab the same parts sit in a reading column at most 720 pt wide on the web card's color.
+/// Every part copies a part of the sidebar (`AIPanelStyle`), and Brk's own words follow the language the user writes in
+/// (`AIPanelCopy`). Arc has no such view.
+///
+/// Top to bottom: the header (the conversation's name, a spinner while the agent works, New Conversation, Open as Tab and
+/// Close), the transcript (`AITranscriptView`), the approval the agent waits for, and the composer (`AIComposerView`)
+/// with its + menu and @ list over the transcript just above it.
 @MainActor
-final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
+final class AIAnswerDocumentView: NSView {
     private let dispatch: Dispatch
     let style: AIDocumentStyle
-    private let material = NSVisualEffectView()
-    private let heading = NSTextField(labelWithString: "Max · Local agent")
-    private let question = NSTextField(wrappingLabelWithString: "")
-    private let scroll = NSScrollView()
-    /// TextKit 1: pages are laid over their attachments' glyph rects, and the answers' tables are text tables.
-    private let text = NSTextView(usingTextLayoutManager: false)
-    private lazy var pages = TranscriptPages(text: text)
-    /// Its pages commit their edits in progress (the view is about to go).
-    func commitPageEdits() async { await pages.commitEdits() }
-    private let close = AIActionButton("Close")
-    private let openTab = AIActionButton("Open as Tab")
-    private var pageTheme: PageTheme?
-    private var textWidth: CGFloat = 0
+    private let heading = aiLabel(Metrics.ai.titleFont.value, weight: .semibold)
     private let progress = NSProgressIndicator()
-    private let input = NSTextField()
-    private let send = AIActionButton("Send")
-    private let folderStatus = NSTextField(labelWithString: "")
-    private let folder = AIActionButton("Work in a Folder…")
-    private let settings = AIActionButton("Agent…")
-    private let approvalTitle = NSTextField(wrappingLabelWithString: "")
-    private let approvalDetail = NSTextField(wrappingLabelWithString: "")
-    private let approvalBack = NSView()
-    private var approvalButtons: [AIActionButton] = []
-    private var pendingApproval: AIAgentApproval?
-    private var sources: [AIActionButton] = []
-    private var controls: [AIActionButton] = []
+    private let newConversation = AIIconButton(symbol: "square.and.pencil", tip: "")
+    private let openTab = AIIconButton(symbol: "macwindow", tip: "")
+    private let close = AIIconButton(symbol: "xmark", tip: "")
+    private let scroll = NSScrollView()
+    private let transcript = AITranscriptView()
+    private let approval = AIApprovalView()
+    private let composer = AIComposerView()
+    private let plusMenu = AIMenuView()
+    private let mentions = AIMenuView()
     private var answer: AIAnswerSnapshot?
+    private var theme: ResolvedTheme?
+    private var panelStyle: AIPanelStyle?
+    private var copy = AIPanelCopy([])
+    private var pageTheme: PageTheme?
     private var shownConversation: AIRequestID?
-    private var rendered: [(item: AIConversationItem, text: NSAttributedString)] = []
-    /// The chips of tabs given to the next message, and the @ list while one is typed.
-    private var chipButtons: [AIChipButton] = []
-    private var mentionRows: [AIActionButton] = []
+    private var menuOpen = false
+    private var menuMonitor: Any?
     private var mentionIndex = 0
     private var mention: AIMentionSnapshot?
     /// The query whose list Esc closed: it stays closed until the text after @ changes.
     private var dismissedMention: String?
-    private let mentionBack = NSView()
+    private var placedWidth: CGFloat = 0
+
+    /// Its pages commit their edits in progress (the view is about to go).
+    func commitPageEdits() async { await transcript.pages.commitEdits() }
 
     init(dispatch: @escaping Dispatch, style: AIDocumentStyle = .panel) {
         self.dispatch = dispatch
@@ -59,45 +55,43 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         isHidden = true
         if style == .panel { setAccessibilityIdentifier("ai-document") } else { identify(.aiControl("conversation-tab")) }
         wantsLayer = true
-        layer?.masksToBounds = true
-        if style == .panel {
-            layer?.cornerRadius = Metrics.ai.cornerRadius.value
-            layer?.borderWidth = Metrics.ai.borderWidth.value
-            layer?.borderColor = NSColor.separatorColor.cgColor
-        }
-        material.isHidden = style == .tab
-        material.material = .sidebar; material.blendingMode = .withinWindow; material.state = .active
-        heading.font = .systemFont(ofSize: Metrics.ai.headingFont.value, weight: .semibold)
-        heading.lineBreakMode = .byTruncatingTail
+        layer?.masksToBounds = style == .tab
         heading.setAccessibilityIdentifier(style == .panel ? "ai-heading" : "ai-tab-heading")
-        question.font = .systemFont(ofSize: style == .tab ? Metrics.ai.tabTitleFont.value : Metrics.ai.questionFont.value, weight: style == .tab ? .semibold : .medium)
-        question.maximumNumberOfLines = 2; question.lineBreakMode = .byTruncatingTail
-        text.isEditable = false; text.isSelectable = true; text.isRichText = true
-        text.drawsBackground = false; text.textColor = .labelColor
-        text.font = .systemFont(ofSize: Metrics.ai.bodyFont.value)
-        text.autoresizingMask = [.width]; text.isVerticallyResizable = true; text.isHorizontallyResizable = false
-        text.textContainer?.widthTracksTextView = true
-        text.linkTextAttributes = [.foregroundColor: NSColor.linkColor, .cursor: NSCursor.pointingHand]
-        text.delegate = self
-        text.setAccessibilityIdentifier(style == .panel ? "ai-answer" : "ai-tab-answer")
-        scroll.identify(.aiControl(style == .panel ? "transcript" : "tab-transcript"))
-        scroll.documentView = text; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.drawsBackground = false
-        progress.style = .spinning; progress.controlSize = .small; progress.isDisplayedWhenStopped = false
-        close.setAccessibilityIdentifier("ai-close")
-        close.onPress = { [weak self] in guard let self else { return }; dispatch(.assist(answer?.busy == true && answer?.conversation == nil ? .cancel : .dismiss)) }
-        close.isHidden = style == .tab
+        if style == .tab { heading.font = .systemFont(ofSize: Metrics.ai.tabTitleFont.value, weight: .semibold) }
+        progress.style = .spinning
+        progress.controlSize = .small
+        progress.isDisplayedWhenStopped = false
+        newConversation.identify(.aiControl("new"))
+        newConversation.onPress = { dispatch(.assist(.newConversation)) }
         openTab.identify(.aiControl("open-tab"))
-        openTab.toolTip = "Show this conversation full size in its own tab. It keeps running."
         openTab.onPress = { dispatch(.assist(.openAsTab)) }
-        openTab.isHidden = true
+        close.setAccessibilityIdentifier("ai-close")
+        close.onPress = { [weak self] in
+            guard let self else { return }
+            dispatch(.assist(self.answer?.busy == true && self.answer?.conversation == nil ? .cancel : .dismiss))
+        }
+        for button in [newConversation, openTab, close] {
+            button.layer?.cornerRadius = Metrics.ai.iconRadius.value
+            button.isHidden = style == .tab
+        }
+        scroll.identify(.aiControl(style == .panel ? "transcript" : "tab-transcript"))
+        scroll.documentView = transcript
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.scrollerStyle = .overlay
+        scroll.drawsBackground = false
+        scroll.contentView.drawsBackground = false
+        transcript.onLink = { [weak self] url in self?.openLink(url) }
+        transcript.onKeep = { [weak self] page in self?.send(.keepPage(page)) }
+        transcript.onAction = { dispatch($0) }
+        transcript.onResize = { [weak self] in self?.relayTranscript() }
+        let pages = transcript.pages
         pages.onEvent = { [weak self] page, event in
             if case .link(let url) = event { self?.send(.pageLink(page, url)) }
         }
-        pages.onKeep = { [weak self] page in self?.send(.keepPage(page)) }
         pages.onSave = { [weak self] page, text in self?.send(.pageSave(page, text)) }
         pages.onHeight = { [weak self] in
             guard let self, let answer = self.answer else { return }
-            self.rendered = []
             self.showTranscript(answer)
         }
         pages.menu = { [weak self] page in
@@ -105,46 +99,25 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
             let kept = self.answer?.pages.first { $0.id == page }?.kept == true
             return [ClosureMenuItem(kept ? "Show Tab" : "Keep as Tab") { [weak self] in self?.send(.keepPage(page)) }]
         }
-        input.placeholderString = "Ask a follow-up"
-        input.font = .systemFont(ofSize: Metrics.ai.bodyFont.value)
-        input.lineBreakMode = .byTruncatingTail
-        input.usesSingleLineMode = true
-        input.cell?.sendsActionOnEndEditing = false
-        input.target = self; input.action = #selector(submit)
-        input.delegate = self
-        input.identify(.aiControl("input"))
-        mentionBack.wantsLayer = true
-        mentionBack.layer?.cornerRadius = Metrics.ai.approvalRadius.value
-        mentionBack.layer?.borderWidth = Metrics.ai.borderWidth.value
-        mentionBack.layer?.borderColor = NSColor.separatorColor.cgColor
-        mentionBack.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        mentionBack.isHidden = true
-        mentionBack.setAccessibilityIdentifier("ai-mentions")
-        send.identify(.aiControl("send"))
-        send.onPress = { [weak self] in self?.sendOrStop() }
-        folder.identify(.aiControl("folder"))
-        folder.toolTip = "Start a session that may run commands and change files in a folder you choose. It asks you first."
-        folder.onPress = { [weak self] in self?.send(.chooseFolder) }
-        settings.identify(.aiControl("agent-settings"))
-        settings.toolTip = "Choose the agent, model and effort in Settings → Max."
-        settings.onPress = { dispatch(.settings(.openPane(.max))) }
-        folderStatus.font = .systemFont(ofSize: Metrics.ai.stepFont.value)
-        folderStatus.textColor = .secondaryLabelColor
-        folderStatus.lineBreakMode = .byTruncatingMiddle
-        folderStatus.setAccessibilityIdentifier("ai-folder-status")
-        approvalBack.wantsLayer = true
-        approvalBack.layer?.cornerRadius = Metrics.ai.approvalRadius.value
-        approvalBack.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
-        approvalBack.setAccessibilityIdentifier("ai-approval")
-        approvalTitle.font = .systemFont(ofSize: Metrics.ai.bodyFont.value, weight: .medium)
-        approvalTitle.maximumNumberOfLines = 2; approvalTitle.lineBreakMode = .byTruncatingTail
-        approvalDetail.font = .monospacedSystemFont(ofSize: Metrics.ai.stepFont.value, weight: .regular)
-        approvalDetail.textColor = .secondaryLabelColor
-        // A long command (a whole document going to a service) wraps, so more of what would leave shows before Allow.
-        approvalDetail.maximumNumberOfLines = 4; approvalDetail.lineBreakMode = .byCharWrapping
-        approvalDetail.cell?.truncatesLastVisibleLine = true
-        for view in [material, heading, question, scroll, close, openTab, progress, approvalBack, approvalTitle, approvalDetail, folderStatus, folder, settings, input, send, mentionBack] as [NSView] { addSubview(view) }
+        approval.onAnswer = { [weak self] approval, option in self?.send(.approve(approval: approval, option: option)) }
+        approval.onResize = { [weak self] in self?.needsLayout = true }
+        composer.onSend = { [weak self] message in
+            guard let self, self.answer?.busy != true else { return }
+            self.composer.text = ""
+            self.send(.followUp(message))
+        }
+        composer.onStop = { [weak self] in self?.send(.stop) }
+        composer.onPlus = { [weak self] in self?.toggleMenu() }
+        composer.onRemoveChip = { [weak self] id in self?.send(.detach(id)) }
+        composer.onChange = { [weak self] text in self?.textChanged(text) }
+        composer.onCommand = { [weak self] selector in self?.command(selector) ?? false }
+        composer.onResize = { [weak self] in self?.needsLayout = true }
+        mentions.setAccessibilityIdentifier("ai-mentions")
+        plusMenu.identify(.aiControl("menu"))
+        for view in [heading, progress, newConversation, openTab, close, scroll, approval, composer, mentions, plusMenu] as [NSView] { addSubview(view) }
     }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
+    override var isFlipped: Bool { true }
 
     /// The conversation this view shows.
     var conversationID: AIRequestID? { answer?.conversation?.id }
@@ -154,244 +127,188 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         if style == .tab, let id = answer?.conversation?.id { dispatch(.assist(.inTab(id, intent))) }
         else { dispatch(.assist(intent)) }
     }
-    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
-    override var isFlipped: Bool { true }
 
-    @objc private func submit() {
-        guard answer?.busy != true else { return }
-        sendOrStop()
+    private func openLink(_ url: URL) {
+        if let tab = AgentTabLink.id(url) { send(.openTabLink(tab)) }
+        else if let conversation = ConversationPage.id(of: url) { send(.openConversation(conversation)) }
+        else if ["http", "https"].contains(url.scheme?.lowercased()) { dispatch(.commandBar(.submit(url.absoluteString))) }
     }
 
-    private func sendOrStop() {
-        guard let answer else { return }
-        if answer.busy { send(.stop); return }
-        let message = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !message.isEmpty else { return }
-        input.stringValue = ""
-        send(.followUp(message))
-    }
-
-    /// The colors a tab's card has behind the column, like Brk's other native pages (History).
-    private static func cardColor(_ scheme: Scheme) -> NSColor {
-        scheme == .light ? .white : NSColor(srgbRed: 0x20 / 255, green: 0x21 / 255, blue: 0x24 / 255, alpha: 1)
-    }
+    // MARK: Render
 
     func render(_ answer: AIAnswerSnapshot?, in area: CGRect, theme: ResolvedTheme? = nil) {
         guard let answer else {
-            self.answer = nil; shownConversation = nil; rendered = []; isHidden = true; progress.stopAnimation(nil)
-            pages.removeAll()
+            self.answer = nil; shownConversation = nil; isHidden = true; progress.stopAnimation(nil)
+            closeMenu()
+            transcript.show([], style: panelStyle ?? AIPanelStyle(.fallbackLight), copy: copy, agent: nil, folder: nil)
+            transcript.pages.removeAll()
             return
         }
         isHidden = false
-        let m = Metrics.ai
-        if style == .tab {
-            frame = area
-        } else {
-            let width = min(m.width.value, max(m.minimumWidth.value, area.width - m.inset.value * 2))
-            frame = CGRect(x: area.maxX - width - m.inset.value, y: area.minY + m.inset.value,
-                           width: width, height: max(m.minimumHeight.value, area.height - m.inset.value * 2))
+        if frame != area { frame = area }
+        let theme = theme ?? self.theme ?? .fallbackLight
+        let styleChanged = theme != self.theme
+        if styleChanged {
+            self.theme = theme
+            panelStyle = AIPanelStyle(theme, onCard: style == .tab)
+            appearance = NSAppearance(named: theme.scheme == .light ? .aqua : .darkAqua)
+            layer?.backgroundColor = style == .tab ? AIPanelStyle.cardColor(theme.scheme).cgColor : nil
+            let next = PageTheme(theme, background: AIPanelStyle.cardRGBA(theme.scheme))
+            if next != pageTheme { pageTheme = next; transcript.pages.apply(next) }
         }
-        if let theme {
-            let card: RGBA? = style == .tab ? (theme.scheme == .light ? RGBA(1, 1, 1) : RGBA(hex: "#202124")) : nil
-            let next = PageTheme(theme, background: card ?? (theme.scheme == .light ? RGBA(hex: "#EDEDED") : RGBA(hex: "#2A2A2C")))
-            if next != pageTheme { pageTheme = next; pages.apply(next) }
-            if style == .tab {
-                appearance = NSAppearance(named: theme.scheme == .light ? .aqua : .darkAqua)
-                layer?.backgroundColor = Self.cardColor(theme.scheme).cgColor
+        guard self.answer != answer || styleChanged, let panelStyle else { needsLayout = true; return }
+        self.answer = answer
+        copy = AIPanelCopy(answer.conversation?.items ?? [])
+        let conversation = answer.conversation
+        heading.stringValue = title(answer)
+        heading.textColor = style == .tab ? panelStyle.cardText : panelStyle.text
+        heading.toolTip = heading.stringValue
+        if answer.busy { progress.startAnimation(nil) } else { progress.stopAnimation(nil) }
+        progress.toolTip = copy.working
+        for button in [newConversation, openTab, close] {
+            button.tint = panelStyle.secondary
+            button.hoverFill = panelStyle.itemHover
+            button.pressFill = panelStyle.itemHover
+        }
+        newConversation.tooltip(copy.newConversation)
+        openTab.tooltip(copy.openInTab)
+        close.tooltip(answer.busy && conversation == nil ? copy.cancel : copy.close)
+        newConversation.isHidden = style == .tab || conversation == nil || conversation?.fresh == true && conversation?.items.isEmpty == true
+        openTab.isHidden = style == .tab || conversation == nil || conversation?.ended == true
+        showTranscript(answer)
+        showComposer(answer)
+        approval.show(pending(answer), agent: conversation?.agentName, folder: conversation?.folder, style: panelStyle, copy: copy)
+        showMention(conversation?.mention)
+        if menuOpen { showMenu() }
+        needsLayout = true
+    }
+
+    /// The conversation's name; a new one's first words while it has none.
+    private func title(_ answer: AIAnswerSnapshot) -> String {
+        guard let conversation = answer.conversation else { return answer.title }
+        if let name = answer.name, !name.isEmpty { return AgentLine.oneLine(name, limit: 120) }
+        if let first = conversation.items.lazy.compactMap({ if case .user(let text) = $0 { text } else { nil } }).first { return AgentLine.oneLine(first, limit: 120) }
+        if conversation.folder != nil { return answer.title }
+        return copy.language == .zh ? "问问你的 tab" : answer.title
+    }
+
+    private func pending(_ answer: AIAnswerSnapshot) -> AIAgentApproval? {
+        answer.conversation?.items.lazy.compactMap { item -> AIAgentApproval? in
+            if case .approval(let value) = item, value.answer == nil { value } else { nil }
+        }.first
+    }
+
+    private func actions(_ answer: AIAnswerSnapshot) -> [AIAnswerAction] {
+        var out = answer.sources.enumerated().map { index, source in
+            AIAnswerAction(id: "ai-source-\(index)", title: "[\(index + 1)] " + (source.title.isEmpty ? source.url.absoluteString : source.title),
+                           tip: source.url.absoluteString, link: true, command: .commandBar(.submit(source.url.absoluteString)))
+        }
+        // Arc's own actions keep Arc's words.
+        if answer.canUndo { out.append(AIAnswerAction(id: "ai-undo", title: "Undo Organize Today", tip: nil, link: false, command: .assist(.undoOrganize))) }
+        if answer.site != nil { out.append(AIAnswerAction(id: "ai-never-site", title: "Never translate this site", tip: nil, link: false, command: .assist(.neverTranslateSite))) }
+        if let language = answer.language, !language.isEmpty {
+            out.append(AIAnswerAction(id: "ai-never-language", title: "Never translate \(language)", tip: nil, link: false, command: .assist(.neverTranslateLanguage)))
+        }
+        return out
+    }
+
+    private func showTranscript(_ answer: AIAnswerSnapshot) {
+        guard let panelStyle else { return }
+        let wasAtBottom = scroll.documentVisibleRect.maxY >= transcript.frame.height - Metrics.ai.itemGap.value
+        transcript.show(AITranscriptRow.rows(answer, actions: actions(answer)), style: panelStyle, copy: copy,
+                        agent: answer.conversation?.agentName, folder: answer.conversation?.folder)
+        relayTranscript(stickToBottom: wasAtBottom)
+    }
+
+    /// The transcript laid out again at the scroll view's width; it keeps to the bottom when it was there.
+    private func relayTranscript(stickToBottom: Bool? = nil) {
+        let atBottom = stickToBottom ?? (scroll.documentVisibleRect.maxY >= transcript.frame.height - Metrics.ai.itemGap.value)
+        let width = scroll.contentSize.width
+        guard width > 0 else { return }
+        let height = transcript.place(width: width)
+        transcript.frame = CGRect(x: 0, y: 0, width: width, height: max(height, scroll.contentSize.height))
+        if atBottom { transcript.scroll(CGPoint(x: 0, y: max(0, transcript.frame.height - scroll.contentSize.height))) }
+    }
+
+    private func showComposer(_ answer: AIAnswerSnapshot) {
+        guard let panelStyle else { return }
+        let conversation = answer.conversation
+        let open = conversation?.ended == false
+        composer.isHidden = !open
+        guard open, let conversation else { return }
+        let placeholder: String
+        if conversation.folder != nil, !conversation.items.contains(where: { if case .user = $0 { true } else { false } }) { placeholder = copy.placeholderFolder }
+        else if conversation.fresh { placeholder = copy.placeholderFresh }
+        else if conversation.tabs { placeholder = copy.placeholderTabs }
+        else { placeholder = copy.placeholderPlain }
+        composer.render(style: panelStyle, copy: copy, placeholder: placeholder, busy: answer.busy, attached: conversation.attached)
+        // A new conversation takes the keyboard, once the window has finished applying its own focus for this pass.
+        if conversation.id != shownConversation {
+            shownConversation = conversation.id
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                guard let self, !self.isHidden, !self.composer.isHidden else { return }
+                self.window?.makeFirstResponder(self.composer.input)
             }
         }
-        if self.answer != answer {
-            self.answer = answer
-            question.stringValue = answer.title
-            heading.stringValue = Self.headingText(answer.conversation)
-            showTranscript(answer)
-            close.title = answer.busy && answer.conversation == nil ? "Cancel" : "Close"
-            openTab.isHidden = style == .tab || answer.conversation == nil || answer.conversation?.ended == true
-            if answer.busy { progress.startAnimation(nil) } else { progress.stopAnimation(nil) }
-            showInput(answer)
-            showChips(answer.conversation)
-            showMention(answer.conversation?.mention)
-            showApproval(answer)
-            for button in sources + controls { button.removeFromSuperview() }
-            sources = answer.sources.enumerated().map { index, source in
-                let button = AIActionButton("[\(index + 1)] " + (source.title.isEmpty ? source.url.absoluteString : source.title))
-                button.isBordered = false; button.contentTintColor = .linkColor; button.alignment = .left
-                button.lineBreakMode = .byTruncatingTail; button.toolTip = source.url.absoluteString
-                button.onPress = { [weak self] in self?.dispatch(.commandBar(.submit(source.url.absoluteString))) }
-                return button
+    }
+
+    /// Tabs dragged from the sidebar are over the panel: the composer's outline says it takes them.
+    func showDropTarget(_ on: Bool) { composer.showDropTarget(on) }
+
+    // MARK: The + menu
+
+    private func toggleMenu() {
+        if menuOpen { closeMenu() } else { menuOpen = true; showMenu() }
+    }
+
+    private func showMenu() {
+        guard let answer, let conversation = answer.conversation, let panelStyle, let theme else { closeMenu(); return }
+        let open = !conversation.ended
+        var rows: [AIMenuView.Row] = []
+        if open, conversation.folder == nil {
+            rows.append(.init(id: "folder", title: copy.workInFolder, tip: copy.workInFolderTip) { [weak self] in self?.closeMenu(); self?.send(.chooseFolder) })
+        }
+        let agent = ([conversation.agentName ?? copy.localAgent] + [conversation.model, conversation.effort].compactMap { $0 }).joined(separator: " · ")
+        rows.append(.init(id: "agent", title: copy.language == .zh ? "换 agent 和模型" : "Agent and Model", detail: agent, tip: copy.chooseAgentTip) { [weak self] in
+            self?.closeMenu(); self?.dispatch(.settings(.openPane(.max)))
+        })
+        rows.append(.init(id: "permissions", title: copy.language == .zh ? "权限" : "Permissions",
+                          detail: copy.permissions(folder: conversation.folder, tabs: conversation.tabs),
+                          tip: copy.permissionsTip(folder: conversation.folder, tabs: conversation.tabs)) {})
+        rows.append(.init(id: "agent-settings", title: copy.agentSettings, tip: copy.agentSettingsTip) { [weak self] in
+            self?.closeMenu(); self?.dispatch(.settings(.openPane(.max)))
+        })
+        mentions.hide()
+        plusMenu.show(rows, style: panelStyle, fill: Self.opaque(panelStyle.composer, over: theme))
+        plusMenu.controls.first { $0.accessibilityIdentifier() == ViewID.aiControl("permissions").identifier }?.hoverFill = nil
+        if menuMonitor == nil {
+            menuMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                guard let self, event.window === self.window else { return event }
+                // A click anywhere but the menu and its + button closes it (the + button toggles it itself).
+                let point = self.convert(event.locationInWindow, from: nil)
+                let plus = self.composer.convert(self.composer.plus.frame, to: self)
+                if !self.plusMenu.frame.contains(point), !plus.contains(point) { self.closeMenu() }
+                return event
             }
-            controls = []
-            func control(_ title: String, _ intent: AIIntent, _ identifier: String) {
-                let button = AIActionButton(title); button.setAccessibilityIdentifier(identifier)
-                button.onPress = { [weak self] in self?.send(intent) }; controls.append(button)
-            }
-            if answer.canUndo { control("Undo Organize Today", .undoOrganize, "ai-undo") }
-            if answer.site != nil { control("Never translate this site", .neverTranslateSite, "ai-never-site") }
-            if let language = answer.language, !language.isEmpty { control("Never translate \(language)", .neverTranslateLanguage, "ai-never-language") }
-            for button in sources + controls { addSubview(button) }
         }
         needsLayout = true
     }
 
-    /// "Max · Claude · Opus 5.5", with the effort when one was chosen.
-    private static func headingText(_ conversation: AIConversationSnapshot?) -> String {
-        guard let name = conversation?.agentName else { return "Max · Local agent" }
-        return (["Max", name, conversation?.model, conversation?.effort].compactMap { $0 }).joined(separator: " · ")
+    private func closeMenu() {
+        menuOpen = false
+        plusMenu.hide()
+        if let menuMonitor { NSEvent.removeMonitor(menuMonitor) }
+        menuMonitor = nil
     }
 
-    private func showInput(_ answer: AIAnswerSnapshot) {
-        let conversation = answer.conversation
-        let open = conversation?.ended == false
-        input.isHidden = !open
-        send.isHidden = !open
-        send.title = answer.busy ? "Stop" : "Send"
-        send.identify(.aiControl(answer.busy ? "stop" : "send"))
-        input.isEnabled = !answer.busy
-        input.placeholderString = conversation?.folder != nil && !(conversation?.items.contains { if case .user = $0 { true } else { false } } ?? false) ? "Tell the agent what to do here"
-            : conversation?.fresh == true ? "Ask about these tabs, or type @ to add one" : conversation?.tabs == true ? "Ask a follow-up, or type @ to add a tab" : "Ask a follow-up"
-        folder.isHidden = !open || conversation?.folder != nil
-        settings.isHidden = false
-        folderStatus.isHidden = conversation == nil
-        if let path = conversation?.folder {
-            folderStatus.stringValue = "Tools on in " + (path as NSString).lastPathComponent
-            folderStatus.toolTip = path
-        } else if conversation?.tabs == true {
-            folderStatus.stringValue = "Tab tools on · others ask"
-            folderStatus.toolTip = "The agent reads this profile's tabs. It asks before it first closes or moves them, and before every command, file change or other tool of its own."
-        } else {
-            folderStatus.stringValue = "Tools off"
-            folderStatus.toolTip = "This conversation cannot run commands or change files."
-        }
-        // A new conversation takes the keyboard, once the window has finished applying its own focus for this pass.
-        if open, let id = conversation?.id, id != shownConversation {
-            shownConversation = id
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                guard let self, !self.isHidden, !self.input.isHidden else { return }
-                self.window?.makeFirstResponder(self.input)
-            }
-        }
+    /// A translucent fill made solid over the window's own color, for lists that cover the transcript.
+    private static func opaque(_ color: NSColor, over theme: ResolvedTheme) -> NSColor {
+        let base = NSColor(srgbRed: theme.windowColor.red, green: theme.windowColor.green, blue: theme.windowColor.blue, alpha: 1)
+        guard let fill = color.usingColorSpace(.sRGB) else { return base }
+        return base.blended(withFraction: fill.alphaComponent, of: fill.withAlphaComponent(1)) ?? base
     }
 
-    private func showApproval(_ answer: AIAnswerSnapshot) {
-        let approval = answer.conversation?.items.lazy.compactMap { item -> AIAgentApproval? in
-            if case .approval(let value) = item, value.answer == nil { value } else { nil }
-        }.first
-        guard approval != pendingApproval else { return }
-        pendingApproval = approval
-        for button in approvalButtons { button.removeFromSuperview() }
-        approvalButtons = []
-        approvalBack.isHidden = approval == nil
-        approvalTitle.isHidden = approval == nil
-        approvalDetail.isHidden = approval == nil || approval?.detail.isEmpty == true
-        guard let approval else { return }
-        approvalTitle.stringValue = approval.title
-        approvalDetail.stringValue = approval.detail
-        for option in approval.options {
-            let button = AIActionButton(option.title)
-            button.identify(.aiControl("approval-" + option.kind.rawValue))
-            button.onPress = { [weak self] in self?.send(.approve(approval: approval.id, option: option.id)) }
-            approvalButtons.append(button)
-            addSubview(button)
-        }
-    }
-
-    private func showTranscript(_ answer: AIAnswerSnapshot) {
-        guard let conversation = answer.conversation else {
-            rendered = []
-            if text.string != answer.text { text.textStorage?.setAttributedString(NSAttributedString(string: answer.text, attributes: Self.body)) }
-            return
-        }
-        let wasAtBottom = scroll.documentVisibleRect.maxY >= text.bounds.height - Metrics.ai.gap.value
-        // Only what changed is built again: while the agent writes, that is its last row.
-        var next: [(item: AIConversationItem, text: NSAttributedString)] = []
-        let width = max(40, text.textContainer.map { $0.size.width - $0.lineFragmentPadding * 2 } ?? scroll.contentSize.width)
-        for (index, item) in conversation.items.enumerated() {
-            // The panel shows the first question as its title.
-            if style == .panel, index == 0, case .user(let first) = item, first == answer.title { continue }
-            let value: NSAttributedString?
-            if case .page(let ref) = item {
-                value = answer.pages.first { $0.id == ref.id }.map { pageRow($0, width: width) }
-            } else {
-                value = AIConversationText.attributed(item)
-            }
-            guard let value else { continue }
-            if next.count < rendered.count, rendered[next.count].item == item, !Self.isPage(item) { next.append(rendered[next.count]) }
-            else { next.append((item, value)) }
-        }
-        rendered = next
-        let joined = NSMutableAttributedString()
-        for (index, row) in rendered.enumerated() {
-            if index > 0 { joined.append(NSAttributedString(string: "\n\n", attributes: Self.body)) }
-            joined.append(row.text)
-        }
-        if text.attributedString() != joined { text.textStorage?.setAttributedString(joined) }
-        pages.place(answer.pages)
-        if wasAtBottom { text.scrollToEndOfDocument(nil) }
-    }
-
-    private static func isPage(_ item: AIConversationItem) -> Bool { if case .page = item { true } else { false } }
-
-    /// A page in the transcript: the page and its caption row (title, Keep as Tab), one attachment.
-    private func pageRow(_ page: AIPageSnapshot, width: CGFloat) -> NSAttributedString { pages.attachment(page, width: width) }
-
-    private static var body: [NSAttributedString.Key: Any] {
-        [.font: NSFont.systemFont(ofSize: Metrics.ai.bodyFont.value), .foregroundColor: NSColor.labelColor]
-    }
-
-    func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
-        let address = (link as? URL)?.absoluteString ?? link as? String
-        guard let address, let url = URL(string: address) else { return true }
-        if let tab = AgentTabLink.id(url) { send(.openTabLink(tab)) }
-        else if let conversation = ConversationPage.id(of: url) { send(.openConversation(conversation)) }
-        else if ["http", "https"].contains(url.scheme?.lowercased()) { dispatch(.commandBar(.submit(url.absoluteString))) }
-        return true
-    }
-
-    // MARK: Chips and @
-
-    private func showChips(_ conversation: AIConversationSnapshot?) {
-        let attached = conversation?.ended == false ? conversation?.attached ?? [] : []
-        guard attached.map(\.id) != chipButtons.map(\.chipID) || attached.map(\.title) != chipButtons.map(\.chipTitle) else { return }
-        for chip in chipButtons { chip.removeFromSuperview() }
-        chipButtons = attached.map { attachment in
-            let count = attachment.tabs.count
-            let title = attachment.kind == .tab ? attachment.title : "\(attachment.title) · \(count)"
-            let chip = AIChipButton(id: attachment.id, title: title)
-            chip.toolTip = attachment.tabs.prefix(12).map { $0.title + ($0.url.map { " — " + $0.absoluteString } ?? "") }.joined(separator: "\n")
-            chip.setAccessibilityIdentifier("ai-chip-" + attachment.id)
-            chip.onRemove = { [weak self] in self?.send(.detach(attachment.id)) }
-            addSubview(chip)
-            return chip
-        }
-    }
-
-    private func showMention(_ next: AIMentionSnapshot?) {
-        let shown = next.flatMap { $0.query == dismissedMention || $0.matches.isEmpty ? nil : $0 }
-        guard shown != mention else { return }
-        if shown?.query != mention?.query { mentionIndex = 0 }
-        mention = shown
-        for row in mentionRows { row.removeFromSuperview() }
-        mentionRows = (shown?.matches ?? []).enumerated().map { index, tab in
-            let host = tab.url?.host.map { "  —  " + $0 } ?? ""
-            let row = AIActionButton(AgentCopyText.oneLine(tab.title, limit: 60) + host)
-            row.isBordered = false; row.alignment = .left; row.lineBreakMode = .byTruncatingTail
-            row.setAccessibilityIdentifier("ai-mention-\(index)")
-            row.onPress = { [weak self] in self?.pickMention(index) }
-            addSubview(row)
-            return row
-        }
-        mentionBack.isHidden = mentionRows.isEmpty
-        mentionIndex = min(mentionIndex, max(0, mentionRows.count - 1))
-        highlightMention()
-    }
-
-    private func highlightMention() {
-        for (index, row) in mentionRows.enumerated() {
-            row.wantsLayer = true
-            row.layer?.cornerRadius = Metrics.ai.chipRadius.value
-            row.layer?.backgroundColor = index == mentionIndex ? NSColor.controlAccentColor.withAlphaComponent(0.2).cgColor : nil
-        }
-    }
+    // MARK: @
 
     /// The text after the @ that starts a word, up to the end of the input; nil when there is none.
     static func mentionQuery(_ text: String) -> String? {
@@ -402,24 +319,42 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
         return query
     }
 
-    func controlTextDidChange(_ notification: Notification) {
-        let query = Self.mentionQuery(input.stringValue)
+    private func textChanged(_ text: String) {
+        let query = Self.mentionQuery(text)
         if query != dismissedMention { dismissedMention = nil }
         guard answer?.conversation?.tabs == true else { return }
         if query != answer?.conversation?.mention?.query || (query == nil) != (answer?.conversation?.mention == nil) { send(.mention(query)) }
     }
 
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-        guard control === input, !mentionRows.isEmpty else { return false }
+    private func showMention(_ next: AIMentionSnapshot?) {
+        let shown = next.flatMap { $0.query == dismissedMention || $0.matches.isEmpty ? nil : $0 }
+        if shown?.query != mention?.query { mentionIndex = 0 }
+        mention = shown
+        guard let shown, let panelStyle, let theme else { mentions.hide(); return }
+        if menuOpen { closeMenu() }
+        let rows = shown.matches.enumerated().map { index, tab in
+            AIMenuView.Row(id: "mention-\(index)", title: AgentLine.oneLine(tab.title, limit: 60), detail: tab.url?.host, tip: tab.url?.absoluteString) { [weak self] in self?.pickMention(index) }
+        }
+        mentionIndex = min(mentionIndex, max(0, rows.count - 1))
+        mentions.show(rows, style: panelStyle, fill: Self.opaque(panelStyle.composer, over: theme))
+        mentions.highlighted = mentionIndex
+        needsLayout = true
+    }
+
+    /// The composer's keys before its own: the @ list's ↑ ↓ Return Tab and Esc, and Esc for the + menu.
+    private func command(_ selector: Selector) -> Bool {
+        if menuOpen, selector == #selector(NSResponder.cancelOperation(_:)) { closeMenu(); return true }
+        guard let mention, !mention.matches.isEmpty, !mentions.isHidden else { return false }
+        let count = mention.matches.count
         switch selector {
         case #selector(NSResponder.moveDown(_:)):
-            mentionIndex = (mentionIndex + 1) % mentionRows.count; highlightMention(); return true
+            mentionIndex = (mentionIndex + 1) % count; mentions.highlighted = mentionIndex; return true
         case #selector(NSResponder.moveUp(_:)):
-            mentionIndex = (mentionIndex + mentionRows.count - 1) % mentionRows.count; highlightMention(); return true
+            mentionIndex = (mentionIndex + count - 1) % count; mentions.highlighted = mentionIndex; return true
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)):
             pickMention(mentionIndex); return true
         case #selector(NSResponder.cancelOperation(_:)):
-            dismissedMention = mention?.query
+            dismissedMention = mention.query
             showMention(nil)
             return true
         default: return false
@@ -429,155 +364,200 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
     /// The tab under @ becomes a chip, and the @ and what followed it leave the text.
     private func pickMention(_ index: Int) {
         guard let mention, mention.matches.indices.contains(index) else { return }
-        let text = input.stringValue
-        if let at = text.lastIndex(of: "@") { input.stringValue = String(text[..<at]) }
+        let text = composer.text
+        if let at = text.lastIndex(of: "@") { composer.text = String(text[..<at]) }
         send(.attach([.tab(mention.matches[index].id)]))
         send(.mention(nil))
-        window?.makeFirstResponder(input)
-        input.currentEditor()?.selectedRange = NSRange(location: (input.stringValue as NSString).length, length: 0)
+        window?.makeFirstResponder(composer.input)
+        composer.input.setSelectedRange(NSRange(location: (composer.text as NSString).length, length: 0))
     }
 
-    /// Tabs dragged from the sidebar are over the panel: its outline says it takes them.
-    func showDropTarget(_ on: Bool) {
-        layer?.borderWidth = on ? Metrics.ai.dropBorderWidth.value : Metrics.ai.borderWidth.value
-        layer?.borderColor = (on ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
-    }
+    // MARK: Layout
 
     override func layout() {
         super.layout()
-        let m = Metrics.ai, pad = m.padding.value, gap = m.gap.value, row = m.buttonHeight.value
-        material.frame = bounds
-        // A tab lays the same parts out in a reading column in the middle of its card.
-        let column: CGRect = style == .tab
-            ? CGRect(x: max(0, (bounds.width - min(m.tabColumnWidth.value, bounds.width - m.tabColumnInset.value * 2)) / 2), y: m.tabColumnInset.value / 2,
-                     width: min(m.tabColumnWidth.value, bounds.width - m.tabColumnInset.value * 2), height: bounds.height - m.tabColumnInset.value)
-            : bounds
-        let width = column.width, height = column.height
-        defer {
-            if style == .tab {
-                for view in subviews where view !== material { view.frame.origin.x += column.minX; view.frame.origin.y += column.minY }
-            }
+        let m = Metrics.ai, gap = m.gap.value
+        // The panel keeps the sidebar's inset; a tab lays the same parts out in a reading column in the middle of its card.
+        let column: CGRect
+        if style == .tab {
+            let width = min(m.tabColumnWidth.value, bounds.width - m.tabColumnInset.value * 2)
+            column = CGRect(x: ((bounds.width - width) / 2).rounded(), y: m.tabColumnInset.value / 2, width: width, height: bounds.height - m.tabColumnInset.value)
+        } else {
+            column = CGRect(x: m.columnInset.value, y: 0, width: bounds.width - m.columnInset.value * 2, height: bounds.height - m.bottomInset.value)
         }
-        let closeWidth = style == .tab ? 0 : m.closeWidth.value
-        close.frame = CGRect(x: width - pad - closeWidth, y: pad, width: closeWidth, height: row)
-        let tabWidth = openTab.isHidden ? 0 : m.openAsTabWidth.value
-        openTab.frame = CGRect(x: close.frame.minX - gap - tabWidth, y: pad, width: tabWidth, height: row)
-        heading.frame = CGRect(x: pad, y: pad, width: max(0, openTab.frame.minX - pad - gap * 2 - row), height: row)
-        progress.frame = CGRect(x: openTab.frame.minX - row - gap, y: pad, width: row, height: row)
-        question.frame = CGRect(x: pad, y: pad + row + gap, width: width - pad * 2, height: m.questionHeight.value)
-        var bottom = height - pad
-        if !input.isHidden {
-            bottom -= row
-            send.frame = CGRect(x: width - pad - m.sendWidth.value, y: bottom, width: m.sendWidth.value, height: row)
-            input.frame = CGRect(x: pad, y: bottom + 2, width: send.frame.minX - gap - pad, height: row - 4)
-            bottom -= gap
-            // Chips sit on the input's edge, left to right, as many lines as they need.
-            if !chipButtons.isEmpty {
-                let height = m.chipHeight.value, width = width - pad * 2
-                var lines: [[(AIChipButton, CGFloat)]] = [[]]
-                var x: CGFloat = 0
-                for chip in chipButtons {
-                    let w = min(m.chipMaxWidth.value, chip.intrinsicContentSize.width + gap)
-                    if x > 0, x + w > width { lines.append([]); x = 0 }
-                    lines[lines.count - 1].append((chip, w))
-                    x += w + gap / 2
-                }
-                for line in lines.reversed() {
-                    bottom -= height
-                    var left = pad
-                    for (chip, w) in line { chip.frame = CGRect(x: left, y: bottom, width: w, height: height); left += w + gap / 2 }
-                    bottom -= gap / 2
-                }
-                bottom -= gap / 2
-            }
-            // The @ list floats over the transcript, just above the input.
-            if !mentionRows.isEmpty {
-                let height = m.mentionRowHeight.value, inner = gap / 2
-                var top = (chipButtons.first?.frame.minY ?? input.frame.minY) - gap / 2 - CGFloat(mentionRows.count) * height - inner * 2
-                mentionBack.frame = CGRect(x: pad, y: top, width: width - pad * 2, height: CGFloat(mentionRows.count) * height + inner * 2)
-                top += inner
-                for row in mentionRows {
-                    row.frame = CGRect(x: pad + inner, y: top, width: width - (pad + inner) * 2, height: height)
-                    top += height
-                }
-            }
+        let headerY = column.minY + m.headerTop.value, headerHeight = m.headerHeight.value, icon = m.iconSize.value
+        var right = column.maxX
+        for button in [close, openTab, newConversation] where !button.isHidden {
+            button.frame = CGRect(x: right - icon, y: headerY + (headerHeight - icon) / 2, width: icon, height: icon)
+            right -= icon + 2
         }
-        // The status line: what this conversation may do, a way to a folder, a way to the agent's settings.
-        bottom -= row
-        let settingsWidth = m.settingsWidth.value, folderWidth = folder.isHidden ? 0 : m.folderWidth.value
-        settings.frame = CGRect(x: width - pad - settingsWidth, y: bottom, width: settingsWidth, height: row)
-        folder.frame = CGRect(x: settings.frame.minX - gap - folderWidth, y: bottom, width: folderWidth, height: row)
-        folderStatus.frame = CGRect(x: pad, y: bottom + 5, width: max(0, (folder.isHidden ? settings.frame.minX : folder.frame.minX) - gap - pad), height: row - 8)
-        bottom -= gap
-        if pendingApproval != nil {
-            let inner = pad / 2
-            let buttons = approvalButtons
-            bottom -= row + inner
-            var x = width - pad - inner
-            for button in buttons.reversed() {
-                let width = max(m.closeWidth.value, button.intrinsicContentSize.width + gap)
-                x -= width
-                button.frame = CGRect(x: x, y: bottom, width: width, height: row)
-                x -= gap
-            }
-            bottom -= gap
-            var top = bottom
-            if !approvalDetail.isHidden {
-                top -= m.approvalDetailHeight.value
-                approvalDetail.frame = CGRect(x: pad + inner, y: top, width: width - (pad + inner) * 2, height: m.approvalDetailHeight.value)
-            }
-            top -= m.approvalTitleHeight.value
-            approvalTitle.frame = CGRect(x: pad + inner, y: top, width: width - (pad + inner) * 2, height: m.approvalTitleHeight.value)
-            approvalBack.frame = CGRect(x: pad, y: top - inner, width: width - pad * 2, height: (height - pad) - (top - inner) - (height - pad - bottom) + row + inner * 2 + gap)
-            bottom = top - inner - gap
+        let spinner: CGFloat = 16
+        progress.frame = CGRect(x: right - spinner - 2, y: headerY + (headerHeight - spinner) / 2, width: spinner, height: spinner)
+        let lineHeight = ceil(heading.intrinsicContentSize.height)
+        heading.frame = CGRect(x: column.minX + 4, y: headerY + ((headerHeight - lineHeight) / 2).rounded(), width: max(0, progress.frame.minX - gap - column.minX - 4), height: lineHeight)
+        var bottom = column.maxY
+        if !composer.isHidden {
+            let height = composer.preferredHeight(width: column.width)
+            composer.frame = CGRect(x: column.minX, y: bottom - height, width: column.width, height: height)
+            bottom = composer.frame.minY - gap
         }
-        for button in (sources + controls).reversed() {
-            bottom -= row
-            button.frame = CGRect(x: pad, y: bottom, width: width - pad * 2, height: row)
-            bottom -= gap
+        if !approval.isHidden {
+            let height = approval.height(width: column.width)
+            approval.frame = CGRect(x: column.minX, y: bottom - height, width: column.width, height: height)
+            bottom = approval.frame.minY - gap
         }
-        let top = question.frame.maxY + gap
-        scroll.frame = CGRect(x: pad, y: top, width: width - pad * 2, height: max(row, bottom - top))
-        text.frame.size.width = scroll.contentSize.width
-        // Pages are as wide as the text: a new width lays them out again.
-        if abs(textWidth - scroll.contentSize.width) > 0.5 {
-            textWidth = scroll.contentSize.width
-            if let answer {
-                rendered = []
-                DispatchQueue.main.async { [weak self] in self?.showTranscript(answer) }
-            }
+        let top = headerY + headerHeight
+        scroll.frame = CGRect(x: column.minX, y: top, width: column.width, height: max(0, bottom - top))
+        if abs(placedWidth - scroll.contentSize.width) > 0.5 || transcript.frame.width != scroll.contentSize.width {
+            placedWidth = scroll.contentSize.width
+            relayTranscript()
+        }
+        // The + menu and the @ list over the transcript, just above the composer.
+        let anchor = composer.isHidden ? bottom : composer.frame.minY - 6
+        for list in [plusMenu, mentions] where !list.isHidden {
+            let height = min(list.preferredHeight, max(0, anchor - top))
+            list.frame = CGRect(x: column.minX, y: anchor - height, width: column.width, height: height)
         }
     }
 }
 
-/// A conversation's rows as text: the agent's words with their Markdown shown, steps and notices quieter.
-enum AIConversationText {
-    @MainActor static func attributed(_ item: AIConversationItem) -> NSAttributedString? {
-        let bodySize = Metrics.ai.bodyFont.value, smallSize = Metrics.ai.stepFont.value
-        switch item {
-        case .user(let text):
-            return NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: bodySize, weight: .semibold), .foregroundColor: NSColor.labelColor])
-        case .assistant(let text):
-            return text.isEmpty ? nil : markdown(text.trimmingCharacters(in: .whitespacesAndNewlines), size: bodySize)
-        case .step(let step):
-            let mark = switch step.state { case .running: "⋯"; case .done: "✓"; case .failed: "✗" }
-            return NSAttributedString(string: mark + " " + step.title, attributes: [.font: NSFont.systemFont(ofSize: smallSize), .foregroundColor: NSColor.secondaryLabelColor])
-        case .approval(let approval):
-            guard let answer = approval.answer, let option = approval.options.first(where: { $0.id == answer }) else { return nil }
-            return NSAttributedString(string: option.title + ": " + approval.title, attributes: [.font: NSFont.systemFont(ofSize: smallSize), .foregroundColor: NSColor.secondaryLabelColor])
-        case .notice(let text):
-            return NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: smallSize), .foregroundColor: NSColor.secondaryLabelColor])
-        case .page:
-            // Drawn by the view with its sandboxed page (`pageRow`).
-            return nil
+/// The approval the agent waits for, over the composer: one plain sentence ("Claude 想在 ~/Desktop 里运行一条命令"), the
+/// command itself behind Show Command, and the agent's options, Allow in the Space's color, the rest on the URL pill's
+/// fill. The card is that fill too.
+@MainActor
+final class AIApprovalView: NSView {
+    private let sentence = NSTextField(wrappingLabelWithString: "")
+    private let toggle = AITextButton("", kind: .link)
+    private let detail = NSTextField(wrappingLabelWithString: "")
+    private var buttons: [AITextButton] = []
+    private var shown: AIAgentApproval?
+    private var expanded = false
+    private var copy = AIPanelCopy([])
+    var onAnswer: ((String, String) -> Void)?
+    var onResize: (() -> Void)?
+
+    init() {
+        super.init(frame: .zero)
+        isHidden = true
+        wantsLayer = true
+        layer?.cornerRadius = Metrics.ai.itemRadius.value
+        layer?.cornerCurve = .continuous
+        setAccessibilityIdentifier("ai-approval")
+        sentence.font = .systemFont(ofSize: Metrics.ai.bodyFont.value, weight: .medium)
+        sentence.maximumNumberOfLines = 3
+        // Wrapping (a truncating break would keep it to one line), the third line cut if it must be.
+        sentence.lineBreakMode = .byCharWrapping
+        sentence.cell?.truncatesLastVisibleLine = true
+        sentence.drawsBackground = false
+        detail.font = .monospacedSystemFont(ofSize: Metrics.ai.stepFont.value - 1, weight: .regular)
+        detail.maximumNumberOfLines = 10
+        detail.lineBreakMode = .byCharWrapping
+        detail.cell?.truncatesLastVisibleLine = true
+        detail.isSelectable = true
+        detail.drawsBackground = false
+        toggle.identify(.aiControl("approval-command"))
+        toggle.alignment = .left
+        toggle.layer?.cornerRadius = Metrics.ai.smallRadius.value
+        toggle.onPress = { [weak self] in
+            guard let self else { return }
+            self.expanded.toggle()
+            self.showToggle()
+            self.needsLayout = true
+            self.onResize?()
         }
+        for view in [sentence, toggle, detail] as [NSView] { addSubview(view) }
+    }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
+    override var isFlipped: Bool { true }
+
+    func show(_ approval: AIAgentApproval?, agent: String?, folder: String?, style: AIPanelStyle, copy: AIPanelCopy) {
+        self.copy = copy
+        isHidden = approval == nil
+        guard let approval else { shown = nil; return }
+        if approval.id != shown?.id { expanded = false }
+        shown = approval
+        layer?.backgroundColor = style.item.cgColor
+        sentence.stringValue = AIStepWords.approval(approval, agent: agent, folder: folder, copy.language)
+        sentence.toolTip = approval.title
+        sentence.textColor = style.onCard ? style.cardText : style.text
+        detail.stringValue = approval.detail
+        detail.textColor = style.secondary
+        toggle.isHidden = approval.detail.isEmpty
+        toggle.apply(style)
+        showToggle()
+        for button in buttons { button.removeFromSuperview() }
+        // Allow last, in the Space's color; Deny and the rest on the item fill.
+        let options = approval.options.filter { $0.kind == .deny } + approval.options.filter { $0.kind == .allowSession } + approval.options.filter { $0.kind == .allowOnce }
+        buttons = options.map { option in
+            let button = AITextButton(copy.option(option), kind: option.kind == .allowOnce ? .accent : .item)
+            button.identify(.aiControl("approval-" + option.kind.rawValue))
+            button.toolTip = option.title
+            button.layer?.cornerRadius = Metrics.ai.chipRadius.value
+            button.apply(style)
+            button.onPress = { [weak self] in self?.onAnswer?(approval.id, option.id) }
+            addSubview(button)
+            return button
+        }
+        needsLayout = true
     }
 
+    private func showToggle() {
+        let command = shown?.kind == .command
+        toggle.title = expanded ? (command ? copy.hideCommand : copy.hideDetail) : (command ? copy.showCommand : copy.showDetail)
+        detail.isHidden = !expanded || shown?.detail.isEmpty != false
+    }
+
+    private var pad: CGFloat { Metrics.ai.gap.value + 2 }
+
+    func height(width: CGFloat) -> CGFloat {
+        let m = Metrics.ai, inner = width - pad * 2
+        var height = pad + textHeight(sentence, width: inner)
+        if !toggle.isHidden { height += 2 + 20 }
+        if !detail.isHidden { height += 4 + textHeight(detail, width: inner) }
+        return height + m.gap.value + m.buttonHeight.value + pad
+    }
+
+    private func textHeight(_ label: NSTextField, width: CGFloat) -> CGFloat {
+        ceil(label.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: max(20, width), height: 10_000)).height ?? 16)
+    }
+
+    override func layout() {
+        super.layout()
+        let m = Metrics.ai, inner = bounds.width - pad * 2
+        var y = pad
+        let sentenceHeight = textHeight(sentence, width: inner)
+        sentence.frame = CGRect(x: pad, y: y, width: inner, height: sentenceHeight)
+        y += sentenceHeight
+        if !toggle.isHidden {
+            y += 2
+            toggle.frame = CGRect(x: pad - m.gap.value, y: y, width: min(inner, toggle.fittingWidth), height: 20)
+            y += 20
+        }
+        if !detail.isHidden {
+            y += 4
+            let height = textHeight(detail, width: inner)
+            detail.frame = CGRect(x: pad, y: y, width: inner, height: height)
+            y += height
+        }
+        var x = bounds.width - pad
+        for button in buttons.reversed() {
+            let width = max(64, button.fittingWidth)
+            x -= width
+            button.frame = CGRect(x: x, y: bounds.height - pad - m.buttonHeight.value, width: width, height: m.buttonHeight.value)
+            x -= m.gap.value
+        }
+    }
+}
+
+/// A conversation's text: the agent's Markdown shown, in the panel's colors.
+enum AIConversationText {
     /// Agents answer in Markdown. Code blocks and headings by line, the rest through Foundation's inline parser.
-    static func markdown(_ text: String, size: CGFloat) -> NSAttributedString {
+    @MainActor static func markdown(_ text: String, size: CGFloat, color: NSColor, style: AIPanelStyle) -> NSAttributedString {
         let out = NSMutableAttributedString()
-        let plain: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: size), .foregroundColor: NSColor.labelColor]
-        let code: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedSystemFont(ofSize: size - 1, weight: .regular), .foregroundColor: NSColor.labelColor]
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = 2
+        let plain: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: size), .foregroundColor: color, .paragraphStyle: paragraph]
+        let code: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedSystemFont(ofSize: size - 1, weight: .regular), .foregroundColor: color]
         var inCode = false, first = true
         let lines = text.components(separatedBy: "\n")
         var index = 0
@@ -593,14 +573,14 @@ enum AIConversationText {
                 var rows = [header]
                 index += 1
                 while index < lines.count, let cells = tableCells(lines[index]) { rows.append(cells); index += 1 }
-                out.append(table(rows, size: size))
+                out.append(table(rows, size: size, color: color, style: style))
                 continue
             }
             let hashes = line.prefix { $0 == "#" }.count
             if (1...6).contains(hashes), line.dropFirst(hashes).first == " " {
-                out.append(inline(String(line.dropFirst(hashes + 1)), size: size, weight: .semibold))
+                out.append(inline(String(line.dropFirst(hashes + 1)), size: size, weight: .semibold, color: color, paragraph: paragraph))
             } else {
-                out.append(inline(line, size: size, weight: .regular))
+                out.append(inline(line, size: size, weight: .regular, color: color, paragraph: paragraph))
             }
         }
         return out
@@ -615,8 +595,8 @@ enum AIConversationText {
         return body.split(separator: "|", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
     }
 
-    /// Rows as an AppKit text table: hairline borders, the header row in semibold.
-    private static func table(_ rows: [[String]], size: CGFloat) -> NSAttributedString {
+    /// Rows as an AppKit text table: the sidebar's separator for lines, the header row on the item fill.
+    @MainActor private static func table(_ rows: [[String]], size: CGFloat, color: NSColor, style: AIPanelStyle) -> NSAttributedString {
         let columns = rows.map(\.count).max() ?? 1
         let table = NSTextTable()
         table.numberOfColumns = columns
@@ -626,24 +606,26 @@ enum AIConversationText {
             for column in 0..<columns {
                 let block = NSTextTableBlock(table: table, startingRow: row, rowSpan: 1, startingColumn: column, columnSpan: 1)
                 block.setWidth(4, type: .absoluteValueType, for: .padding)
-                block.setWidth(Metrics.ai.borderWidth.value, type: .absoluteValueType, for: .border)
-                block.setBorderColor(.separatorColor)
-                if row == 0 { block.backgroundColor = NSColor.labelColor.withAlphaComponent(0.06) }
-                let style = NSMutableParagraphStyle()
-                style.textBlocks = [block]
-                let cell = NSMutableAttributedString(attributedString: inline(column < cells.count ? cells[column] : "", size: size - 1, weight: row == 0 ? .semibold : .regular))
+                block.setWidth(1, type: .absoluteValueType, for: .border)
+                block.setBorderColor(style.separator)
+                if row == 0 { block.backgroundColor = style.item }
+                let paragraph = NSMutableParagraphStyle()
+                paragraph.textBlocks = [block]
+                let cell = NSMutableAttributedString(attributedString: inline(column < cells.count ? cells[column] : "", size: size - 1, weight: row == 0 ? .semibold : .regular, color: color, paragraph: nil))
                 cell.append(NSAttributedString(string: "\n", attributes: [.font: NSFont.systemFont(ofSize: size - 1)]))
-                cell.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: cell.length))
+                cell.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: cell.length))
                 out.append(cell)
             }
         }
         return out
     }
 
-    private static func inline(_ line: String, size: CGFloat, weight: NSFont.Weight) -> NSAttributedString {
+    private static func inline(_ line: String, size: CGFloat, weight: NSFont.Weight, color: NSColor, paragraph: NSParagraphStyle?) -> NSAttributedString {
         let base = NSFont.systemFont(ofSize: size, weight: weight)
+        var common: [NSAttributedString.Key: Any] = [.foregroundColor: color]
+        if let paragraph { common[.paragraphStyle] = paragraph }
         guard let parsed = try? AttributedString(markdown: line, options: .init(allowsExtendedAttributes: false, interpretedSyntax: .inlineOnlyPreservingWhitespace)) else {
-            return NSAttributedString(string: line, attributes: [.font: base, .foregroundColor: NSColor.labelColor])
+            return NSAttributedString(string: line, attributes: common.merging([.font: base]) { $1 })
         }
         let out = NSMutableAttributedString()
         for run in parsed.runs {
@@ -652,7 +634,8 @@ enum AIConversationText {
             if intent.contains(.stronglyEmphasized) { font = NSFont.systemFont(ofSize: size, weight: .semibold) }
             if intent.contains(.emphasized) { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
             if intent.contains(.code) { font = NSFont.monospacedSystemFont(ofSize: size - 1, weight: .regular) }
-            var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
+            var attributes = common
+            attributes[.font] = font
             if let link = run.link, ["http", "https", AgentTabLink.scheme].contains(link.scheme?.lowercased()) { attributes[.link] = link }
             out.append(NSAttributedString(string: String(parsed[run.range].characters), attributes: attributes))
         }
@@ -660,42 +643,6 @@ enum AIConversationText {
     }
 }
 
-/// A tab, folder or Space given to the next message: its title, and an × that takes it back.
-@MainActor
-private final class AIChipButton: NSButton {
-    let chipID: String
-    let chipTitle: String
-    var onRemove: () -> Void = {}
-    init(id: String, title: String) {
-        chipID = id
-        chipTitle = title
-        super.init(frame: .zero)
-        self.title = "✕  " + title
-        bezelStyle = .inline; setButtonType(.momentaryPushIn)
-        font = .systemFont(ofSize: Metrics.ai.stepFont.value)
-        lineBreakMode = .byTruncatingTail
-        target = self; action = #selector(pressed)
-        setAccessibilityLabel("Remove " + title)
-    }
-    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
-    @objc private func pressed() { onRemove() }
-}
-
 enum AgentCopyText {
-    static func oneLine(_ text: String, limit: Int) -> String {
-        let line = text.split(whereSeparator: \.isNewline).joined(separator: " ")
-        return line.count > limit ? String(line.prefix(limit)) + "…" : line
-    }
-}
-
-@MainActor
-private final class AIActionButton: NSButton {
-    var onPress: () -> Void = {}
-    init(_ title: String) {
-        super.init(frame: .zero)
-        self.title = title; bezelStyle = .rounded; setButtonType(.momentaryPushIn)
-        target = self; action = #selector(pressed)
-    }
-    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
-    @objc private func pressed() { onPress() }
+    static func oneLine(_ text: String, limit: Int) -> String { AgentLine.oneLine(text, limit: limit) }
 }

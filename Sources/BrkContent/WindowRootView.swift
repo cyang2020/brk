@@ -224,7 +224,10 @@ public final class WindowRootView: NSView {
         library.render(librarySnapshot, now: snapshot.now, frames: frames, palette: palette)
         peek.render(peekSnapshot, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         findBar.render(snapshot.find, frames: frames.find, palette: palette)
-        aiAnswer.render(snapshot.ai, in: frames.contentArea, theme: snapshot.theme)
+        // The panel's column (none over the Library: the panel waits, as it is, until the Library closes).
+        if let panel = frames.aiPanel { aiAnswer.render(snapshot.ai, in: panel, theme: snapshot.theme) }
+        else if snapshot.ai == nil { aiAnswer.render(nil, in: .zero) }
+        else { aiAnswer.isHidden = true }
         linkPrompt.render(snapshot.pageLinkPrompt, in: frames.contentArea)
         linkStatus.render(snapshot.overlay == nil ? snapshot.linkStatus : nil, frames: frames)
         aiPreview.render(snapshot.overlay == nil ? snapshot.aiPreview : nil, frames: frames)

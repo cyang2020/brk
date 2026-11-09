@@ -116,7 +116,7 @@ enum BrkToolCatalog {
     /// The layout and theme rules for an agent's pages, after T3 Code's `html_render`, with Brk's variables.
     static let pageRules = """
     Write one complete, self-contained HTML document. Inline <style> and <script> only: the page has no network, so no external scripts, styles, fonts or images (use data: URLs), and fetch fails. Links to http(s) addresses open as Brk tabs when clicked.
-    Frame width is reply width, on the conversation's background. Leave html, body, and the outer element with no background color, no outer card, border, banner title, or side padding. A box that needs its own background gets 16px padding and var(--radius) corners. Give charts fixed pixel heights. Let content set the height. Do not use vh units or height:100% on html or body.
+    Frame width is reply width, on the conversation's background; the panel's reply width can be as narrow as 260px, so the layout must wrap: use flexible widths (%, fr, minmax(0,1fr), flex-wrap), never fixed widths wider than the frame, and let a table's columns shrink. Leave html, body, and the outer element with no background color, no outer card, border, banner title, or side padding (Brk's page card shows the title). A box that needs its own background gets 16px padding and var(--radius) corners. Give charts fixed pixel heights and draw them at the frame's width. Let content set the height. Do not use vh units or height:100% on html or body. Mark what stands out (the cheapest, the latest, a change) with var(--primary), the Space's color.
     Draw everything that can change from `window.brk.data`, never hard-coded: Brk replaces the data when the page refreshes and loads the page again. What the user ticks, notes or edits: `await window.brk.save(object)` (a JSON object, at most \(AIPageLimits.saved) bytes, fitting `saveSchema`; it resolves true, or rejects with why) and read it back from `window.brk.saved` (null at first). Save on every `input` event of a text field and every tick, not only on `change` or blur (a debounce of at most 300 ms is fine): a note typed and left in its field must not be lost. Key saved things by the item ids in your data.
     Use theme CSS variables on :root, not fixed colors: --background, --foreground, --muted, --card, --popover, --secondary, --border, --ring, --primary, --accent, --destructive, --warning, --success, --info, --code-background (most have a matching -foreground, e.g. --primary-foreground), --chart-1 to --chart-6, --radius, --font-sans, --font-mono. The base sheet sets background, text, and font. Colors change when the user switches theme; a script that draws with colors listens for the `ui/notifications/host-context-changed` message.
     """
@@ -558,6 +558,32 @@ enum BrkToolCatalog {
         let characters = Array(text)
         let start = max(0, at - Caps.snippet / 2), end = min(characters.count, start + Caps.snippet)
         return String(characters[start..<end]).split(whereSeparator: \.isNewline).joined(separator: " ")
+    }
+
+    /// What one of these tools does, for the panel's words (`AIStepWords`), whatever the agent calls it.
+    static func stepKind(_ tool: String) -> AIStepKind? {
+        let bare = tool.replacingOccurrences(of: "mcp__\(server)__", with: "").replacingOccurrences(of: "\(server): ", with: "")
+        guard let name = Name(rawValue: bare) else { return nil }
+        switch name {
+        case .list: return .listTabs
+        case .search: return .searchTabs
+        case .read: return .readTab
+        case .open: return .openTab
+        case .focus: return .showTab
+        case .close: return .closeTabs
+        case .move: return .moveTabs
+        case .group: return .groupTabs
+        case .split: return .splitTabs
+        case .conversationList: return .listConversations
+        case .conversationSearch: return .searchConversations
+        case .conversationRead: return .readConversation
+        case .preview: return .previewPage
+        case .render: return .makePage
+        case .savePage: return .keepPage
+        case .updatePage: return .changePage
+        case .sourceRead: return .readSource
+        case .updateData: return .writeData
+        }
     }
 
     /// The step title the panel shows for one of these tools, whatever the agent calls it (`mcp__brk__brk_tab_read`,

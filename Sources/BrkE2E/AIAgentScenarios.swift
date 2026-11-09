@@ -150,12 +150,16 @@ enum AIAgentScenarios {
 
     private static func tools(_ app: AppUnderTest, _ choice: AIProviderChoice) throws {
         try prepare(app, choice)
+        try AIPanelLookScenarios.clearOfSystemDialogs(app)
         let folder = app.dataDirectory.appendingPathComponent("ai-work", isDirectory: true)
         try app.dispatch(.assist(.ask("hello")))
         try waitAnswer(app, contains: "hello")
         try expect(!FileManager.default.fileExists(atPath: folder.path), "a folder exists before the user chose one")
         // Only the explicit button opens a session with tools on; the panel answers with the fixture's folder.
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // Work in a Folder… is in the composer's + menu.
+        try click(app, .aiControl("plus"))
+        try app.waitUntil("the + menu", timeout: 5) { try app.native().actual[ViewID.aiControl("folder").identifier]?.hidden == false }
         try click(app, .aiControl("folder"))
         try app.waitUntil("a session in the folder", timeout: 15) {
             let conversation = try app.view().ai?.conversation

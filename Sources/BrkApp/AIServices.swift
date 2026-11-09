@@ -241,6 +241,8 @@ final class AIServices {
                 switch outcome {
                 case .failed(let message): self.endRefresh(run.run, .failed, detail: AgentCopy.oneLine(message, limit: 200))
                 case .unavailable: self.endRefresh(run.run, .failed, detail: AgentCopy.missing(run.agent))
+                // The agent's one line on what changed goes into the conversation's notice.
+                case .text(let line): self.endRefresh(run.run, .updated, detail: line.isEmpty ? nil : AgentCopy.oneLine(line, limit: 120))
                 default: self.endRefresh(run.run, .updated, detail: nil)
                 }
             case .usage(let count): self.send(.aiUsage(AIUsageKey(feature: Self.refreshFeature, service: service, way: way), count))

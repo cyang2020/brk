@@ -121,15 +121,92 @@ def refresh_live_page(prompt):
     sources = [line[2:].strip() for line in prompt.splitlines() if line.startswith('- http')]
     current = prompt.split('The data now:\n', 1)[1].split('\n\n', 1)[0] if 'The data now:\n' in prompt else 'null'
     data = json.loads(current) if current.strip() != 'null' else {'items': []}
+    changes = []
     for source in sources:
         failed, read = call('brk_page_source_read', {'url': source, 'maxChars': 2000})
         if failed: continue
         found = re.search(r'€\s?(\d+[.,]\d\d)', read.get('text', ''))
         for item in data.get('items', []):
-            if item.get('url') == source and found: item['price'] = float(found.group(1).replace(',', '.'))
+            if item.get('url') == source and found:
+                price = float(found.group(1).replace(',', '.'))
+                # A page that names its items keeps the price before a change (its "↓4.50").
+                if 'name' in item and item.get('price') not in (None, price):
+                    item['was'] = item['price']
+                    changes.append((item['name'], item['price'] - price))
+                item['price'] = price
     failed, _ = call('brk_page_update_data', {'data': data})
-    put({'type': 'stream_event', 'parent_tool_use_id': None, 'event': {'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': 'Refreshed the prices.' if not failed else 'Could not refresh.'}}})
+    chinese = re.search(r'[\u4e00-\u9fff]', prompt.split('The conversation that made the page', 1)[-1]) is not None
+    if failed: line = 'Could not refresh.'
+    elif changes and chinese: line = '，'.join(f"{name}{'降' if d > 0 else '涨'}了 €{abs(d):.2f}" for name, d in changes)
+    elif changes: line = ', '.join(f"{name} {'down' if d > 0 else 'up'} €{abs(d):.2f}" for name, d in changes)
+    else: line = 'Refreshed the prices.'
+    put({'type': 'stream_event', 'parent_tool_use_id': None, 'event': {'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': line}}})
     server.stdin.close(); server.wait(timeout=5)
+
+PRICE_PAGE = """<!doctype html><html><head><meta charset="utf-8"><style>
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:7px 2px;border-top:1px solid var(--border)}
+.row:first-child{border-top:none}
+.name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.price{font-weight:600;font-variant-numeric:tabular-nums}
+.down{color:var(--success);font-weight:500;margin-left:6px}
+.cheapest .name::after{content:" 最便宜";color:var(--primary);font-size:11px;font-weight:600}
+</style></head><body><div id="rows"></div><script>
+const items = (window.brk.data && window.brk.data.items) || [];
+const low = Math.min(...items.map(i => i.price));
+document.getElementById('rows').innerHTML = items.map(i =>
+  '<div class="row' + (i.price === low ? ' cheapest' : '') + '"><span class="name">' + i.name + '</span><span class="price">€' + i.price.toFixed(2) +
+  (i.was && i.was > i.price ? '<span class="down">↓' + (i.was - i.price).toFixed(2) + '</span>' : '') + '</span></div>').join('');
+</script></body></html>"""
+
+def price_watch(step_events):
+    """The user's example, the way an agent with Brk's MCP server does it: list the tabs, read the three shops, make a
+    page with their prices as data and keep it with an hourly refresh. Each call shows as a step."""
+    config = json.loads(sys.argv[sys.argv.index('--mcp-config') + 1])['mcpServers']['brk']
+    server = subprocess.Popen([config['command']] + config['args'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    ids = {'n': 0}
+    def rpc(method, params=None):
+        ids['n'] += 1
+        server.stdin.write(json.dumps({'jsonrpc': '2.0', 'id': ids['n'], 'method': method, 'params': params or {}}) + '\n'); server.stdin.flush()
+        while True:
+            line = server.stdout.readline()
+            if not line: return {}
+            reply = json.loads(line)
+            if reply.get('id') == ids['n']: return reply.get('result') or {'error': reply.get('error')}
+    def call(name, arguments):
+        use = step_events(name, arguments, None)
+        result = rpc('tools/call', {'name': name, 'arguments': arguments})
+        text = (result.get('content') or [{}])[0].get('text', '')
+        step_events(name, arguments, (use, result.get('isError', False)))
+        try: return json.loads(text)
+        except Exception: return {}
+    rpc('initialize', {'protocolVersion': '2025-06-18', 'capabilities': {}, 'clientInfo': {'name': 'fixture', 'version': '1'}})
+    listed = call('brk_tab_list', {})
+    tabs = []
+    def walk(node):
+        if isinstance(node, dict):
+            if 'tabId' in node and 'shop-' in str(node.get('url', '')): tabs.append(node)
+            for value in node.values(): walk(value)
+        elif isinstance(node, list):
+            for value in node: walk(value)
+    walk(listed)
+    names = {'kettle': '电热水壶', 'toaster': '烤面包机', 'blender': '搅拌机'}
+    items, seen = [], set()
+    for tab in tabs:
+        key = next((k for k in names if 'shop-' + k in tab['url']), None)
+        if key is None or key in seen: continue
+        seen.add(key)
+        read = call('brk_tab_read', {'tabId': tab['tabId'], 'maxChars': 2000})
+        found = re.search(r'€\s?(\d+[.,]\d\d)', json.dumps(read, ensure_ascii=False))
+        items.append({'id': key, 'name': names[key], 'url': tab['url'], 'price': float(found.group(1).replace(',', '.')) if found else 0.0})
+    order = list(names)
+    items.sort(key=lambda i: order.index(i['id']))
+    schema = {'type': 'object', 'required': ['items'], 'properties': {'items': {'type': 'array', 'items': {'type': 'object', 'required': ['id', 'name', 'url', 'price'],
+              'properties': {'id': {'type': 'string'}, 'name': {'type': 'string'}, 'url': {'type': 'string'}, 'price': {'type': 'number'}, 'was': {'type': 'number'}}}}}}
+    made = call('brk_html_render', {'html': PRICE_PAGE, 'title': '商品价格监控', 'height': 40 + 34 * len(items), 'data': {'items': items}, 'dataSchema': schema,
+                                    'sources': [i['url'] for i in items]})
+    if made.get('pageId'): call('brk_page_save', {'pageId': made['pageId'], 'refresh': 'hourly'})
+    server.stdin.close(); server.wait(timeout=5)
+    return bool(made.get('pageId'))
 
 def claude():
     tools = '--permission-prompt-tool' in sys.argv
@@ -156,6 +233,31 @@ def claude():
             refresh_live_page(prompt)
             put({'type': 'result', 'subtype': 'success', 'is_error': False, 'result': None, 'session_id': session, 'num_turns': 3,
                  'usage': {'input_tokens': 900, 'cache_creation_input_tokens': 0, 'cache_read_input_tokens': 300, 'output_tokens': 40}})
+            return
+        if '盯着这三个商品页的价格' in prompt and '--mcp-config' in sys.argv:
+            def step_events(name, arguments, done):
+                if done is None:
+                    use = 'toolu_' + str(next_request['n']); next_request['n'] += 1
+                    put({'type': 'assistant', 'parent_tool_use_id': None, 'message': {'content': [{'type': 'tool_use', 'id': use, 'name': 'mcp__brk__' + name, 'input': arguments}]}})
+                    return use
+                use, failed = done
+                put({'type': 'user', 'parent_tool_use_id': None, 'message': {'content': [{'type': 'tool_result', 'tool_use_id': use, 'is_error': failed, 'content': 'ok'}]}})
+            made = price_watch(step_events)
+            text('已经设好，价格有变化时侧边栏那一行会出现小圆点。' if made else '没能做出页面。')
+            result()
+            return
+        if 'fixture:command' in prompt:
+            # A command in a folder session: Bash asks first.
+            use = 'toolu_' + str(next_request['n']); next_request['n'] += 1
+            input_ = {'command': 'ls -la ' + os.getcwd(), 'description': 'List the folder'}
+            put({'type': 'assistant', 'parent_tool_use_id': None, 'message': {'content': [{'type': 'tool_use', 'id': use, 'name': 'Bash', 'input': input_}]}})
+            if tools:
+                rid = 'approval-' + use
+                pending[rid] = (use, {'file_path': os.path.join(os.getcwd(), 'listed.txt'), 'content': 'listed\n'})
+                put({'type': 'control_request', 'request_id': rid, 'request': {'subtype': 'can_use_tool', 'tool_name': 'Bash', 'input': input_, 'tool_use_id': use, 'permission_suggestions': []}})
+            else:
+                put({'type': 'user', 'parent_tool_use_id': None, 'message': {'content': [{'type': 'tool_result', 'tool_use_id': use, 'is_error': True, 'content': 'no tools'}]}})
+                result()
             return
         if prompt == 'fixture:stream':
             text('first\n'); time.sleep(2); text('second\n'); result('first\nsecond\n')

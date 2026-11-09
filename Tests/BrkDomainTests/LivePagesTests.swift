@@ -212,7 +212,8 @@ final class LivePagesTests: XCTestCase {
         XCTAssertEqual(d.state.savedPages[page]?.live?.outcome?.kind, .updated)
         XCTAssertEqual(pageRow(d, page)?.liveMark, .changed)
         XCTAssertFalse(pageRow(d, page)?.loading ?? true)
-        XCTAssertEqual(d.state.savedConversations[conversation]?.items.last, .notice("Refreshed “Price Watch”: new data."))
+        // The conversation was in Chinese: Brk's notice is too, with the time of the refresh.
+        XCTAssertEqual(d.state.savedConversations[conversation]?.items.last, .notice("\(AIWords.clock(d.now, calendar: Driver.calendar)) 已更新「Price Watch」"))
         // Showing the page is looking at it.
         d.user(.tab(.focus(pageRow(d, page)!.id)))
         XCTAssertNil(pageRow(d, page)?.liveMark)
@@ -296,7 +297,7 @@ final class LivePagesTests: XCTestCase {
         XCTAssertEqual(d.state.savedPages[page]?.live?.outcome?.kind, .flagged)
         XCTAssertEqual(pageRow(d, page)?.liveMark, .attention)
         XCTAssertTrue(pageRow(d, page)?.sourceStatus?.contains("last refresh stopped") == true)
-        XCTAssertTrue(d.state.savedConversations[conversation]?.items.last.map { if case .notice(let t) = $0 { t.hasPrefix("Stopped the refresh") } else { false } } == true)
+        XCTAssertTrue(d.state.savedConversations[conversation]?.items.last.map { if case .notice(let t) = $0 { t.hasPrefix("已停止更新「Price Watch」") } else { false } } == true)
         // Data that arrives after the run ended is not taken.
         d.system(.aiPageRefresh(page, run: run.run, .data(#"{"items":[{"id":"kettle","price":1}]}"#)))
         XCTAssertEqual(d.state.savedPages[page]?.data, before)

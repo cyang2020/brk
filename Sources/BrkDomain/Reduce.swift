@@ -10,10 +10,15 @@ public struct Context: Sendable {
     private let currentCalendar: @Sendable () -> Calendar
     public var calendar: Calendar { currentCalendar() }
 
-    public init(now: Instant, newID: @escaping @Sendable () -> String, calendar: Calendar = .autoupdatingCurrent) {
+    /// The system's first preferred language ("en-US"): Brk's own AI words follow it until the user has written in a
+    /// conversation (`AIWords`).
+    public let systemLanguage: String
+
+    public init(now: Instant, newID: @escaping @Sendable () -> String, calendar: Calendar = .autoupdatingCurrent, systemLanguage: String = "en") {
         self.now = now
         self.newID = newID
         currentCalendar = { calendar }
+        self.systemLanguage = systemLanguage
     }
 }
 

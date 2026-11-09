@@ -25,7 +25,7 @@ extension Work {
         guard !made.isEmpty else { return }
         if var answer = state.session.ai[host: host], var conversation = answer.conversation, !conversation.ended {
             guard conversation.tabs else {
-                conversation.items.append(.notice("This conversation cannot read tabs. Close it, then drop the tabs again to start one that can."))
+                conversation.items.append(.notice(AIWords.cannotReadTabs(aiLanguage(conversation.items))))
                 answer.conversation = conversation
                 state.session.ai[host: host] = answer
                 return
@@ -37,7 +37,12 @@ extension Work {
             return
         }
         guard case .panel = host else { return }
-        // No conversation yet: a new one, waiting for its first message. Its session starts with that message.
+        startFreshConversation(in: window, attached: made)
+    }
+
+    /// A new conversation in the panel with Brk's tab tools, waiting for its first message; its session starts with that
+    /// message. The one the panel showed is put away first (its tab keeps it).
+    mutating func startFreshConversation(in window: WindowID, attached made: [AIAttachment]) {
         putAwayPanelConversation(in: window)
         cancelAI(in: window, slot: .panel)
         let id = AIRequestID(ctx.newID())
@@ -145,9 +150,23 @@ extension Work {
         conversation.attached = []
         conversation.mention = nil
         guard !attached.isEmpty else { return [] }
-        let names = attached.map { $0.kind == .tab ? $0.title : "\($0.title) (\($0.tabs.count) \($0.tabs.count == 1 ? "tab" : "tabs"))" }
-        conversation.items.append(.notice("With " + names.joined(separator: " · ")))
+        let language = aiLanguage(conversation.items)
+        let names = attached.map { $0.kind == .tab ? $0.title : AIWords.group($0.title, tabs: $0.tabs.count, language) }
+        conversation.items.append(.notice(AIWords.with(names, language)))
         return attached
+    }
+
+    /// The language Brk's own words take in a conversation with these items (`AILanguage.of`).
+    func aiLanguage(_ items: [AIConversationItem]) -> AILanguage { AILanguage.of(items, system: ctx.systemLanguage) }
+
+    /// The user's message goes into the transcript. The first one sets the conversation's language: Brk's notices from
+    /// before it, written in the system's language, are written again in that one (`AIWords.reword`).
+    func appendUserMessage(_ text: String, to conversation: inout AIConversationSnapshot) {
+        let first = !conversation.items.contains { if case .user = $0 { true } else { false } }
+        if first, let language = AILanguage.of(text: text), language != aiLanguage(conversation.items) {
+            conversation.items = conversation.items.map { if case .notice(let notice) = $0 { .notice(AIWords.reword(notice, to: language)) } else { $0 } }
+        }
+        conversation.items.append(.user(text))
     }
 }
 

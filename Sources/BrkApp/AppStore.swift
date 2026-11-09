@@ -218,9 +218,10 @@ public final class AppStore {
                 return await PageSandbox.preview(html: html, data: data, width: width, theme: PageTheme(theme))
             },
             replyWidth: { [weak self] conversation, window in
-                let m = Metrics.ai
+                // Where the conversation shows now: its tab's reading column, else the panel's reading width at the
+                // panel's widest (a narrower window lays the page out again at its width).
                 let inTab = self?.snapshot.windows[window]?.conversations.contains { $0.answer.conversation?.id == conversation } == true
-                return Int((inTab ? m.tabColumnWidth.value : m.width.value) - m.padding.value * 2 - 10)
+                return Int(AIPanelLayout.pageWidth(readingWidth: inTab ? Metrics.ai.tabColumnWidth.value : AIPanelLayout.readingWidth(panelWidth: Metrics.ai.width.value)))
             })
     }
 
@@ -344,7 +345,7 @@ public final class AppStore {
             default: break
             }
         }
-        let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }))
+        let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }, systemLanguage: Locale.preferredLanguages.first ?? "en"))
         var checkpointed = false
         if t.docChanged, let failure = t.checkpointFailure {
             do { try stateFile.writeNow(StateCodec.encode(t.state)); checkpointed = true }

@@ -93,6 +93,9 @@ public enum AIIntent: Hashable, Sendable, Codable {
     indirect case inTab(AIRequestID, AIIntent)
     /// The panel's Open as Tab: the conversation moves into its sidebar tab, shown full size; its session goes on.
     case openAsTab
+    /// The panel's New Conversation: the one it shows is put away (its tab keeps it) and a new one with Brk's tab tools
+    /// waits for its first message.
+    case newConversation
     /// A `brk://conversation/<id>` link: that conversation's tab is shown, or opened again from the archive.
     case openConversation(AIRequestID)
     /// Keep as Tab on a page in an answer: the page becomes a sidebar tab of its own.
@@ -226,6 +229,8 @@ public struct AIAnswerSnapshot: Equatable, Sendable, Codable {
     public var conversation: AIConversationSnapshot? = nil
     /// The pages the conversation's items show, filled in by the projection (`AppState.withPages`).
     public var pages: [AIPageSnapshot] = []
+    /// The conversation's name, its tab's title (the projection fills it in); nil before it has one.
+    public var name: String? = nil
 }
 
 /// A conversation with a local agent in the Max panel. Session only, one per window. Its id is the first request's.
@@ -263,13 +268,28 @@ public enum AIConversationItem: Equatable, Sendable, Codable {
     /// A page the agent rendered (`brk_html_render`), shown inline where it was made.
     case page(AIPageRef)
 }
+/// What an agent's step or approval does, as Brk tells it from the tool's name: the panel words it in the conversation's
+/// language and sums up a run of steps in plain words (`AIStepWords`). Nil: a tool Brk has no name for; its title shows
+/// as the agent gave it.
+public enum AIStepKind: String, Hashable, Sendable, Codable {
+    case listTabs, searchTabs, readTab, openTab, showTab, closeTabs, moveTabs, groupTabs, splitTabs
+    case listConversations, searchConversations, readConversation
+    case previewPage, makePage, keepPage, changePage, readSource, writeData
+    case command, readFile, writeFile, editFile, searchFiles, fetchPage, searchWeb, helper, taskList, skill
+}
 /// One thing the agent does (a command, a file edit, a search), as it reports it.
 public struct AIAgentStep: Equatable, Sendable, Codable {
     public enum State: String, Equatable, Sendable, Codable { case running, done, failed }
     public let id: String
+    /// The agent's own words for it, in English: what shows when `kind` is nil.
     public var title: String
     public var state: State
-    public init(id: String, title: String, state: State) { self.id = id; self.title = title; self.state = state }
+    public var kind: AIStepKind? = nil
+    /// What it acts on, as the agent gave it: the command, the file, the search words, the address.
+    public var subject: String? = nil
+    public init(id: String, title: String, state: State, kind: AIStepKind? = nil, subject: String? = nil) {
+        self.id = id; self.title = title; self.state = state; self.kind = kind; self.subject = subject
+    }
 }
 /// A tool the agent wants to run and may not without the user's answer. `options` come from the agent.
 public struct AIAgentApproval: Equatable, Sendable, Codable {
@@ -286,8 +306,11 @@ public struct AIAgentApproval: Equatable, Sendable, Codable {
     public let options: [Option]
     /// The option chosen; nil while the agent waits.
     public var answer: String? = nil
-    public init(id: String, title: String, detail: String, options: [Option]) {
-        self.id = id; self.title = title; self.detail = detail; self.options = options
+    /// What the tool would do (`AIStepKind`) and on what, for the card's one plain sentence; nil: the title is the sentence.
+    public var kind: AIStepKind? = nil
+    public var subject: String? = nil
+    public init(id: String, title: String, detail: String, options: [Option], kind: AIStepKind? = nil, subject: String? = nil) {
+        self.id = id; self.title = title; self.detail = detail; self.options = options; self.kind = kind; self.subject = subject
     }
 }
 /// What a running session reports (`SystemEvent.aiConversation`). Text arrives as `aiPartial` and `aiResult`.

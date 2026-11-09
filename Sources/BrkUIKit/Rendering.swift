@@ -46,6 +46,16 @@ public struct Palette: Equatable {
     public func color(_ rgba: RGBA) -> NSColor {
         NSColor(srgbRed: rgba.red, green: rgba.green, blue: rgba.blue, alpha: rgba.alpha)
     }
+
+    /// Arc's `focus` palette color, seen as its split focus ring (P23-a, P23-c): light, the theme's hue and saturation at
+    /// relative luminance 0.097; dark, a lighter shade of the hue (the same numbers as `ThemeAccent.splitFocusRing`).
+    /// Brk's own Space-colored marks use it too: a kept page's new-data dot and the AI panel's send button and links.
+    public var focusColor: NSColor {
+        if scheme == .light { return color(themeShade(accent, luminance: 0.097)) }
+        var hue: CGFloat = 0, saturation: CGFloat = 0, value: CGFloat = 0, alpha: CGFloat = 0
+        NSColor(srgbRed: accent.red, green: accent.green, blue: accent.blue, alpha: 1).getHue(&hue, saturation: &saturation, brightness: &value, alpha: &alpha)
+        return NSColor(hue: hue, saturation: min(0.53, saturation * 9), brightness: 0.8, alpha: 1)
+    }
 }
 
 /// Arc's English copy used by the core views (visual-and-copy.md section 3). One place, so views and e2e agree.

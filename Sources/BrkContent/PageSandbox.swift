@@ -1,6 +1,7 @@
 import AppKit
 import BrkBase
 import BrkDomain
+import BrkUIKit
 import WebKit
 
 // The page sandbox: where an agent's HTML is shown (docs/design/ai-conversations.md, "The page sandbox"). The HTML is
@@ -39,9 +40,11 @@ public struct PageTheme: Equatable, Sendable {
     public init(_ theme: ResolvedTheme, background: RGBA? = nil) {
         scheme = theme.scheme
         let dark = theme.scheme == .dark
-        let space = theme.gradient.first ?? RGBA(hex: "#3478F6")
-        // The Space's color as an accent the text can stand on: darkened on light, lightened on dark until it reads.
-        let primary = Self.readable(space, on: dark ? RGBA(hex: "#1E1E1E") : RGBA(hex: "#FFFFFF"))
+        // The Space's own accent, the one the panel's send button and links use (`Palette.focusColor`), kept readable on
+        // the page's background: a page marks what stands out in the same color as the panel around it.
+        let focus = Palette(theme).focusColor.usingColorSpace(.sRGB) ?? .systemBlue
+        let space = RGBA(Double(focus.redComponent), Double(focus.greenComponent), Double(focus.blueComponent))
+        let primary = Self.readable(space, on: background ?? (dark ? RGBA(hex: "#1E1E1E") : RGBA(hex: "#FFFFFF")))
         let onPrimary = Self.luminance(primary) > 0.45 ? "#111111" : "#FFFFFF"
         let base = background ?? (dark ? RGBA(hex: "#1E1E1E") : RGBA(hex: "#FFFFFF"))
         func css(_ c: RGBA) -> String {
@@ -322,7 +325,9 @@ public final class PageSandboxView: NSView {
           const root = document.documentElement;
           const base = document.createElement('style');
           base.id = 'brk-base';
-          base.textContent = 'html,body{margin:0;padding:0;background:transparent;color:var(--foreground);font-family:var(--font-sans);font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}*,*::before,*::after{box-sizing:border-box}a{color:var(--primary)}';
+          // Pages fit the width they are shown at, the panel's included: nothing is wider than the page, long words and
+          // numbers wrap, tables shrink their columns, grid and flex children may narrow, media scale down.
+          base.textContent = 'html,body{margin:0;padding:0;background:transparent;color:var(--foreground);font-family:var(--font-sans);font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow-wrap:anywhere}*,*::before,*::after{box-sizing:border-box;min-width:0}body>*{max-width:100%}a{color:var(--primary)}img,video{max-width:100%;height:auto}svg,canvas,iframe{max-width:100%}table{max-width:100%;border-collapse:collapse}td,th{overflow-wrap:anywhere}pre,code{white-space:pre-wrap;overflow-wrap:anywhere}';
           const vars = document.createElement('style');
           vars.id = 'brk-theme';
           root.prepend(vars);

@@ -181,6 +181,7 @@ enum AIRealUIScenarios {
         let log = Log(app.shotsDirectory.appendingPathComponent("real-ui-\(name).txt"))
         defer { try? NativeSystemInput.setShift(false); PhysicalKeys.clearSystemModifiers(KeyChord([.command, .shift, .option, .control], .a)) }
 
+        try AIPanelLookScenarios.clearOfSystemDialogs(app)
         // A new user: Settings, the Max tab, Turn On Max, the agent.
         var ready = false
         log.check("Max pane: Turn On Max and choose \(kind.displayName)") {
@@ -204,6 +205,11 @@ enum AIRealUIScenarios {
                 return status != nil && status?.state != .checking
             }
             ready = status?.state == .ready
+            // BRK_E2E_REAL_UI_MODEL: the text typed into the model pop-up (spend little: Haiku, GPT-6-Luna).
+            if ready, let model = ProcessInfo.processInfo.environment["BRK_E2E_REAL_UI_MODEL"], !model.isEmpty {
+                try choose(popUp: ViewID.settingsField("agentModel").identifier, typing: model, "the model pop-up")
+                try app.waitUntil("the model chosen") { try settings(app).max.settings.agentOptions?[kind]?.model != nil }
+            }
             app.sleep(0.5)
             try captureSettings(app, "max-pane")
             try key(.command, .w)
@@ -386,6 +392,9 @@ enum AIRealUIScenarios {
             try bar(app, "say ok")
             try key([], .tab)
             _ = try answer(app)
+            // Work in a Folder… is in the composer's + menu.
+            try click(app, .aiControl("plus"))
+            try app.waitUntil("the + menu", timeout: 5) { try app.native().actual[ViewID.aiControl("folder").identifier]?.hidden == false }
             try click(app, .aiControl("folder"))
             try choosePanelFolder(app, work)
             try app.waitUntil("a session in the folder", timeout: 20) { try app.view().ai?.conversation?.folder != nil }
@@ -405,6 +414,8 @@ enum AIRealUIScenarios {
                 // The default model has no quota left: the panel's Agent… leads to the model, the next message uses it.
                 notes.append("default model: \(limit)")
                 shot(app, "folder-limit")
+                try click(app, .aiControl("plus"))
+                try app.waitUntil("the + menu", timeout: 5) { try app.native().actual[ViewID.aiControl("agent-settings").identifier]?.hidden == false }
                 try click(app, .aiControl("agent-settings"))
                 try choose(popUp: ViewID.settingsField("agentModel").identifier, typing: "Haiku", "the model pop-up")
                 try key(.command, .w)

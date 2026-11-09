@@ -34,6 +34,9 @@ public struct WindowFrames: Sendable, Equatable, Codable {
     /// The Peek card over the content area (Metrics.peek), nil unless a Peek is open.
     public var find: FindFrames? = nil
     public var peek: CGRect?
+    /// Brk's AI panel: a column at the window's right edge, beside the cards, nil while no conversation or message is in
+    /// it (`AIPanelLayout`).
+    public var aiPanel: CGRect? = nil
 
     public init(contentSize: CGSize, sidebar: SidebarFrames?, sidebarFloats: Bool, resizeHandle: CGRect?,
                 revealStrip: CGRect?, contentArea: CGRect, cards: [CardFrame], dividers: [CGRect],

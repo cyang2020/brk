@@ -185,7 +185,8 @@ import Foundation
             let options: [AIAgentApproval.Option] = spec.access == .browser
                 ? [.init(id: "once", title: "Allow", kind: .allowOnce), .init(id: "deny", title: "Deny", kind: .deny)]
                 : [.init(id: "once", title: "Allow", kind: .allowOnce), .init(id: "session", title: "Allow for Session", kind: .allowSession), .init(id: "deny", title: "Deny", kind: .deny)]
-            events?(.approval(AIAgentApproval(id: id, title: Self.title(tool: tool, input: input), detail: Self.detail(tool: tool, input: input), options: options)))
+            events?(.approval(AIAgentApproval(id: id, title: Self.title(tool: tool, input: input), detail: Self.detail(tool: tool, input: input), options: options,
+                                              kind: Self.kind(tool: tool), subject: Self.subject(tool: tool, input: input))))
         case "control_cancel_request":
             if let id = object["request_id"] as? String, pendingApprovals.removeValue(forKey: id) != nil { events?(.approvalClosed(id)) }
         case "system":
@@ -209,19 +210,22 @@ import Foundation
             let content = (object["message"] as? [String: Any])?["content"] as? [[String: Any]] ?? []
             for block in content where block["type"] as? String == "tool_use" {
                 guard let id = block["id"] as? String, openSteps.insert(id).inserted else { continue }
-                events?(.step(AIAgentStep(id: id, title: Self.title(tool: block["name"] as? String ?? "Tool", input: block["input"] as? [String: Any] ?? [:]), state: .running)))
-                stepTitles[id] = Self.title(tool: block["name"] as? String ?? "Tool", input: block["input"] as? [String: Any] ?? [:])
+                let tool = block["name"] as? String ?? "Tool", input = block["input"] as? [String: Any] ?? [:]
+                let step = AIAgentStep(id: id, title: Self.title(tool: tool, input: input), state: .running, kind: Self.kind(tool: tool), subject: Self.subject(tool: tool, input: input))
+                events?(.step(step))
+                stepTitles[id] = step
             }
         case "user":
             let content = (object["message"] as? [String: Any])?["content"] as? [[String: Any]] ?? []
             for block in content where block["type"] as? String == "tool_result" {
-                guard let id = block["tool_use_id"] as? String, let title = stepTitles.removeValue(forKey: id) else { continue }
+                guard let id = block["tool_use_id"] as? String, var step = stepTitles.removeValue(forKey: id) else { continue }
                 openSteps.remove(id)
-                events?(.step(AIAgentStep(id: id, title: title, state: block["is_error"] as? Bool == true ? .failed : .done)))
+                step.state = block["is_error"] as? Bool == true ? .failed : .done
+                events?(.step(step))
             }
         case "result":
             // Ending a turn ends whatever it was still doing.
-            for id in openSteps { if let title = stepTitles.removeValue(forKey: id) { events?(.step(AIAgentStep(id: id, title: title, state: .failed))) } }
+            for id in openSteps { if var step = stepTitles.removeValue(forKey: id) { step.state = .failed; events?(.step(step)) } }
             openSteps = []
             for id in pendingApprovals.keys { events?(.approvalClosed(id)) }
             pendingApprovals = [:]
@@ -240,7 +244,7 @@ import Foundation
         default: break
         }
     }
-    private var stepTitles: [String: String] = [:]
+    private var stepTitles: [String: AIAgentStep] = [:]
 
     /// The name the user knows. What the agent says it runs comes first: the user's own settings can pick a model the
     /// list's default entry does not name. "claude-fable-5-1" reads as the entry called "Fable 5.1".
@@ -280,6 +284,39 @@ import Foundation
         case "TodoWrite": return "Update the task list"
         case "Skill": return "Use the skill " + (text("skill") ?? text("name") ?? "")
         default: return BrkToolCatalog.stepTitle(tool) ?? tool
+        }
+    }
+
+    /// What the tool does, for the panel's words; nil for one Brk has no name for.
+    static func kind(tool: String) -> AIStepKind? {
+        switch tool {
+        case "Bash": .command
+        case "Read": .readFile
+        case "Write": .writeFile
+        case "Edit", "MultiEdit", "NotebookEdit": .editFile
+        case "Grep", "Glob": .searchFiles
+        case "WebFetch": .fetchPage
+        case "WebSearch": .searchWeb
+        case "Task": .helper
+        case "TodoWrite": .taskList
+        case "Skill": .skill
+        default: BrkToolCatalog.stepKind(tool)
+        }
+    }
+
+    /// What it acts on: the command, the file, the pattern, the address, the words searched for.
+    static func subject(tool: String, input: [String: Any]) -> String? {
+        let text = { (key: String) in (input[key] as? String).flatMap { $0.isEmpty ? nil : $0 } }
+        switch tool {
+        case "Bash": return text("command").map { AgentCopy.oneLine($0) }
+        case "Read", "Write", "Edit", "MultiEdit": return text("file_path").map(AIStepWords.shortPath)
+        case "NotebookEdit": return text("notebook_path").map(AIStepWords.shortPath)
+        case "Grep", "Glob": return text("pattern")
+        case "WebFetch": return text("url")
+        case "WebSearch": return text("query")
+        case "Task": return text("description")
+        case "Skill": return text("skill") ?? text("name")
+        default: return nil
         }
     }
 

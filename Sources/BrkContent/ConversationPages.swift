@@ -4,140 +4,42 @@ import BrkDomain
 import BrkLayout
 import BrkUIKit
 
-/// The space a page takes in a transcript's text: an attachment as wide as the text and as tall as the page. The page
-/// itself is a `PageSandboxView` laid over it (`TranscriptPages`), so it scrolls with the text.
-final class PageAttachmentCell: NSTextAttachmentCell {
-    let page: AIPageID
-    var size: NSSize
-    init(page: AIPageID, size: NSSize) {
-        self.page = page
-        self.size = size
-        super.init(textCell: "")
-    }
-    @available(*, unavailable) required init(coder: NSCoder) { fatalError("not used") }
-    override func cellSize() -> NSSize { size }
-    override func cellBaselineOffset() -> NSPoint { .zero }
-    override func draw(withFrame cellFrame: NSRect, in controlView: NSView?) {}
-    override func wantsToTrackMouse() -> Bool { false }
-}
-
-/// The row under a page in a transcript: its title, and Keep as Tab (Show Tab once kept).
-@MainActor
-final class PageCaptionView: NSView {
-    private let title = NSTextField(labelWithString: "")
-    let keep = NSButton(title: "Keep as Tab", target: nil, action: nil)
-    var onKeep: (() -> Void)?
-
-    init(page: AIPageID) {
-        super.init(frame: .zero)
-        title.font = .systemFont(ofSize: Metrics.ai.stepFont.value)
-        title.textColor = .secondaryLabelColor
-        title.lineBreakMode = .byTruncatingTail
-        title.usesSingleLineMode = true
-        title.cell?.wraps = false
-        keep.isBordered = false
-        keep.font = .systemFont(ofSize: Metrics.ai.stepFont.value, weight: .medium)
-        keep.contentTintColor = .linkColor
-        keep.target = self
-        keep.action = #selector(pressed)
-        keep.identify(.aiControl("keep-" + page.rawValue))
-        keep.toolTip = "Keep this page as a tab in the sidebar, with its data and this conversation."
-        addSubview(title)
-        addSubview(keep)
-    }
-    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
-    override var isFlipped: Bool { true }
-    @objc private func pressed() { onKeep?() }
-
-    func show(_ page: AIPageSnapshot) {
-        title.stringValue = page.title
-        keep.title = page.kept ? "Show Tab" : "Keep as Tab"
-        needsLayout = true
-    }
-
-    override func layout() {
-        super.layout()
-        let width = ceil(keep.intrinsicContentSize.width) + 8
-        keep.frame = CGRect(x: bounds.width - width, y: 0, width: width, height: bounds.height)
-        title.frame = CGRect(x: 0, y: (bounds.height - 16) / 2, width: max(0, keep.frame.minX - 8), height: 16)
-    }
-}
-
-/// The pages of one transcript: a sandboxed view for each page item, placed over its attachment with its caption row
-/// under it, kept while the page stays in the transcript. A page's own height, once it reports one, wins over the one
-/// it was rendered with.
+/// The pages of one transcript: a sandboxed view for each page item, kept while the page stays in the transcript and
+/// placed by its card row (`AIPageRowView`). A page's own height, once it reports one, wins over the one it was rendered
+/// with. A page that leaves, or gets new data or HTML, commits what is being typed first, out of sight but still in the
+/// window (`host`).
 @MainActor
 final class TranscriptPages {
-    private weak var text: NSTextView?
     private var views: [AIPageID: PageSandboxView] = [:]
     private var revisions: [AIPageID: Int] = [:]
-    private var captions: [AIPageID: PageCaptionView] = [:]
-    var onKeep: ((AIPageID) -> Void)?
+    private var heights: [AIPageID: Int] = [:]
+    /// Where a page waits, out of sight, while it commits its edits on its way out.
+    weak var host: NSView?
     /// The page saved its own state (`window.brk.save`).
     var onSave: ((AIPageID, String) -> Void)?
-    /// The caption row under each page.
-    static let captionHeight: CGFloat = 26
-    private var heights: [AIPageID: Int] = [:]
     var theme: PageTheme?
     var onEvent: ((AIPageID, PageSandboxEvent) -> Void)?
     var menu: ((AIPageID) -> [NSMenuItem])?
-    /// A page's height changed: the text must be laid out again.
+    /// A page's height changed, or a page was made anew: the transcript must be laid out again.
     var onHeight: (() -> Void)?
 
-    init(text: NSTextView) { self.text = text }
+    /// The height a page shows at: what it reported last, else what it was rendered with, within Brk's limits.
+    func height(_ page: AIPageSnapshot) -> Int { AIPageLimits.height(heights[page.id] ?? page.height) }
 
-    private var cache: [AIPageID: (size: NSSize, text: NSAttributedString)] = [:]
-
-    /// The attachment for `page`, `width` wide; the same object while its size stays, so unchanged text compares equal.
-    func attachment(_ page: AIPageSnapshot, width: CGFloat) -> NSAttributedString {
-        let size = NSSize(width: max(40, width.rounded(.down)), height: CGFloat(AIPageLimits.height(heights[page.id] ?? page.height)) + Self.captionHeight)
-        if let cached = cache[page.id], cached.size == size { return cached.text }
-        let attachment = NSTextAttachment()
-        attachment.attachmentCell = PageAttachmentCell(page: page.id, size: size)
-        let text = NSAttributedString(attachment: attachment)
-        cache[page.id] = (size, text)
-        return text
+    /// The view for `page`: the one it has, the one on its way out (its edits in progress kept), or a new one. New data
+    /// or HTML loads it again once the shown page has committed what is being typed; its own saves never do.
+    func view(for page: AIPageSnapshot) -> PageSandboxView {
+        if let old = views[page.id], revisions[page.id] != page.revision { replace(old, page: page.id) }
+        if views[page.id] == nil, revisions[page.id] == page.revision, let back = leaving.removeValue(forKey: page.id) {
+            back.identify(.aiControl("page-" + page.id.rawValue))
+            views[page.id] = back
+        }
+        return views[page.id] ?? make(page)
     }
 
-    /// Places a view over every page attachment in the text, making the ones that are new; drops the rest.
-    func place(_ pages: [AIPageSnapshot]) {
-        guard let text, let storage = text.textStorage, let layout = text.layoutManager, let container = text.textContainer else { return }
-        layout.ensureLayout(for: container)
-        var seen = Set<AIPageID>()
-        let origin = text.textContainerOrigin
-        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
-            guard let cell = (value as? NSTextAttachment)?.attachmentCell as? PageAttachmentCell, let page = pages.first(where: { $0.id == cell.page }) else { return }
-            seen.insert(page.id)
-            let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
-            var rect = layout.boundingRect(forGlyphRange: glyphs, in: container)
-            rect.origin.x += origin.x
-            rect.origin.y += origin.y
-            rect.size = cell.size
-            // New data or HTML: the page loads again, once it has committed what is being typed. Its own saves never
-            // reload it.
-            if let old = views[page.id], revisions[page.id] != page.revision { replace(old, page: page.id) }
-            if views[page.id] == nil, revisions[page.id] == page.revision, let back = leaving.removeValue(forKey: page.id) {
-                back.identify(.aiControl("page-" + page.id.rawValue))
-                views[page.id] = back
-            }
-            let view = views[page.id] ?? make(page)
-            if view.superview !== text { text.addSubview(view) }
-            view.frame = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - Self.captionHeight)
-            let caption = captions[page.id] ?? {
-                let made = PageCaptionView(page: page.id)
-                made.onKeep = { [weak self] in self?.onKeep?(page.id) }
-                captions[page.id] = made
-                return made
-            }()
-            if caption.superview !== text { text.addSubview(caption) }
-            caption.frame = CGRect(x: rect.minX, y: rect.maxY - Self.captionHeight, width: rect.width, height: Self.captionHeight)
-            caption.show(page)
-        }
-        for (id, view) in views where !seen.contains(id) {
-            retire(view, page: id)
-            captions.removeValue(forKey: id)?.removeFromSuperview()
-            cache[id] = nil
-        }
+    /// Every page not in `shown` leaves.
+    func keep(only shown: Set<AIPageID>) {
+        for (id, view) in views where !shown.contains(id) { retire(view, page: id) }
     }
 
     /// Views committing their page's edits on their way out, by page.
@@ -148,6 +50,7 @@ final class TranscriptPages {
     private func retire(_ view: PageSandboxView, page: AIPageID) {
         views[page] = nil
         leaving[page] = view
+        if let host, view.superview !== host { host.addSubview(view) }
         view.frame.origin.x = -100_000
         view.identify(.aiControl("page-leaving-" + page.rawValue))
         Task { @MainActor [weak self] in
@@ -188,9 +91,6 @@ final class TranscriptPages {
 
     func removeAll() {
         for (page, view) in views { retire(view, page: page) }
-        for caption in captions.values { caption.removeFromSuperview() }
-        captions = [:]
-        cache = [:]
     }
 
     private func make(_ page: AIPageSnapshot) -> PageSandboxView {
