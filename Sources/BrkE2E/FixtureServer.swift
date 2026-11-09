@@ -18,6 +18,8 @@ final class FixtureServer: @unchecked Sendable {
     func requestCount(_ path: String) -> Int { countLock.withLock { counts[path, default: 0] } }
     /// A site file served with `text` replaced (a shop's price changes, a page gains an injection): live page scenarios.
     func replace(in path: String, _ text: String, with replacement: String) { countLock.withLock { replacements[path, default: []].append((text, replacement)) } }
+    /// The page at `path` served as its file has it again: earlier scenarios' replacements dropped.
+    func restore(_ path: String) { countLock.withLock { replacements[path] = nil } }
     private var replacements: [String: [(String, String)]] = [:]
     /// Every `/suggest` request's query string, in order (which engine asked: `engine=<its suggest host>`).
     func suggestQueries() -> [String] { countLock.withLock { suggests } }
