@@ -50,6 +50,8 @@ final class RightPanelTests: XCTestCase {
             text = text.replacingOccurrences(of: from, with: to)
         }
         let next = Driver(file: Data(text.utf8))
+        // The app reduces other launch events before it reads the conversations: the rows must wait for them.
+        next.system(.aiProvidersDetected([.claude]))
         XCTAssertTrue(next.allTabRows.contains { $0.url == ConversationPage.url(AIRequestID("pinned")) }, "the old file has the rows")
         func stored(_ id: String, space: SpaceID?) -> StoredConversation {
             var conversation = StoredConversation(id: AIRequestID(id), profile: .default, title: id + " question", createdAt: T0, tabs: true)

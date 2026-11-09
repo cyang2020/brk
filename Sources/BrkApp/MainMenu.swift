@@ -72,7 +72,8 @@ enum MainMenu {
 
     /// One item of a menu or submenu at its Arc row.
     private struct Slot {
-        let row: Int
+        /// Its place in the menu: the table's row, or between two rows for Brk's own placed rows (`ActionSpec.after`).
+        let row: Double
         let group: Int
         /// Brk's own hidden rows (after Arc's 189) take no part in the separators, so they leave no stray line;
         /// Arc's hidden rows keep the nib's separators.
@@ -141,18 +142,18 @@ enum MainMenu {
     private static func slots(in name: MenuName, submenu: Submenu?, target: MenuTarget, bindings: [ActionID: ResolvedBinding]) -> [Slot] {
         var slots: [Slot] = []
         for action in ActionID.allCases where action.spec.row < 1000 && action.spec.menu == name && action.spec.submenu == submenu {
-            slots.append(Slot(row: action.spec.row, group: action.spec.group, silent: action.spec.hidden && action.spec.row > 189) {
+            slots.append(Slot(row: action.spec.menuOrder, group: action.spec.group, silent: action.spec.hidden && action.spec.row > 189) {
                 item(action, binding: 0, title: nil, hidden: action.spec.hidden, target: target, bindings: bindings)
             })
         }
         for repeat_ in repeats where repeat_.menu == name && repeat_.submenu == submenu {
-            slots.append(Slot(row: repeat_.row, group: repeat_.group) {
+            slots.append(Slot(row: Double(repeat_.row), group: repeat_.group) {
                 item(repeat_.action, binding: repeat_.binding, title: nil, hidden: repeat_.hidden, target: target, bindings: bindings)
             })
         }
         if submenu == nil {
             for header in headers where header.menu == name {
-                slots.append(Slot(row: header.row, group: header.group) {
+                slots.append(Slot(row: Double(header.row), group: header.group) {
                     let sub = NSMenu(title: title(of: header.submenu))
                     fill(sub, slots: self.slots(in: name, submenu: header.submenu, target: target, bindings: bindings), target: target)
                     let item = NSMenuItem(title: sub.title, action: nil, keyEquivalent: "")
@@ -161,7 +162,7 @@ enum MainMenu {
                 })
             }
             for standard in standards[name] ?? [] {
-                slots.append(Slot(row: standard.row, group: standard.group) { standard.item(target: target) })
+                slots.append(Slot(row: Double(standard.row), group: standard.group) { standard.item(target: target) })
             }
         }
         if submenu == .appearance {

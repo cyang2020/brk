@@ -133,6 +133,11 @@ public struct ActionSpec: Hashable, Sendable {
     /// The row in anatomy-m 2.3 this action comes from.
     public let row: Int
 
+    /// Brk's own row placed right after this action in its menu (menus order by `row`, and Brk's rows come after Arc's 189).
+    public var after: ActionID? = nil
+    /// Where the row sorts in its menu: its own row, or just after `after`'s.
+    public var menuOrder: Double { after.map { Double($0.spec.row) + 0.5 } ?? Double(row) }
+
     /// What the command bar's row runs: the listing's own command, else the item's.
     public var barCommand: Command { commandBar?.command ?? command }
 
@@ -165,6 +170,14 @@ private let cmd = Modifiers.command, shift = Modifiers.shift, opt = Modifiers.op
 
 /// Arc's priority column: overrideWebView -> `.app`, promptAfterConsumedByWebView -> `.pageThenApp`, blank -> `.page`.
 private func key(_ modifiers: Modifiers, _ key: Key, _ priority: KeyPriority) -> KeyBinding { KeyBinding(KeyChord(modifiers, key), priority) }
+
+extension ActionSpec {
+    func placed(after action: ActionID) -> ActionSpec {
+        var spec = self
+        spec.after = action
+        return spec
+    }
+}
 
 extension ActionID {
     public var spec: ActionSpec {
@@ -285,6 +298,7 @@ extension ActionID {
         case .aiConversations:
             entry(246, "Show/Hide AI Conversations", .view, 1, [key([opt, cmd], .a, .page)], .assist(.togglePanel),
                   bar: listing("bubble.left.and.bubble.right", title: "AI Conversations", command: .assist(.panelPage(.list)), "AI Conversations", "AI 对话", "Conversations", "Threads"))
+                .placed(after: .showSidebar)
         case .toggleToolbar:
             entry(92, "Show/Hide Toolbar", .view, 1, [key([shift, cmd], .d, .pageThenApp)], .sidebar(.toggleToolbar),
                   bar: listing("rectangle.topthird.inset.filled", "Toggle Hide Show Toolbar"), hidden: true)

@@ -307,7 +307,8 @@ extension Work {
     /// sidebar (an old folder restored from the archive, an undo, a typed `brk://conversation/` address) goes again, and
     /// the conversation shows in that window's panel instead.
     mutating func reconcileConversations(from previous: AppState) {
-        dropConversationRows(showing: true)
+        // Before the saved conversations are read, a row is still where the move off the sidebar reads its Space.
+        if state.session.ai.conversationsLoaded { dropConversationRows(showing: true) }
         for (id, answer) in state.session.ai.awayAnswers where !answer.busy {
             commitConversation(id)
             state.session.ai.awayAnswers[id] = nil
@@ -364,6 +365,7 @@ extension Work {
             state.doc.aiPages[page.id] = page
         }
         migrateConversationRows()
+        state.session.ai.conversationsLoaded = true
     }
 
     private mutating func migrateConversationRows() {

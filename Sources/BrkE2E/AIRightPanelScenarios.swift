@@ -298,23 +298,30 @@ enum AIRightPanelScenarios {
             return "count 1 on the button"
         }
         log.check("narrow: reload into … first, then the chat button, whose … item carries the count") {
-            try app.dispatch(.sidebar(.resize(width: 210)))
-            try app.waitUntil("the compact row with the chat button", timeout: 5) { try T.shown(app, .aiControl("toggle")) && T.shown(app, .tabTool("title-more")) }
+            // Arc's default width (228) holds the toggle and four compact buttons: reload is the one in "…".
+            try app.dispatch(.sidebar(.resize(width: Metrics.sidebar.defaultWidth.value)))
+            try app.waitUntil("reload folded, the chat button at the end", timeout: 5) { try T.shown(app, .aiControl("toggle")) && T.shown(app, .tabTool("title-more")) }
+            guard case .menuItems(let first) = try app.send(.captureClickMenu(view: .tabTool("title-more"))) else { throw Check(description: "no … menu") }
+            try expect(first == ["Reload"], "the … menu at 228: \(first)")
             T.shot(app, "3-compact")
-            try app.dispatch(.sidebar(.resize(width: 172)))
+            try app.dispatch(.sidebar(.resize(width: 190)))
             try app.waitUntil("the chat button folded", timeout: 5) { try !T.shown(app, .aiControl("toggle")) && T.shown(app, .tabTool("title-more")) }
             guard case .menuItems(let items) = try app.send(.captureClickMenu(view: .tabTool("title-more"), choose: "AI Conversations")) else {
                 throw Check(description: "no … menu")
             }
+            try expect(items.contains("AI Conversations") && items.contains("Reload"), "the … menu at 190: \(items)")
             try app.waitUntil("the panel by the … item", timeout: 5) { try app.view().aiToggle?.open == true }
             T.shot(app, "4-folded-open")
+            try app.dispatch(.sidebar(.resize(width: 300)))
+            try app.waitUntil("all five at 300", timeout: 5) { try T.shown(app, .aiControl("toggle")) && !T.shown(app, .tabTool("title-more")) }
+            T.shot(app, "5-wide-row")
             try app.dispatch(.sidebar(.resize(width: Metrics.sidebar.defaultWidth.value)))
-            return "… menu: \(items.joined(separator: " · "))"
+            return "228: … holds \(first); 190: … holds \(items.joined(separator: " · ")); 300: all five"
         }
         log.check("AI off: no chat button, the row is Arc's") {
             try app.dispatch(.settings(.max(.feature(.commandBar, false))))
             try app.waitUntil("no button", timeout: 5) { try app.view().aiToggle == nil && !T.shown(app, .aiControl("toggle")) }
-            T.shot(app, "5-ai-off")
+            T.shot(app, "6-ai-off")
             try app.dispatch(.settings(.max(.feature(.commandBar, true))))
             return "button gone with Ask in Command Bar off"
         }

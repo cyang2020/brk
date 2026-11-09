@@ -190,7 +190,8 @@ final class AIPageCardsView {
     }
 
     private func make(_ content: AIPageSnapshot?, theme: PageTheme) -> Entry {
-        let back = NSView()
+        // Flipped: the caption row is laid out from the card's top.
+        let back = AIFlippedView()
         back.wantsLayer = true
         back.layer?.masksToBounds = true
         back.identify(.aiControl("page-card"))

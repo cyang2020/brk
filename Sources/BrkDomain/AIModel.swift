@@ -497,6 +497,9 @@ struct AISession: Equatable, Sendable {
     var renamingConversation: [WindowID: AIRequestID] = [:]
     /// Delete for good, waiting for Cancel or Delete in the window's dialog.
     var pendingConversationDeletion: [WindowID: ConversationDeletionRequest] = [:]
+    /// The saved conversations were read at launch (`SystemEvent.conversationsLoaded`): only then can a conversation row
+    /// left in the sidebar be moved off it, its Space read first (docs/design/ai-right-panel.md).
+    var conversationsLoaded = false
     /// The list row under the pointer, and the chip under it: what the sidebar lights (docs/design/ai-right-panel.md).
     var hoveredConversation: [WindowID: AIRequestID] = [:]
     var hoveredChip: [WindowID: String] = [:]

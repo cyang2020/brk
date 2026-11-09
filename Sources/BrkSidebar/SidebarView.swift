@@ -587,6 +587,8 @@ final class TitleRowView: NSView {
     private let dispatch: Dispatch
     private var loading = false
     private var aiFolded = false
+    /// The sidebar toggle is in "…" (Arc's compact row).
+    private var foldsToggle = false
     private var last: (URLPillSnapshot, SidebarFrames, Bool, Palette, Bool, AIToggleSnapshot?)?
 
     init(dispatch: @escaping Dispatch) {
@@ -631,43 +633,54 @@ final class TitleRowView: NSView {
         // With the toolbar shown the chat button is the toolbar's; a split's row keeps it at the end.
         let chat = toggleState != nil && !toolbar
         let offRow = toolbar || !navigation
+        let compact = Draw.navButtonCompact.value, cy = (f.titleRow.height - compact) / 2
         aiFolded = false
-        var aiCompact = false
+        foldsToggle = false
         ai.isHidden = !chat
-        if chat, offRow {
-            ai.frame = CGRect(x: right - size, y: y, width: size, height: size)
-        } else if chat, right - 4 * size - 3 * gap >= toggle.frame.maxX + gap {
-            ai.frame = CGRect(x: right - size, y: y, width: size, height: size)
-            right -= size + gap
-        } else if chat {
-            // Too narrow for five: Arc's compact row with the chat button at its end, else the chat button in "…" too.
-            let compact = Draw.navButtonCompact.value, cy = (f.titleRow.height - compact) / 2
-            if right - 4 * compact >= lightsEnd {
-                ai.frame = CGRect(x: right - compact, y: cy, width: compact, height: compact)
-                right -= compact
-                aiCompact = true
+        if chat, !offRow, right - 4 * size - 3 * gap < toggle.frame.maxX + gap {
+            // Too narrow for all five. First reload goes into "…" and the toggle stays: the chat button, "…", forward and
+            // back on Arc's 28 pt compact buttons. Narrower still, Arc's own compact row with the chat button in "…" too.
+            reload.isHidden = true
+            more.isHidden = false
+            if right - 4 * compact >= toggle.frame.maxX {
+                toggle.isHidden = false
+                for (i, button) in [ai, more, forward, back].enumerated() {
+                    button.frame = CGRect(x: right - Double(i + 1) * compact, y: cy, width: compact, height: compact)
+                    button.isHidden = false
+                }
             } else {
                 ai.isHidden = true
                 aiFolded = true
-            }
-        }
-        let fits = !aiFolded && !aiCompact && right - 3 * size - 2 * gap >= toggle.frame.maxX + gap
-        more.isHidden = offRow || fits
-        toggle.isHidden = !offRow && !fits
-        if fits || offRow {
-            var x = right
-            for button in [reload, forward, back] {
-                x -= size
-                button.frame = CGRect(x: x, y: y, width: size, height: size)
-                button.isHidden = offRow
-                x -= gap
+                foldsToggle = true
+                toggle.isHidden = true
+                for (i, button) in [more, forward, back].enumerated() {
+                    button.frame = CGRect(x: right - Double(i + 1) * compact, y: cy, width: compact, height: compact)
+                    button.isHidden = button.frame.minX < lightsEnd
+                }
             }
         } else {
-            let compact = Draw.navButtonCompact.value, cy = (f.titleRow.height - compact) / 2
-            reload.isHidden = true
-            for (i, button) in [more, forward, back].enumerated() {
-                button.frame = CGRect(x: right - Double(i + 1) * compact, y: cy, width: compact, height: compact)
-                button.isHidden = button.frame.minX < lightsEnd
+            if chat {
+                ai.frame = CGRect(x: right - size, y: y, width: size, height: size)
+                if !offRow { right -= size + gap }
+            }
+            let fits = right - 3 * size - 2 * gap >= toggle.frame.maxX + gap
+            more.isHidden = offRow || fits
+            toggle.isHidden = !offRow && !fits
+            foldsToggle = toggle.isHidden
+            if fits || offRow {
+                var x = right
+                for button in [reload, forward, back] {
+                    x -= size
+                    button.frame = CGRect(x: x, y: y, width: size, height: size)
+                    button.isHidden = offRow
+                    x -= gap
+                }
+            } else {
+                reload.isHidden = true
+                for (i, button) in [more, forward, back].enumerated() {
+                    button.frame = CGRect(x: right - Double(i + 1) * compact, y: cy, width: compact, height: compact)
+                    button.isHidden = button.frame.minX < lightsEnd
+                }
             }
         }
         back.isEnabled = pill.canGoBack
@@ -704,7 +717,8 @@ final class TitleRowView: NSView {
         let toggleItem = NSMenuItem(title: SidebarCopy.showHideSidebar, action: #selector(menuToggle), keyEquivalent: "")
         toggleItem.target = self
         menu.autoenablesItems = false
-        menu.items = [reloadItem, toggleItem]
+        // What did not fit: reload, the toggle when it is folded too (Arc's compact row).
+        menu.items = foldsToggle ? [reloadItem, toggleItem] : [reloadItem]
         // The chat button folded in: its item, with the count of what waits for the user.
         if aiFolded, let state = last?.5 {
             let item = NSMenuItem(title: AIThreadWords.toggleName(state.language), action: #selector(menuAI), keyEquivalent: "")
