@@ -22,6 +22,10 @@ extension Work {
             answerApproval(approval, option: option, at: .panel(window))
             return
         case .openAsTab: openPanelAsTab(in: window); return
+        case .newConversation:
+            guard aiEnabled(.commandBar, window), state.agentProfile(in: window) != nil else { return }
+            startFreshConversation(in: window, attached: [])
+            return
         case .openConversation(let id): openConversationTab(id, in: window); return
         case .keepPage(let id): _ = keepPage(id, title: nil, in: window, show: true); return
         case .pageLink(let page, let url): pageLink(page, url, in: window); return
@@ -314,7 +318,7 @@ extension Work {
         cancelAI(in: window, slot: .panel)
         let id = AIRequestID(ctx.newID())
         var conversation = AIConversationSnapshot(id: id, folder: folder)
-        conversation.items = [.notice("Working in \(folder). Tools are on; the agent asks here before it runs a command or changes a file.")]
+        conversation.items = [.notice(AIWords.workingIn(folder, aiLanguage([])))]
         state.session.ai.answerContexts[window] = state.libraryContext(in: window)
         state.session.ai.answers[window] = AIAnswerSnapshot(request: nil, title: (folder as NSString).lastPathComponent, text: "", busy: false, sources: [], conversation: conversation)
         state.session.ai.turnText[id] = 0
@@ -704,7 +708,10 @@ extension Work {
         state.session.ai[host: host]?.conversation = conversation
         // The answer's text; otherwise what went wrong goes under whatever the agent had written.
         if answered { showTurnText(text, at: host) }
-        else { state.session.ai[host: host]?.conversation?.items.append(.notice(text == Self.cancelled ? "Stopped." : text)) }
+        else {
+            let words = text == Self.cancelled ? AIWords.stopped(aiLanguage(conversation.items)) : text
+            state.session.ai[host: host]?.conversation?.items.append(.notice(words))
+        }
         commitConversation(conversation.id)
     }
     private mutating func finishInPlace(_ id: AIRequestID, _ request: AIRequest, text: String, success: Bool) {
@@ -873,7 +880,8 @@ extension Work {
             for (window, answer) in state.session.ai.answers {
                 guard let id = answer.conversation?.id, answer.conversation?.ended == false, answer.conversation?.dormant == false else { continue }
                 state.session.ai.answers[window]?.conversation?.ended = true
-                state.session.ai.answers[window]?.conversation?.items.append(.notice("Max's agent changed. Ask again to talk to the new one."))
+                let words = AIWords.agentChanged(aiLanguage(answer.conversation?.items ?? []))
+                state.session.ai.answers[window]?.conversation?.items.append(.notice(words))
                 effects.append(.aiCloseConversation(id))
             }
             for (id, answer) in state.session.ai.tabAnswers where answer.conversation?.dormant == false { state.session.ai.tabAnswers[id] = nil }

@@ -291,14 +291,6 @@ extension Palette {
     var ink: Ink { Ink(scheme: scheme, accent: accent) }
     /// Today's Clear and Tidy at rest: the sidebar foreground, lighter on a dark theme.
     var clearInk: NSColor { scheme == .dark ? NSColor(white: 1, alpha: Draw.clearInkDark.value) : color(tokens.foreground) }
-    /// Arc's `focus` palette color, seen as its split focus ring (P23-a, P23-c): light, the theme's hue and saturation at
-    /// relative luminance 0.097; dark, a lighter shade of the hue (the same numbers as `ThemeAccent.splitFocusRing`).
-    var focusColor: NSColor {
-        if scheme == .light { return color(themeShade(accent, luminance: 0.097)) }
-        var hue: CGFloat = 0, saturation: CGFloat = 0, value: CGFloat = 0, alpha: CGFloat = 0
-        NSColor(srgbRed: accent.red, green: accent.green, blue: accent.blue, alpha: 1).getHue(&hue, saturation: &saturation, brightness: &value, alpha: &alpha)
-        return NSColor(hue: hue, saturation: min(0.53, saturation * 9), brightness: 0.8, alpha: 1)
-    }
 }
 
 /// Arc's copy that `Copy` does not hold yet (visual-and-copy.md section 3, unless noted).

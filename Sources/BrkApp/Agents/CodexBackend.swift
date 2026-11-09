@@ -229,11 +229,13 @@ import Foundation
             let command = (params["command"] as? String) ?? (params["command"] as? [String])?.joined(separator: " ") ?? ""
             let shown = Self.plainCommand(command)
             ask(id, key: "\(id)", legacy: method == "execCommandApproval", title: "Run: " + AgentCopy.oneLine(shown),
-                detail: [AgentCopy.detail(shown), params["reason"] as? String ?? ""].filter { !$0.isEmpty }.joined(separator: "\n"), decisions: params["availableDecisions"] as? [Any])
+                detail: [AgentCopy.detail(shown), params["reason"] as? String ?? ""].filter { !$0.isEmpty }.joined(separator: "\n"), decisions: params["availableDecisions"] as? [Any],
+                kind: .command, subject: AgentCopy.oneLine(shown))
         case "item/fileChange/requestApproval", "applyPatchApproval":
             guard spec.access == .tools else { peer?.respond(id, ["decision": method == "applyPatchApproval" ? "denied" : "decline"]); return }
             let known = (params["itemId"] as? String).flatMap { files[$0] }
-            ask(id, key: "\(id)", legacy: method == "applyPatchApproval", title: "Change files", detail: [known ?? "", params["reason"] as? String ?? ""].filter { !$0.isEmpty }.joined(separator: "\n"), decisions: params["availableDecisions"] as? [Any])
+            ask(id, key: "\(id)", legacy: method == "applyPatchApproval", title: "Change files", detail: [known ?? "", params["reason"] as? String ?? ""].filter { !$0.isEmpty }.joined(separator: "\n"), decisions: params["availableDecisions"] as? [Any],
+                kind: .editFile, subject: known)
         case "item/permissions/requestApproval":
             // More access than the sandbox gives: never granted from here. The command can still ask on its own.
             peer?.respond(id, ["permissions": [String: Any](), "scope": "turn"])
@@ -250,7 +252,7 @@ import Foundation
 
     /// The options the agent offers: an option to remember a rule on disk is not one of Brk's; the decision
     /// it does not list is not shown.
-    private func ask(_ id: Any, key: String, legacy: Bool, title: String, detail: String, decisions: [Any]?) {
+    private func ask(_ id: Any, key: String, legacy: Bool, title: String, detail: String, decisions: [Any]?, kind: AIStepKind? = nil, subject: String? = nil) {
         pendingApprovals[key] = (id, legacy)
         let names = (decisions ?? ["accept", "acceptForSession", "decline"]).compactMap { $0 as? String }
         var options: [AIAgentApproval.Option] = []
@@ -260,7 +262,7 @@ import Foundation
         // "decline" lets the turn go on without it; "cancel" also ends the turn.
         if names.contains("decline") { options.append(.init(id: "decline", title: "Deny", kind: .deny)) }
         else { options.append(.init(id: "cancel", title: "Deny", kind: .deny)) }
-        events?(.approval(AIAgentApproval(id: key, title: title, detail: detail, options: options)))
+        events?(.approval(AIAgentApproval(id: key, title: title, detail: detail, options: options, kind: kind, subject: subject)))
     }
 
     /// Codex shows commands as `/bin/zsh -lc '…'`; the user wants to see the `…`.
@@ -281,20 +283,27 @@ import Foundation
     static func step(_ item: [String: Any], state: AIAgentStep.State) -> AIAgentStep? {
         guard let id = item["id"] as? String else { return nil }
         let title: String
+        var kind: AIStepKind?, subject: String?
         switch item["type"] as? String {
-        case "commandExecution": title = "Run: " + AgentCopy.oneLine(plainCommand(item["command"] as? String ?? ""))
+        case "commandExecution":
+            subject = AgentCopy.oneLine(plainCommand(item["command"] as? String ?? ""))
+            title = "Run: " + (subject ?? ""); kind = .command
         case "fileChange":
             let paths = (item["changes"] as? [[String: Any]] ?? []).compactMap { $0["path"] as? String }
             title = paths.isEmpty ? "Change files" : "Edit " + paths.joined(separator: ", ")
+            kind = .editFile; subject = paths.isEmpty ? nil : paths.map(AIStepWords.shortPath).joined(separator: ", ")
         case "mcpToolCall":
             let named = [item["server"] as? String, item["tool"] as? String].compactMap { $0 }.joined(separator: ": ")
             title = BrkToolCatalog.stepTitle(named) ?? named
+            kind = BrkToolCatalog.stepKind(named)
         case "dynamicToolCall": title = item["tool"] as? String ?? "Tool"
-        case "webSearch": title = "Search the web: " + AgentCopy.oneLine(item["query"] as? String ?? "")
-        case "collabAgentToolCall": title = "Start a helper"
+        case "webSearch":
+            subject = AgentCopy.oneLine(item["query"] as? String ?? "")
+            title = "Search the web: " + (subject ?? ""); kind = .searchWeb
+        case "collabAgentToolCall": title = "Start a helper"; kind = .helper
         default: return nil
         }
-        return AIAgentStep(id: id, title: title, state: state)
+        return AIAgentStep(id: id, title: title, state: state, kind: kind, subject: subject.flatMap { $0.isEmpty ? nil : $0 })
     }
 
     static func failure(_ status: Int32, _ stderr: String) -> String {

@@ -213,6 +213,8 @@ public struct AIPageSnapshot: Hashable, Sendable, Codable {
     public var saveSchema: String? = nil
     /// A view loads the page again when this changes (new data or HTML), never for the page's own saves.
     public var revision: Int = 0
+    /// How often it updates itself; nil when it does not.
+    public var schedule: AIPageSchedule? = nil
     public init(id: AIPageID, title: String, html: URL, height: Int, data: String?, kept: Bool) {
         self.id = id; self.title = title; self.html = html; self.height = height; self.data = data; self.kept = kept
     }

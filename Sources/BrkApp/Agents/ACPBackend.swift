@@ -23,6 +23,7 @@ import Foundation
     private var interrupting = false
     private var modelName: String?
     private var steps: [String: String] = [:]
+    private var kinds: [String: AIStepKind?] = [:]
     private var sentFirst = false
 
     init(spec: AgentSpec, environment: [String: String]) {
@@ -210,12 +211,14 @@ import Foundation
             guard let id = update["toolCallId"] as? String else { return }
             let title = update["title"] as? String ?? "Tool"
             steps[id] = title
-            events?(.step(AIAgentStep(id: id, title: title, state: Self.state(update["status"] as? String))))
+            kinds[id] = Self.kind(update, title: title)
+            events?(.step(AIAgentStep(id: id, title: title, state: Self.state(update["status"] as? String), kind: kinds[id] ?? nil)))
         case "tool_call_update":
             guard let id = update["toolCallId"] as? String else { return }
             let title = update["title"] as? String ?? steps[id] ?? "Tool"
             steps[id] = title
-            events?(.step(AIAgentStep(id: id, title: title, state: Self.state(update["status"] as? String))))
+            if update["kind"] != nil || kinds[id] == nil { kinds[id] = Self.kind(update, title: title) }
+            events?(.step(AIAgentStep(id: id, title: title, state: Self.state(update["status"] as? String), kind: kinds[id] ?? nil)))
         case "current_mode_update", "config_option_update", "available_commands_update", "plan", "agent_thought_chunk", "user_message_chunk": break
         default: break
         }
@@ -253,7 +256,21 @@ import Foundation
             default: return nil
             }
         }
-        events?(.approval(AIAgentApproval(id: key, title: tool["title"] as? String ?? "Use a tool", detail: AgentCopy.detail(Self.detail(tool)), options: shown)))
+        events?(.approval(AIAgentApproval(id: key, title: tool["title"] as? String ?? "Use a tool", detail: AgentCopy.detail(Self.detail(tool)), options: shown,
+                                          kind: Self.kind(tool, title: tool["title"] as? String ?? ""))))
+    }
+
+    /// ACP's tool kinds as Brk's (`AIStepKind`); Brk's own tools by name.
+    static func kind(_ tool: [String: Any], title: String) -> AIStepKind? {
+        if let brk = BrkToolCatalog.stepKind(title) { return brk }
+        switch tool["kind"] as? String {
+        case "read": return .readFile
+        case "edit", "delete", "move": return .editFile
+        case "search": return .searchFiles
+        case "execute": return .command
+        case "fetch": return .fetchPage
+        default: return nil
+        }
     }
 
     private static func detail(_ tool: [String: Any]) -> String {

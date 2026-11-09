@@ -560,6 +560,32 @@ enum BrkToolCatalog {
         return String(characters[start..<end]).split(whereSeparator: \.isNewline).joined(separator: " ")
     }
 
+    /// What one of these tools does, for the panel's words (`AIStepWords`), whatever the agent calls it.
+    static func stepKind(_ tool: String) -> AIStepKind? {
+        let bare = tool.replacingOccurrences(of: "mcp__\(server)__", with: "").replacingOccurrences(of: "\(server): ", with: "")
+        guard let name = Name(rawValue: bare) else { return nil }
+        switch name {
+        case .list: return .listTabs
+        case .search: return .searchTabs
+        case .read: return .readTab
+        case .open: return .openTab
+        case .focus: return .showTab
+        case .close: return .closeTabs
+        case .move: return .moveTabs
+        case .group: return .groupTabs
+        case .split: return .splitTabs
+        case .conversationList: return .listConversations
+        case .conversationSearch: return .searchConversations
+        case .conversationRead: return .readConversation
+        case .preview: return .previewPage
+        case .render: return .makePage
+        case .savePage: return .keepPage
+        case .updatePage: return .changePage
+        case .sourceRead: return .readSource
+        case .updateData: return .writeData
+        }
+    }
+
     /// The step title the panel shows for one of these tools, whatever the agent calls it (`mcp__brk__brk_tab_read`,
     /// `brk: brk_tab_read`).
     static func stepTitle(_ tool: String) -> String? {

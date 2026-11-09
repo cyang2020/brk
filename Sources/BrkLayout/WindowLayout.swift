@@ -56,12 +56,16 @@ public enum WindowLayout {
         // The inset is kept when the sidebar is hidden (Arc keeps 10 pt); beside an anchored sidebar the card starts at
         // its edge (Metrics.content.sidebarGap). The toolbar is the top of the card: the cards start under it.
         let left = anchoredWidth + (sidebar != nil && !floats ? Metrics.content.sidebarGap.value : inset)
+        // The AI panel is a column at the right edge: the card ends at its edge as it starts at the sidebar's. Not over
+        // the Library, whose page runs under the window's right edge.
+        let panel = snapshot.ai != nil && !libraryOpen ? AIPanelLayout.frame(contentSize: contentSize, cardLeft: left) : nil
+        let right = panel.map { contentSize.width - $0.minX } ?? inset
         let toolbarHeight = toolbarVisible && !libraryOpen ? AddressToolbarLayout.height : 0
         let pageOverlap = toolbarHeight > 0 ? Metrics.spaceTools.toolbarPageOverlap.value : 0
-        let toolbar = toolbarHeight > 0 ? CGRect(x: left, y: inset, width: max(0, contentSize.width - left - inset), height: toolbarHeight) : nil
+        let toolbar = toolbarHeight > 0 ? CGRect(x: left, y: inset, width: max(0, contentSize.width - left - right), height: toolbarHeight) : nil
         let contentArea = libraryOpen
             ? LibraryLayout.contentArea(panelWidth: anchoredWidth, snapshot: snapshot, contentSize: contentSize)
-            : CGRect(x: left, y: inset + toolbarHeight - pageOverlap, width: max(0, contentSize.width - left - inset),
+            : CGRect(x: left, y: inset + toolbarHeight - pageOverlap, width: max(0, contentSize.width - left - right),
                      height: max(0, contentSize.height - 2 * inset - toolbarHeight + pageOverlap))
         let visiblePanes = snapshot.content.panes.enumerated().filter { !snapshot.content.expanded || $0.element.focused }
         let (rects, dividers) = ContentLayout.cards(in: contentArea, fractions: visiblePanes.map { $0.element.fraction },
@@ -97,8 +101,32 @@ public enum WindowLayout {
             result.find = FindLayout.compute(in: visible.isNull ? card : visible, replacing: find.replacement, notFound: find.notFound, message: !find.message.isEmpty)
         }
         result.toolbar = toolbar
+        result.aiPanel = panel
         return result
     }
+}
+
+/// Brk's AI panel (docs/design/ai-panel.md): a second sidebar at the window's right edge, full height, drawn straight on
+/// the Space's background. Arc has none. The card ends at the panel's edge with no gap, as it starts at the sidebar's
+/// (Metrics.content.sidebarGap), and the panel keeps its parts `Metrics.ai.columnInset` from its edges, the inset the
+/// sidebar keeps its rows at, so the space between the card and either column is the same. The panel narrows down to
+/// its minimum before the card gets narrower than `Metrics.ai.minimumCardWidth`.
+public enum AIPanelLayout {
+    public static func width(windowWidth: Double, cardLeft: Double) -> Double {
+        let m = Metrics.ai
+        let room = windowWidth - cardLeft - m.minimumCardWidth.value
+        return max(m.minimumWidth.value, min(m.width.value, room)).rounded(.down)
+    }
+
+    /// The column in a window `contentSize` big whose card starts at `cardLeft`; in a Little window it starts under
+    /// the header (`top`).
+    public static func frame(contentSize: CGSize, cardLeft: Double, top: Double = 0) -> CGRect {
+        let width = min(contentSize.width, width(windowWidth: contentSize.width, cardLeft: cardLeft))
+        return CGRect(x: contentSize.width - width, y: top, width: width, height: max(0, contentSize.height - top))
+    }
+
+    /// How wide the panel's text and pages are: the column less its inset on both sides.
+    public static func readingWidth(panelWidth: Double) -> Double { max(0, panelWidth - Metrics.ai.columnInset.value * 2) }
 }
 
 /// The Library (Arc: `HomeButton`). Owner: F5. While it is open its panel replaces the sidebar at the window's left
@@ -178,7 +206,9 @@ public enum LittleLayout {
         let bounds = CGRect(origin: .zero, size: contentSize)
         let empty = snapshot.content.panes.isEmpty
         let header = empty ? 0 : min(contentSize.height, Metrics.littleArc.headerHeight.value)
-        let area = CGRect(x: 0, y: header, width: contentSize.width, height: max(0, contentSize.height - header))
+        // The AI panel takes the right of the page area under the header; the page runs to its edge.
+        let panel = snapshot.ai != nil && !empty ? AIPanelLayout.frame(contentSize: contentSize, cardLeft: 0, top: header) : nil
+        let area = CGRect(x: 0, y: header, width: panel?.minX ?? contentSize.width, height: max(0, contentSize.height - header))
         let cards = empty
             ? [CardFrame(pane: 0, content: .blank, rect: area, cornerRadius: 0)]
             : snapshot.content.panes.enumerated().filter(\.element.focused).prefix(1).map { CardFrame(pane: $0.offset, content: $0.element.content, rect: area, cornerRadius: 0) }
@@ -191,6 +221,7 @@ public enum LittleLayout {
         if let find = snapshot.find, let card = cards.first(where: { $0.content == .page(find.page) })?.rect {
             result.find = FindLayout.compute(in: card, replacing: find.replacement, notFound: find.notFound, message: !find.message.isEmpty)
         }
+        result.aiPanel = panel
         return result
     }
 

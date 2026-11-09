@@ -241,17 +241,17 @@ struct BrkPageTools {
             if flagged || (hasPageText && !now.agentKnows(url, profile: profile) && !grants.contains(.site(host))) {
                 guard await approve(title: "Open \(AgentCopy.oneLine(url.absoluteString, limit: 120)) in a new tab?",
                                     detail: "The agent has read page text in this conversation, and this address is new to this profile. The address itself can carry what it read.",
-                                    remember: .site(host), rememberTitle: "Allow \(host)") else { return declined }
+                                    remember: .site(host), rememberTitle: "Allow \(host)", kind: .openTab, subject: url.absoluteString) else { return declined }
             }
             return await act(.open(url, space: space, background: background), titles: [url.absoluteString])
         case .focus(let id):
-            if flagged, !(await approve(title: "Show “\(title(id, now))”?", detail: "", remember: nil)) { return declined }
+            if flagged, !(await approve(title: "Show “\(title(id, now))”?", detail: "", remember: nil, kind: .showTab, subject: title(id, now))) { return declined }
             return await act(.focus(id), titles: [title(id, now)])
         case .close(let ids):
             let names = ids.map { title($0, now) }
             if !granted(.close) {
                 guard await approve(title: "Close \(ids.count) \(ids.count == 1 ? "tab" : "tabs")?", detail: list(names), remember: .close,
-                                    rememberTitle: "Allow in This Conversation") else { return declined }
+                                    rememberTitle: "Allow in This Conversation", kind: .closeTabs, subject: "\(ids.count)") else { return declined }
             }
             return await act(.close(ids), titles: names)
         case .move(let ids, let space, let section, let folder, let newFolder):
@@ -263,7 +263,7 @@ struct BrkPageTools {
                              newFolder.map { "new folder “\($0)”" } ?? folder.flatMap { id in now.agentSpaces(profile: profile, window: window).flatMap(\.folders).first { $0.id == id }?.title }]
                     .compactMap { $0 }.joined(separator: " › ")
                 guard await approve(title: "Move \(ids.count) \(ids.count == 1 ? "tab" : "tabs") to \(place.isEmpty ? "another place" : place)?", detail: list(names),
-                                    remember: .layout, rememberTitle: "Allow in This Conversation") else { return declined }
+                                    remember: .layout, rememberTitle: "Allow in This Conversation", kind: .moveTabs, subject: "\(ids.count)") else { return declined }
             }
             return await act(.move(ids, to: AgentDestination(space: target, section: section, folder: folder, newFolder: newFolder)), titles: names)
         case .group(let space, let section, let groups):
@@ -272,14 +272,14 @@ struct BrkPageTools {
             if !granted(.layout) {
                 let detail = groups.map { group in (group.name ?? group.folder.map { title($0, now) } ?? "Folder") + ": " + group.tabs.map { title($0, now) }.joined(separator: ", ") }
                 guard await approve(title: "Group \(count) tabs into \(groups.count) \(groups.count == 1 ? "folder" : "folders")?", detail: list(detail),
-                                    remember: .layout, rememberTitle: "Allow in This Conversation") else { return declined }
+                                    remember: .layout, rememberTitle: "Allow in This Conversation", kind: .groupTabs, subject: "\(count)") else { return declined }
             }
             return await act(.group(space: target, section: section, groups), titles: [])
         case .split(let ids):
             let names = ids.map { title($0, now) }
             if !granted(.layout) {
                 guard await approve(title: "Show \(ids.count) tabs side by side?", detail: list(names), remember: .layout,
-                                    rememberTitle: "Allow in This Conversation") else { return declined }
+                                    rememberTitle: "Allow in This Conversation", kind: .splitTabs, subject: "\(ids.count)") else { return declined }
             }
             return await act(.split(ids), titles: names)
         case .conversationList(let cursor, let limit):
@@ -584,14 +584,14 @@ struct BrkPageTools {
     static let approvalPrefix = "brk-"
 
     /// Asks in the panel. `remember` is what Allow in This Conversation keeps; nothing is kept once a page was flagged.
-    private func approve(title: String, detail: String, remember: Grant?, rememberTitle: String = "") async -> Bool {
+    private func approve(title: String, detail: String, remember: Grant?, rememberTitle: String = "", kind: AIStepKind? = nil, subject: String? = nil) async -> Bool {
         let id = Self.approvalPrefix + UUID().uuidString
         var options: [AIAgentApproval.Option] = [.init(id: "once", title: "Allow", kind: .allowOnce)]
         if remember != nil, !flagged { options.append(.init(id: "remember", title: rememberTitle, kind: .allowSession)) }
         options.append(.init(id: "deny", title: "Deny", kind: .deny))
         let answer = await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
             approvals[id] = (continuation, remember)
-            if !ask(AIAgentApproval(id: id, title: title, detail: detail, options: options)) {
+            if !ask(AIAgentApproval(id: id, title: title, detail: detail, options: options, kind: kind, subject: subject)) {
                 approvals.removeValue(forKey: id)?.continuation.resume(returning: nil)
             }
         }

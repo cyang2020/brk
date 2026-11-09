@@ -141,14 +141,22 @@ extension Work {
             record.live = live
             state.doc.aiPages[id] = record
             // The conversation hears of refreshes that changed something or were stopped; an unchanged one says nothing.
+            // An update says when, and the agent's one line on what changed.
+            let language = aiLanguage(conversationItems(record.conversation))
             let words: String? = switch outcome {
-            case .updated: "Refreshed “\(record.title)”: new data."
-            case .flagged: "Stopped the refresh of “\(record.title)”: \(detail ?? "Brk flagged what it read"). Nothing changed."
-            case .failed: "The refresh of “\(record.title)” failed: \(detail ?? "the agent did not finish"). Nothing changed."
+            case .updated: AIWords.refreshed(record.title, at: AIWords.clock(ctx.now, calendar: ctx.calendar), summary: detail, language)
+            case .flagged: AIWords.refreshStopped(record.title, why: detail, language)
+            case .failed: AIWords.refreshFailed(record.title, why: detail, language)
             case .unchanged: nil
             }
             if let words { noteInConversation(record.conversation, words) }
         }
+    }
+
+    /// A conversation's items, live or saved.
+    private func conversationItems(_ id: AIRequestID) -> [AIConversationItem] {
+        if let host = state.session.ai.host(ofConversation: id), let items = state.session.ai[host: host]?.conversation?.items { return items }
+        return state.doc.conversations[id]?.items ?? []
     }
 
     /// A notice at the end of a conversation's transcript, live or saved.

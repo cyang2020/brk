@@ -25,7 +25,7 @@ enum CommandInventory {
         .assist(.useOriginal), .assist(.languageSettings), .assist(.previewHover(true)), .assist(.sharePreview),
         .assist(.followUp("why")), .assist(.stop), .assist(.chooseFolder), .assist(.approve(approval: "a", option: "b")),
         .assist(.attach([.tab("ghost"), .folder(ItemID("ghost")), .space(SpaceID("ghost"))])), .assist(.detach("ghost")), .assist(.mention("x")), .assist(.openTabLink("ghost")),
-        .assist(.inTab(AIRequestID("ghost"), .followUp("x"))), .assist(.openAsTab), .assist(.openConversation(AIRequestID("ghost"))), .assist(.keepPage(AIPageID("ghost"))),
+        .assist(.inTab(AIRequestID("ghost"), .followUp("x"))), .assist(.openAsTab), .assist(.newConversation), .assist(.openConversation(AIRequestID("ghost"))), .assist(.keepPage(AIPageID("ghost"))),
         .assist(.pageLink(AIPageID("ghost"), URL(string: "https://ghost.example/")!)), .assist(.answerPageLink(true)),
         .assist(.pageSave(AIPageID("ghost"), "{}")), .assist(.livePage(AIPageID("ghost"), .refreshNow)), .archive(.delete(ArchiveID("ghost"))),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
@@ -242,6 +242,7 @@ enum CommandInventory {
             case .openTabLink: "openTabLink"
             case .inTab: "inTab"
             case .openAsTab: "openAsTab"
+            case .newConversation: "newConversation"
             case .openConversation: "openConversation"
             case .keepPage: "keepPage"
             case .pageLink: "pageLink"

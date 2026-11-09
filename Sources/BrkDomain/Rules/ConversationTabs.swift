@@ -104,13 +104,22 @@ extension AppState {
 
     /// The pages a conversation's items show, as views need them.
     func withPages(_ answer: AIAnswerSnapshot) -> AIAnswerSnapshot {
-        guard let items = answer.conversation?.items else { return answer }
+        guard let items = answer.conversation?.items, let id = answer.conversation?.id else { return answer }
         var out = answer
         out.pages = items.compactMap { item in
             guard case .page(let ref) = item, let record = doc.aiPages[ref.id] else { return nil }
             return pageSnapshot(record, height: ref.height)
         }
+        out.name = conversationName(id)
         return out
+    }
+
+    /// What a conversation is called: its tab's own title once someone (the user, Name Tabs) gave it one, else its saved
+    /// title, which starts as its first message.
+    func conversationName(_ id: AIRequestID) -> String? {
+        let url = ConversationPage.url(id)
+        if let custom = doc.tree.allTabs().lazy.compactMap({ tab($0) }).first(where: { $0.url == url })?.customTitle, !custom.isEmpty { return custom }
+        return doc.conversations[id]?.title
     }
 
     func pageSnapshot(_ record: AIPageRecord, height: Int? = nil) -> AIPageSnapshot {
@@ -120,6 +129,7 @@ extension AppState {
         snapshot.saved = record.saved
         snapshot.saveSchema = record.saveSchema
         snapshot.revision = record.revision ?? 0
+        snapshot.schedule = record.live?.schedule
         return snapshot
     }
 
