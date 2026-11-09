@@ -51,4 +51,33 @@ final class AIPanelLayoutTests: XCTestCase {
         let frames = d.frames(snapshot)
         XCTAssertEqual(frames.toolbar?.maxX, frames.aiPanel?.minX)
     }
+
+    /// Step 8 (docs/design/ai-right-panel.md): the gap between the card and the panel drags the panel wider, up to half
+    /// the window, the card keeping 400 pt and the panel 280; the width a window keeps lays it out; the handle straddles
+    /// the card's edge while a list is open.
+    func testADraggedWidthStopsAtHalfTheWindowAndTheCardsMinimum() {
+        XCTAssertEqual(AIPanelLayout.width(windowWidth: 1600, cardLeft: 250, preferred: 600), 600)
+        XCTAssertEqual(AIPanelLayout.width(windowWidth: 1000, cardLeft: 250, preferred: 600), 350, "the card keeps 400")
+        XCTAssertEqual(AIPanelLayout.width(windowWidth: 1100, cardLeft: 10, preferred: 900), 550, "half the window")
+        XCTAssertEqual(AIPanelLayout.width(windowWidth: 1600, cardLeft: 250, preferred: nil), Metrics.ai.width.value, "the default as before")
+        XCTAssertEqual(AIPanelLayout.width(windowWidth: 700, cardLeft: 228, preferred: 600), Metrics.ai.minimumWidth.value, "never under its minimum")
+        let d = LayoutDriver()
+        var snapshot = withPanel(d)
+        snapshot.aiPanelWidth = 520
+        XCTAssertEqual(d.frames(snapshot).aiPanel?.width, 520)
+        XCTAssertNil(d.frames(snapshot).aiPanelHandle, "no list (no panel snapshot): nothing to drag")
+        snapshot.aiPanel = AIPanelSnapshot(page: .list, hasConversation: true, space: d.view.space.id, spaceTitle: "", language: .en, search: "",
+                                           strips: [], groups: [], waiting: 0, spaces: [])
+        let frames = d.frames(snapshot)
+        let panel = frames.aiPanel!
+        XCTAssertEqual(frames.aiPanelHandle?.midX, panel.minX, "the handle straddles the card's edge")
+        XCTAssertEqual(AIPanelLayout.width(snapshot, contentSize: CGSize(width: 1280, height: 776)), 520, "where the panel would open")
+    }
+
+    func testTheToolbarMakesRoomForTheChatButton() {
+        let rect = CGRect(x: 228, y: 10, width: 800, height: 40)
+        XCTAssertLessThan(AddressToolbarLayout.trailingButton(2, in: rect, ai: true).maxX, AddressToolbarLayout.aiButton(in: rect).minX)
+        XCTAssertEqual(AddressToolbarLayout.aiButton(in: rect), AddressToolbarLayout.trailingButton(2, in: rect))
+        XCTAssertLessThan(AddressToolbarLayout.address(in: rect, ai: true).width, AddressToolbarLayout.address(in: rect).width)
+    }
 }

@@ -1,6 +1,5 @@
 import BrkBase
 @testable import BrkDomain
-@testable import BrkLayout
 import XCTest
 
 /// Step 8 (docs/design/ai-right-panel.md): conversations only in the right panel. The move off the sidebar at the first
@@ -302,17 +301,9 @@ final class RightPanelTests: XCTestCase {
         d.user(.assist(.panelWidth(600)))
         let next = Driver(file: d.savedFile)
         XCTAssertEqual(next.view.aiPanelWidth, 600, "kept like the sidebar's width")
-        XCTAssertEqual(AIPanelLayout.width(windowWidth: 1600, cardLeft: 250, preferred: 600), 600)
-        XCTAssertEqual(AIPanelLayout.width(windowWidth: 1000, cardLeft: 250, preferred: 600), 350, "the card keeps 400")
-        XCTAssertEqual(AIPanelLayout.width(windowWidth: 1100, cardLeft: 10, preferred: 900), 550, "half the window")
-        XCTAssertEqual(AIPanelLayout.width(windowWidth: 1600, cardLeft: 250, preferred: nil), Metrics.ai.width.value, "the default as before")
-        var frames = WindowLayout.compute(next.view, contentSize: CGSize(width: 1600, height: 900))
-        XCTAssertNil(frames.aiPanelHandle, "closed: nothing to drag")
-        next.user(.assist(.panelPage(.list)))
-        frames = WindowLayout.compute(next.view, contentSize: CGSize(width: 1600, height: 900))
-        let panel = try XCTUnwrap(frames.aiPanel)
-        XCTAssertEqual(panel.width, 600)
-        XCTAssertEqual(try XCTUnwrap(frames.aiPanelHandle).midX, panel.minX, "the handle straddles the card's edge")
+        next.user(.window(.new))
+        let second = try XCTUnwrap(next.state.doc.windows.keys.first { $0 != next.window })
+        XCTAssertEqual(next.view(of: second).aiPanelWidth, 600, "a new window takes the window's width, as the sidebar's")
     }
 
     // MARK: A deleted Space's conversations
