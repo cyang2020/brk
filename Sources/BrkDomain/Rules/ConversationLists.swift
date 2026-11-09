@@ -67,15 +67,20 @@ extension AppState {
         return archived ? .archived : .idle
     }
 
-    /// The language of a list's own words: the most recent conversations' that tell, else the system's.
+    /// The language of a list's own words: the one most of the five most recent conversations that tell are in (the most
+    /// recent one on a tie), else the system's. One message in another language does not turn the list over.
     func listLanguage(_ profile: ProfileID, system: String) -> AILanguage {
-        for stored in conversations(of: profile) {
+        var told: [AILanguage] = []
+        for stored in conversations(of: profile) where told.count < Self.languageSample {
             for item in stored.items.reversed() {
-                if case .user(let text) = item, let language = AILanguage.of(text: text) { return language }
+                if case .user(let text) = item, let language = AILanguage.of(text: text) { told.append(language); break }
             }
         }
-        return AILanguage.system(system)
+        guard let newest = told.first else { return AILanguage.system(system) }
+        let zh = told.filter { $0 == .zh }.count, en = told.count - zh
+        return zh == en ? newest : (zh > en ? .zh : .en)
     }
+    static let languageSample = 5
 
     /// One conversation as a list shows it.
     func threadRow(_ stored: StoredConversation, place: ConversationPlace?, now: Instant, calendar: Calendar, system: String) -> AIThreadRow {

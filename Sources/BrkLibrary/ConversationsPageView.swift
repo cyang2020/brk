@@ -172,7 +172,8 @@ final class ConversationsPageView: NSView {
         }
         let detail = row.snippet ?? [row.spaceTitle.isEmpty ? nil : row.spaceTitle, row.agent, state].compactMap { $0 }.joined(separator: " · ")
         let id = row.id
-        let view = LibraryRowView(id: .aiControl("library-thread-" + id.rawValue), icon: Self.dot(row.spaceColor), title: row.title, detail: detail,
+        let ink = SpaceInk.readable(row.spaceColor, on: scheme ?? .light, luminance: SpaceInk.dotLuminance)
+        let view = LibraryRowView(id: .aiControl("library-thread-" + id.rawValue), icon: Self.dot(ink), title: row.title, detail: detail,
                                   progress: .none, accessories: [], menu: [], selected: selected, colors: colors,
                                   onClick: { [weak self] in self?.dispatch(.library(.selectConversation(id))) })
         view.toolTip = row.title
@@ -181,9 +182,9 @@ final class ConversationsPageView: NSView {
     }
 
     /// The Space's dot as the row's icon.
-    private static func dot(_ color: RGBA) -> NSImage {
+    private static func dot(_ color: NSColor) -> NSImage {
         let image = NSImage(size: NSSize(width: 10, height: 10), flipped: false) { rect in
-            NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1).setFill()
+            color.setFill()
             NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).fill()
             return true
         }

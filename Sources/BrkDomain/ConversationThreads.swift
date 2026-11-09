@@ -210,7 +210,8 @@ public enum ConversationSearch {
 public enum AIThreadWords {
     public static func listTitle(_ space: String, _ language: AILanguage) -> String { language == .zh ? "\(space) 的对话" : "Conversations in \(space)" }
     public static func search(_ language: AILanguage) -> String { language == .zh ? "搜索这个 Space 的对话" : "Search this Space's conversations" }
-    public static func libraryTitle(_ language: AILanguage) -> String { language == .zh ? "AI 对话" : "AI Conversations" }
+    /// The Library's page name: short enough for its 78 pt cell ("AI Conversations" is cut there).
+    public static func libraryTitle(_ language: AILanguage) -> String { language == .zh ? "AI 对话" : "Conversations" }
     public static func librarySearch(_ language: AILanguage) -> String { language == .zh ? "搜索对话内容…" : "Search Conversations…" }
     public static func composer(_ language: AILanguage) -> String { language == .zh ? "在这个 Space 开一个新对话" : "Start a new conversation in this Space" }
     public static func empty(_ language: AILanguage) -> String {

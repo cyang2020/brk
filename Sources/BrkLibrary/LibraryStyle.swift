@@ -294,7 +294,7 @@ public enum LibraryCopy {
         case .spaces: "Spaces"
         case .boosts: "Boosts"
         case .archive: "Archived Tabs"
-        case .conversations: "AI Conversations"
+        case .conversations: "Conversations"
         }
     }
 

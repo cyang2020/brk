@@ -281,7 +281,7 @@ final class AIThreadRowView: AIControl {
         dot.wantsLayer = true
         dot.layer?.backgroundColor = style.accent.cgColor
         spaceDot.wantsLayer = true
-        spaceDot.layer?.backgroundColor = NSColor(srgbRed: row.spaceColor.red, green: row.spaceColor.green, blue: row.spaceColor.blue, alpha: 1).cgColor
+        spaceDot.layer?.backgroundColor = SpaceInk.readable(row.spaceColor, on: style.scheme, luminance: SpaceInk.dotLuminance).cgColor
         spinner.style = .spinning
         spinner.controlSize = .small
         spinner.isDisplayedWhenStopped = false

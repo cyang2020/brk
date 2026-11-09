@@ -141,8 +141,8 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(self.view(.library, in: view)?.frame, CGRect(x: 0, y: 0, width: 417, height: 776))
         let cells = shown(view).compactMap { $0 as? LibraryNavCell }
         XCTAssertEqual(cells.map(\.page), LibraryPage.allCases)
-        // Arc's six, then Brk's own AI Conversations (in the conversations' language; English with none).
-        XCTAssertEqual(cells.map(\.titleText), ["Media", "Downloads", "Easels", "Spaces", "Boosts", "Archived Tabs", "AI Conversations"])
+        // Arc's six, then Brk's own AI conversations page (in the conversations' language; English with none).
+        XCTAssertEqual(cells.map(\.titleText), ["Media", "Downloads", "Easels", "Spaces", "Boosts", "Archived Tabs", "Conversations"])
         XCTAssertTrue(cells.allSatisfy { $0.glyphImage != nil })
         for cell in cells {
             XCTAssertEqual(cell.frame, f.library?.pageCells[cell.page])

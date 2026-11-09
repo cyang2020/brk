@@ -104,7 +104,7 @@ enum AIThreadsScenarios {
         for (digit, code) in zip("1234567890", [18, 19, 20, 21, 23, 22, 26, 28, 25, 29] as [CGKeyCode]) { map[digit] = (code, false) }
         return map
     }()
-    private static func post(_ code: CGKeyCode, _ down: Bool, _ flags: CGEventFlags) {
+    static func post(_ code: CGKeyCode, _ down: Bool, _ flags: CGEventFlags) {
         guard let event = CGEvent(keyboardEventSource: CGEventSource(stateID: .hidSystemState), virtualKey: code, keyDown: down) else { return }
         event.flags = flags; event.post(tap: .cghidEventTap); usleep(15_000)
     }
@@ -556,6 +556,39 @@ enum AIThreadsScenarios {
 
     // MARK: Look
 
+    /// Chinese goes in as a person's input method leaves it: pasted. The pasteboard is put back after.
+    static func paste(_ text: String) throws {
+        func shell(_ path: String, _ input: String?) -> String {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: path)
+            process.environment = ["LANG": "en_US.UTF-8", "LC_ALL": "en_US.UTF-8"]
+            let output = Pipe(), feed = Pipe()
+            process.standardOutput = output; process.standardInput = feed
+            guard (try? process.run()) != nil else { return "" }
+            if let input { feed.fileHandleForWriting.write(Data(input.utf8)) }
+            try? feed.fileHandleForWriting.close()
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return String(decoding: data, as: UTF8.self)
+        }
+        let saved = shell("/usr/bin/pbpaste", nil)
+        _ = shell("/usr/bin/pbcopy", text)
+        defer { _ = shell("/usr/bin/pbcopy", saved) }
+        try key(.command, .v)
+        usleep(300_000)
+    }
+
+    /// A folder session in the window's Space whose agent asks to run a command, the message in Chinese.
+    private static func waitingInFolder(_ app: AppUnderTest) throws {
+        try app.dispatch(.assist(.chooseFolder))
+        try app.waitUntil("a folder session", timeout: 15) { try app.view().ai?.conversation?.folder != nil && app.view().ai?.conversation?.agent != nil }
+        try click(app, .aiControl("input"))
+        try paste("看看这个文件夹里有什么 fixture:command")
+        post(36, true, []); post(36, false, [])
+        try app.waitUntil("the approval card", timeout: 15) { try shown(app, .aiControl("approval-command")) }
+        app.sleep(0.4)
+    }
+
     @Sendable static func look(_ app: AppUnderTest) throws {
         try prepare(app)
         let log = Log(app)
@@ -563,19 +596,15 @@ enum AIThreadsScenarios {
         try app.dispatch(.space(.update(light, title: "购物", icon: nil, theme: nil)))
         let lightTheme = SpaceTheme(colors: [ThemePresets.pastel[7]], texture: .grain, intensity: 0.25, appearance: .light)
         try app.dispatch(.space(.update(light, title: nil, icon: nil, theme: lightTheme)))
+        let folder = app.dataDirectory.appendingPathComponent("ai-work", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         _ = try ask(app, "比较三款降噪耳机", answer: "比较三款降噪耳机")
         _ = try ask(app, "这家店能退货吗", answer: "这家店能退货吗")
+        try waitingInFolder(app)
         try app.dispatch(.space(.create(title: "工作", icon: .none, theme: SpaceTheme(colors: [ThemePresets.drab[0]], texture: .grain, intensity: 0.25, appearance: .dark))))
         try app.waitUntil("the dark Space") { try app.view().space.title == "工作" }
         let dark = try app.view().space.id
         _ = try ask(app, "整理这周的周报", answer: "整理这周的周报")
-        let folder = app.dataDirectory.appendingPathComponent("ai-work", isDirectory: true)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        // A conversation in the light Space waits for approval; the dark Space's list shows its strip.
-        try click(app, .dockSpace(light))
-        try app.waitUntil("light") { try app.view().space.id == light }
-        try app.dispatch(.assist(.ask("fixture:tool")))
-        try app.waitUntil("the approval", timeout: 15) { try pending(app) != nil }
         func set(_ name: String, here: SpaceID, other: SpaceID) throws -> String {
             try click(app, .dockSpace(here))
             try app.waitUntil("\(name)") { try app.view().space.id == here }
@@ -586,7 +615,8 @@ enum AIThreadsScenarios {
             shot(app, "\(name)-list")
             let view = try app.view()
             let ring = view.dock.first { $0.id == other }?.attention == true
-            let strips = view.aiPanel?.strips.count ?? 0
+            let strips = view.aiPanel?.strips.map { "\($0.spaceTitle) · \($0.title) · \($0.pill ?? "")" } ?? []
+            let words = [view.aiPanel?.spaceTitle, view.aiPanel?.groups.map(\.title).joined(separator: "/")].compactMap { $0 }
             try click(app, .dockLibrary)
             try app.waitUntil("the Library") { if case .library? = try app.view().overlay { true } else { false } }
             try click(app, .libraryPage(.conversations))
@@ -595,14 +625,14 @@ enum AIThreadsScenarios {
             shot(app, "\(name)-library")
             try click(app, .libraryClose)
             try app.waitUntil("Library closed") { try app.view().overlay == nil }
-            return "\(name): \(strips) strip(s), other Space's dot ringed: \(ring)"
+            return "\(name): strips \(strips), groups \(words), the other Space's dot ringed: \(ring)"
         }
         log.check("the dark Space: the light Space's waiting conversation as a strip, its dot ringed") {
             try set("dark", here: dark, other: light)
         }
-        log.check("the approval card in both Spaces, Show Command readable") {
+        log.check("the light Space's approval card, Show Command readable") {
             try click(app, .dockSpace(light))
-            try app.waitUntil("light with the approval") { try app.view().space.id == light && pending(app) != nil }
+            try app.waitUntil("light with the approval", timeout: 6) { try app.view().space.id == light && pending(app) != nil }
             if try panel(app)?.page == .list { try click(app, .aiControl("list-back")) }
             try app.waitUntil("the card") { try shown(app, .aiControl("approval-command")) }
             shot(app, "light-approval")
@@ -614,12 +644,7 @@ enum AIThreadsScenarios {
         log.check("the dark Space's approval card, then the light Space with the dark one waiting") {
             try click(app, .dockSpace(dark))
             try app.waitUntil("dark") { try app.view().space.id == dark }
-            try app.dispatch(.assist(.chooseFolder))
-            try app.waitUntil("a folder session", timeout: 15) { try app.view().ai?.conversation?.folder != nil && app.view().ai?.conversation?.agent != nil }
-            try click(app, .aiControl("input"))
-            try type("fixture:tool", enter: true)
-            try app.waitUntil("the card", timeout: 15) { try shown(app, .aiControl("approval-command")) }
-            app.sleep(0.4)
+            try waitingInFolder(app)
             shot(app, "dark-approval")
             try click(app, .aiControl("approval-command"))
             app.sleep(0.4)
@@ -643,30 +668,9 @@ enum AIRealThreadsScenarios {
                          cefOnly: "real agent, real input") { try route($0, choice) }]
     }
 
-    private static func paste(_ text: String) throws {
-        func shell(_ path: String, _ input: String?) -> String {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: path)
-            process.environment = ["LANG": "en_US.UTF-8", "LC_ALL": "en_US.UTF-8"]
-            let output = Pipe(), feed = Pipe()
-            process.standardOutput = output; process.standardInput = feed
-            guard (try? process.run()) != nil else { return "" }
-            if let input { feed.fileHandleForWriting.write(Data(input.utf8)) }
-            try? feed.fileHandleForWriting.close()
-            let data = output.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            return String(decoding: data, as: UTF8.self)
-        }
-        let saved = shell("/usr/bin/pbpaste", nil)
-        _ = shell("/usr/bin/pbcopy", text)
-        defer { _ = shell("/usr/bin/pbcopy", saved) }
-        try AIThreadsScenarios.key(.command, .v)
-        usleep(300_000)
-    }
-
     private static func send(_ app: AppUnderTest, _ text: String, input: ViewID) throws {
         try AIThreadsScenarios.click(app, input)
-        try paste(text)
+        try AIThreadsScenarios.paste(text)
         try NativeSystemInput.postSystemWide(KeyChord([], .returnKey))
         usleep(400_000)
     }

@@ -258,15 +258,9 @@ final class DockCellView: HoverView {
         CATransaction.commit()
     }
 
-    /// A Space's color made to read on the sidebar: its hue at a mid-dark shade on light, bright on dark.
+    /// A Space's color made to read on the sidebar (`SpaceInk`).
     static func ringColor(_ color: RGBA, scheme: Scheme) -> NSColor {
-        if scheme == .light {
-            let shade = themeShade(color, luminance: Draw.dockRingLuminance.value)
-            return NSColor(srgbRed: shade.red, green: shade.green, blue: shade.blue, alpha: 1)
-        }
-        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
-        NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-        return NSColor(hue: hue, saturation: min(0.6, saturation * 9), brightness: 0.85, alpha: 1)
+        SpaceInk.readable(color, on: scheme, luminance: Draw.dockRingLuminance.value)
     }
 
     /// A scale about the centre (a layer-backed view's anchor is its corner).
