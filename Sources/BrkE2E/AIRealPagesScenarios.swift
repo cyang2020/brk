@@ -114,7 +114,9 @@ enum AIRealPagesScenarios {
     private static func click(_ app: AppUnderTest, at point: CGPoint, right: Bool = false, flags: CGEventFlags = []) throws {
         try WindowServerKeys.ensureFrontmost(app, app.window!)
         let target = try screen(app, point)
-        guard let front = PhysicalPointer.frontmost(at: target), front.pid == pid else { throw Check(description: "another window is in front at \(target); nothing posted") }
+        guard let front = PhysicalPointer.frontmost(at: target), front.pid == pid else {
+            throw Check(description: "another window is in front at \(target) (\(String(describing: PhysicalPointer.frontmost(at: target))), this Brk \(pid), window \(try app.native().windowFrame)); nothing posted")
+        }
         try clickScreen(target, right: right, flags: flags)
     }
     private static func clickScreen(_ target: CGPoint, right: Bool = false, flags: CGEventFlags = []) throws {
@@ -124,9 +126,19 @@ enum AIRealPagesScenarios {
     }
     private static func centre(_ r: CGRect) -> CGPoint { CGPoint(x: r.midX, y: r.midY) }
     /// A control's frame, read after the window is clear of the dialogs again (something can widen it after the start).
+    /// The window can still be laying out after the move: the frame counts once two reads 0.2 s apart agree and it sits
+    /// inside the window (a read taken before the panel moved over gave the composer's place in the wider window).
     private static func frame(_ app: AppUnderTest, _ id: ViewID) throws -> CGRect {
         if try app.native().windowFrame.maxX > 1280 { try clearOfSystemDialogs(app) }
-        return try visible(app.native(), id).frame
+        var last: CGRect?
+        for _ in 0..<25 {
+            let facts = try app.native()
+            let now = try visible(facts, id).frame
+            if now == last, now.maxX <= facts.windowFrame.width + 0.5 { return now }
+            last = now
+            usleep(200_000)
+        }
+        return try XCTUnwrapValue(last)
     }
     private static func clickControl(_ app: AppUnderTest, _ name: String) throws { try click(app, at: centre(frame(app, .aiControl(name)))) }
     private static func chooseMenu(_ title: String) throws {
