@@ -183,7 +183,7 @@ public enum ConversationSearch {
         guard words.allSatisfy(folded.contains), let first = words.first, let range = folded.range(of: first) else { return nil }
         let at = folded.distance(from: folded.startIndex, to: range.lowerBound)
         let characters = Array(text)
-        let start = max(0, min(at, characters.count) - 30), end = min(characters.count, start + 90)
+        let start = max(0, min(at, characters.count) - 16), end = min(characters.count, start + 80)
         let snippet = (start > 0 ? "…" : "") + String(characters[start..<end]).split(whereSeparator: \.isNewline).joined(separator: " ")
         return .text(snippet: snippet)
     }

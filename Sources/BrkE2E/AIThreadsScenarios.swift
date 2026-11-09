@@ -412,7 +412,9 @@ enum AIThreadsScenarios {
             try app.waitUntil("only the first", timeout: 5) { try library(app)?.rows.map(\.id) == [first] }
             try expect(try library(app)?.rows.first?.snippet?.contains("zebrafish") == true, "no snippet")
             shot(app, "2-search")
-            post(53, true, []); post(53, false, [])
+            // Emptied by selecting it all and deleting (Esc in the Library's search closes the Library once it is empty).
+            try key(.command, .a)
+            post(51, true, []); post(51, false, [])
             try app.waitUntil("both again", timeout: 5) { try library(app)?.rows.count == 2 }
             return "“zebrafish” → \(first.rawValue)"
         }
@@ -473,8 +475,9 @@ enum AIThreadsScenarios {
                 return row != nil && row == last
             }
             let space = try app.view().space.title
-            let subtitle = NativeSystemInput.staticTexts(pid: pid).first { $0.text.hasPrefix(space + " · ") && $0.text.contains("narwhal") && onScreen.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }
-            try expect(subtitle != nil, "no “\(space) · …narwhal…” under it")
+            // The row's second part: the Space's name, then what was said around the word ("— Space 1 · …the narwhal detail").
+            let subtitle = NativeSystemInput.staticTexts(pid: pid).first { $0.text.contains(space + " · ") && $0.text.contains("narwhal") && onScreen.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }
+            try expect(subtitle != nil, "no “\(space) · …narwhal…” beside it")
             shot(app, "1-bar")
             try PhysicalPointer.click(app, at: CGPoint(x: row!.minX + 12, y: row!.midY), window: app.window!)
             try app.waitUntil("its tab", timeout: 8) { try app.view().conversations.first?.answer.conversation?.id == id }
@@ -560,7 +563,7 @@ enum AIThreadsScenarios {
         try app.dispatch(.space(.update(light, title: "购物", icon: nil, theme: nil)))
         let lightTheme = SpaceTheme(colors: [ThemePresets.pastel[7]], texture: .grain, intensity: 0.25, appearance: .light)
         try app.dispatch(.space(.update(light, title: nil, icon: nil, theme: lightTheme)))
-        _ = try ask(app, "盯着这三个商品页的价格", answer: "盯着这三个商品页的价格")
+        _ = try ask(app, "比较三款降噪耳机", answer: "比较三款降噪耳机")
         _ = try ask(app, "这家店能退货吗", answer: "这家店能退货吗")
         try app.dispatch(.space(.create(title: "工作", icon: .none, theme: SpaceTheme(colors: [ThemePresets.drab[0]], texture: .grain, intensity: 0.25, appearance: .dark))))
         try app.waitUntil("the dark Space") { try app.view().space.title == "工作" }

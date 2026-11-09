@@ -79,32 +79,42 @@ final class AIPanelView: NSView {
         let reserve = panel == nil ? 0 : Metrics.ai.dotsHeight.value
         conversation.bottomReserve = reserve
         list.bottomReserve = reserve
-        if let answer { conversation.render(answer, in: CGRect(origin: .zero, size: area.size), theme: theme) }
+        // The row of pages first, so each page renders where it stays: a render can come between a click's mouse-down
+        // and its hit test (the click itself is window activity, which renders), and a page drawn in the wrong place
+        // for that moment would lose the click.
+        var pages: [AIPanelPage] = []
+        if panel != nil { pages.append(.list) }
+        if answer != nil { pages.append(.conversation) }
+        pager.update(pages: pages, widths: pages.map { _ in Double(area.width) })
+        if let answer { conversation.render(answer, in: pageFrame(.conversation, size: area.size), theme: theme) }
         else { conversation.render(nil, in: .zero) }
         conversation.showList(panel)
         list.isHidden = panel == nil
         if let panel { list.render(panel, style: style) }
         dots.isHidden = panel == nil || !(panel?.hasConversation ?? false)
         if let panel { dots.apply(style, language: panel.language) }
-        // The row of pages: the list, then the conversation when there is one.
-        var pages: [AIPanelPage] = []
-        if panel != nil { pages.append(.list) }
-        if answer != nil { pages.append(.conversation) }
-        pager.update(pages: pages, widths: pages.map { _ in Double(area.width) })
         let wanted: AIPanelPage = panel?.page ?? .conversation
         if pager.selectedPage != wanted, !pager.isTracking, pages.contains(wanted) { pager.select(wanted, animated: true) }
+        place()
         needsLayout = true
+    }
+
+    /// Where a page stands in the strip.
+    private func pageFrame(_ page: AIPanelPage, size: CGSize) -> CGRect {
+        CGRect(x: CGFloat(pager.pages.firstIndex(of: page) ?? 0) * size.width, y: 0, width: size.width, height: size.height)
     }
 
     override func layout() {
         super.layout()
+        place()
+    }
+
+    private func place() {
         clip.frame = bounds
         dots.frame = CGRect(x: 0, y: bounds.height - Metrics.ai.dotsHeight.value, width: bounds.width, height: Metrics.ai.dotsHeight.value)
-        let width = bounds.width
-        let pages = pager.pages
-        list.frame = CGRect(x: CGFloat(pages.firstIndex(of: .list) ?? 0) * width, y: 0, width: width, height: bounds.height)
-        conversation.frame = CGRect(x: CGFloat(pages.firstIndex(of: .conversation) ?? 0) * width, y: 0, width: width, height: bounds.height)
-        strip.frame = CGRect(x: 0, y: 0, width: width * CGFloat(max(1, pages.count)), height: bounds.height)
+        list.frame = pageFrame(.list, size: bounds.size)
+        if conversation.frame != pageFrame(.conversation, size: bounds.size) { conversation.frame = pageFrame(.conversation, size: bounds.size) }
+        strip.frame = CGRect(x: strip.frame.minX, y: 0, width: bounds.width * CGFloat(max(1, pager.pages.count)), height: bounds.height)
         applyPosition()
     }
 
