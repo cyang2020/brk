@@ -137,6 +137,80 @@ enum AIPanelLookScenarios {
         return "panel \(panel), card ends \(card.maxX), transcript \(transcript.width) wide, pages \(pages.map { "\($0.value.frame.width)×\($0.value.frame.height)" }), composer \(composer)"
     }
 
+    /// The window's picture as sRGB pixels, and how many pixels a point is.
+    private struct Picture {
+        let pixels: [UInt8], width: Int, height: Int, scale: Double
+        init(_ url: URL, contentWidth: Double) throws {
+            guard let provider = CGDataProvider(url: url as CFURL),
+                  let image = CGImage(pngDataProviderSource: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent),
+                  let space = CGColorSpace(name: CGColorSpace.sRGB) else { throw Check(description: "unreadable capture") }
+            width = image.width; height = image.height; scale = Double(image.width) / contentWidth
+            var buffer = [UInt8](repeating: 0, count: width * height * 4)
+            guard let context = CGContext(data: &buffer, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw Check(description: "no bitmap") }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            pixels = buffer
+        }
+        /// The mean color of `rect` (window points, top-left origin).
+        func mean(_ rect: CGRect) -> [Double] {
+            var sum = [0.0, 0.0, 0.0], n = 0.0
+            for y in Int(rect.minY * scale)..<max(Int(rect.minY * scale) + 1, Int(rect.maxY * scale)) where y >= 0 && y < height {
+                for x in Int(rect.minX * scale)..<max(Int(rect.minX * scale) + 1, Int(rect.maxX * scale)) where x >= 0 && x < width {
+                    let i = (y * width + x) * 4
+                    for c in 0..<3 { sum[c] += Double(pixels[i + c]) }
+                    n += 1
+                }
+            }
+            return sum.map { n > 0 ? $0 / n : 0 }
+        }
+    }
+    private static func hex(_ c: [Double]) -> String { String(format: "#%02X%02X%02X", Int(c[0].rounded()), Int(c[1].rounded()), Int(c[2].rounded())) }
+    private static func distance(_ a: [Double], _ b: [Double]) -> Double { zip(a, b).map { abs($0 - $1) }.max() ?? 0 }
+
+    /// The Space's accent as the panel paints it (`Palette.focusColor`): light, the primary's hue at relative luminance
+    /// 0.097 (`themeShade`); dark, the hue at HSB saturation min(0.53, 9 × s) and brightness 0.8.
+    private static func accent(_ theme: ResolvedTheme) -> [Double] {
+        let p = theme.gradient.first ?? RGBA(0.5, 0.5, 0.5)
+        if theme.scheme == .light { let c = themeShade(p, luminance: 0.097); return [c.red * 255, c.green * 255, c.blue * 255] }
+        let hi = max(p.red, p.green, p.blue), lo = min(p.red, p.green, p.blue), d = hi - lo
+        var hue = 0.0
+        if d > 0 {
+            hue = hi == p.red ? ((p.green - p.blue) / d).truncatingRemainder(dividingBy: 6) : hi == p.green ? (p.blue - p.red) / d + 2 : (p.red - p.green) / d + 4
+            hue = (hue * 60 + 360).truncatingRemainder(dividingBy: 360)
+        }
+        let s = min(0.53, (hi > 0 ? d / hi : 0) * 9), v = 0.8
+        let c = v * s, x = c * (1 - abs((hue / 60).truncatingRemainder(dividingBy: 2) - 1)), m = v - c
+        let (r, g, b): (Double, Double, Double) = switch hue { case ..<60: (c, x, 0); case ..<120: (x, c, 0); case ..<180: (0, c, x); case ..<240: (0, x, c); case ..<300: (x, 0, c); default: (c, 0, x) }
+        return [(r + m) * 255, (g + m) * 255, (b + m) * 255]
+    }
+
+    /// The spec's four checks on one window picture: the panel's background is the window's own next to it, the user's
+    /// message and the composer are the sidebar's current row, the send button is the Space's accent, no page leaves
+    /// the transcript (`geometry`).
+    private static func colours(_ app: AppUnderTest, _ shot: URL) throws -> String {
+        let facts = try app.native(), view = try app.view()
+        let picture = try Picture(shot, contentWidth: facts.contentSize.width)
+        let panel = try XCTUnwrapValue(facts.computed.aiPanel), card = try XCTUnwrapValue(facts.computed.cards.first?.rect)
+        // 1. Above the card's top and inside the panel's inset, at the same height: one background.
+        let outside = picture.mean(CGRect(x: card.maxX - 8, y: 2, width: 5, height: 5)), inside = picture.mean(CGRect(x: panel.minX + 2, y: 2, width: 5, height: 5))
+        let below = picture.mean(CGRect(x: card.maxX - 40, y: card.maxY + 3, width: 30, height: 4)), panelLow = picture.mean(CGRect(x: panel.minX + 2, y: card.maxY + 3, width: 5, height: 4))
+        try expect(distance(outside, inside) <= 6 && distance(below, panelLow) <= 6, "the panel has a fill of its own: \(hex(inside)) beside \(hex(outside)), \(hex(panelLow)) beside \(hex(below))")
+        // 2. The current row's fill, the user's message and the composer.
+        let current = try XCTUnwrapValue(view.space.today.rows.lazy.compactMap { row -> TabRow? in if case .tab(let t) = row, t.status == .current { t } else { nil } }.first)
+        let rowFrame = try visible(facts, .row(current.id)).frame
+        let rowFill = picture.mean(CGRect(x: rowFrame.maxX - 15, y: rowFrame.minY + 5, width: 3, height: 3))
+        let bubble = try visible(facts, .aiControl("user-0")).frame
+        let bubbleFill = picture.mean(CGRect(x: bubble.maxX - 7, y: bubble.midY - 1, width: 3, height: 3))
+        let composer = try visible(facts, .aiControl("composer")).frame
+        let composerFill = picture.mean(CGRect(x: composer.maxX - 44, y: composer.minY + 4, width: 3, height: 3))
+        try expect(distance(rowFill, bubbleFill) <= 8 && distance(rowFill, composerFill) <= 8, "row \(hex(rowFill)), message \(hex(bubbleFill)), composer \(hex(composerFill))")
+        // 3. The send button.
+        let send = try visible(facts, .aiControl("send")).frame
+        let sendFill = picture.mean(CGRect(x: send.minX + 4, y: send.midY - 1, width: 3, height: 3)), wanted = accent(view.theme)
+        try expect(distance(sendFill, wanted) <= 10, "send \(hex(sendFill)), the Space's accent \(hex(wanted))")
+        return "background \(hex(inside)) beside \(hex(outside)); row \(hex(rowFill)), message \(hex(bubbleFill)), composer \(hex(composerFill)); send \(hex(sendFill)) for accent \(hex(wanted))"
+    }
+
     private static func route(_ app: AppUnderTest) throws {
         guard WindowServerKeys.allowed else { throw Check(description: "posting events is not allowed for this runner") }
         guard case .hello(let hello) = try app.send(.hello) else { throw Check(description: "no hello") }
@@ -203,8 +277,8 @@ enum AIPanelLookScenarios {
                 try PhysicalPointer.click(app, at: try screen(app, CGPoint(x: (try app.native().computed.contentArea.midX), y: 300)), window: app.window!)
                 app.sleep(1.5)
                 let facts = try geometry(app)
-                _ = try app.screenshot("\(index + 1)-\(space.name)")
-                return "\(try app.view().theme.scheme) scheme; \(facts)"
+                let shot = try app.screenshot("\(index + 1)-\(space.name)")
+                return "\(try app.view().theme.scheme) scheme; \(facts); \(try colours(app, shot.url))"
             }
         }
 

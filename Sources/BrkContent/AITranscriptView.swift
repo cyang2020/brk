@@ -97,13 +97,15 @@ final class AITranscriptView: NSView {
         self.copy = copy
         context = (agent, folder)
         var next: [NSView] = []
-        var stepRun = 0
+        var stepRun = 0, userMessage = 0
         for (index, row) in rows.enumerated() {
             let old = index < views.count ? views[index] : nil
             let view: NSView
             switch row {
             case .user(let text):
                 let bubble = old as? AIBubbleView ?? AIBubbleView()
+                bubble.identify(.aiControl("user-\(userMessage)"))
+                userMessage += 1
                 bubble.show(text, style: style)
                 view = bubble
             case .answer(let text):
