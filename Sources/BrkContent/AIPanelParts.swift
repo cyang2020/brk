@@ -39,6 +39,9 @@ class AIControl: NSView {
         let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways], owner: self)
         addTrackingArea(area)
         tracking = area
+        // A control that moved or resized hears no exit from its old area: whether the pointer is over it is read again.
+        let over = window.map { bounds.contains(convert($0.mouseLocationOutsideOfEventStream, from: nil)) } ?? false
+        if over != hovered { hovered = over; refresh() }
     }
     override func mouseEntered(with event: NSEvent) { hovered = true; refresh() }
     override func mouseExited(with event: NSEvent) { hovered = false; refresh() }
