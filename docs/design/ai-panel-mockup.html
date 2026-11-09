@@ -1,0 +1,109 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+.cap{font-size:13px;font-weight:600;margin:0 0 4px}
+.sub{font-size:12px;color:#6e6e73;margin:0 0 10px;line-height:1.45}
+.f{font-family:-apple-system,"PingFang SC",sans-serif;font-size:11.5px;line-height:1.45}
+/* theme variables per mock */
+.beige{--bg:linear-gradient(180deg,#ece5dd,#e6ded5);--fg:rgba(0,0,0,.86);--fg2:rgba(0,0,0,.45);--fg3:rgba(0,0,0,.3);--item:rgba(14,15,16,.05);--cur:rgba(255,255,255,.85);--shadow:0 1px 2px rgba(0,0,0,.12);--card:#fff;--cardfg:#1d1d1f;--accent:#8a6a4f;--sep:rgba(0,0,0,.08)}
+.sky{--bg:linear-gradient(180deg,#e4edf8,#d8e4f3);--fg:rgba(0,0,0,.86);--fg2:rgba(0,0,0,.45);--fg3:rgba(0,0,0,.3);--item:rgba(14,15,16,.05);--cur:rgba(255,255,255,.85);--shadow:0 1px 2px rgba(0,0,0,.12);--card:#fff;--cardfg:#1d1d1f;--accent:#3d6fb6;--sep:rgba(0,0,0,.08)}
+.grape{--bg:linear-gradient(160deg,#c4b2f2,#e7b3dc);--fg:rgba(0,0,0,.86);--fg2:rgba(0,0,0,.5);--fg3:rgba(0,0,0,.35);--item:rgba(14,15,16,.06);--cur:rgba(255,255,255,.8);--shadow:0 1px 2px rgba(0,0,0,.14);--card:#fff;--cardfg:#1d1d1f;--accent:#6a43c9;--sep:rgba(0,0,0,.08)}
+.night{--bg:linear-gradient(180deg,#25242b,#1f1e24);--fg:rgba(255,255,255,.9);--fg2:rgba(255,255,255,.5);--fg3:rgba(255,255,255,.35);--item:rgba(250,251,255,.1);--cur:rgba(250,251,255,.18);--shadow:0 1px 2px rgba(0,0,0,.4);--card:#2c2b31;--cardfg:rgba(255,255,255,.9);--accent:#9c8cff;--sep:rgba(255,255,255,.08)}
+.win{background:var(--bg);border-radius:12px;display:flex;gap:8px;padding:8px;height:420px;color:var(--fg)}
+.side{width:150px;display:flex;flex-direction:column;gap:3px;padding-top:22px}
+.url{background:var(--item);border-radius:8px;padding:5px 8px;color:var(--fg2);margin-bottom:8px}
+.tab{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:8px;white-space:nowrap;overflow:hidden}
+.tab.cur{background:var(--cur);box-shadow:var(--shadow)}
+.ic{width:12px;height:12px;border-radius:3px;background:var(--fg3);flex:none}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--accent);margin-left:auto;flex:none}
+.sec{color:var(--fg3);font-size:10.5px;padding:8px 8px 2px}
+.page{flex:1;background:var(--card);color:var(--cardfg);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.12);padding:14px;min-width:0}
+.page h3{margin:0 0 6px;font-size:15px}
+.page p{margin:0;color:#6e6e73}
+.night .page p{color:rgba(255,255,255,.55)}
+.panel{width:236px;display:flex;flex-direction:column;min-width:0}
+.hd{display:flex;align-items:center;gap:4px;padding:2px 2px 6px 4px}
+.hd b{flex:1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{width:20px;height:20px;display:flex;align-items:center;justify-content:center;color:var(--fg2)}
+.ib svg{width:13px;height:13px}
+.msgs{flex:1;display:flex;flex-direction:column;gap:8px;overflow:hidden;padding:0 2px}
+.me{align-self:flex-end;max-width:88%;background:var(--cur);box-shadow:var(--shadow);border-radius:12px 12px 4px 12px;padding:5px 9px}
+.steps{color:var(--fg2);font-size:10.5px}
+.card{background:var(--card);color:var(--cardfg);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.12);overflow:hidden;font-size:11px}
+.card .ch{display:flex;padding:6px 8px;border-bottom:1px solid var(--sep);font-weight:600}
+.card .ch span{margin-left:auto;font-weight:400;color:#8a8a8e;font-size:10px}
+.night .card .ch span{color:rgba(255,255,255,.5)}
+.r{display:flex;justify-content:space-between;padding:4px 8px}
+.r+.r{border-top:1px solid var(--sep)}
+.down{color:#2e9e5b}
+.sys{align-self:center;background:var(--item);color:var(--fg2);border-radius:99px;padding:2px 9px;font-size:10px}
+.cmp{background:var(--cur);box-shadow:var(--shadow);border-radius:12px;padding:6px 6px 6px 8px;margin-top:6px}
+.chips{display:flex;gap:4px;margin-bottom:5px}
+.chip{background:var(--item);border-radius:6px;padding:1px 5px;font-size:10px;color:var(--fg2)}
+.line{display:flex;align-items:center;gap:6px}
+.plus{color:var(--fg2);font-size:14px;width:16px;text-align:center}
+.ph{flex:1;color:var(--fg3)}
+.send{width:22px;height:22px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center}
+.send svg{width:11px;height:11px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}
+.sw{border-radius:12px;background:var(--bg);color:var(--fg);padding:8px;height:300px;display:flex;flex-direction:column}
+.sw .panel{width:auto;flex:1}
+.lab{font-size:11px;color:#6e6e73;margin:6px 2px 0}
+</style></head><body>
+<p class="cap">融进窗口：面板就是右边的第二条侧边栏</p>
+<p class="sub">面板用 Space 的主题底色，网页卡片夹在左右两条之间。面板里的每样东西都借用侧边栏现成的样子，不另造新样式。</p>
+<div class="f beige win">
+ <div class="side">
+  <div class="url">shop.example.com</div>
+  <div class="sec">Today</div>
+  <div class="tab"><span class="ic" style="background:#8a6a4f"></span>商品价格监控<span class="dot"></span></div>
+  <div class="tab"><span class="ic"></span>盯着这三个商品页…</div>
+  <div class="tab cur"><span class="ic"></span>Steel Kettle 1.7 L</div>
+  <div class="tab"><span class="ic"></span>Two-Slice Toaster</div>
+  <div class="tab"><span class="ic"></span>Glass Blender</div>
+ </div>
+ <div class="page"><h3>Steel Kettle 1.7 L</h3><p>Price: €34.50, free delivery. Brushed steel, boils 1.7 litres in four minutes.</p></div>
+ <div class="panel">
+  <div class="hd"><b>商品价格监控</b>
+   <span class="ib"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/></svg></span>
+   <span class="ib"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="3.5" width="11" height="9" rx="2"/><path d="M2.5 6.5h11"/></svg></span>
+   <span class="ib"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div>
+  <div class="msgs">
+   <div class="me">盯着这三个商品页的价格，每小时更新一次</div>
+   <div class="steps">✓ 读了 3 个 tab，做了一个页面 ›</div>
+   <div class="card"><div class="ch">商品价格监控<span>每小时</span></div>
+    <div class="r"><span>电热水壶</span><b>€34.50 <span class="down">↓4.50</span></b></div>
+    <div class="r"><span>烤面包机</span><b>€24.50</b></div>
+    <div class="r"><span>搅拌机</span><b>€59.90</b></div></div>
+   <div>已经设好，价格有变化时侧边栏那一行会出现小圆点。</div>
+   <div class="sys">11:32 已更新 · 水壶降了 €4.50</div>
+  </div>
+  <div class="cmp"><div class="chips"><span class="chip">Steel Kettle ×</span></div>
+   <div class="line"><span class="plus">＋</span><span class="ph">继续问，或输入 @</span><span class="send"><svg viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="1.9"><path d="M7 11.5V3M3.5 6.5L7 3l3.5 3.5"/></svg></span></div></div>
+ </div>
+</div>
+
+<p class="cap" style="margin-top:18px">换一个 Space，面板跟着变</p>
+<p class="sub">同一个面板放在另外三种 Space 主题里。底色、字色、选中块、输入框都取自这个 Space 的侧边栏，发送键和小圆点用这个 Space 的主题色。</p>
+<div class="grid">
+ <div><div class="f sky sw"><div class="panel">
+  <div class="hd"><b>商品价格监控</b><span class="ib"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div>
+  <div class="msgs"><div class="me">每小时更新一次</div><div class="steps">✓ 读了 3 个 tab ›</div>
+   <div class="card"><div class="ch">价格<span>每小时</span></div><div class="r"><span>水壶</span><b>€34.50</b></div><div class="r"><span>烤面包机</span><b>€24.50</b></div></div>
+   <div class="sys">11:32 已更新</div></div>
+  <div class="cmp"><div class="line"><span class="plus">＋</span><span class="ph">继续问</span><span class="send"><svg viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="1.9"><path d="M7 11.5V3M3.5 6.5L7 3l3.5 3.5"/></svg></span></div></div></div></div>
+  <p class="lab">浅蓝</p></div>
+ <div><div class="f grape sw"><div class="panel">
+  <div class="hd"><b>商品价格监控</b><span class="ib"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div>
+  <div class="msgs"><div class="me">每小时更新一次</div><div class="steps">✓ 读了 3 个 tab ›</div>
+   <div class="card"><div class="ch">价格<span>每小时</span></div><div class="r"><span>水壶</span><b>€34.50</b></div><div class="r"><span>烤面包机</span><b>€24.50</b></div></div>
+   <div class="sys">11:32 已更新</div></div>
+  <div class="cmp"><div class="line"><span class="plus">＋</span><span class="ph">继续问</span><span class="send"><svg viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="1.9"><path d="M7 11.5V3M3.5 6.5L7 3l3.5 3.5"/></svg></span></div></div></div></div>
+  <p class="lab">渐变紫</p></div>
+ <div><div class="f night sw"><div class="panel">
+  <div class="hd"><b>商品价格监控</b><span class="ib"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div>
+  <div class="msgs"><div class="me">每小时更新一次</div><div class="steps">✓ 读了 3 个 tab ›</div>
+   <div class="card"><div class="ch">价格<span>每小时</span></div><div class="r"><span>水壶</span><b>€34.50</b></div><div class="r"><span>烤面包机</span><b>€24.50</b></div></div>
+   <div class="sys">11:32 已更新</div></div>
+  <div class="cmp"><div class="line"><span class="plus">＋</span><span class="ph">继续问</span><span class="send"><svg viewBox="0 0 14 14" fill="none" stroke="#1f1e24" stroke-width="1.9"><path d="M7 11.5V3M3.5 6.5L7 3l3.5 3.5"/></svg></span></div></div></div></div>
+  <p class="lab">深色</p></div>
+</div>
+</body></html>

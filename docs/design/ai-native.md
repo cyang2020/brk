@@ -219,6 +219,7 @@ Brk 已有 Arc 的 Space（一组 tab），这个功能不能叫 Space。暂名"
 4. **第 3 步：agent 底座。** Brk 的 MCP 服务和"看 tab""动 tab""读对话"工具，system prompt 规则，把 tab 交给 agent 的三种方式，对话变成 tab，新的安全规则。用户选了 key 时，把 key 交给 Brk 启动的 Claude Code 或 Codex 进程。
 5. **第 4 步：在回答里显示页面，并能存成 tab。**
 6. **第 5 步：会自己更新的 AI 页面。**
+7. **第 6 步：对话面板融进窗口。** 面板不再浮在网页上，改成窗口右边的一栏，直接画在 Space 底色上，里面每样东西都用侧边栏已有的样子，所以跟着每个 Space 的主题变。标题、工具步骤、授权框、输入框和加号菜单一起改。规则和设计稿在 `docs/design/ai-panel.md` 和 `docs/design/ai-panel-mockup.html`。
 
 第 0 到第 3 步可以同时做：第 1 步先用小文字模型代答决策题，第 2 步做完再换成本机模型。第 4 步要用第 3 步的 MCP 服务，第 5 步要用第 4 步的页面，这两步按顺序来。
 
@@ -226,7 +227,7 @@ Brk 已有 Arc 的 Space（一组 tab），这个功能不能叫 Space。暂名"
 
 ## 进度
 
-到 2026-11-09，分步计划的五步都已合进 main（ffc7066a）。每一批都经过同一套检查才合并：完整单元测试、真实启动的 Brk 上的场景、真实 Claude 跑用户自己的例子，以及和 main 在同一块屏幕上的截图对比。每次检查的记录在 `verify/ai-native/merge-gate-*/README.md`，功能清单是 `docs/completion/features.json` 的 B013 到 B040。
+到 2026-11-09，分步计划的前五步都已合进 main（ffc7066a）；第 6 步是用户看过面板后加的，正在做。每一批都经过同一套检查才合并：完整单元测试、真实启动的 Brk 上的场景、真实 Claude 跑用户自己的例子，以及和 main 在同一块屏幕上的截图对比。每次检查的记录在 `verify/ai-native/merge-gate-*/README.md`，功能清单是 `docs/completion/features.json` 的 B013 到 B040。
 
 | 步骤 | 内容 | 合并 |
 |---|---|---|
@@ -235,6 +236,7 @@ Brk 已有 Arc 的 Space（一组 tab），这个功能不能叫 Space。暂名"
 | 第 3 步 | Brk 的 MCP 工具、把 tab 交给 agent、安全规则（2a96a9d7，C）；对话变成 tab、读对话工具（db019532，D） | 2a96a9d7、db019532 |
 | 第 4 步 | 回答里显示页面（无网络的隔离区）、页面存成 tab | db019532（D） |
 | 第 5 步 | 会自己更新的 AI 页面、页面里打勾和笔记、只在某几天显示、彻底删除对话、命令栏搜对话 | 7e682e99（E）、ffc7066a（E2） |
+| 第 6 步 | 对话面板融进窗口、跟着 Space 主题变 | 进行中 |
 
 做的过程中按实测改了几处原来的设想：
 - Tidy 和新 tab 归位默认交给小文字模型，JevK5 只答是或否的题。
