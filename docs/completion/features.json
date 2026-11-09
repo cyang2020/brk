@@ -15413,6 +15413,44 @@
           "scope": "Parent's rerun at 7e682e99: 10 of 10 on real Claude (Haiku 5.5)."
         }
       ]
+    },
+    {
+      "id": "B041",
+      "section": "AI agent",
+      "feature": "The AI panel joins the window and follows the Space theme",
+      "arc_evidence": "None: Brk's own.",
+      "description": "The AI panel is a column at the window's right edge, drawn on the Space background; the web card ends at its edge. Every part reuses a sidebar style: your messages and the composer look like the current tab row, steps, notices, chips and @ rows use the URL pill's fill, and the send button, links and pages use the Space's main color. A run of tool steps folds into one plain-language line. Approvals open with one sentence (a long folder by its name), the command behind Show Command. The composer holds chips, a + menu (folder, agent and model, permissions, settings), multi-line input with Return to send, and Stop. Brk's own AI words follow the conversation's language. The conversation tab uses the same rules in a 720 pt column on the card.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "In light, pale blue, purple gradient and dark Spaces the panel's background runs into the sidebar's, your message and the composer match the current tab row, the send button has the Space's color and no page is cropped (measured from screenshots by AIAgentPanelLook); the AI scenarios and real Claude runs still pass.",
+      "owner": "ai-native-f-panel-ux",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-f/README.md",
+          "scope": "Parent's run at e7fd2a2e: exit 0, no failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-f/run-native.py fixture-1 --only <33 AI scenarios>",
+          "artifact": "verify/ai-native/merge-gate-f/fixture-1/REPORT.md",
+          "scope": "Parent's run at e7fd2a2e: 33 of 33, including AIAgentPanelLook's measured checks in four Spaces."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_*_AGENT=claude BRK_E2E_REAL_*_MODEL=Haiku python3 verify/ai-native/merge-gate-f/run-native.py <name> --only AIRealUI-claude,AIRealPages-claude,AIRealTabs-claude,AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-f/README.md",
+          "scope": "Parent's runs at e7fd2a2e on real Claude (Haiku 5.5): all four pass; AIRealTabs-claude failed once in Settings setup and passed alone."
+        }
+      ]
     }
   ]
 }
