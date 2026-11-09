@@ -133,7 +133,8 @@ enum AIAgentScenarios {
         try expect(all.count == 3 && Set(all.compactMap { $0["pid"] as? Int32 }).count == 1, "turns ran in \(Set(all.compactMap { $0["pid"] as? Int32 })) processes")
         // Stop: the process stays, the command the turn started does not.
         try typeIntoInput(app, "fixture:slowstop")
-        try app.waitUntil("the turn's command runs", timeout: 15) { FileManager.default.fileExists(atPath: childFile(app).path) }
+        // The file can exist a moment before its pid is in it.
+        try app.waitUntil("the turn's command runs", timeout: 15) { (try? String(contentsOf: childFile(app), encoding: .utf8)).flatMap { Int32($0) } != nil }
         let child = try XCTUnwrapValue(Int32(String(contentsOf: childFile(app), encoding: .utf8)))
         _ = try app.screenshot("AIAgentChat-\(choice.rawValue)-running")
         try click(app, .aiControl("stop"))

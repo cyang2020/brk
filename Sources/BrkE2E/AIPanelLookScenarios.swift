@@ -266,12 +266,14 @@ enum AIPanelLookScenarios {
         for (index, space) in spaces.enumerated() {
             log.check("the panel in the \(space.name) Space") {
                 if let theme = space.theme {
-                    try app.dispatch(.space(.create(title: space.title, icon: .none, theme: theme)))
-                    try app.waitUntil("the \(space.name) Space", timeout: 8) { try app.view().space.title == space.title }
-                    try openShops(app)
+                    // One Space, its theme changed: since step 7 each Space has its own conversation list
+                    // (docs/design/ai-threads.md), and a new Space would show its own, empty one.
+                    try app.dispatch(.space(.update(home, title: space.title, icon: nil, theme: theme)))
+                    try app.waitUntil("the \(space.name) Space", timeout: 8) { try app.view().space.title == space.title && app.view().theme.scheme == (theme.appearance == .dark ? .dark : .light) }
                 } else {
                     try expect(try app.view().space.id == home, "not the first Space")
                 }
+                try expect(try app.view().space.id == home, "the window left the Space")
                 try expect(try app.view().ai?.conversation != nil, "the panel left with the Space")
                 // Off the panel, so no control shows its hover fill.
                 try PhysicalPointer.click(app, at: try screen(app, CGPoint(x: (try app.native().computed.contentArea.midX), y: 300)), window: app.window!)

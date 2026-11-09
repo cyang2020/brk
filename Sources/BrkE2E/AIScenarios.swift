@@ -261,7 +261,9 @@ enum AIScenarios {
         _ = try app.screenshot("AIAskRow-bar")
         try app.click(.aiControl("ask-row"))
         try answer(app, contains: "Fixture answer")
-        try expect(calls(app).last?["prompt"] as? String == "how do browsers render fonts", "the Ask row asked something else")
+        // The question's call; Name Tabs, on here, names the conversation after it with a structured request of its own.
+        let asked = calls(app).last { !(($0["argv"] as? [String])?.contains("--json-schema") ?? false) }
+        try expect(asked?["prompt"] as? String == "how do browsers render fonts", "the Ask row asked something else")
         try openBar(app)
         try app.type(String(provider.prefix(3)))
         try app.press("tab")
