@@ -15451,6 +15451,237 @@
           "scope": "Parent's runs at e7fd2a2e on real Claude (Haiku 5.5): all four pass; AIRealTabs-claude failed once in Settings setup and passed alone."
         }
       ]
+    },
+    {
+      "id": "B042",
+      "section": "AI agent",
+      "feature": "The AI panel swipes between this Space's conversation list and the conversation",
+      "arc_evidence": "None: Brk's own.",
+      "description": "The panel has two pages, the list first: a two-finger swipe over the panel moves between them with the sidebar's own pager and spring; two dots at the foot and a list icon in the header do the same. ⌥⌘A or the command bar's AI Conversations opens a closed panel on the list. A sideways-scrolling page in the transcript keeps the swipe.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "A real swipe, the list icon, a row, the dots and ⌥⌘A move between the pages; the sidebar's Space swipe is unchanged (AIAgentThreads-Swipe, R56-SwipeReal).",
+      "owner": "ai-native-g-threads",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-g/README.md",
+          "scope": "Parent's run: 1709 tests, 9 skipped; the two action-count assertions the new ⌥⌘A entry changed were updated and ActionsTests and ConversationListsTests rerun, 34 of 34."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
+          "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        }
+      ]
+    },
+    {
+      "id": "B043",
+      "section": "AI agent",
+      "feature": "One conversation list per Space",
+      "arc_evidence": "None: Brk's own.",
+      "description": "Each Space's panel lists that Space's conversations (search, groups 等你处理 / 进行中 / 今天 / 昨天 / 更早, two-line rows with a pill, dot or spinner, archived ones grey and restored on click, a row menu with open in tab, rename, archive, move and delete for good); switching Space switches the list and brings back that Space's last conversation and page; the list's composer starts a conversation in this Space.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Switching Space switches the list and restores the last conversation and page; search, groups, archive restore, the row menu and the composer work by real input (AIAgentThreads-Spaces, -Archive).",
+      "owner": "ai-native-g-threads",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-g/README.md",
+          "scope": "Parent's run: 1709 tests, 9 skipped; the two action-count assertions the new ⌥⌘A entry changed were updated and ActionsTests and ConversationListsTests rerun, 34 of 34."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
+          "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        }
+      ]
+    },
+    {
+      "id": "B044",
+      "section": "AI agent",
+      "feature": "What waits in other Spaces",
+      "arc_evidence": "None: Brk's own.",
+      "description": "Conversations of the same profile's other Spaces that wait for approval or have an unseen reply show as strips at the top of the list, a ring on that Space's dock dot and a count on the list icon; a click goes there. While Brk is in the back, an approval or a reply that ran over a minute posts a macOS notification that opens the conversation.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "The strip, ring and count appear and clear after Allow, with real Claude in two Spaces (AIAgentThreads-Waiting, AIRealThreads-claude).",
+      "owner": "ai-native-g-threads",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-g/README.md",
+          "scope": "Parent's run: 1709 tests, 9 skipped; the two action-count assertions the new ⌥⌘A entry changed were updated and ActionsTests and ConversationListsTests rerun, 34 of 34."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
+          "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_*_AGENT=claude BRK_E2E_REAL_*_MODEL=Haiku python3 verify/ai-native/merge-gate-g/run-native.py <name> --only AIRealThreads-claude,AIRealUI-claude,AIRealPages-claude,AIRealTabs-claude,AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-g/README.md",
+          "scope": "Parent's runs on real Claude (Haiku 5.5): all five pass (AIRealPages after the parent's scenario fix, real-pages-4)."
+        }
+      ]
+    },
+    {
+      "id": "B045",
+      "section": "AI agent",
+      "feature": "Library AI Conversations page",
+      "arc_evidence": "None: Brk's own.",
+      "description": "Library gets an AI 对话 page after Archived Tabs: full-text search across the profile's Spaces, a Filter menu (Space, agent, state, AI pages), the chips 全部 / 等你处理 N / 有 AI 页面, and the selected conversation in full with Continue, Open in Tab, Move to Space and Delete for Good.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Full-text search finds a word said only in the body, the Space filter narrows, delete for good asks and removes (AIAgentThreads-Library).",
+      "owner": "ai-native-g-threads",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-g/README.md",
+          "scope": "Parent's run: 1709 tests, 9 skipped; the two action-count assertions the new ⌥⌘A entry changed were updated and ActionsTests and ConversationListsTests rerun, 34 of 34."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
+          "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        }
+      ]
+    },
+    {
+      "id": "B046",
+      "section": "AI agent",
+      "feature": "The command bar searches conversations' full text and names the Space",
+      "arc_evidence": "None: Brk's own.",
+      "description": "The command bar finds conversations through the same search as the list and Library, over their whole text, and its second line starts with the Space's name.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Typing a word said in a conversation lists it with its Space; a click opens its tab (AIAgentThreads-Bar).",
+      "owner": "ai-native-g-threads",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-g/README.md",
+          "scope": "Parent's run: 1709 tests, 9 skipped; the two action-count assertions the new ⌥⌘A entry changed were updated and ActionsTests and ConversationListsTests rerun, 34 of 34."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
+          "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        }
+      ]
+    },
+    {
+      "id": "B047",
+      "section": "AI agent",
+      "feature": "Conversations are named by the small model",
+      "arc_evidence": "None: Brk's own.",
+      "description": "After the first answer the basic channel's small model names the conversation with a JSON schema, short and in the conversation's language, under the Name Tabs switch; a name the user gave is never replaced; with no agent and no key the first message stays.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "A structured naming request after the answer renames the row, panel header and list; a user's name is kept; Name Tabs off keeps the first message (AIAgentThreads-Names; real Haiku named one 电水壶商品价格).",
+      "owner": "ai-native-g-threads",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-g/README.md",
+          "scope": "Parent's run: 1709 tests, 9 skipped; the two action-count assertions the new ⌥⌘A entry changed were updated and ActionsTests and ConversationListsTests rerun, 34 of 34."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
+          "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_*_AGENT=claude BRK_E2E_REAL_*_MODEL=Haiku python3 verify/ai-native/merge-gate-g/run-native.py <name> --only AIRealThreads-claude,AIRealUI-claude,AIRealPages-claude,AIRealTabs-claude,AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-g/README.md",
+          "scope": "Parent's runs on real Claude (Haiku 5.5): all five pass (AIRealPages after the parent's scenario fix, real-pages-4)."
+        }
+      ]
+    },
+    {
+      "id": "B048",
+      "section": "AI agent",
+      "feature": "The + menu lists agents and models",
+      "arc_evidence": "None: Brk's own.",
+      "description": "The composer's + menu opens the ready agents with their models, the current one checked; a pick applies from the next message, continuing the session for the same agent or starting a new one with the transcript for another.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Picking a model by real clicks reaches the next message, switching agent when needed (AIAgentThreads-Models).",
+      "owner": "ai-native-g-threads",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-g/README.md",
+          "scope": "Parent's run: 1709 tests, 9 skipped; the two action-count assertions the new ⌥⌘A entry changed were updated and ActionsTests and ConversationListsTests rerun, 34 of 34."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
+          "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        }
+      ]
     }
   ]
 }
