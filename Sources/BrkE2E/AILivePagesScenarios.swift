@@ -691,7 +691,10 @@ enum AILivePagesScenarios {
     private static func pageControls(_ role: String) -> [CGRect] {
         guard let app, let card = try? pageCard(app), let origin = try? screen(app, card.origin) else { return [] }
         let shown = CGRect(origin: origin, size: card.size)
-        return axNodes(role).map(\.frame).filter { shown.contains(CGPoint(x: $0.midX, y: $0.midY)) }
+        // Accessibility lists each of the page's controls twice, at the same place (real-live-claude-3); once each.
+        var out: [CGRect] = []
+        for frame in axNodes(role).map(\.frame) where shown.contains(CGPoint(x: frame.midX, y: frame.midY)) && !out.contains(frame) { out.append(frame) }
+        return out
     }
     /// What `pageControls` chose from, for the step's line.
     private static func controlsReport(_ role: String) -> String {
