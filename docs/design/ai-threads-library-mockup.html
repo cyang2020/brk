@@ -1,0 +1,89 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+.cap{font-size:13px;font-weight:600;margin:0 0 4px}
+.sub{font-size:12px;color:#6e6e73;margin:0 0 10px;line-height:1.45}
+.f{font-family:-apple-system,"PingFang SC",sans-serif;font-size:11.5px;line-height:1.45}
+.beige{--bg:linear-gradient(180deg,#ece5dd,#e6ded5);--fg:#221811;--fg2:rgba(0,0,0,.45);--fg3:rgba(0,0,0,.3);--item:rgba(14,15,16,.05);--hover:rgba(14,15,16,.1);--cur:rgba(255,255,255,.85);--shadow:0 1px 2px rgba(0,0,0,.12);--card:#fff;--cardfg:#1d1d1f;--accent:#7a5a40;--sep:rgba(0,0,0,.08)}
+.win{background:var(--bg);border-radius:12px;display:flex;gap:8px;padding:8px;color:var(--fg)}
+.side{width:150px;display:flex;flex-direction:column;gap:3px;padding-top:22px}
+.url{background:var(--item);border-radius:8px;padding:5px 8px;color:var(--fg2);margin-bottom:8px}
+.tab{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:8px;white-space:nowrap;overflow:hidden}
+.tab.cur{background:var(--cur);box-shadow:var(--shadow)}
+.ic{width:12px;height:12px;border-radius:3px;background:var(--fg3);flex:none}
+.sec{color:var(--fg3);font-size:10.5px;padding:8px 8px 2px}
+.spaces{margin-top:auto;display:flex;justify-content:center;gap:9px;padding:8px 0 2px;align-items:center}
+.sp{width:7px;height:7px;border-radius:50%;background:var(--fg3)}
+.sp.on{background:var(--fg)}
+.sp.ring{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px #3d6fb6;background:#3d6fb6}
+.page{flex:1;background:var(--card);color:var(--cardfg);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.12);padding:14px;min-width:0}
+.page h3{margin:0 0 6px;font-size:15px}.page p{margin:0;color:#6e6e73}
+.panel{width:250px;display:flex;flex-direction:column;min-width:0}
+.hd{display:flex;align-items:center;gap:4px;padding:2px 2px 6px 2px}
+.hd b{flex:1;font-size:12.5px}
+.ib{width:20px;height:20px;display:flex;align-items:center;justify-content:center;color:var(--fg2);position:relative}
+.ib svg{width:13px;height:13px}
+.badge{position:absolute;top:-2px;right:-3px;background:var(--accent);color:#fff;font-size:8.5px;line-height:12px;min-width:12px;border-radius:6px;text-align:center}
+.search{background:var(--item);border-radius:8px;padding:5px 8px;color:var(--fg3);margin:0 2px 6px}
+.grp{color:var(--fg3);font-size:10.5px;padding:7px 6px 2px}
+.row{display:flex;align-items:center;gap:7px;padding:5px 6px;border-radius:8px}
+.row.cur{background:var(--cur);box-shadow:var(--shadow)}
+.row .t{flex:1;min-width:0}
+.row .t div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .m{font-size:10px;color:var(--fg2);display:flex;align-items:center;gap:4px}
+.row.dim .t div:first-child{color:var(--fg2)}
+.sd{width:6px;height:6px;border-radius:50%;flex:none}
+.bub{width:13px;height:13px;flex:none;color:var(--fg2)}
+.pill{font-size:9.5px;background:var(--accent);color:#fff;border-radius:99px;padding:0 6px;white-space:nowrap}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none}
+.spin{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--fg3);border-top-color:var(--fg);flex:none}
+.cmp{background:var(--cur);box-shadow:var(--shadow);border-radius:12px;padding:6px 8px;margin-top:auto;display:flex;align-items:center;gap:6px;color:var(--fg3)}
+.cmp .send{margin-left:auto;width:20px;height:20px;border-radius:50%;background:var(--accent)}
+/* library */
+.lib{background:var(--bg);border-radius:12px;display:flex;gap:0;padding:8px;color:var(--fg)}
+.icons{width:58px;display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:26px}
+.li{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px;color:var(--fg2);width:52px;padding:5px 0;border-radius:8px}
+.li i{width:16px;height:14px;border:1.5px solid var(--fg2);border-radius:3px;display:block}
+.li.on{background:var(--item);color:var(--fg)}.li.on i{border-color:var(--fg)}
+.list{width:230px;padding:6px 6px 0}
+.tools{display:flex;gap:6px;margin-bottom:4px}
+.tools .search{flex:1;margin:0}
+.filter{background:var(--item);border-radius:8px;padding:5px 8px;color:var(--fg2)}
+.chips{display:flex;gap:4px;margin:6px 0 2px}
+.chip{background:var(--item);border-radius:99px;padding:1px 8px;font-size:10px;color:var(--fg2)}
+.chip.on{background:var(--cur);box-shadow:var(--shadow);color:var(--fg)}
+.conv{flex:1;background:var(--card);color:var(--cardfg);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.12);padding:14px 22px;min-width:0;display:flex;flex-direction:column;gap:8px;margin-left:8px}
+.conv .h{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px}
+.conv .h span{margin-left:auto;font-weight:400;font-size:10.5px;color:#8a8a8e}
+.me{align-self:flex-end;background:rgba(14,15,16,.05);border-radius:12px 12px 4px 12px;padding:5px 9px;max-width:80%}
+.st{color:#8a8a8e;font-size:10.5px;background:rgba(14,15,16,.05);border-radius:8px;padding:3px 8px;align-self:flex-start}
+.mini{border:1px solid rgba(0,0,0,.08);border-radius:8px;overflow:hidden;font-size:10.5px}
+.mini .r{display:flex;justify-content:space-between;padding:4px 8px}.mini .r+.r{border-top:1px solid rgba(0,0,0,.06)}
+.acts{display:flex;gap:6px;margin-top:auto}
+.btn{background:rgba(14,15,16,.05);border-radius:7px;padding:3px 9px;font-size:10.5px}
+.btn.p{background:var(--accent);color:#fff}
+</style></head><body>
+<p class="cap">Library 里完整地管：新增一页"AI 对话"，和"已归档 tab"同一种排法</p>
+<p class="sub">左边多一个图标。中间一列能搜对话里的全文，能按状态、Space、agent 筛选。右边是选中的对话全文和它做过的页面，下面是操作按钮。</p>
+<div class="f beige lib" style="height:330px">
+ <div class="icons">
+  <div class="li"><i></i>媒体</div><div class="li"><i></i>下载</div><div class="li"><i></i>Easels</div><div class="li"><i></i>Spaces</div><div class="li"><i></i>已归档</div><div class="li on"><i style="border-radius:6px 6px 6px 2px"></i>AI 对话</div>
+ </div>
+ <div class="list">
+  <div class="tools"><div class="search">搜索对话内容…</div><div class="filter">筛选</div></div>
+  <div class="chips"><span class="chip on">全部</span><span class="chip">等你处理 2</span><span class="chip">有 AI 页面</span></div>
+  <div class="grp">今天</div>
+  <div class="row cur"><span class="sd" style="background:#7a5a40"></span><div class="t"><div>盯着这三个商品页的价格</div><div class="m">购物 · Claude · 11:32</div></div></div>
+  <div class="row"><span class="sd" style="background:#3d6fb6"></span><div class="t"><div>把这几个 tab 总结成飞书文档</div><div class="m">工作 · Claude · 等你确认</div></div></div>
+  <div class="row"><span class="sd" style="background:#3f8f6b"></span><div class="t"><div>这篇论文的实验部分讲了什么</div><div class="m">学习 · Codex · 10:05</div></div></div>
+  <div class="grp">昨天</div>
+  <div class="row dim"><span class="sd" style="background:#8a5bc4"></span><div class="t"><div>下周东京行程</div><div class="m">个人 · Claude · 已归档</div></div></div>
+ </div>
+ <div class="conv">
+  <div class="h">盯着这三个商品页的价格<span>购物 · Claude · Haiku 5.5</span></div>
+  <div class="me">盯着这三个商品页的价格，每小时更新一次</div>
+  <div class="st">✓ 读了 3 个 tab，做了一个页面 ›</div>
+  <div class="mini"><div class="r"><b>商品价格监控</b><span style="color:#8a8a8e">每小时</span></div><div class="r"><span>电热水壶</span><b>€34.50</b></div><div class="r"><span>烤面包机</span><b>€24.50</b></div></div>
+  <div>已经设好，价格有变化时侧边栏那一行会出现小圆点。</div>
+  <div class="acts"><span class="btn p">继续这个对话</span><span class="btn">在 tab 里打开</span><span class="btn">移到别的 Space…</span><span class="btn" style="margin-left:auto;color:#c0392b">彻底删除…</span></div>
+ </div>
+</div>
+</body></html>
