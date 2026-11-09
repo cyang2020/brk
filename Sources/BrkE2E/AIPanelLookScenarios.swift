@@ -145,6 +145,8 @@ enum AIPanelLookScenarios {
         var page: AIPageID?
 
         log.check("the price watch, typed into the composer and sent with Return") {
+            // The fixture site is shared by a run's scenarios: the kettle starts at its own price again.
+            app.site.replace(in: "/shop-kettle.html", "€34.50", with: "€39.00")
             try openShops(app)
             // The header's New Conversation, before there is a panel to click it in.
             try app.dispatch(.assist(.newConversation))
