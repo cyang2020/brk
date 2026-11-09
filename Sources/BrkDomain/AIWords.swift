@@ -45,6 +45,17 @@ public enum AIWords {
         language == .zh ? "附上 " + names.joined(separator: " · ") : "With " + names.joined(separator: " · ")
     }
 
+    /// The tab names a `with` line lists, without its folders and Spaces; nil for any other line.
+    public static func attachedNames(_ line: String) -> [String]? {
+        let rest: Substring
+        if line.hasPrefix("附上 ") { rest = line.dropFirst(3) } else if line.hasPrefix("With ") { rest = line.dropFirst(5) } else { return nil }
+        let group = try? NSRegularExpression(pattern: #"(（\d+ 个 tab）|\(\d+ tabs?\))$"#)
+        return rest.components(separatedBy: " · ").filter { name in
+            guard !name.isEmpty else { return false }
+            return group?.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) == nil
+        }
+    }
+
     /// One attached folder or Space and how many tabs it gave.
     public static func group(_ title: String, tabs: Int, _ language: AILanguage) -> String {
         language == .zh ? "\(title)（\(tabs) 个 tab）" : "\(title) (\(tabs) \(tabs == 1 ? "tab" : "tabs"))"

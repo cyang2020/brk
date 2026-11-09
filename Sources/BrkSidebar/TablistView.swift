@@ -112,9 +112,13 @@ final class TablistView: NSScrollView {
         return window.makeFirstResponder(document)
     }
 
+    /// The Cmd+click selection `id` belongs to, in its order, else `id` alone.
+    func selectionGroup(containing id: ItemID) -> [ItemID] { multiselection.contains(id) ? multiselection : [id] }
+
     /// `newTabCurrent`: the New Tab row draws as the current row (a blank window showing nothing, as Arc's does).
+    /// `lit`: the rows an AI list row or chip under the pointer lights (docs/design/ai-right-panel.md).
     func render(_ space: SpaceSnapshot, renaming: ItemID?, frames f: SidebarFrames, palette: Palette, tools: TabToolsSnapshot,
-                newTabCurrent: Bool = false, now: Instant = Instant(milliseconds: 0)) {
+                newTabCurrent: Bool = false, now: Instant = Instant(milliseconds: 0), lit: Set<ItemID> = []) {
         // While New Tab is the current row the tab on screen draws like any other (Arc, Q01-a: one white card).
         let space = newTabCurrent ? space.idlingCurrent : space
         self.tools = tools
@@ -174,6 +178,7 @@ final class TablistView: NSScrollView {
                 if view.superview !== container { container.addSubview(view) }
                 view.frame = frame.rect.offsetBy(dx: -container.frame.minX, dy: -container.frame.minY)
                 view.render(row, section: section, depth: frame.depth, renaming: renaming == id, multiselected: multiselection.contains(id), palette: palette)
+                view.lit = lit.contains(id)
             case .divider:
                 divider.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
                 divider.render(canClear: space.today.kind == .today && !space.today.rows.isEmpty, clearAction: space.today.clearAction,
@@ -513,6 +518,8 @@ final class RowView: HoverView {
     private var depth = 0
     private var palette: Palette?
     private let background = NSView()
+    /// Brk's own: the outline and tint in the Space's color while the AI conversation under the pointer used this row's tab.
+    private let litMark = NSView()
     private let icon = IconView()
     private let title = NSTextField(labelWithString: "")
     /// "Double-click to rename" under the title, on a tab just dropped on the Space name strip (Q13-h).
@@ -535,6 +542,8 @@ final class RowView: HoverView {
     /// A split row with a custom icon starts its panes after the icon; without one they start in the icon slot.
     private var splitIcon = false
     var multiselected = false { didSet { if multiselected != oldValue { stateChanged() } } }
+    /// The AI list row or chip under the pointer used this row's tab (docs/design/ai-right-panel.md, 悬停高亮).
+    var lit = false { didSet { if lit != oldValue { showLit() } } }
     var dropInto = false { didSet { if dropInto != oldValue { stateChanged() } } }
     var dragSource = false { didSet { alphaValue = dragSource ? Draw.dragSourceAlpha.value : 1 } }
     /// The row a tab drag left while the pointer is over the content: Arc keeps it in place on the selected-row card
@@ -577,7 +586,11 @@ final class RowView: HoverView {
         joinSlot.layer?.cornerCurve = .continuous
         joinSlot.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
         joinSlot.isHidden = true
-        for view in [background, joinSlot, icon, title, renameHint, suggestion, audio, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
+        litMark.wantsLayer = true
+        litMark.layer?.cornerCurve = .continuous
+        litMark.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
+        litMark.isHidden = true
+        for view in [background, litMark, joinSlot, icon, title, renameHint, suggestion, audio, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
         suggestion.isHidden = true
         suggestion.accept = { [weak self] in if let id = self?.row?.id { self?.dispatch(.assist(.acceptSuggestion(id))) } }
         suggestion.dismiss = { [weak self] in if let id = self?.row?.id { self?.dispatch(.assist(.dismissSuggestion(id))) } }
@@ -746,6 +759,7 @@ final class RowView: HoverView {
         super.layout()
         let g = RowGeometry(bounds: bounds, depth: depth, speaker: !audio.isHidden)
         background.frame = g.selection
+        litMark.frame = g.selection
         icon.frame = g.icon
         button.frame = g.button
         audio.frame = g.speaker
@@ -803,8 +817,19 @@ final class RowView: HoverView {
         CATransaction.commit()
     }
 
+    /// The lit look: the Space's own color as a thin outline and a light tint over whatever fill the row has.
+    private func showLit() {
+        litMark.isHidden = !lit
+        litMark.identify(.tabTool("ai-lit-" + (row?.id.rawValue ?? "")))
+        guard lit, let palette else { return }
+        litMark.layer?.borderWidth = Metrics.ai.litBorderWidth.value
+        litMark.layer?.borderColor = palette.focusColor.cgColor
+        litMark.layer?.backgroundColor = palette.focusColor.withAlphaComponent(Metrics.ai.litTint.value).cgColor
+    }
+
     override func stateChanged() {
         guard let palette, let row else { return }
+        if lit { showLit() }
         let hovered = isHovered && !isEditingName && !isPressed
         if hovered != reportedHover { reportedHover = hovered; onHover?(self, hovered) }
         let tokens = palette.tokens

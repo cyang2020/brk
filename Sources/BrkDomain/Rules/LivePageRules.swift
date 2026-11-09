@@ -220,29 +220,13 @@ extension Work {
 
     // MARK: Delete for good
 
-    /// The archive's Delete: a conversation with its transcript and every page it made, or one kept page. Their rows go
-    /// from the archive and the sidebar without being archived again; their files go with the next write.
+    /// The archive's Delete Page…: one kept page. Its rows go from the archive and the sidebar without being archived
+    /// again; its files go with the next write. (A conversation is deleted from its list or the Library's "AI 对话" page.)
     mutating func deleteForGood(_ archive: ArchiveID, in window: WindowID) {
-        guard let entry = state.doc.archive.first(where: { $0.id == archive }) else { return }
-        let title: String
-        var urls: Set<URL> = []
-        if let conversation = ConversationPage.id(of: entry.tab.url) {
-            let pages = state.doc.aiPages.values.filter { $0.conversation == conversation }.map(\.id)
-            title = state.doc.conversations[conversation]?.title ?? entry.tab.displayTitle
-            urls = Set([ConversationPage.url(conversation)] + pages.map(AIPageTab.url))
-            state.doc.conversations[conversation] = nil
-            for page in pages { state.doc.aiPages[page] = nil }
-            for (host, answer) in state.session.ai.answers where answer.conversation?.id == conversation {
-                state.session.ai.answers[host] = nil
-                state.session.ai.answerContexts[host] = nil
-            }
-            state.session.ai.tabAnswers[conversation] = nil
-            state.session.ai.tabWindows[conversation] = nil
-        } else if let page = AIPageTab.id(of: entry.tab.url) {
-            title = state.doc.aiPages[page]?.title ?? entry.tab.displayTitle
-            urls = [AIPageTab.url(page)]
-            state.doc.aiPages[page] = nil
-        } else { return }
+        guard let entry = state.doc.archive.first(where: { $0.id == archive }), let page = AIPageTab.id(of: entry.tab.url) else { return }
+        let title = state.doc.aiPages[page]?.title ?? entry.tab.displayTitle
+        let urls: Set<URL> = [AIPageTab.url(page)]
+        state.doc.aiPages[page] = nil
         state.doc.archive.removeAll { record in
             guard let url = record.tab.url, urls.contains(url) else { return false }
             if case .folder? = record.structure { return false }

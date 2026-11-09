@@ -8,6 +8,7 @@ import BrkUIKit
 /// rounded at the top corners, a hairline under the 32 pt control row. Back, forward and reload (stop while loading)
 /// at the left; the link glyph and the host centred on the card (a click edits the address); copy link, the site
 /// controls and a new split pane at the right. While it shows, the sidebar keeps only the traffic lights and its toggle.
+/// Brk's own: while the window can open the AI panel its chat button ends the row (docs/design/ai-right-panel.md).
 @MainActor
 public final class AddressToolbarView: NSView {
     private let address = NSButton()
@@ -16,6 +17,8 @@ public final class AddressToolbarView: NSView {
     private let hairline = NSView()
     private var buttons: [NSButton] = []
     private var trailing: [NSButton] = []
+    private let ai = AddressToolbarView.button(AIToggleBadge.symbol, name: "ai", target: nil, action: nil)
+    private let aiBadge = AIToggleBadge()
     private let dispatch: Dispatch
     private var loading = false
 
@@ -53,14 +56,19 @@ public final class AddressToolbarView: NSView {
         host.isSelectable = false
         hairline.wantsLayer = true
         hairline.layer?.backgroundColor = NSColor(white: 0, alpha: Draw.toolbarHairlineAlpha.value).cgColor
-        for view in [address, link, host, hairline] as [NSView] { addSubview(view) }
+        ai.target = self
+        ai.action = #selector(aiClicked)
+        ai.wantsLayer = true
+        ai.identify(.toolbarButton("ai"))
+        aiBadge.identify(.aiControl("toolbar-toggle-badge"))
+        for view in [address, link, host, hairline, ai, aiBadge] as [NSView] { addSubview(view) }
         isHidden = true
     }
     @available(*, unavailable) public required init?(coder: NSCoder) { fatalError("not used") }
     public override var isFlipped: Bool { true }
     public override var mouseDownCanMoveWindow: Bool { true }
 
-    private static func button(_ symbol: String, name: String, target: AnyObject, action: Selector) -> NSButton {
+    private static func button(_ symbol: String, name: String, target: AnyObject?, action: Selector?) -> NSButton {
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: name)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: Draw.toolbarGlyph.value, weight: .regular))
         let button = NSButton(image: image ?? NSImage(), target: target, action: action)
@@ -69,13 +77,25 @@ public final class AddressToolbarView: NSView {
         return button
     }
 
-    public func render(_ pill: URLPillSnapshot, rect: CGRect?, palette: Palette) {
+    public func render(_ pill: URLPillSnapshot, rect: CGRect?, palette: Palette, ai toggleState: AIToggleSnapshot? = nil) {
         guard let rect else { isHidden = true; return }
         isHidden = false; frame = rect
         let enabled = NSColor(white: 0, alpha: Draw.toolbarGlyphAlpha.value), disabled = NSColor(white: 0, alpha: Draw.toolbarDisabledAlpha.value)
+        let chat = toggleState != nil
+        ai.isHidden = !chat
+        if let toggleState {
+            ai.frame = AddressToolbarLayout.aiButton(in: bounds)
+            ai.contentTintColor = enabled
+            ai.toolTip = AIThreadWords.toggleTip(toggleState.language)
+            ai.setAccessibilityValue(toggleState.open ? "open" : "closed")
+            // Open: the fill a hovered sidebar button has, the panel's switch shown on.
+            ai.layer?.cornerRadius = Draw.navButtonRadius.value
+            ai.layer?.backgroundColor = toggleState.open ? NSColor(white: 0, alpha: 0.06).cgColor : nil
+        }
+        aiBadge.show(chat ? toggleState?.waiting ?? 0 : 0, on: ai.frame, palette: palette)
         for (i, button) in buttons.enumerated() { button.frame = AddressToolbarLayout.button(i, in: bounds) }
         for (i, button) in trailing.enumerated() {
-            button.frame = AddressToolbarLayout.trailingButton(i, in: bounds)
+            button.frame = AddressToolbarLayout.trailingButton(i, in: bounds, ai: chat)
             button.contentTintColor = enabled
             button.isEnabled = pill.text != nil
         }
@@ -86,7 +106,7 @@ public final class AddressToolbarView: NSView {
         buttons[2].image = NSImage(systemSymbolName: loading ? "xmark" : "arrow.clockwise", accessibilityDescription: loading ? "Stop" : "Reload")?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: Draw.toolbarGlyph.value, weight: .regular))
         buttons[2].toolTip = loading ? "Stop" : "Reload"
-        let area = AddressToolbarLayout.address(in: bounds)
+        let area = AddressToolbarLayout.address(in: bounds, ai: chat)
         address.frame = area
         let text = pill.toolbarText ?? pill.host ?? pill.text
         host.stringValue = text ?? Copy.urlPlaceholder
@@ -109,6 +129,7 @@ public final class AddressToolbarView: NSView {
     }
 
     @objc private func editAddress() { dispatch(.commandBar(.open(.editCurrent))) }
+    @objc private func aiClicked() { dispatch(.assist(.togglePanel)) }
     @objc private func clicked(_ sender: NSButton) {
         switch sender.tag {
         case 0: dispatch(.page(.back(.focused)))

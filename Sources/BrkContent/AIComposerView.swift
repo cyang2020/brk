@@ -48,6 +48,8 @@ final class AIComposerView: NSView, NSTextViewDelegate {
     var onStop: (() -> Void)?
     var onPlus: (() -> Void)?
     var onRemoveChip: ((String) -> Void)?
+    /// The pointer went over a chip (its id) or off every chip (nil).
+    var onHoverChip: ((String?) -> Void)?
     /// The text changed (the @ list follows it).
     var onChange: ((String) -> Void)?
     /// A key command before the composer's own: the @ list's ↑ ↓ Return Tab Esc. True when it was taken.
@@ -157,6 +159,7 @@ final class AIComposerView: NSView, NSTextViewDelegate {
                 chip.setAccessibilityIdentifier("ai-chip-" + attachment.id)
                 chip.remove.identify(.aiControl("chip-remove-" + attachment.id))
                 chip.remove.onPress = { [weak self] in self?.onRemoveChip?(attachment.id) }
+                chip.onHover = { [weak self] over in self?.onHoverChip?(over ? attachment.id : nil) }
                 addSubview(chip)
                 return chip
             }

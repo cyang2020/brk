@@ -89,15 +89,9 @@ public enum AIIntent: Hashable, Sendable, Codable {
     case mention(String?)
     /// A `brk://tab/<id>` link in an agent's answer: that tab is shown, or opened again from the archive or history.
     case openTabLink(String)
-    /// One of the intents above from a conversation's own tab: it acts on that conversation, not the window's panel.
-    indirect case inTab(AIRequestID, AIIntent)
-    /// The panel's Open as Tab: the conversation moves into its sidebar tab, shown full size; its session goes on.
-    case openAsTab
-    /// The panel's New Conversation: the one it shows is put away (its tab keeps it) and a new one with Brk's tab tools
-    /// waits for its first message.
+    /// The panel's New Conversation: the one it shows is put away (it stays in the list) and a new one with Brk's tab
+    /// tools waits for its first message.
     case newConversation
-    /// A `brk://conversation/<id>` link: that conversation's tab is shown, or opened again from the archive.
-    case openConversation(AIRequestID)
     /// Keep as Tab on a page in an answer: the page becomes a sidebar tab of its own.
     case keepPage(AIPageID)
     /// A click on a link in an agent's page.
@@ -108,11 +102,22 @@ public enum AIIntent: Hashable, Sendable, Codable {
     case pageSave(AIPageID, String)
     /// A kept page's schedule, weekdays, refresh model, or Refresh Now, from its row's menu.
     case livePage(AIPageID, AIPageLiveChange)
-    /// The panel's page: a swipe over the panel, the list icon. `.list` opens a closed panel on the list.
+    /// The panel's page: a swipe over the panel, the list icon. `.list` opens a closed panel on the list (the command
+    /// bar's "AI 对话").
     case panelPage(AIPanelPage)
-    /// A conversation shown in the panel: a list row, a strip, the Library's Continue, a notification. Another Space's
-    /// switches the window there first; an archived one comes back from the archive.
+    /// The sidebar title row's chat button, ⌥⌘A and View › Show/Hide AI Conversations (docs/design/ai-right-panel.md): an
+    /// open panel closes; a closed one opens on what this Space's panel showed last, the list when it has no conversation.
+    case togglePanel
+    /// The gap between the card and the panel dragged: the panel's width, kept for the window like the sidebar's.
+    case panelWidth(Double)
+    /// A conversation shown in the panel: a list row, a strip, the Library's Continue, a notification, a command bar
+    /// result, a `brk://conversation/<id>` link, a kept page's conversation button. Another Space's switches the window
+    /// there first.
     case showConversation(AIRequestID)
+    /// The pointer is over a list row (nil: off every row): the tabs that conversation used light up in the sidebar.
+    case hoverConversation(AIRequestID?)
+    /// The pointer is over a chip in the composer (its id, nil: off every chip): that tab lights up.
+    case hoverChip(String?)
     /// The list's search box.
     case listSearch(String)
     /// The list page's composer: a new conversation in this Space.
@@ -121,8 +126,7 @@ public enum AIIntent: Hashable, Sendable, Codable {
     /// cancels. Delete for good asks first (`.library(.requestDeleteConversation)`).
     case beginRenameConversation(AIRequestID)
     case renameConversation(AIRequestID, String?)
-    case archiveConversation(AIRequestID)
-    case restoreConversation(AIRequestID)
+    /// The row menu's Move to Another Space, or a list row dropped on a Space's dot in the sidebar's dock.
     case moveConversation(AIRequestID, SpaceID)
     /// The + menu's agent list: this agent and model for the conversation's next messages.
     case pickAgent(AIProviderKind, model: String?)
@@ -265,7 +269,7 @@ public struct AIAnswerSnapshot: Equatable, Sendable, Codable {
     public var conversation: AIConversationSnapshot? = nil
     /// The pages the conversation's items show, filled in by the projection (`AppState.withPages`).
     public var pages: [AIPageSnapshot] = []
-    /// The conversation's name, its tab's title (the projection fills it in); nil before it has one.
+    /// The conversation's name, its saved title (the projection fills it in); nil before it has one.
     public var name: String? = nil
 }
 
@@ -368,6 +372,8 @@ public enum AIConversationEvent: Equatable, Sendable, Codable {
     /// The agent changed one of this conversation's pages (`brk_page_update`): new HTML (already written to its file),
     /// data, title or height; nil leaves that as it was.
     case pageUpdated(AIPageID, html: Bool, data: String?, schema: String?, saveSchema: String?, title: String?, height: Int?)
+    /// The agent read, opened or showed these tabs with Brk's tab tools (`AgentTabFacts.id`): the conversation used them.
+    case usedTabs([String])
 }
 
 /// What an installed agent says about itself, read without sending the model anything (the Max pane, the panel).
@@ -461,11 +467,11 @@ struct AISession: Equatable, Sendable {
     var localDecisions = false
     /// A download Max is renaming in the background, and the window that started it.
     var renamingDownloads: [DownloadID: WindowID] = [:]
-    /// Live conversations outside a panel: shown in their own tab, or still running out of sight
-    /// (Rules/ConversationTabs.swift). A panel's conversation stays in `answers`.
-    var tabAnswers: [AIRequestID: AIAnswerSnapshot] = [:]
-    /// The window a tab conversation runs in: where it was shown or typed into last.
-    var tabWindows: [AIRequestID: WindowID] = [:]
+    /// Live conversations outside a panel: still running out of sight (Rules/ConversationLive.swift). A panel's
+    /// conversation stays in `answers`.
+    var awayAnswers: [AIRequestID: AIAnswerSnapshot] = [:]
+    /// The window a conversation out of sight runs in: the one whose panel showed it last.
+    var awayWindows: [AIRequestID: WindowID] = [:]
     /// A link in an agent's page that asks before it opens, by window.
     var linkPrompts: [WindowID: AIPageLinkPrompt] = [:]
     /// Live pages refreshing now, and the run of each (Rules/LivePageRules.swift).
@@ -491,6 +497,9 @@ struct AISession: Equatable, Sendable {
     var renamingConversation: [WindowID: AIRequestID] = [:]
     /// Delete for good, waiting for Cancel or Delete in the window's dialog.
     var pendingConversationDeletion: [WindowID: ConversationDeletionRequest] = [:]
+    /// The list row under the pointer, and the chip under it: what the sidebar lights (docs/design/ai-right-panel.md).
+    var hoveredConversation: [WindowID: AIRequestID] = [:]
+    var hoveredChip: [WindowID: String] = [:]
     /// Conversation names asked of the basic model, by request; and the conversations asked about this session.
     var conversationNaming: [AIRequestID: AIRequestID] = [:]
     var namedAsked: Set<AIRequestID> = []

@@ -3,9 +3,9 @@ import Foundation
 
 // Conversation lists (docs/design/ai-threads.md). The AI panel has two pages, this Space's conversation list and the
 // conversation, and a two-finger swipe over the panel moves between them the way the sidebar's swipe moves between
-// Spaces. Each Space has its own list: a conversation belongs to the Space whose sidebar holds its row (an archived one to
-// the Space it was archived from), so switching Space on the left switches the panel's list and brings back the
-// conversation that Space showed last. What waits for the user in another Space of the same profile shows as a strip at
+// Spaces. Each Space has its own list: a conversation belongs to the Space it records (`StoredConversation.space`: where
+// it started, or where it was moved), so switching Space on the left switches the panel's list and brings back the
+// conversation that Space showed last. Conversations have no sidebar rows (docs/design/ai-right-panel.md). What waits for the user in another Space of the same profile shows as a strip at
 // the top of the list, a ring on that Space's dot and a count on the list icon. The Library's "AI 对话" page lists every
 // Space's conversations, and the command bar and both lists search conversations with one search (`ConversationSearch`).
 
@@ -18,13 +18,11 @@ public enum AIPanelPage: String, Hashable, Sendable, Codable {
 public enum AIThreadState: String, Hashable, Sendable, Codable, CaseIterable {
     /// The agent waits for the user to answer an approval: a pill in the Space's color.
     case waiting
-    /// A reply finished after the conversation was last shown in the panel or its tab: a dot.
+    /// A reply finished after the conversation was last shown in the panel: a dot.
     case unread
     /// A turn runs: a spinner.
     case running
     case idle
-    /// Its row is in the archive: grey, and a click brings it back.
-    case archived
 
     /// "等你处理": the agent waits, or a reply nobody has seen yet.
     public var needsUser: Bool { self == .waiting || self == .unread }
@@ -40,7 +38,8 @@ public struct AIThreadRow: Hashable, Sendable, Codable {
     public let id: AIRequestID
     public var title: String
     public var state: AIThreadState
-    /// The second line: "想运行一条命令", "2 分钟前回复了", "读了 5 个 tab", "11:32 · 1 个 AI 页面", "已归档".
+    /// The second line: "想运行一条命令", "2 分钟前回复了", "读了 5 个 tab", "11:32 · 1 个 AI 页面"; while the pointer is over
+    /// the row, "用了 3 个 tab" or "用了 3 个 tab，亮着 2 个".
     public var detail: String
     /// The pill's word on a waiting row ("等你确认"), in the conversation's language; nil on other rows.
     public var pill: String? = nil
@@ -90,6 +89,29 @@ public struct AIPanelSnapshot: Hashable, Sendable, Codable {
     public var spaces: [AIThreadSpace]
     /// The row shown as a text field for its new name.
     public var renaming: AIRequestID? = nil
+    /// The row under the pointer, whose tabs the sidebar lights, and its second line meanwhile: "用了 3 个 tab", or "用了 3
+    /// 个 tab，亮着 2 个" when not all of them light up here.
+    public var hovered: AIRequestID? = nil
+    public var hoveredDetail: String? = nil
+}
+
+/// The sidebar title row's chat button (docs/design/ai-right-panel.md), shown while the window can open the AI panel. With
+/// the toolbar shown it sits at the toolbar's right end instead.
+public struct AIToggleSnapshot: Hashable, Sendable, Codable {
+    /// The panel is open: the button keeps its hover fill.
+    public var open: Bool
+    /// What waits for the user in the profile: the same count as the panel's list icon.
+    public var waiting: Int
+    /// The language of its tooltip and its "…" item: the list's.
+    public var language: AILanguage
+    public init(open: Bool, waiting: Int, language: AILanguage) { self.open = open; self.waiting = waiting; self.language = language }
+}
+
+/// The drop area at the window's right edge while the panel is closed (docs/design/ai-right-panel.md): tabs let go there
+/// go to a new conversation, as Ask AI on them does.
+public struct AIEdgeDropSnapshot: Hashable, Sendable, Codable {
+    public var language: AILanguage
+    public init(language: AILanguage) { self.language = language }
 }
 
 /// Delete for good, waiting for Cancel or Delete in the window's dialog.
@@ -229,7 +251,6 @@ public enum AIThreadWords {
         }
     }
     public static func pill(_ language: AILanguage) -> String { language == .zh ? "等你确认" : "Needs you" }
-    public static func archived(_ language: AILanguage) -> String { language == .zh ? "已归档" : "Archived" }
     public static func answering(_ language: AILanguage) -> String { language == .zh ? "正在回答…" : "Answering…" }
     public static func pages(_ n: Int, _ language: AILanguage) -> String {
         language == .zh ? "\(n) 个 AI 页面" : (n == 1 ? "1 AI page" : "\(n) AI pages")
@@ -269,11 +290,16 @@ public enum AIThreadWords {
         return "\(names[max(0, min(11, month - 1))]) \(day)"
     }
 
+    /// The second line while the pointer is over a row: how many tabs the conversation used, and how many of them light
+    /// up here when not all do.
+    public static func used(_ count: Int, lit: Int, _ language: AILanguage) -> String {
+        if language == .zh { return lit == count ? "用了 \(count) 个 tab" : "用了 \(count) 个 tab，亮着 \(lit) 个" }
+        let tabs = count == 1 ? "1 tab" : "\(count) tabs"
+        return lit == count ? "Used \(tabs)" : "Used \(tabs), \(lit) lit"
+    }
+
     // The row menu.
-    public static func openInTab(_ language: AILanguage) -> String { language == .zh ? "在 tab 里打开" : "Open in Tab" }
     public static func rename(_ language: AILanguage) -> String { language == .zh ? "重命名" : "Rename" }
-    public static func archive(_ language: AILanguage) -> String { language == .zh ? "归档" : "Archive" }
-    public static func restore(_ language: AILanguage) -> String { language == .zh ? "恢复" : "Restore" }
     public static func move(_ language: AILanguage) -> String { language == .zh ? "移到别的 Space" : "Move to Another Space" }
     public static func moveEllipsis(_ language: AILanguage) -> String { language == .zh ? "移到别的 Space…" : "Move to Another Space…" }
     public static func noOtherSpace(_ language: AILanguage) -> String { language == .zh ? "这个 profile 没有别的 Space" : "No other Space in this profile" }
@@ -317,7 +343,6 @@ public enum AIThreadWords {
         case .unread: return zh ? "有新回复" : "New reply"
         case .running: return zh ? "进行中" : "Running"
         case .idle: return zh ? "其他" : "Other"
-        case .archived: return zh ? "已归档" : "Archived"
         }
     }
     public static func libraryEmpty(_ language: AILanguage) -> String {
@@ -328,5 +353,19 @@ public enum AIThreadWords {
     public static func notificationReplied(_ language: AILanguage) -> String { language == .zh ? "回复好了" : "Replied" }
     public static func deleted(_ title: String, _ language: AILanguage) -> String {
         language == .zh ? "已彻底删除「\(title)」" : "Deleted “\(title)” for good"
+    }
+
+    // Step 8 (docs/design/ai-right-panel.md).
+    /// The title row's chat button: its tooltip with the shortcut, and its item in the narrow row's "…".
+    public static func toggleName(_ language: AILanguage) -> String { language == .zh ? "AI 对话" : "AI Conversations" }
+    public static func toggleTip(_ language: AILanguage) -> String { toggleName(language) + " ⌥⌘A" }
+    /// The drop area at the window's right edge.
+    public static func dropToAI(_ language: AILanguage) -> String { language == .zh ? "松手交给 AI" : "Drop to Give to AI" }
+    /// A kept page's caption row: its conversation button's tooltip, and the row menu's item.
+    public static func openConversation(_ language: AILanguage) -> String { language == .zh ? "打开对话" : "Open Conversation" }
+    /// The Space deletion dialog's extra sentence: where its conversations go.
+    public static func spaceDeletionMoves(_ count: Int, to space: String, _ language: AILanguage) -> String {
+        if language == .zh { return "\(count) 段 AI 对话会移到 \(space)。" }
+        return count == 1 ? "1 AI conversation will move to \(space)." : "\(count) AI conversations will move to \(space)."
     }
 }

@@ -139,58 +139,15 @@ final class ClosureMenuItem: NSMenuItem {
     @objc private func fire() { run() }
 }
 
-/// The conversation tabs a window's cards show: one document view per card, in its tab style.
-@MainActor
-final class ConversationCardsView {
-    private let dispatch: Dispatch
-    private var views: [PageID: AIAnswerDocumentView] = [:]
-    weak var parent: NSView?
-    /// Views above which the cards sit (the panel, overlays): kept in front.
-    var below: NSView?
-
-    init(dispatch: @escaping Dispatch) { self.dispatch = dispatch }
-
-    func render(_ cards: [ConversationCard], frames: [CardFrame], theme: ResolvedTheme, agents: AIAgentMenu? = nil) {
-        var seen = Set<PageID>()
-        for card in cards {
-            guard let frame = frames.first(where: { if case .conversation(let page, _) = $0.content { page == card.page } else { false } }) else { continue }
-            seen.insert(card.page)
-            let view = views[card.page] ?? {
-                let made = AIAnswerDocumentView(dispatch: dispatch, style: .tab)
-                views[card.page] = made
-                return made
-            }()
-            if view.superview == nil, let parent {
-                if let below { parent.addSubview(view, positioned: .below, relativeTo: below) } else { parent.addSubview(view) }
-            }
-            view.layer?.cornerRadius = frame.cornerRadius
-            view.agents = agents
-            view.render(card.answer, in: frame.rect, theme: theme)
-        }
-        for (page, view) in views where !seen.contains(page) {
-            // Its pages commit what is being typed first, out of sight but still in the window.
-            views[page] = nil
-            view.frame.origin.x = -100_000
-            Task { @MainActor in
-                await view.commitPageEdits()
-                view.removeFromSuperview()
-            }
-        }
-    }
-
-    /// The card under a drop of tabs, if any shows a conversation there.
-    func view(at point: CGPoint) -> AIAnswerDocumentView? { views.values.first { !$0.isHidden && $0.frame.contains(point) } }
-    func clearDropTargets() { for view in views.values { view.showDropTarget(false) } }
-    var allViews: [NSView] { Array(views.values) }
-}
-
-/// The kept pages a window's cards show, each in the sandbox, filling its card. A page whose card goes (its tab hidden
-/// or switched away) first commits an edit in progress (`PageSandboxView.commitEdits`), out of sight but still in the
-/// window; shown again meanwhile, the same view comes back. New data or HTML for a shown page waits for the old page to
-/// commit before the new one loads.
+/// The kept pages a window's cards show, each in the sandbox under a caption row (docs/design/ai-right-panel.md): the
+/// page's name and how often it refreshes on the left, as above a page in the panel, and a button back to the conversation
+/// that made it on the right (none once that conversation is deleted). A page whose card goes (its tab hidden or switched
+/// away) first commits an edit in progress (`PageSandboxView.commitEdits`), out of sight but still in the window; shown
+/// again meanwhile, the same view comes back. New data or HTML for a shown page waits for the old page to commit before the
+/// new one loads.
 @MainActor
 final class AIPageCardsView {
-    private typealias Entry = (page: AIPageID, revision: Int, view: PageSandboxView, back: NSView)
+    private typealias Entry = (page: AIPageID, revision: Int, view: PageSandboxView, back: NSView, caption: AIPageCaptionView)
     private let dispatch: Dispatch
     private var views: [PageID: Entry] = [:]
     /// Views committing their page's edits on their way out, by page.
@@ -216,7 +173,7 @@ final class AIPageCardsView {
                 if existing.page == content?.id {
                     // New data or HTML for this page: it is loaded again once the page has committed what is being typed.
                     replace(existing, of: card.page)
-                    place(existing, in: frame, theme: pageTheme)
+                    place(existing, in: frame, theme: pageTheme, content: content, style: AIPanelStyle(theme, onCard: true))
                     continue
                 }
                 retire(existing)
@@ -224,7 +181,7 @@ final class AIPageCardsView {
             }
             let entry = views[card.page] ?? content.flatMap { comeBack($0.id, revision: revision) } ?? make(content, theme: pageTheme)
             views[card.page] = entry
-            place(entry, in: frame, theme: pageTheme)
+            place(entry, in: frame, theme: pageTheme, content: content, style: AIPanelStyle(theme, onCard: true))
         }
         for (page, entry) in views where !seen.contains(page) {
             retire(entry)
@@ -246,18 +203,25 @@ final class AIPageCardsView {
         }
         if let id { view.onSave = { [weak self] text in self?.dispatch(.assist(.pageSave(id, text))) } }
         back.addSubview(view)
-        return (page: content?.id ?? AIPageID(""), revision: content?.revision ?? 0, view: view, back: back)
+        let caption = AIPageCaptionView()
+        caption.onConversation = { [weak self] id in self?.dispatch(.assist(.showConversation(id))) }
+        back.addSubview(caption)
+        return (page: content?.id ?? AIPageID(""), revision: content?.revision ?? 0, view: view, back: back, caption: caption)
     }
 
-    private func place(_ entry: Entry, in frame: CardFrame, theme: PageTheme) {
+    private func place(_ entry: Entry, in frame: CardFrame, theme: PageTheme, content: AIPageSnapshot?, style: AIPanelStyle) {
         if entry.back.superview == nil, let parent {
             if let below { parent.addSubview(entry.back, positioned: .below, relativeTo: below) } else { parent.addSubview(entry.back) }
         }
         entry.back.frame = frame.rect
         entry.back.layer?.cornerRadius = frame.cornerRadius
         entry.back.layer?.backgroundColor = theme.backgroundColor.cgColor
-        let inset = Metrics.ai.tabColumnInset.value
-        entry.view.frame = entry.back.bounds.insetBy(dx: inset, dy: inset)
+        let m = Metrics.ai, inset = m.keptPageInset.value
+        let captionWidth = max(0, entry.back.bounds.width - inset * 2)
+        entry.caption.frame = CGRect(x: inset, y: inset / 2, width: captionWidth, height: m.pageHeaderHeight.value)
+        entry.caption.show(content, style: style)
+        let top = entry.caption.frame.maxY + m.keptPageGap.value
+        entry.view.frame = CGRect(x: inset, y: top, width: captionWidth, height: max(0, entry.back.bounds.height - top - inset))
         entry.view.apply(theme)
     }
 
@@ -268,6 +232,7 @@ final class AIPageCardsView {
         entry.back.frame.origin.x = -100_000
         entry.back.identify(.aiControl("page-card-leaving"))
         entry.view.identify(.aiControl("page-card-view-leaving"))
+        entry.caption.identify(.aiControl("page-caption-leaving"))
         Task { @MainActor [weak self] in
             await entry.view.commitEdits()
             guard let self, self.leaving[entry.page]?.view === entry.view else { return }
@@ -282,6 +247,7 @@ final class AIPageCardsView {
         leaving[page] = nil
         entry.back.identify(.aiControl("page-card"))
         entry.view.identify(.aiControl("page-card-view"))
+        entry.caption.identify(.aiControl("page-caption"))
         return entry
     }
 
@@ -300,6 +266,63 @@ final class AIPageCardsView {
     }
 
     var allViews: [NSView] { views.values.map(\.back) }
+}
+
+/// A kept page's caption row at the top of its card: its name and refresh frequency, a hairline under them, and a button
+/// that opens the conversation that made it in the panel (`AIIntent.showConversation`; another Space's switches there).
+/// The words follow the conversation's language.
+@MainActor
+final class AIPageCaptionView: NSView {
+    private let title = aiLabel(Metrics.ai.stepFont.value, weight: .semibold)
+    private let schedule = aiLabel(Metrics.ai.noticeFont.value)
+    private let open = AIIconButton(symbol: "bubble.left.and.bubble.right", tip: "")
+    private let rule = NSView()
+    private var conversation: AIRequestID?
+    var onConversation: ((AIRequestID) -> Void)?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        identify(.aiControl("page-caption"))
+        rule.wantsLayer = true
+        open.identify(.aiControl("page-conversation"))
+        open.layer?.cornerRadius = Metrics.ai.iconRadius.value
+        open.onPress = { [weak self] in if let id = self?.conversation { self?.onConversation?(id) } }
+        for view in [title, schedule, rule, open] as [NSView] { addSubview(view) }
+    }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
+    override var isFlipped: Bool { true }
+    /// The card under it is a drag region of nothing: a press on the row must not move the window.
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    func show(_ content: AIPageSnapshot?, style: AIPanelStyle) {
+        let copy = AIPanelCopy(language: content?.language ?? .en)
+        conversation = content?.conversation
+        title.stringValue = content?.title ?? ""
+        title.textColor = style.cardText
+        title.toolTip = content?.title
+        schedule.stringValue = content?.schedule.map { "· " + copy.schedule($0) } ?? ""
+        schedule.textColor = style.cardText.withAlphaComponent(0.5)
+        open.isHidden = content?.conversation == nil
+        open.tooltip(AIThreadWords.openConversation(copy.language))
+        open.tint = style.cardText.withAlphaComponent(0.55)
+        open.hoverFill = style.scheme == .light ? NSColor(white: 0, alpha: 0.06) : NSColor(white: 1, alpha: 0.1)
+        open.pressFill = open.hoverFill
+        rule.layer?.backgroundColor = style.separator.cgColor
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let m = Metrics.ai, header = bounds.height
+        open.frame = CGRect(x: bounds.width - m.iconSize.value, y: (header - m.iconSize.value) / 2, width: m.iconSize.value, height: m.iconSize.value)
+        let lineHeight = ceil(title.intrinsicContentSize.height)
+        let y = ((header - lineHeight) / 2).rounded()
+        let room = (open.isHidden ? bounds.width : open.frame.minX) - 4
+        let titleWidth = min(CGFloat(title.cellWidth), room * 0.7)
+        title.frame = CGRect(x: 0, y: y, width: titleWidth, height: lineHeight)
+        schedule.frame = CGRect(x: title.frame.maxX + 4, y: y + 1, width: max(0, room - titleWidth - 4), height: lineHeight)
+        rule.frame = CGRect(x: 0, y: header - 1, width: bounds.width, height: 1)
+    }
 }
 
 /// Asks before a link in an agent's page opens a new address (`AIPageLinkPrompt`).

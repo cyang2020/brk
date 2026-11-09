@@ -223,12 +223,10 @@ enum AIRealPagesScenarios {
         app.sleep(1)
     }
 
-    // MARK: The live conversation, in the panel or its tab
+    // MARK: The live conversation, in the panel (the only place a conversation shows since step 8)
 
-    private enum Place { case panel, tab }
-    private static func answer(_ app: AppUnderTest, _ place: Place) throws -> AIAnswerSnapshot? {
-        place == .panel ? try app.view().ai : try app.view().conversations.first?.answer
-    }
+    private enum Place { case panel }
+    private static func answer(_ app: AppUnderTest, _ place: Place) throws -> AIAnswerSnapshot? { try app.view().ai }
     private static func pending(_ ai: AIAnswerSnapshot?) -> AIAgentApproval? {
         ai?.conversation?.items.lazy.compactMap { if case .approval(let a) = $0, a.answer == nil { a } else { nil } }.first
     }
@@ -365,8 +363,8 @@ enum AIRealPagesScenarios {
             page = found.last?.id
             let rect = try pageOnScreen(app, found.last!.id)
             try expect(namesToaster(lastReply(ai)), "the toaster (€24.50) is the cheapest; the reply: \(short(lastReply(ai)))")
-            let row = try todayRow(app) { $0.url == ConversationPage.url(conversation!) }
-            return "steps \(steps(ai)); page “\(found.last!.title)” \(Int(rect.width))×\(Int(rect.height)) on screen; preview first: \(steps(ai).contains { $0.hasPrefix("Preview a page") }); row “\(row.title)”; model \(ai.conversation?.model ?? "?")"
+            try expect(!tabRows(try app.view().space.today.rows).contains { $0.url == ConversationPage.url(conversation!) }, "a conversation row is in Today")
+            return "steps \(steps(ai)); page “\(found.last!.title)” \(Int(rect.width))×\(Int(rect.height)) on screen; preview first: \(steps(ai).contains { $0.hasPrefix("Preview a page") }); no sidebar row; model \(ai.conversation?.model ?? "?")"
         } }
 
         if wanted("keep"), let page { log.check("Keep as Tab under the page, clicked, opens the page as a tab") {
@@ -398,7 +396,7 @@ enum AIRealPagesScenarios {
             return "by \(path); row “\(row.title)”, card \(Int(card.frame.width))×\(Int(card.frame.height))"
         } }
 
-        if wanted("relaunch"), let conversation, let page { log.check("⌘Q and a relaunch bring the conversation's tab and the page's tab back") {
+        if wanted("relaunch"), let conversation, let page { log.check("⌘Q and a relaunch bring the page's tab back; its conversation button opens the conversation in the panel") {
             try WindowServerKeys.ensureFrontmost(app, app.window!)
             try key(.command, .q)
             let start = ProcessInfo.processInfo.systemUptime
@@ -411,36 +409,32 @@ enum AIRealPagesScenarios {
             guard case .hello(let again) = try app.send(.hello) else { throw Check(description: "no hello after the relaunch") }
             Self.pid = again.pid
             try clearOfSystemDialogs(app)
-            try app.waitUntil("the rows are back", timeout: 15) {
-                let rows = tabRows(try app.view().space.today.rows)
-                return rows.contains { $0.url == ConversationPage.url(conversation) } && rows.contains { $0.url == AIPageTab.url(page) }
-            }
-            let conversationRow = try todayRow(app) { $0.url == ConversationPage.url(conversation) }
-            try click(app, at: centre(frame(app, .row(conversationRow.id))))
-            try app.waitUntil("the conversation's tab shows it", timeout: 8) { try app.view().conversations.first?.answer.conversation?.id == conversation }
-            app.sleep(2)
-            let card = try XCTUnwrapValue(try app.view().conversations.first?.answer)
-            try expect(pages(card).contains { $0.id == page }, "the page is not in the transcript after the relaunch")
-            try expect(namesToaster(card.conversation?.items.compactMap { if case .assistant(let t) = $0 { t } else { nil } }.joined() ?? ""), "the answer is gone")
-            let tab = try XCTUnwrapValue(try app.native().actual[ViewID.aiControl("conversation-tab").identifier])
-            try expect(!tab.hidden, "the conversation's tab view is hidden")
-            let inline = try pageOnScreen(app, page)
-            shot(app, "relaunch-conversation-tab")
+            try app.waitUntil("the page's row is back", timeout: 15) { tabRows(try app.view().space.today.rows).contains { $0.url == AIPageTab.url(page) } }
+            try expect(!tabRows(try app.view().space.today.rows).contains { $0.url == ConversationPage.url(conversation) }, "a conversation row is in Today")
             let pageRow = try todayRow(app) { $0.url == AIPageTab.url(page) }
             try click(app, at: centre(frame(app, .row(pageRow.id))))
             try app.waitUntil("the page's tab shows it", timeout: 8) { try app.view().aiPages.first?.content?.id == page }
             app.sleep(1.5)
             shot(app, "relaunch-page-tab")
-            return "rows “\(conversationRow.title)” and “\(pageRow.title)”; transcript with \(card.conversation?.items.count ?? 0) items, page inline \(Int(inline.width))×\(Int(inline.height))"
+            try clickControl(app, "page-conversation")
+            try app.waitUntil("the conversation in the panel", timeout: 8) { try app.view().ai?.conversation?.id == conversation }
+            app.sleep(2)
+            let card = try XCTUnwrapValue(try app.view().ai)
+            try expect(pages(card).contains { $0.id == page }, "the page is not in the transcript after the relaunch")
+            try expect(namesToaster(card.conversation?.items.compactMap { if case .assistant(let t) = $0 { t } else { nil } }.joined() ?? ""), "the answer is gone")
+            let inline = try pageOnScreen(app, page)
+            shot(app, "relaunch-conversation-panel")
+            return "page row “\(pageRow.title)”; its button opened the transcript with \(card.conversation?.items.count ?? 0) items, page inline \(Int(inline.width))×\(Int(inline.height))"
         } }
 
-        if wanted("continue"), let conversation { log.check("the next message in the conversation's tab continues it") {
-            let row = try todayRow(app) { $0.url == ConversationPage.url(conversation) }
-            try click(app, at: centre(frame(app, .row(row.id))))
-            try app.waitUntil("the conversation's tab") { try app.view().conversations.first?.answer.conversation?.id == conversation }
+        if wanted("continue"), let conversation { log.check("the next message in the conversation, opened from the list, continues it") {
+            if try app.view().ai?.conversation?.id != conversation {
+                try app.dispatch(.assist(.showConversation(conversation)))
+                try app.waitUntil("the conversation in the panel") { try app.view().ai?.conversation?.id == conversation }
+            }
             app.sleep(1)
-            try send(app, .tab, "第二便宜的是哪个? 一句话回答")
-            let ai = try run(app, log, .tab, "continue")
+            try send(app, .panel, "第二便宜的是哪个? 一句话回答")
+            let ai = try run(app, log, .panel, "continue")
             shot(app, "continue-answer")
             let reply = lastReply(ai)
             let lower = reply.lowercased()

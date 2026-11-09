@@ -1,22 +1,32 @@
 import BrkBase
 import Foundation
 
-// Giving tabs to the panel's conversation (docs/design/ai-native.md, "把 tab 交给 agent"): a drop on the panel, Ask AI in
-// a sidebar menu, or a pick after @. What is given shows as chips in the input and goes with the next message; the agent
-// reads the text itself with Brk's tools, so nothing here copies page text.
+// Giving tabs to the panel's conversation (docs/design/ai-native.md, "把 tab 交给 agent"): a drop on the panel or on the
+// window's right edge, Ask AI in a sidebar menu, or a pick after @. What is given shows as chips in the input and goes with
+// the next message; the agent reads the text itself with Brk's tools, so nothing here copies page text. A conversation
+// keeps the tabs it used (`StoredConversation.usedTabs`), so hovering its list row can light them.
 
 extension Work {
     /// At most this many tabs wait in the chips at once.
     static let attachedTabsLimit = 50
 
     mutating func attachToConversation(_ sources: [AIAttachmentSource], in window: WindowID) {
-        // The window's panel takes what is given; with no conversation in it, the conversation tab the window shows does.
-        if state.session.ai.answers[window]?.conversation == nil, let shown = state.conversationCards(in: window).first?.answer.conversation?.id,
-           let host = reviveConversation(shown, in: window) {
-            attachToConversation(sources, at: host, window: window)
-            return
-        }
         attachToConversation(sources, at: .panel(window), window: window)
+    }
+
+    /// The conversation used these tabs (`AgentTabFacts.id`s; a chip's or a tool's): those that are sidebar rows of its
+    /// profile join its record, each once, in the order first used.
+    mutating func noteUsedTabs(_ id: AIRequestID, _ tabs: [String]) {
+        guard var stored = state.doc.conversations[id], !tabs.isEmpty else { return }
+        var used = stored.usedTabs ?? []
+        for raw in tabs {
+            let tab = ItemID(raw)
+            guard !used.contains(tab), state.locate(tab) == .global, state.tab(tab) != nil else { continue }
+            used.append(tab)
+        }
+        guard used != (stored.usedTabs ?? []) else { return }
+        stored.usedTabs = used
+        state.doc.conversations[id] = stored
     }
 
     mutating func attachToConversation(_ sources: [AIAttachmentSource], at host: AIAnswerHost, window: WindowID) {
@@ -41,7 +51,7 @@ extension Work {
     }
 
     /// A new conversation in the panel with Brk's tab tools, waiting for its first message; its session starts with that
-    /// message. The one the panel showed is put away first (its tab keeps it).
+    /// message. The one the panel showed is put away first (the list keeps it).
     mutating func startFreshConversation(in window: WindowID, attached made: [AIAttachment]) {
         putAwayPanelConversation(in: window)
         cancelAI(in: window, slot: .panel)
@@ -111,10 +121,9 @@ extension Work {
         effects.append(.aiMentionSearch(window, query))
     }
 
-    /// The live conversation whose @ list a window's search answers: the panel's, else the shown conversation tab's.
+    /// The live conversation whose @ list a window's search answers: the panel's.
     private func mentionHost(in window: WindowID, query: String) -> AIAnswerHost? {
-        if state.session.ai.answers[window]?.conversation?.mention?.query == query { return .panel(window) }
-        return state.session.ai.tabAnswers.first { state.session.ai.tabWindows[$0.key] == window && $0.value.conversation?.mention?.query == query }.map { .tab($0.key) }
+        state.session.ai.answers[window]?.conversation?.mention?.query == query ? .panel(window) : nil
     }
 
     mutating func aiMentionMatches(_ window: WindowID, query: String, ids: [String]) {

@@ -156,10 +156,17 @@ extension Work {
             for root in [space.pinnedRoot, space.todayRoot] {
                 for (tab, _) in state.doc.tree.removeRoot(root) ?? [] { unload(tab) }
             }
+            // Its AI conversations are not deleted: they move to the profile's first remaining Space (the dialog said so).
+            let moved = state.conversationSpaces(space.profile).filter { $0.value == id }.map(\.key).sorted()
             state.doc.spaces[id] = nil
             state.doc.spaceOrder.remove(at: index)
+            if let first = state.doc.spaceOrder.first(where: { state.doc.spaces[$0]?.profile == space.profile }) {
+                for conversation in moved { state.doc.conversations[conversation]?.space = first }
+            }
             for (wid, w) in state.doc.windows where w.activeBySpace[id] != nil { state.doc.windows[wid]!.activeBySpace[id] = nil }
-            if state.doc.windows[window]?.kind == .standard { undoToast("Space deleted! Use", undo: .space(space, index: index, entries: entries), in: window) }
+            if state.doc.windows[window]?.kind == .standard {
+                undoToast("Space deleted! Use", undo: .space(space, index: index, entries: entries, conversations: moved), in: window)
+            }
         case .move(let id, let index):
             // `index` counts the dock after the space is taken out, clamped.
             guard let from = state.doc.spaceOrder.firstIndex(of: id) else { return }
@@ -271,9 +278,15 @@ extension Work {
         if !model.entries.isEmpty, let sources = askAISources(for: request, in: window), !sources.isEmpty {
             model.entries += [.separator, .action(title: "Ask AI", command: .assist(.attach(sources)), enabled: true)]
         }
-        // A kept AI page's schedule, model and weekdays, also Brk's own.
-        if !model.entries.isEmpty, case .item(let id) = request, state.agentProfile(in: window) != nil {
-            let live = state.livePageMenu(state.tab(id)?.url)
+        // A kept AI page's way back to its conversation (while the conversation is saved), then its schedule, model and
+        // weekdays, also Brk's own.
+        if !model.entries.isEmpty, case .item(let id) = request, let profile = state.agentProfile(in: window) {
+            var live = state.livePageMenu(state.tab(id)?.url)
+            if let page = AIPageTab.id(of: state.tab(id)?.url).flatMap({ state.doc.aiPages[$0] }), let stored = state.doc.conversations[page.conversation],
+               stored.profile == profile {
+                let language = AILanguage.of(state.liveAnswer(stored.id)?.conversation?.items ?? stored.items, system: ctx.systemLanguage)
+                live.insert(.action(title: AIThreadWords.openConversation(language), command: .assist(.showConversation(stored.id)), enabled: true), at: 0)
+            }
             if !live.isEmpty { model.entries += [.separator] + live }
         }
         return model

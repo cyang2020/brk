@@ -156,6 +156,9 @@ struct WindowDoc: Sendable, Equatable {
     var stayOnTop: Bool = false
     var sidebarVisible: Bool
     var sidebarWidth: Double
+    /// The AI panel's width once its edge was dragged (docs/design/ai-right-panel.md); nil: the default. Kept like the
+    /// sidebar's width: per window, saved, and carried to the windows this one opens.
+    var aiPanelWidth: Double? = nil
     var toolbarVisible: Bool = false
     var spaceHeaderVisible: Bool = true
 

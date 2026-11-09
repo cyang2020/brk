@@ -153,7 +153,10 @@ public final class AppStore {
         // Saved conversations and pages, before the first render: a restored window may show one in a card.
         let (conversations, pages) = conversationFiles.load()
         state = reduce(state, .system(.conversationsLoaded(conversations, pages)), Context(now: clock.now(), newID: { UUID().uuidString })).state
-        savedConversations = (state.savedConversations, state.savedPages)
+        // What is on disk is what was saved: a conversation the load changed (step 8's move off the sidebar gives each its
+        // Space) is written with the next save.
+        let loaded = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        savedConversations = (state.savedConversations.mapValues { loaded[$0.id] ?? $0 }, state.savedPages)
         snapshot = project(state, ProjectionContext(now: clock.now(), calendar: Calendar.autoupdatingCurrent))
     }
 
@@ -229,11 +232,14 @@ public final class AppStore {
                 let theme = self?.snapshot.windows[window]?.theme ?? resolveTheme(.default, systemScheme: .light)
                 return await PageSandbox.preview(html: html, data: data, width: width, theme: PageTheme(theme))
             },
-            replyWidth: { [weak self] conversation, window in
-                // Where the conversation shows now: its tab's reading column, else the panel's reading width at the
-                // panel's widest (a narrower window lays the page out again at its width).
-                let inTab = self?.snapshot.windows[window]?.conversations.contains { $0.answer.conversation?.id == conversation } == true
-                return Int(AIPanelLayout.pageWidth(readingWidth: inTab ? Metrics.ai.tabColumnWidth.value : AIPanelLayout.readingWidth(panelWidth: Metrics.ai.width.value)))
+            replyWidth: { [weak self] _, window in
+                // The panel's reading width at the width this window gives its panel now (dragged wider or not; a window
+                // that changes size lays the page out again at its width, docs/design/ai-right-panel.md).
+                let panel: Double
+                if let shown = self?.snapshot.windows[window], let size = shown.bounds?.size {
+                    panel = AIPanelLayout.width(shown, contentSize: size)
+                } else { panel = Metrics.ai.width.value }
+                return Int(AIPanelLayout.pageWidth(readingWidth: AIPanelLayout.readingWidth(panelWidth: panel)))
             })
     }
 
@@ -310,7 +316,7 @@ public final class AppStore {
 
     static func pageSave(_ command: Command) -> (page: AIPageID, text: String)? {
         switch command {
-        case .assist(.pageSave(let page, let text)), .assist(.inTab(_, .pageSave(let page, let text))): (page, text)
+        case .assist(.pageSave(let page, let text)): (page, text)
         default: nil
         }
     }

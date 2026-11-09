@@ -32,6 +32,7 @@ extension Work {
             // the command bar and an empty card, like Arc's new window (normalize fills nothing; `focus` would).
             guard let doc = state.doc.windows[window] else { return }
             let id = newWindow(kind: .standard, space: doc.space, sidebar: (doc.sidebarVisible, doc.sidebarWidth), cascadingFrom: doc.bounds)
+            state.doc.windows[id]?.aiPanelWidth = doc.aiPanelWidth
             openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)
         case .newIncognito:
             // Shift+Cmd+N: a session-only window; its tabs live in its scratch tree and its pages browse in

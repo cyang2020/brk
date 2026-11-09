@@ -18,6 +18,11 @@ public struct SpaceDeletionRequest: Sendable, Equatable, Codable {
     public let id: SpaceID
     public let title: String
     public let token: String
+    /// Brk's own sentence after Arc's, when the Space has AI conversations: where they go ("3 段 AI 对话会移到 购物。").
+    public var conversations: String? = nil
+    public init(id: SpaceID, title: String, token: String, conversations: String? = nil) {
+        self.id = id; self.title = title; self.token = token; self.conversations = conversations
+    }
 }
 
 public enum SpaceExportOutcome: Sendable, Equatable {
@@ -33,7 +38,17 @@ extension Work {
     mutating func requestSpaceDeletion(_ id: SpaceID, in window: WindowID) {
         guard state.doc.spaces[id] != nil,
               state.doc.spaceOrder.count > 1 else { return }
-        let request = SpaceDeletionRequest(id: id, title: state.displayTitle(of: id), token: ctx.newID())
+        var request = SpaceDeletionRequest(id: id, title: state.displayTitle(of: id), token: ctx.newID())
+        // Its conversations move to the profile's first other Space; the dialog says how many and where (in the list's
+        // language). With none, or no other Space of the profile, it is Arc's dialog as it is.
+        if let profile = state.doc.spaces[id]?.profile,
+           let first = state.doc.spaceOrder.first(where: { $0 != id && state.doc.spaces[$0]?.profile == profile }) {
+            let count = state.conversationSpaces(profile).values.filter { $0 == id }.count
+            if count > 0 {
+                let language = state.listLanguage(profile, system: ctx.systemLanguage)
+                request.conversations = AIThreadWords.spaceDeletionMoves(count, to: state.displayTitle(of: first), language)
+            }
+        }
         state.session.windows[window]?.pendingSpaceDeletion = request
     }
 

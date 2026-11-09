@@ -34,7 +34,7 @@ public struct ProjectionContext: Sendable {
 public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot {
     var windows: [WindowID: WindowSnapshot] = [:]
     for id in state.doc.windows.keys {
-        if var window = projectWindow(id, state, ctx) { window.linkStatus = state.session.windows[id]?.linkStatus; window.ai = state.session.ai.answers[id].map(state.withPages); window.aiPanel = state.panelSnapshot(in: id, now: ctx.now, calendar: ctx.calendar, system: ctx.systemLanguage); window.pendingConversationDeletion = state.session.ai.pendingConversationDeletion[id]; window.aiAgents = state.agentMenu; window.conversations = state.conversationCards(in: id); window.aiPages = state.aiPageCards(in: id); window.pageLinkPrompt = state.session.ai.linkPrompts[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
+        if var window = projectWindow(id, state, ctx) { window.linkStatus = state.session.windows[id]?.linkStatus; window.ai = state.session.ai.answers[id].map(state.withPages); window.aiPanel = state.panelSnapshot(in: id, now: ctx.now, calendar: ctx.calendar, system: ctx.systemLanguage); window.pendingConversationDeletion = state.session.ai.pendingConversationDeletion[id]; window.aiAgents = state.agentMenu; window.aiPages = state.aiPageCards(in: id, system: ctx.systemLanguage); state.projectPanelEntries(into: &window, id, system: ctx.systemLanguage); window.pageLinkPrompt = state.session.ai.linkPrompts[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
     }
     return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state, systemScheme: ctx.systemScheme) + state.session.ai.requests.values.flatMap(\.hidden), settings: projectSettings(state),
                        sites: state.siteSnapshots(),
@@ -174,7 +174,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     func tabRow(_ tab: ItemID, _ original: Tab, _ kind: SectionKind) -> TabRow {
         let t = state.displayedTab(tab, in: id) ?? original
         var row = TabRow(id: tab, section: kind, title: t.displayTitle, url: t.url, favicon: t.favicon, icon: t.icon, status: status(tab),
-               loading: state.session.live[PageID(window: id, item: tab)]?.loading ?? ConversationPage.id(of: t.url).map(state.conversationBusy) ?? false, loaded: state.session.loaded.contains(PageID(window: id, item: tab)),
+               loading: state.session.live[PageID(window: id, item: tab)]?.loading ?? false, loaded: state.session.loaded.contains(PageID(window: id, item: tab)),
                audible: state.session.live[PageID(window: id, item: tab)]?.audible ?? false, muted: t.muted,
                canReset: kind != .today && t.pinnedURL != nil && t.pinnedURL != t.url)
         row.awaitingFirstDocument = awaitingFirstDocument(tab, t)
@@ -329,7 +329,6 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             let page = PageID(window: id, item: p)
             if HistoryPage.shows(address) { content = .history(page) }
             else if let easel = EaselPage.id(of: address), state.doc.easels[easel] != nil { content = .easel(page, easel) }
-            else if let conversation = ConversationPage.id(of: address) { content = .conversation(page, conversation) }
             else if let aiPage = AIPageTab.id(of: address) { content = .aiPage(page, aiPage) }
             else { content = (state.session.live[page]?.crashed ?? false) ? .crashed(page) : .page(page) }
         } else {
@@ -374,9 +373,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             pill.toolbarText = doc.toolbarVisible ? EaselCopy.share : nil
             pill.canGoBack = false; pill.canGoForward = false
         }
-        // A conversation's or kept page's pill names what the card shows, not its brk:// address.
-        if ConversationPage.shows(t.url) || AIPageTab.shows(t.url) {
-            let name = ConversationPage.shows(t.url) ? AICopy.conversationPill : AICopy.pagePill
+        // A kept page's pill names what the card shows, not its brk:// address.
+        if AIPageTab.shows(t.url) {
+            let name = AICopy.pagePill
             pill.text = name; pill.host = name
             pill.toolbarText = doc.toolbarVisible ? name : nil
             pill.canGoBack = false; pill.canGoForward = false
@@ -698,9 +697,7 @@ private func archiveGroups(_ state: AppState, _ ctx: ProjectionContext) -> [Arch
         var shown = ArchiveEntry(id: entry.id, title: entry.structure?.title ?? entry.tab.displayTitle, url: entry.tab.url, favicon: entry.tab.favicon,
                                  archivedAt: entry.archivedAt, reason: entry.reason, fromSpaceTitle: from)
         let single: Bool = if case .folder? = entry.structure { false } else if case .split? = entry.structure { false } else { true }
-        if single, let conversation = ConversationPage.id(of: entry.tab.url), state.doc.conversations[conversation] != nil {
-            shown.deletable = .conversation(pages: state.doc.aiPages.values.filter { $0.conversation == conversation }.count)
-        } else if single, let page = AIPageTab.id(of: entry.tab.url), state.doc.aiPages[page] != nil {
+        if single, let page = AIPageTab.id(of: entry.tab.url), state.doc.aiPages[page] != nil {
             shown.deletable = .page
         }
         byBucket[bucket, default: []].append((shown, index))

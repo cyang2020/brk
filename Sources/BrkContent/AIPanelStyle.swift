@@ -68,7 +68,6 @@ struct AIPanelCopy {
     private var zh: Bool { language == .zh }
 
     var newConversation: String { zh ? "新对话" : "New conversation" }
-    var openInTab: String { zh ? "在 tab 里打开，它会接着运行" : "Open in a tab. It keeps running." }
     var close: String { zh ? "关闭" : "Close" }
     var cancel: String { zh ? "取消" : "Cancel" }
     var working: String { zh ? "正在做事" : "Working" }
@@ -134,4 +133,6 @@ struct AIPanelCopy {
     init(_ items: [AIConversationItem]) {
         language = AILanguage.of(items, system: Locale.preferredLanguages.first ?? "en")
     }
+
+    init(language: AILanguage) { self.language = language }
 }

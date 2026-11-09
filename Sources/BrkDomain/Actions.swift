@@ -34,7 +34,7 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     // View (88 to 122). Rows 107 and 108 repeat zoomIn's Cmd+=; rows 110 and 115 are the remappable second keys of
     // Zoom Out and Developer Tools (Arc's `developerTools_Alternate`).
     case appearanceAutomatic, appearanceLight, appearanceDark
-    case showSidebar, toggleToolbar, expandPinnedSection, collapsePinnedSection, focusSidebar
+    case showSidebar, aiConversations, toggleToolbar, expandPinnedSection, collapsePinnedSection, focusSidebar
     case stopLoading, reloadPage, forceReloadPage, clearCookies, clearCache
     case addSplitView, removeSplitView, separateTabFromSplitView, maximizeSplitPane
     case splitHorizontal, splitVertical, restoreSplit, separateAllSplit, nextSplitPane, previousSplitPane
@@ -46,7 +46,7 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     // Spaces (124 to 130)
     case newSpace, editSpaceTheme, renameSpace, changeProfile, focusNextSpace, focusPreviousSpace, openSpaceManager
     // Tabs (133 to 155). Row 132 is a second New Tab… (same action); rows 150 to 152 are nib placeholders.
-    case askOnPage, aiInstantLink, aiBrowse, aiTranslate, aiOrganizeToday, aiUndoOrganize, aiConversations
+    case askOnPage, aiInstantLink, aiBrowse, aiTranslate, aiOrganizeToday, aiUndoOrganize
     case gptMessage, joinLiveMeeting, peekEmail, pinTab, openTabIn, newFolder, duplicate, rename, collapseAllFolders, expandAllFolders
     case selectNextTab, selectPreviousTab, cycleNextTab, cyclePreviousTab, cycleTabForward, cycleTabBackward, revealTabInSidebar
     case clearExplore, resetSpace, resetTab
@@ -100,6 +100,9 @@ public struct CommandBarListing: Hashable, Sendable {
     /// The result's title where Arc gives one that differs from the menu's (Arc: `arcTypeTravelTitle`: View >
     /// Appearance > Dark is "Switch to Dark Mode" in the bar).
     public let title: String?
+    /// What the bar's row does where it differs from the menu item's (Brk's own: View › Show/Hide AI Conversations toggles
+    /// the panel, the bar's "AI Conversations" row opens its list).
+    public var command: Command? = nil
 }
 
 public struct ActionSpec: Hashable, Sendable {
@@ -130,6 +133,9 @@ public struct ActionSpec: Hashable, Sendable {
     /// The row in anatomy-m 2.3 this action comes from.
     public let row: Int
 
+    /// What the command bar's row runs: the listing's own command, else the item's.
+    public var barCommand: Command { commandBar?.command ?? command }
+
     /// A greyed-out row of a later wave.
     public var later: LaterFeature? {
         if case .later(let feature) = command { return feature }
@@ -148,6 +154,11 @@ private func entry(
 /// Arc's `arcTypeTravelIcon` and `arcTypeTravelTriggers` for the row, word for word.
 private func listing(_ symbol: String, title: String? = nil, _ triggers: String...) -> CommandBarListing {
     CommandBarListing(triggers: triggers, symbol: symbol, title: title)
+}
+
+/// A listing whose row runs another command than the menu item.
+private func listing(_ symbol: String, title: String, command: Command, _ triggers: String...) -> CommandBarListing {
+    CommandBarListing(triggers: triggers, symbol: symbol, title: title, command: command)
 }
 
 private let cmd = Modifiers.command, shift = Modifiers.shift, opt = Modifiers.option, ctrl = Modifiers.control
@@ -269,6 +280,11 @@ extension ActionID {
                   bar: listing("moon.stars.fill", title: "Switch to Dark Mode", "Switch to Dark Mode", "Switch Dark Mode", "Dark Mode", "Night Mode"))
         case .showSidebar:
             entry(91, "Show/Hide Sidebar", .view, 1, [key(cmd, .s, .pageThenApp)], .sidebar(.toggle), bar: listing("sidebar.left", "Toggle Sidebar"))
+        // Brk's own, under Arc's Show/Hide Sidebar (docs/design/ai-right-panel.md): the AI panel on the right as the sidebar
+        // on the left; ⌥⌘A shows in the menu so it is learnt. The command bar's "AI Conversations" opens the list.
+        case .aiConversations:
+            entry(246, "Show/Hide AI Conversations", .view, 1, [key([opt, cmd], .a, .page)], .assist(.togglePanel),
+                  bar: listing("bubble.left.and.bubble.right", title: "AI Conversations", command: .assist(.panelPage(.list)), "AI Conversations", "AI 对话", "Conversations", "Threads"))
         case .toggleToolbar:
             entry(92, "Show/Hide Toolbar", .view, 1, [key([shift, cmd], .d, .pageThenApp)], .sidebar(.toggleToolbar),
                   bar: listing("rectangle.topthird.inset.filled", "Toggle Hide Show Toolbar"), hidden: true)
@@ -382,9 +398,6 @@ extension ActionID {
         case .aiTranslate: entry(243, "Translate Page…", .tabs, 0, [], .assist(.open(.translate)), bar: listing("globe", "Translate Page"), hidden: true)
         case .aiOrganizeToday: entry(244, "Organize Today Tabs", .tabs, 0, [], .assist(.organizeToday), bar: listing("folder", "Organize Today Tabs", "Tidy Tabs"), hidden: true)
         case .aiUndoOrganize: entry(245, "Undo Organize Today", .tabs, 0, [], .assist(.undoOrganize), bar: listing("arrow.uturn.backward", "Undo Organize Today"), hidden: true)
-        // The panel's conversation list when the panel is closed (docs/design/ai-threads.md): ⌥⌘A or the command bar.
-        case .aiConversations: entry(246, "AI Conversations", .tabs, 0, [key([opt, cmd], .a, .page)], .assist(.panelPage(.list)),
-                                     bar: listing("bubble.left.and.bubble.right", "AI Conversations", "AI 对话", "Conversations", "Threads"), hidden: true)
         case .joinLiveMeeting: entry(134, "Join Meeting", .tabs, 0, [key([ctrl, cmd], .j, .pageThenApp)], .tabTools(.site(.joinMeeting)), bar: listing("calendar", "Join Meeting"), hidden: true)
         case .peekEmail: entry(135, "Peek Email…", .tabs, 0, [key([shift, cmd], .e, .pageThenApp)], .peek(.email), bar: listing("envelope", "Peek Email", "Gmail"), hidden: true)
         case .pinTab: entry(136, "Pin/Unpin Tab", .tabs, 0, [key(cmd, .d, .pageThenApp)], .tab(.togglePin(.focused)), bar: listing("pin", "save"))

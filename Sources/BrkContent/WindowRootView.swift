@@ -34,9 +34,12 @@ public final class WindowRootView: NSView {
     private let aiAnswer: AIPanelView
     /// The Library's "AI 对话" page's selected conversation, over the content card.
     private let libraryConversation: LibraryConversationPreview
-    /// Conversation tabs and kept pages, drawn over their cards like History and Easels.
-    private let conversationCards: ConversationCardsView
+    /// Kept pages, drawn over their cards like History and Easels.
     private let pageCards: AIPageCardsView
+    /// The strip between the card and the AI panel that widens the panel, and the drop area at the right edge for tabs
+    /// dragged there while the panel is closed (docs/design/ai-right-panel.md).
+    private let panelHandle: AIPanelResizeHandle
+    private let edgeDrop = AIEdgeDropView()
     private let linkPrompt: PageLinkPromptView
     private let aiPreview: AIPreviewCardView
     private let linkStatus = LinkStatusCapsule()
@@ -64,8 +67,8 @@ public final class WindowRootView: NSView {
         boostPanel = BoostPanel(dispatch: dispatch)
         aiAnswer = AIPanelView(dispatch: dispatch)
         libraryConversation = LibraryConversationPreview(dispatch: dispatch)
-        conversationCards = ConversationCardsView(dispatch: dispatch)
         pageCards = AIPageCardsView(dispatch: dispatch)
+        panelHandle = AIPanelResizeHandle(dispatch: dispatch)
         linkPrompt = PageLinkPromptView(dispatch: dispatch)
         aiPreview = AIPreviewCardView(dispatch: dispatch)
         captureOverlay = CaptureOverlayView(dispatch: dispatch)
@@ -83,9 +86,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, libraryConversation, peek, findBar, aiAnswer, linkPrompt, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
-        conversationCards.parent = self
-        conversationCards.below = toolbar
+        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, libraryConversation, peek, findBar, aiAnswer, panelHandle, edgeDrop, linkPrompt, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
         pageCards.parent = self
         pageCards.below = toolbar
         for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
@@ -99,29 +100,27 @@ public final class WindowRootView: NSView {
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
         sidebar.contentDropCardSize = { [weak content] in content?.dropCardSize ?? .zero }
         sidebar.beginContentDrop = { [weak content] item in content?.beginDrop(item) }
-        sidebar.endContentDrop = { [weak content, weak aiAnswer, weak self] in
+        sidebar.endContentDrop = { [weak content, weak aiAnswer, weak edgeDrop] in
             content?.endDrop()
             aiAnswer?.showDropTarget(false)
-            self?.conversationCards.clearDropTargets()
+            edgeDrop?.hide()
         }
-        sidebar.panelSpaceDrop = { [weak aiAnswer, weak self] space, point in
+        sidebar.panelSpaceDrop = { [weak aiAnswer] space, point in
             guard let aiAnswer, !aiAnswer.isHidden, aiAnswer.frame.contains(point) else {
                 aiAnswer?.showDropTarget(false)
-                // A conversation's tab takes the drop like the panel does.
-                if let tab = self?.conversationCards.view(at: point), let id = tab.conversationID { tab.showDropTarget(true); return .assist(.inTab(id, .attach([.space(space)]))) }
                 return nil
             }
             aiAnswer.showDropTarget(true)
             return .assist(.attach([.space(space)]))
         }
-        sidebar.panelDropEnded = { [weak aiAnswer, weak self] in aiAnswer?.showDropTarget(false); self?.conversationCards.clearDropTargets() }
+        sidebar.panelDropEnded = { [weak aiAnswer, weak edgeDrop] in aiAnswer?.showDropTarget(false); edgeDrop?.hide() }
         sidebar.panelDrop = { [weak content, weak aiAnswer, weak self] item, kind, point in
             guard let aiAnswer, !aiAnswer.isHidden, aiAnswer.frame.contains(point) else {
                 aiAnswer?.showDropTarget(false)
-                guard let tab = self?.conversationCards.view(at: point), let id = tab.conversationID, kind != .section else { self?.conversationCards.clearDropTargets(); return nil }
+                // The panel closed: near the window's right edge the drop area takes the tabs (as Ask AI on them).
+                guard let self, kind != .section, let sources = self.edgeDropSources(item, kind: kind, at: point) else { return nil }
                 if kind == .tab { _ = content?.dropCommand(item, at: CGPoint(x: -1, y: -1)) }
-                tab.showDropTarget(true)
-                return .assist(.inTab(id, .attach([kind == .folder ? .folder(item) : .tab(item.rawValue)])))
+                return .assist(.attach(sources))
             }
             // The page under the panel shows no drop slot while the panel takes the drop.
             if kind == .tab { _ = content?.dropCommand(item, at: CGPoint(x: -1, y: -1)) }
@@ -132,6 +131,9 @@ public final class WindowRootView: NSView {
             case .section: return nil
             }
         }
+        // A conversation's list row dragged onto a Space's dot in the dock moves it there.
+        aiAnswer.list.dockSpace = { [weak sidebar] point in sidebar?.dockSpace(atWindowPoint: point) }
+        aiAnswer.list.showDockDrop = { [weak sidebar] space in sidebar?.showDockDrop(space) }
         // Both span the window from its top left, so the Library's coordinates are the dialog host's.
         spaceDialog.cardHeader = { [weak library] space in library?.spaceCardHeader(space) }
         sidebar.onThemeBlend = { [weak background] from, to, progress in background?.scrub(from: from, to: to, progress: progress) }
@@ -152,6 +154,23 @@ public final class WindowRootView: NSView {
 
     public override var isFlipped: Bool { true }
     public func cancelDrag() -> Bool { sidebar.cancelDrag() }
+
+    /// The tabs a drag near the window's right edge gives to a new conversation while the panel is closed, with the drop
+    /// area shown meanwhile (docs/design/ai-right-panel.md): the dragged row's whole Cmd+click selection, a Favorite, a
+    /// split's panes or a folder. The area shows once the pointer is within `Metrics.ai.edgeDropBand` of the edge and stays
+    /// while the pointer is in it. Nil, the area hidden, when the window cannot open the panel or the pointer is elsewhere:
+    /// the page's split slots work as before.
+    private func edgeDropSources(_ item: ItemID, kind: ItemKind, at point: CGPoint) -> [AIAttachmentSource]? {
+        guard let last, let drop = last.snapshot.aiEdgeDrop, last.frames.aiPanel == nil else { edgeDrop.hide(); return nil }
+        let width = AIPanelLayout.width(last.snapshot, contentSize: last.frames.contentSize)
+        let inset = Metrics.content.inset.value
+        let area = CGRect(x: bounds.width - width, y: inset, width: max(0, width - inset), height: max(0, bounds.height - 2 * inset))
+        let inBand = point.x >= bounds.width - Metrics.ai.edgeDropBand.value
+        guard inBand || (!edgeDrop.isHidden && area.contains(point)) else { edgeDrop.hide(); return nil }
+        edgeDrop.show(in: area, theme: last.snapshot.theme, language: drop.language)
+        if kind == .folder { return [.folder(item)] }
+        return sidebar.dragGroup(for: item).map { .tab($0.rawValue) }
+    }
 
     /// Gives keyboard focus to the native view a `FocusTarget` names. Returns false for `.page` and `.none` (the
     /// engine's business, handled by the window controller) and when the view is not on screen yet. This is the
@@ -211,9 +230,8 @@ public final class WindowRootView: NSView {
         let easelCard = easelCards.first { card in snapshot.content.panes.indices.contains(card.pane) && snapshot.content.panes[card.pane].focused } ?? easelCards.first
         let shownEasel = easelCard.flatMap { card in snapshot.easels.first { if case .easel(let page, _) = card.content { $0.page == page } else { false } } }
         easel.render(shownEasel, in: easelCard?.rect, cornerRadius: easelCard?.cornerRadius ?? 0)
-        conversationCards.render(snapshot.conversations, frames: frames.cards, theme: snapshot.theme, agents: snapshot.aiAgents)
         pageCards.render(snapshot.aiPages, frames: frames.cards, theme: snapshot.theme)
-        toolbar.render(snapshot.urlPill, rect: frames.toolbar, palette: palette)
+        toolbar.render(snapshot.urlPill, rect: frames.toolbar, palette: palette, ai: snapshot.aiToggle)
         let focusedCard = snapshot.content.panes.firstIndex(where: \.focused).flatMap { i in frames.cards.first { $0.pane == i }?.rect } ?? frames.cards.first?.rect
         loadingBar.render(loading: snapshot.urlPill.loading && snapshot.overlay == nil, progress: snapshot.urlPill.loadProgress,
                           over: focusedCard.map { card in frames.toolbar.map { CGRect(x: card.minX, y: $0.minY, width: card.width, height: card.maxY - $0.minY) } ?? card },
@@ -238,6 +256,8 @@ public final class WindowRootView: NSView {
         if let panel = frames.aiPanel { aiAnswer.render(snapshot.ai, panel: snapshot.aiPanel, agents: snapshot.aiAgents, in: panel, theme: snapshot.theme) }
         else if snapshot.ai == nil && snapshot.aiPanel == nil { aiAnswer.render(nil, panel: nil, in: .zero, theme: nil) }
         else { aiAnswer.isHidden = true }
+        panelHandle.render(frames.aiPanelHandle, panelWidth: frames.aiPanel.map { Double($0.width) } ?? Metrics.ai.width.value)
+        if snapshot.aiEdgeDrop == nil { edgeDrop.hide() }
         linkPrompt.render(snapshot.pageLinkPrompt, in: frames.contentArea)
         linkStatus.render(snapshot.overlay == nil ? snapshot.linkStatus : nil, frames: frames)
         aiPreview.render(snapshot.overlay == nil ? snapshot.aiPreview : nil, frames: frames)
@@ -305,7 +325,7 @@ public final class WindowRootView: NSView {
     /// shrinks a little, moves right and fades.
     private func placeForLibrary() {
         guard let last else { return }
-        let moving: [NSView] = [content, history, easel, toolbar, loadingBar, findBar] + conversationCards.allViews + pageCards.allViews
+        let moving: [NSView] = [content, history, easel, toolbar, loadingBar, findBar] + pageCards.allViews
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }

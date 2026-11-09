@@ -58,7 +58,7 @@ public enum WindowLayout {
         let left = anchoredWidth + (sidebar != nil && !floats ? Metrics.content.sidebarGap.value : inset)
         // The AI panel is a column at the right edge: the card ends at its edge as it starts at the sidebar's. Not over
         // the Library, whose page runs under the window's right edge.
-        let panel = (snapshot.ai != nil || snapshot.aiPanel != nil) && !libraryOpen ? AIPanelLayout.frame(contentSize: contentSize, cardLeft: left) : nil
+        let panel = (snapshot.ai != nil || snapshot.aiPanel != nil) && !libraryOpen ? AIPanelLayout.frame(contentSize: contentSize, cardLeft: left, preferred: snapshot.aiPanelWidth) : nil
         let right = panel.map { contentSize.width - $0.minX } ?? inset
         let toolbarHeight = toolbarVisible && !libraryOpen ? AddressToolbarLayout.height : 0
         let pageOverlap = toolbarHeight > 0 ? Metrics.spaceTools.toolbarPageOverlap.value : 0
@@ -85,7 +85,7 @@ public enum WindowLayout {
         var library: LibraryFrames?
         var peek: CGRect?
         switch snapshot.overlay {
-        case .commandBar(let bar)?: commandBar = CommandBarLayout.frame(placement: bar.placement, contentArea: contentArea, urlPill: toolbar.map(AddressToolbarLayout.address(in:)) ?? sidebar?.urlPill)
+        case .commandBar(let bar)?: commandBar = CommandBarLayout.frame(placement: bar.placement, contentArea: contentArea, urlPill: toolbar.map { AddressToolbarLayout.address(in: $0, ai: snapshot.aiToggle != nil) } ?? sidebar?.urlPill)
         case .library?:
             library = LibraryLayout.frames(panel: CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height))
         case .peek?: peek = PeekLayout.card(in: contentArea)
@@ -102,6 +102,12 @@ public enum WindowLayout {
         }
         result.toolbar = toolbar
         result.aiPanel = panel
+        // The gap between the card and the panel widens the panel when dragged, as the sidebar's edge does (a list exists:
+        // a standard window).
+        if let panel, snapshot.aiPanel != nil {
+            let hit = Metrics.ai.resizeHitWidth.value
+            result.aiPanelHandle = CGRect(x: panel.minX - hit / 2, y: m.resizeHitTop.value, width: hit, height: max(0, contentSize.height - m.resizeHitBottomTrim.value))
+        }
         return result
     }
 }
@@ -112,17 +118,27 @@ public enum WindowLayout {
 /// sidebar keeps its rows at, so the space between the card and either column is the same. The panel narrows down to
 /// its minimum before the card gets narrower than `Metrics.ai.minimumCardWidth`.
 public enum AIPanelLayout {
-    public static func width(windowWidth: Double, cardLeft: Double) -> Double {
+    /// The panel's width: the one the window keeps (`preferred`, dragged; else the default), at most half the window, and
+    /// narrower when the card would get under its minimum, down to the panel's own minimum.
+    public static func width(windowWidth: Double, cardLeft: Double, preferred: Double? = nil) -> Double {
         let m = Metrics.ai
         let room = windowWidth - cardLeft - m.minimumCardWidth.value
-        return max(m.minimumWidth.value, min(m.width.value, room)).rounded(.down)
+        let wanted = min(preferred ?? m.width.value, max(m.minimumWidth.value, windowWidth * m.maximumShare.value))
+        return max(m.minimumWidth.value, min(wanted, room)).rounded(.down)
     }
 
     /// The column in a window `contentSize` big whose card starts at `cardLeft`; in a Little window it starts under
     /// the header (`top`).
-    public static func frame(contentSize: CGSize, cardLeft: Double, top: Double = 0) -> CGRect {
-        let width = min(contentSize.width, width(windowWidth: contentSize.width, cardLeft: cardLeft))
+    public static func frame(contentSize: CGSize, cardLeft: Double, top: Double = 0, preferred: Double? = nil) -> CGRect {
+        let width = min(contentSize.width, width(windowWidth: contentSize.width, cardLeft: cardLeft, preferred: preferred))
         return CGRect(x: contentSize.width - width, y: top, width: width, height: max(0, contentSize.height - top))
+    }
+
+    /// Where the panel would be in a window with this snapshot if it were open: the right-edge drop area's width and the
+    /// page width told to an agent.
+    public static func width(_ snapshot: WindowSnapshot, contentSize: CGSize) -> Double {
+        let left = snapshot.sidebar.visible ? snapshot.sidebar.width + Metrics.content.sidebarGap.value : Metrics.content.inset.value
+        return width(windowWidth: contentSize.width, cardLeft: left, preferred: snapshot.aiPanelWidth)
     }
 
     /// How wide the panel's text is: the column less its inset on both sides.

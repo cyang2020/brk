@@ -91,7 +91,7 @@ extension Work {
         case .tidy: undoAIOrganize(in: window)
         case .restore(let entries):
             for id in entries { _ = restoreEntry(id, in: window) }
-        case .space(let space, let index, let entries):
+        case .space(let space, let index, let entries, let conversations):
             guard state.doc.spaces[space.id] == nil,
                   state.doc.tree.makeRoot(space.pinnedRoot, .pinned(space.id), createdAt: ctx.now),
                   state.doc.tree.makeRoot(space.todayRoot, .today(space.id), createdAt: ctx.now) else { return }
@@ -99,6 +99,7 @@ extension Work {
             state.doc.spaceOrder.insert(space.id, at: min(index, state.doc.spaceOrder.count))
             showSpace(space.id, in: window)
             for id in entries { _ = restoreEntry(id, in: window) }
+            for id in conversations where state.doc.conversations[id]?.profile == space.profile { state.doc.conversations[id]?.space = space.id }
             showSpace(space.id, in: window)
         case .regroup(let id, let folder, let parent, let children):
             restoreGroupHeader(id: id, folder: folder, parent: parent, children: children)

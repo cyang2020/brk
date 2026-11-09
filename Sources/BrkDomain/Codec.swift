@@ -335,6 +335,7 @@ struct StoredDocV3: Codable {
         var emptySelections: [SpaceID]?
         var folderExpansion: [ItemID: Bool]?
         var stayOnTop: Bool?
+        var aiPanelWidth: Double?
     }
 
     /// Doc -> stored, field by field. Only the global tree is stored, and only `.standard` windows: an ephemeral
@@ -374,7 +375,8 @@ struct StoredDocV3: Codable {
         windows = doc.windows.filter { $0.value.isPersistent }.mapValues {
             StoredWindow(bounds: $0.bounds, space: $0.space, activeBySpace: $0.activeBySpace, sidebarVisible: $0.sidebarVisible, sidebarWidth: $0.sidebarWidth,
                          toolbarVisible: $0.toolbarVisible, spaceHeaderVisible: $0.spaceHeaderVisible,
-                         slots: $0.slots.filter { doc.tree[$0.key]?.kind == .tab }, splitFocus: $0.splitFocus, emptySelections: $0.emptySelections.sorted(), folderExpansion: $0.folderExpansion, stayOnTop: $0.stayOnTop)
+                         slots: $0.slots.filter { doc.tree[$0.key]?.kind == .tab }, splitFocus: $0.splitFocus, emptySelections: $0.emptySelections.sorted(), folderExpansion: $0.folderExpansion, stayOnTop: $0.stayOnTop,
+                         aiPanelWidth: $0.aiPanelWidth)
         }
         settings = StoredSettings(general: doc.settings.general, profiles: doc.settings.profiles, links: doc.settings.links,
                                   max: doc.settings.max, advanced: doc.settings.advanced)
@@ -530,7 +532,7 @@ struct StoredDocV3: Codable {
                                        splitFocus: w.splitFocus ?? [:], folderExpansion: w.folderExpansion ?? tree.items.reduce(into: [:]) { result, pair in
                                            if case .folder(let f) = pair.value.body { result[pair.key] = !f.collapsed }
                                        }, stayOnTop: w.stayOnTop ?? false, sidebarVisible: w.sidebarVisible, sidebarWidth: w.sidebarWidth,
-                                       toolbarVisible: w.toolbarVisible ?? false, spaceHeaderVisible: w.spaceHeaderVisible ?? true)
+                                       aiPanelWidth: w.aiPanelWidth, toolbarVisible: w.toolbarVisible ?? false, spaceHeaderVisible: w.spaceHeaderVisible ?? true)
         }
         if docWindows.isEmpty {
             let id = WindowID(ctx.newID())

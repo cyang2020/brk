@@ -167,7 +167,7 @@ final class ConversationsPageView: NSView {
     private func rowView(_ row: AIThreadRow, selected: Bool) -> LibraryRowView {
         let state: String
         switch row.state {
-        case .waiting, .unread, .running, .archived: state = AIThreadWords.state(row.state, row.language)
+        case .waiting, .unread, .running: state = AIThreadWords.state(row.state, row.language)
         case .idle: state = row.detail
         }
         let detail = row.snippet ?? [row.spaceTitle.isEmpty ? nil : row.spaceTitle, row.agent, state].compactMap { $0 }.joined(separator: " · ")
@@ -177,7 +177,6 @@ final class ConversationsPageView: NSView {
                                   progress: .none, accessories: [], menu: [], selected: selected, colors: colors,
                                   onClick: { [weak self] in self?.dispatch(.library(.selectConversation(id))) })
         view.toolTip = row.title
-        if row.state == .archived { view.alphaValue = 0.6 }
         return view
     }
 

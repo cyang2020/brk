@@ -6,17 +6,17 @@ import BrkUIKit
 
 /// The right side of the Library's "AI 对话" page (docs/design/ai-threads.md): the selected conversation in full over the
 /// content card, as Media's preview shows a capture there. Its name and "Space · agent · model" on top, the transcript
-/// with the pages it drew (the same rows as the panel and the conversation's tab, on the card's color), and four buttons:
-/// Continue (its Space, in the panel), Open in Tab, Move to Another Space… and Delete for Good…, which asks first.
+/// with the pages it drew (the same rows as the panel, on the card's color), and three buttons: Continue (its Space, in
+/// the panel), Move to Another Space… and Delete for Good…, which asks first. A conversation has no tab to open
+/// (docs/design/ai-right-panel.md).
 @MainActor
 final class LibraryConversationPreview: NSView {
     private let dispatch: Dispatch
-    private let title = aiLabel(Metrics.ai.tabTitleFont.value, weight: .semibold)
+    private let title = aiLabel(Metrics.ai.libraryTitleFont.value, weight: .semibold)
     private let meta = aiLabel(Metrics.ai.noticeFont.value)
     private let scroll = NSScrollView()
     private let transcript = AITranscriptView()
     private let continueButton = AITextButton("", kind: .accent)
-    private let openButton = AITextButton("", kind: .item)
     private let moveButton = AITextButton("", kind: .item)
     private let deleteButton = AITextButton("", kind: .item)
     private let separator = NSView()
@@ -49,14 +49,12 @@ final class LibraryConversationPreview: NSView {
         }
         separator.wantsLayer = true
         continueButton.identify(.aiControl("library-continue"))
-        openButton.identify(.aiControl("library-open-tab"))
         moveButton.identify(.aiControl("library-move"))
         deleteButton.identify(.aiControl("library-delete"))
         continueButton.onPress = { [weak self] in self?.act { .assist(.showConversation($0)) } }
-        openButton.onPress = { [weak self] in self?.act { .assist(.openConversation($0)) } }
         deleteButton.onPress = { [weak self] in self?.act { .library(.requestDeleteConversation($0)) } }
         moveButton.onPress = { [weak self] in self?.showMoveMenu() }
-        for view in [title, meta, scroll, separator, continueButton, openButton, moveButton, deleteButton] as [NSView] { addSubview(view) }
+        for view in [title, meta, scroll, separator, continueButton, moveButton, deleteButton] as [NSView] { addSubview(view) }
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
@@ -113,10 +111,9 @@ final class LibraryConversationPreview: NSView {
         meta.textColor = style.secondary
         separator.layer?.backgroundColor = style.separator.cgColor
         continueButton.title = AIThreadWords.continueConversation(language)
-        openButton.title = AIThreadWords.openInTab(language)
         moveButton.title = AIThreadWords.moveEllipsis(language)
         deleteButton.title = AIThreadWords.deleteEllipsis(language)
-        for button in [continueButton, openButton, moveButton, deleteButton] {
+        for button in [continueButton, moveButton, deleteButton] {
             button.apply(style)
             button.layer?.cornerRadius = Metrics.ai.chipRadius.value
         }
@@ -137,18 +134,18 @@ final class LibraryConversationPreview: NSView {
     override func layout() {
         super.layout()
         let m = Metrics.ai
-        let width = min(m.tabColumnWidth.value, bounds.width - m.tabColumnInset.value * 2)
+        let width = min(m.libraryColumnWidth.value, bounds.width - m.libraryColumnInset.value * 2)
         let x = ((bounds.width - width) / 2).rounded()
-        var y = m.tabColumnInset.value / 2 + 6
+        var y = m.libraryColumnInset.value / 2 + 6
         let th = ceil(title.intrinsicContentSize.height), mh = ceil(meta.intrinsicContentSize.height)
         title.frame = CGRect(x: x, y: y, width: width, height: th)
         y += th + 2
         meta.frame = CGRect(x: x, y: y, width: width, height: mh)
         y += mh + 10
         let buttonHeight = m.buttonHeight.value
-        let bottom = bounds.height - m.tabColumnInset.value / 2 - buttonHeight
+        let bottom = bounds.height - m.libraryColumnInset.value / 2 - buttonHeight
         var left = x
-        for button in [continueButton, openButton, moveButton] {
+        for button in [continueButton, moveButton] {
             let w = max(64, button.fittingWidth)
             button.frame = CGRect(x: left, y: bottom, width: w, height: buttonHeight)
             left += w + m.gap.value

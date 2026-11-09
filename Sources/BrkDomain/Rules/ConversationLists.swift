@@ -1,50 +1,23 @@
 import BrkBase
 import Foundation
 
-// Conversation lists (docs/design/ai-threads.md). The panel's live conversation stays in `AISession.answers`, as
-// before; the panel's page, the Space it belongs to and what each Space showed last are kept beside it. After every input
-// `reconcilePanels` swaps the panel when the window moved to another Space (the conversation it showed is put away, the
-// new Space's last one comes back), opens the conversation page when a new answer arrives, closes the panel when the
-// conversation page has nothing left, and marks replies seen once their conversation shows.
-
-/// Where a conversation is in the sidebar: the Space it belongs to and whether only the archive has its row.
-struct ConversationPlace: Equatable {
-    var space: SpaceID?
-    var archived: Bool
-    /// Its open row, when it has one.
-    var row: ItemID?
-}
+// Conversation lists (docs/design/ai-threads.md, ai-right-panel.md). The panel's live conversation stays in
+// `AISession.answers`, as before; the panel's page, the Space it belongs to and what each Space showed last are kept
+// beside it. After every input `reconcilePanels` swaps the panel when the window moved to another Space (the
+// conversation it showed is put away, the new Space's last one comes back), opens the conversation page when a new answer
+// arrives, closes the panel when the conversation page has nothing left, and marks replies seen once their conversation
+// shows. Conversations live only here: the list keeps rename, move and delete; hovering a row lights the tabs it used.
 
 extension AppState {
-    /// Where every conversation of `profile` is: the Space whose Pinned or Today holds its row; a Favorite, or one with no
-    /// row at all, belongs to the Space it was started in; an archived one to the Space it was archived from. A Space that
-    /// is gone gives way to the profile's first.
-    func conversationPlaces(_ profile: ProfileID) -> [AIRequestID: ConversationPlace] {
-        var out: [AIRequestID: ConversationPlace] = [:]
+    /// The Space every conversation of `profile` belongs to: the one it records, or the profile's first when that one is
+    /// gone. A profile with no Space has none.
+    func conversationSpaces(_ profile: ProfileID) -> [AIRequestID: SpaceID] {
         let spaces = doc.spaceOrder.filter { doc.spaces[$0]?.profile == profile }
-        func id(_ row: ItemID) -> AIRequestID? { ConversationPage.id(of: tab(row)?.url ?? tab(row)?.pinnedURL) }
-        for sid in spaces {
-            guard let space = doc.spaces[sid] else { continue }
-            for row in doc.tree.tabs(under: space.pinnedRoot) + doc.tree.tabs(under: space.todayRoot) {
-                guard let conversation = id(row), out[conversation] == nil, doc.conversations[conversation]?.profile == profile else { continue }
-                out[conversation] = ConversationPlace(space: sid, archived: false, row: row)
-            }
+        guard let first = spaces.first else { return [:] }
+        var out: [AIRequestID: SpaceID] = [:]
+        for stored in doc.conversations.values where stored.profile == profile {
+            out[stored.id] = stored.space.flatMap { spaces.contains($0) ? $0 : nil } ?? first
         }
-        if let root = doc.favorites[profile] {
-            for row in doc.tree.tabs(under: root) {
-                guard let conversation = id(row), out[conversation] == nil, let stored = doc.conversations[conversation], stored.profile == profile else { continue }
-                out[conversation] = ConversationPlace(space: stored.space, archived: false, row: row)
-            }
-        }
-        for entry in doc.archive {
-            guard let conversation = ConversationPage.id(of: entry.tab.url), out[conversation] == nil,
-                  let stored = doc.conversations[conversation], stored.profile == profile else { continue }
-            out[conversation] = ConversationPlace(space: entry.fromSpace ?? stored.space, archived: true, row: nil)
-        }
-        for stored in doc.conversations.values where stored.profile == profile && out[stored.id] == nil {
-            out[stored.id] = ConversationPlace(space: stored.space, archived: false, row: nil)
-        }
-        for (key, place) in out where place.space.map({ !spaces.contains($0) }) ?? true { out[key]?.space = spaces.first }
         return out
     }
 
@@ -60,11 +33,11 @@ extension AppState {
         }.first
     }
 
-    func threadState(_ stored: StoredConversation, archived: Bool) -> AIThreadState {
+    func threadState(_ stored: StoredConversation) -> AIThreadState {
         if pendingApproval(stored.id) != nil { return .waiting }
         if liveAnswer(stored.id)?.busy == true { return .running }
         if stored.unread { return .unread }
-        return archived ? .archived : .idle
+        return .idle
     }
 
     /// The language of a list's own words: the one most of the five most recent conversations that tell are in (the most
@@ -83,11 +56,11 @@ extension AppState {
     static let languageSample = 5
 
     /// One conversation as a list shows it.
-    func threadRow(_ stored: StoredConversation, place: ConversationPlace?, now: Instant, calendar: Calendar, system: String) -> AIThreadRow {
+    func threadRow(_ stored: StoredConversation, space: SpaceID?, now: Instant, calendar: Calendar, system: String) -> AIThreadRow {
         let live = liveAnswer(stored.id)
         let items = live?.conversation?.items ?? stored.items
         let language = AILanguage.of(items, system: system)
-        let state = threadState(stored, archived: place?.archived ?? false)
+        let state = threadState(stored)
         let pages = items.filter { if case .page = $0 { true } else { false } }.count
         let detail: String
         switch state {
@@ -97,17 +70,14 @@ extension AppState {
             let turn = items.lastIndex { if case .user = $0 { true } else { false } }.map { items[($0 + 1)...] } ?? items[...]
             let steps = turn.compactMap { if case .step(let step) = $0 { step } else { nil } }
             detail = steps.isEmpty ? AIThreadWords.answering(language) : AIStepWords.summary(steps, language)
-        case .archived: detail = AIThreadWords.archived(language)
         case .idle:
             let when = AIThreadWords.when(stored.updatedAt, now: now, calendar: calendar, language)
             detail = pages > 0 ? when + " · " + AIThreadWords.pages(pages, language) : when
         }
-        // Its row's own title once someone gave it one (the user, Name Tabs), else its saved title (`conversationName`).
-        let custom = place?.row.flatMap { tab($0)?.customTitle }.flatMap { $0.isEmpty ? nil : $0 }
-        var row = AIThreadRow(id: stored.id, title: custom ?? stored.title, state: state, detail: detail, updatedAt: stored.updatedAt)
+        var row = AIThreadRow(id: stored.id, title: stored.title, state: state, detail: detail, updatedAt: stored.updatedAt)
         if state == .waiting { row.pill = AIThreadWords.pill(language) }
-        row.space = place?.space
-        if let space = place?.space, let value = doc.spaces[space] {
+        row.space = space
+        if let space, let value = doc.spaces[space] {
             row.spaceTitle = displayTitle(of: space)
             row.spaceColor = resolveTheme(value.theme, systemScheme: .light).gradient.first ?? SpaceTheme.default.colors[0]
         }
@@ -122,11 +92,19 @@ extension AppState {
         guard let page = session.ai.panelPage[window], let doc = doc.windows[window], doc.kind == .standard,
               let profile = agentProfile(in: window) else { return nil }
         let here = doc.space
-        let places = conversationPlaces(profile)
+        let spaces = conversationSpaces(profile)
         let language = listLanguage(profile, system: system)
         let current = session.ai.answers[window]?.conversation?.id
-        var all: [AIThreadRow] = conversations(of: profile).map { threadRow($0, place: places[$0.id], now: now, calendar: calendar, system: system) }
+        let hovered = session.ai.hoveredConversation[window]
+        var all: [AIThreadRow] = conversations(of: profile).map { threadRow($0, space: spaces[$0.id], now: now, calendar: calendar, system: system) }
         for index in all.indices where all[index].id == current { all[index].current = true }
+        // The row under the pointer says how many tabs it used, and how many of those light up here.
+        var hoveredDetail: String?
+        if let hovered, let row = all.first(where: { $0.id == hovered }), let stored = self.doc.conversations[hovered] {
+            let used = usedTabs(stored)
+            let lit = Set(used.compactMap { lightTarget($0, in: window) == nil ? nil : $0 }).count
+            hoveredDetail = AIThreadWords.used(used.count, lit: doc.sidebarVisible ? lit : 0, row.language)
+        }
         let strips = all.filter { $0.space != here && $0.state.needsUser }
         var mine = all.filter { $0.space == here }
         let search = session.ai.panelSearch[window] ?? ""
@@ -153,14 +131,15 @@ extension AppState {
         add(.today, rest.filter { day($0) >= today })
         add(.yesterday, rest.filter { day($0) < today && day($0) >= yesterday })
         add(.earlier, rest.filter { day($0) < yesterday })
-        let spaces = self.doc.spaceOrder.compactMap { sid -> AIThreadSpace? in
+        let spaceRows = self.doc.spaceOrder.compactMap { sid -> AIThreadSpace? in
             guard let value = self.doc.spaces[sid], value.profile == profile else { return nil }
             return AIThreadSpace(id: sid, title: displayTitle(of: sid), color: resolveTheme(value.theme, systemScheme: .light).gradient.first ?? SpaceTheme.default.colors[0])
         }
         return AIPanelSnapshot(page: session.ai.answers[window] == nil ? .list : page, hasConversation: session.ai.answers[window] != nil, space: here,
                                spaceTitle: displayTitle(of: here), language: language, search: search, strips: strips, groups: groups,
-                               waiting: all.filter { $0.state.needsUser }.count, spaces: spaces,
-                               renaming: session.ai.renamingConversation[window].flatMap { id in mine.contains { $0.id == id } ? id : nil })
+                               waiting: all.filter { $0.state.needsUser }.count, spaces: spaceRows,
+                               renaming: session.ai.renamingConversation[window].flatMap { id in mine.contains { $0.id == id } ? id : nil },
+                               hovered: hovered.flatMap { id in mine.contains { $0.id == id } ? id : nil }, hoveredDetail: hoveredDetail)
     }
 
     /// The + menu's agent list: what Settings → Max lists, the ready agents with their models.
@@ -174,11 +153,10 @@ extension AppState {
 
     /// The command bar's conversations: the newest of the profile, each with all that was said and the Space it is in.
     func conversationCandidates(_ profile: ProfileID) -> [ConversationCandidate] {
-        let places = conversationPlaces(profile)
+        let spaces = conversationSpaces(profile)
         return conversations(of: profile).prefix(ConversationCandidate.limit).map { stored in
             var candidate = stored.candidate
-            candidate.title = conversationName(stored.id) ?? stored.title
-            candidate.space = places[stored.id]?.space.map { displayTitle(of: $0) }
+            candidate.space = spaces[stored.id].map { displayTitle(of: $0) }
             return candidate
         }
     }
@@ -188,17 +166,17 @@ extension AppState {
         // Most conversations wait for nobody: where they are is looked up only for those that do.
         let waiting = doc.conversations.values.filter { $0.profile == profile && ($0.unread || pendingApproval($0.id) != nil) }
         guard !waiting.isEmpty else { return [] }
-        let places = conversationPlaces(profile)
-        return Set(waiting.compactMap { places[$0.id]?.space }.filter { $0 != except })
+        let spaces = conversationSpaces(profile)
+        return Set(waiting.compactMap { spaces[$0.id] }.filter { $0 != except })
     }
 
     /// The Library's "AI 对话" page for a window.
     func libraryConversations(in window: WindowID, now: Instant, calendar: Calendar, system: String) -> LibraryConversationsSnapshot? {
         guard let profile = agentProfile(in: window) else { return nil }
         let query = session.ai.libraryQuery[window] ?? ConversationLibraryQuery()
-        let places = conversationPlaces(profile)
+        let places = conversationSpaces(profile)
         let language = listLanguage(profile, system: system)
-        let all = conversations(of: profile).map { threadRow($0, place: places[$0.id], now: now, calendar: calendar, system: system) }
+        let all = conversations(of: profile).map { threadRow($0, space: places[$0.id], now: now, calendar: calendar, system: system) }
         var rows = all
         if !query.text.trimmingCharacters(in: .whitespaces).isEmpty {
             let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -236,6 +214,70 @@ extension AppState {
     }
 }
 
+// MARK: The panel's entries and lighting the tabs a conversation used (docs/design/ai-right-panel.md)
+
+extension AppState {
+    /// Whether a window can open the AI panel: a standard window of a profile (not private) with Ask in Command Bar on, the
+    /// switch the panel's conversations need. Off, the title row has no chat button and stays as Arc draws it.
+    func canOpenPanel(_ window: WindowID) -> Bool {
+        guard doc.windows[window]?.kind == .standard, agentProfile(in: window) != nil else { return false }
+        return doc.settings.max.enabled(.commandBar)
+    }
+
+    /// The window's panel width, its title row's chat button, the right-edge drop area and the lit sidebar rows.
+    func projectPanelEntries(into snapshot: inout WindowSnapshot, _ window: WindowID, system: String) {
+        snapshot.aiPanelWidth = doc.windows[window]?.aiPanelWidth
+        guard canOpenPanel(window), let profile = agentProfile(in: window) else { return }
+        let open = session.ai.panelPage[window] != nil || session.ai.answers[window] != nil
+        let waiting = conversations(of: profile).filter { threadState($0).needsUser }.count
+        let language = listLanguage(profile, system: system)
+        snapshot.aiToggle = AIToggleSnapshot(open: open, waiting: waiting, language: language)
+        if !open { snapshot.aiEdgeDrop = AIEdgeDropSnapshot(language: language) }
+        snapshot.sidebar.lit = litRows(in: window)
+    }
+
+    /// The tabs a conversation used, by id, oldest first.
+    func usedTabs(_ stored: StoredConversation) -> [ItemID] { stored.usedTabs ?? [] }
+
+    /// The sidebar row that lights for `tab` in `window`: the tab's own row in this Space's Pinned or Today, the collapsed
+    /// folder that hides it, the split row it is a pane of, or its Favorites tile. Nil for a tab of another Space, one
+    /// that is closed or archived (gone from the sidebar), another profile's, or one under a collapsed Pinned section.
+    func lightTarget(_ tab: ItemID, in window: WindowID) -> ItemID? {
+        guard let doc = doc.windows[window], doc.kind == .standard, locate(tab) == .global, self.tab(tab) != nil,
+              let space = self.doc.spaces[doc.space], let role = role(of: tab) else { return nil }
+        switch role {
+        case .favorites(let profile): return profile == space.profile ? tab : nil
+        case .pinned(let sid), .today(let sid):
+            guard sid == doc.space else { return nil }
+            if case .pinned = role, space.pinnedCollapsed { return nil }
+            // The outermost collapsed folder above it, else the split it is a pane of, else the row itself.
+            var target = tab
+            var current = self.doc.tree[tab]?.parent
+            if let parent = current, case .split? = self.doc.tree[parent]?.body { target = parent }
+            while let id = current, let node = self.doc.tree[id] {
+                if case .folder = node.body, !folderIsExpanded(id, in: window) { target = id }
+                current = node.parent
+            }
+            return target
+        case .scratch: return nil
+        }
+    }
+
+    /// The rows a window's sidebar lights now: the tabs of the list row under the pointer, or the one tab of the chip under
+    /// it. Nothing while the sidebar is hidden.
+    func litRows(in window: WindowID) -> Set<ItemID> {
+        guard let doc = doc.windows[window], doc.sidebarVisible, session.ai.panelPage[window] != nil || session.ai.answers[window] != nil,
+              let profile = agentProfile(in: window) else { return [] }
+        var tabs: [ItemID] = []
+        if let chip = session.ai.hoveredChip[window] {
+            tabs = [ItemID(chip)]
+        } else if let id = session.ai.hoveredConversation[window], let stored = self.doc.conversations[id], stored.profile == profile {
+            tabs = usedTabs(stored)
+        }
+        return Set(tabs.compactMap { lightTarget($0, in: window) })
+    }
+}
+
 extension Work {
     /// The intents of the conversation lists. False: not one of them.
     mutating func threadIntent(_ intent: AIIntent, in window: WindowID) -> Bool {
@@ -258,9 +300,19 @@ extension Work {
         case .renameConversation(let id, let title):
             if state.session.ai.renamingConversation[window] == id { state.session.ai.renamingConversation[window] = nil }
             if let title { renameConversation(id, title, in: window) }
-        case .archiveConversation(let id): archiveConversation(id, in: window)
-        case .restoreConversation(let id): _ = restoreConversation(id, in: window)
         case .moveConversation(let id, let space): moveConversation(id, to: space, in: window)
+        case .togglePanel: togglePanel(in: window)
+        case .panelWidth(let width):
+            guard width.isFinite, state.doc.windows[window]?.kind == .standard else { return true }
+            let clamped = min(max(width.rounded(), Metrics.ai.minimumWidth.value), Metrics.ai.maximumStoredWidth.value)
+            if state.doc.windows[window]?.aiPanelWidth != clamped { state.doc.windows[window]?.aiPanelWidth = clamped }
+        case .hoverConversation(let id):
+            let valid = id.flatMap { id in state.agentProfile(in: window).flatMap { state.doc.conversations[id]?.profile == $0 ? id : nil } }
+            if state.session.ai.hoveredConversation[window] != valid { state.session.ai.hoveredConversation[window] = valid }
+        case .hoverChip(let chip):
+            let attached = state.session.ai.answers[window]?.conversation?.attached ?? []
+            let valid = chip.flatMap { chip in attached.contains { $0.kind == .tab && $0.id == chip } ? chip : nil }
+            if state.session.ai.hoveredChip[window] != valid { state.session.ai.hoveredChip[window] = valid }
         case .pickAgent(let kind, let model): pickAgent(kind, model: model, at: .panel(window))
         default: return false
         }
@@ -288,7 +340,7 @@ extension Work {
     /// without a route for the basic model (no agent, no key): it keeps its first message.
     mutating func nameConversationIfDue(_ id: AIRequestID) {
         guard state.doc.settings.max.enabled(.tabNames), let stored = state.doc.conversations[id], stored.aiNamed != true, stored.userNamed != true,
-              !state.session.ai.namedAsked.contains(id), !conversationRowNamed(id) else { return }
+              !state.session.ai.namedAsked.contains(id) else { return }
         if case .unavailable = state.basicRoute { return }
         let items = state.liveAnswer(id)?.conversation?.items ?? stored.items
         guard let question = items.lazy.compactMap({ if case .user(let text) = $0 { text } else { nil } }).first,
@@ -302,42 +354,24 @@ extension Work {
         state.session.ai.conversationNaming[request] = id
     }
 
-    /// One of its rows has a name someone typed (the sidebar's rename).
-    private func conversationRowNamed(_ id: AIRequestID) -> Bool {
-        let url = ConversationPage.url(id)
-        return state.doc.tree.allTabs().contains { row in
-            guard let tab = state.tab(row), tab.url == url else { return false }
-            return tab.userNamed || !(tab.customTitle ?? "").isEmpty
-        }
-    }
-
     mutating func applyConversationName(_ request: AIRequestID, _ raw: String) {
         guard let id = state.session.ai.conversationNaming.removeValue(forKey: request), let stored = state.doc.conversations[id],
-              stored.userNamed != true, !conversationRowNamed(id), let name = AIValidation.name(raw, limit: AINaming.maxLength) else { return }
+              stored.userNamed != true, let name = AIValidation.name(raw, limit: AINaming.maxLength) else { return }
         state.doc.conversations[id]?.title = name
         state.doc.conversations[id]?.aiNamed = true
-        let url = ConversationPage.url(id)
-        for row in state.doc.tree.allTabs() where state.tab(row)?.url == url {
-            state.doc.tree.updateTab(row) { $0.title = name }
-        }
         if let host = state.session.ai.host(ofConversation: id) { state.session.ai[host: host]?.title = name }
     }
 
-    /// The list row's menu, in the conversation's language.
+    /// The list row's menu, in the conversation's language: rename, move to another Space, delete for good. Nothing else:
+    /// a conversation has no row to pin, file or archive (docs/design/ai-right-panel.md, 列表里只留删除).
     func conversationMenu(_ id: AIRequestID, in window: WindowID) -> [MenuEntry] {
         guard let profile = state.agentProfile(in: window), let stored = state.doc.conversations[id], stored.profile == profile else { return [] }
         let language = AILanguage.of(state.liveAnswer(id)?.conversation?.items ?? stored.items, system: ctx.systemLanguage)
-        let place = state.conversationPlaces(profile)[id]
-        let others = state.doc.spaceOrder.filter { $0 != place?.space && state.doc.spaces[$0]?.profile == profile }
-        var entries: [MenuEntry] = [
-            .action(title: AIThreadWords.openInTab(language), command: .assist(.openConversation(id)), enabled: true),
-            .action(title: AIThreadWords.rename(language), command: .assist(.beginRenameConversation(id)), enabled: true),
-            place?.row == nil && place?.archived == true
-                ? .action(title: AIThreadWords.restore(language), command: .assist(.restoreConversation(id)), enabled: true)
-                : .action(title: AIThreadWords.archive(language), command: .assist(.archiveConversation(id)), enabled: place?.row != nil),
-        ]
+        let space = state.conversationSpaces(profile)[id]
+        let others = state.doc.spaceOrder.filter { $0 != space && state.doc.spaces[$0]?.profile == profile }
+        var entries: [MenuEntry] = [.action(title: AIThreadWords.rename(language), command: .assist(.beginRenameConversation(id)), enabled: true)]
         entries.append(others.isEmpty
-            ? .action(title: AIThreadWords.move(language), command: .assist(.moveConversation(id, place?.space ?? state.doc.windows[window]?.space ?? SpaceID(""))), enabled: false)
+            ? .action(title: AIThreadWords.move(language), command: .assist(.moveConversation(id, space ?? state.doc.windows[window]?.space ?? SpaceID(""))), enabled: false)
             : .submenu(title: AIThreadWords.move(language), entries: others.map { .action(title: state.displayTitle(of: $0), command: .assist(.moveConversation(id, $0)), enabled: true) }))
         entries.append(.separator)
         entries.append(.action(title: AIThreadWords.deleteEllipsis(language), command: .library(.requestDeleteConversation(id)), enabled: true))
@@ -356,17 +390,39 @@ extension Work {
         }
     }
 
-    /// Conversation `id` in this window's panel. Archived, its row comes back first; another Space's, the window switches
-    /// there and the panel brings it back as that Space's (`reconcilePanels`); its tab already shown here, the tab stays.
+    /// Whether the window can open the AI panel: a standard window of a profile (not private), with Ask in Command Bar on,
+    /// the switch the panel's conversations need. Off, the title row has no chat button and stays as Arc draws it.
+    func canOpenPanel(_ window: WindowID) -> Bool { state.canOpenPanel(window) }
+
+    /// The title row's chat button, ⌥⌘A, View › Show/Hide AI Conversations: an open panel closes (as its × does); a closed
+    /// one opens on what this Space's panel showed last, the list when that was nothing or is gone.
+    mutating func togglePanel(in window: WindowID) {
+        if state.session.ai.panelPage[window] != nil || state.session.ai.answers[window] != nil {
+            assist(.dismiss, in: window)
+            return
+        }
+        guard canOpenPanel(window), let space = state.doc.windows[window]?.space, let profile = state.agentProfile(in: window) else {
+            if state.doc.windows[window]?.kind == .standard, state.agentProfile(in: window) != nil, !state.doc.settings.max.enabled(.commandBar) {
+                let text = state.doc.settings.max.isOn ? "\(AIFeature.commandBar.title) not enabled" : Self.maxOff
+                toast(text, link: ToastLink(title: "Max Preferences ↗", command: .settings(.openPane(.max))), in: window)
+            }
+            return
+        }
+        state.session.ai.panelPage[window] = .list
+        state.session.ai.panelSpace[window] = space
+        if let memory = state.session.ai.panelMemory[window]?[space], let id = memory.conversation,
+           state.doc.conversations[id]?.profile == profile, state.conversationSpaces(profile)[id] == space {
+            bringToPanel(id, in: window)
+            if state.session.ai.answers[window] != nil { state.session.ai.panelPage[window] = memory.page }
+        }
+    }
+
+    /// Conversation `id` in this window's panel. Another Space's: the window switches there and the panel brings it back as
+    /// that Space's (`reconcilePanels`).
     mutating func showConversationInPanel(_ id: AIRequestID, in window: WindowID) {
         guard let doc = state.doc.windows[window], doc.kind == .standard, let profile = state.agentProfile(in: window),
               let stored = state.doc.conversations[id], stored.profile == profile else { return }
-        var place = state.conversationPlaces(profile)[id]
-        if place?.row == nil, let entry = state.doc.archive.first(where: { $0.tab.url == ConversationPage.url(id) }), restoreEntry(entry.id, in: window) != nil {
-            place = state.conversationPlaces(profile)[id]
-        }
-        let space = place?.space ?? doc.space
-        if state.shownNativePages(in: window).contains(where: { ConversationPage.id(of: $0.1) == id }) { return }
+        let space = state.conversationSpaces(profile)[id] ?? doc.space
         if space != doc.space {
             if state.session.ai.panelPage[window] == nil { state.session.ai.panelPage[window] = .conversation; state.session.ai.panelSpace[window] = doc.space }
             state.session.ai.panelMemory[window, default: [:]][space] = AIPanelMemory(conversation: id, page: .conversation)
@@ -388,10 +444,10 @@ extension Work {
             state.session.ai.answers[window] = state.session.ai.answers[other]
             state.session.ai.answers[other] = nil
             state.session.ai.answerContexts[other] = nil
-        case .tab?:
-            state.session.ai.answers[window] = state.session.ai.tabAnswers[id]
-            state.session.ai.tabAnswers[id] = nil
-            state.session.ai.tabWindows[id] = nil
+        case .away?:
+            state.session.ai.answers[window] = state.session.ai.awayAnswers[id]
+            state.session.ai.awayAnswers[id] = nil
+            state.session.ai.awayWindows[id] = nil
         case nil:
             guard let stored = state.doc.conversations[id] else { return }
             state.session.ai.answers[window] = stored.snapshot()
@@ -416,41 +472,24 @@ extension Work {
         guard !trimmed.isEmpty else { return }
         state.doc.conversations[id]?.title = trimmed
         state.doc.conversations[id]?.userNamed = true
-        let url = ConversationPage.url(id)
-        for row in state.doc.tree.allTabs() where state.tab(row)?.url == url && state.browsingContext(of: row) == .profile(profile) {
-            // The item rule itself: a nested `run` would apply the overlay rule and close the Library.
-            items(.rename(row, title: trimmed), in: window)
+        if let host = state.session.ai.host(ofConversation: id) { state.session.ai[host: host]?.title = trimmed }
+    }
+
+    /// The conversation goes to another Space's list: the row menu's Move to, or its list row dropped on that Space's dot.
+    /// Only Spaces of the conversation's profile: its agent sees that profile's tabs. A panel that shows it in the Space it
+    /// left puts it away and shows its list.
+    mutating func moveConversation(_ id: AIRequestID, to space: SpaceID, in window: WindowID) {
+        guard let profile = state.agentProfile(in: window), let stored = state.doc.conversations[id], stored.profile == profile,
+              let target = state.doc.spaces[space], target.profile == profile, state.conversationSpaces(profile)[id] != space else { return }
+        state.doc.conversations[id]?.space = space
+        for (other, answer) in state.session.ai.answers where answer.conversation?.id == id && state.session.ai.panelSpace[other] != space {
+            putAwayPanelConversation(in: other)
+            if state.session.ai.panelPage[other] != nil { state.session.ai.panelPage[other] = .list }
         }
     }
 
-    private mutating func archiveConversation(_ id: AIRequestID, in window: WindowID) {
-        guard let profile = state.agentProfile(in: window), let row = state.conversationPlaces(profile)[id]?.row else { return }
-        run(.tab(.archive(.item(row))), in: window)
-    }
-
-    /// The archived conversation's row back in the Space it came from, not shown. True when it came back.
-    private mutating func restoreConversation(_ id: AIRequestID, in window: WindowID) -> Bool {
-        guard let profile = state.agentProfile(in: window), state.doc.conversations[id]?.profile == profile,
-              state.conversationPlaces(profile)[id]?.row == nil,
-              let entry = state.doc.archive.first(where: { $0.tab.url == ConversationPage.url(id) }) else { return false }
-        return restoreEntry(entry.id, in: window) != nil
-    }
-
-    /// The conversation's row goes to the top of another Space's Today (an archived one comes back there). Only Spaces of
-    /// the conversation's profile: its agent sees that profile's tabs.
-    mutating func moveConversation(_ id: AIRequestID, to space: SpaceID, in window: WindowID) {
-        guard let profile = state.agentProfile(in: window), let stored = state.doc.conversations[id], stored.profile == profile,
-              let target = state.doc.spaces[space], target.profile == profile else { return }
-        var place = state.conversationPlaces(profile)[id]
-        if place?.row == nil, restoreConversation(id, in: window) { place = state.conversationPlaces(profile)[id] }
-        state.doc.conversations[id]?.space = space
-        guard let row = place?.row, place?.space != space else { return }
-        if state.doc.tree.role(of: row)?.kind == .favorites { return }
-        items(.move(row, to: .space(space)), in: window)
-    }
-
-    /// Delete for good, from the panel's list or the Library: the transcript, every page it made, its rows wherever they
-    /// are (open or archived), and its live state.
+    /// Delete for good, from the panel's list or the Library: the transcript, every page it made with their rows wherever
+    /// they are (open or archived), and its live state.
     mutating func deleteConversationForGood(_ id: AIRequestID, in window: WindowID) {
         guard let profile = state.agentProfile(in: window), let stored = state.doc.conversations[id], stored.profile == profile else { return }
         let language = AILanguage.of(stored.items, system: ctx.systemLanguage)
@@ -464,9 +503,9 @@ extension Work {
             state.session.ai.answers[host] = nil
             state.session.ai.answerContexts[host] = nil
         }
-        if let request = state.session.ai.tabAnswers[id]?.request { cancelAI(request) }
-        state.session.ai.tabAnswers[id] = nil
-        state.session.ai.tabWindows[id] = nil
+        if let request = state.session.ai.awayAnswers[id]?.request { cancelAI(request) }
+        state.session.ai.awayAnswers[id] = nil
+        state.session.ai.awayWindows[id] = nil
         if state.session.ai.librarySelection[window] == id { state.session.ai.librarySelection[window] = nil }
         state.doc.archive.removeAll { record in
             guard let url = record.tab.url, urls.contains(url) else { return false }
@@ -518,7 +557,7 @@ extension Work {
 
     // MARK: After every input
 
-    /// A reply counts as seen once its conversation shows in a panel's conversation page or in its tab after it finished.
+    /// A reply counts as seen once its conversation shows in a panel's conversation page after it finished.
     private mutating func markSeen(_ id: AIRequestID) {
         guard let stored = state.doc.conversations[id], stored.unread else { return }
         state.doc.conversations[id]?.seenAt = ctx.now
@@ -544,8 +583,7 @@ extension Work {
                 var page = AIPanelPage.list
                 if let memory = state.session.ai.panelMemory[window]?[space], let id = memory.conversation,
                    let profile = state.agentProfile(in: window), state.doc.conversations[id]?.profile == profile,
-                   state.conversationPlaces(profile)[id]?.space == space,
-                   !state.shownConversations.contains(id) {
+                   state.conversationSpaces(profile)[id] == space {
                     bringToPanel(id, in: window)
                     if state.session.ai.answers[window] != nil { page = memory.page }
                 }
@@ -560,14 +598,14 @@ extension Work {
                     // The panel opened (a question, a drop of tabs, a message).
                     state.session.ai.panelPage[window] = .conversation
                     state.session.ai.panelSpace[window] = space
-                } else if state.session.ai.panelPage[window] == .list,
+                } else if state.session.ai.panelPage[window] == .list, previous.session.ai.panelPage[window] != nil,
                           answer.conversation?.id != before?.conversation?.id || (answer.conversation == nil && answer.request != before?.request && answer.request != nil)
                             || (answer.conversation?.attached.count ?? 0) > (before?.conversation?.attached.count ?? 0) {
                     // Something new to show while the list was up (an answer, tabs dropped on the panel): the conversation page.
                     state.session.ai.panelPage[window] = .conversation
                 }
             } else if answer == nil, state.session.ai.panelPage[window] == .conversation {
-                // Closed, opened as a tab, deleted: the conversation page has nothing left.
+                // Closed, deleted, moved to another Space: the conversation page has nothing left.
                 state.session.ai.panelPage[window] = nil
                 state.session.ai.panelSearch[window] = nil
             }
@@ -578,13 +616,19 @@ extension Work {
                 markSeen(id)
             }
         }
-        for id in state.shownConversations { markSeen(id) }
         for (window, id) in state.session.ai.librarySelection where state.doc.conversations[id] == nil { state.session.ai.librarySelection[window] = nil }
         for (window, id) in state.session.ai.renamingConversation where state.doc.conversations[id] == nil || state.session.ai.panelPage[window] == nil {
             state.session.ai.renamingConversation[window] = nil
         }
         for (window, request) in state.session.ai.pendingConversationDeletion where state.doc.windows[window] == nil || state.doc.conversations[request.id] == nil {
             state.session.ai.pendingConversationDeletion[window] = nil
+        }
+        // The pointer can only be over a list row or a chip of a panel that is open.
+        for (window, id) in state.session.ai.hoveredConversation where state.session.ai.panelPage[window] == nil || state.doc.conversations[id] == nil {
+            state.session.ai.hoveredConversation[window] = nil
+        }
+        for (window, chip) in state.session.ai.hoveredChip where !(state.session.ai.answers[window]?.conversation?.attached.contains { $0.id == chip } ?? false) {
+            state.session.ai.hoveredChip[window] = nil
         }
         for (id, _) in state.session.ai.turnStarted where state.liveAnswer(id)?.busy != true { state.session.ai.turnStarted[id] = nil }
     }

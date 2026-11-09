@@ -199,7 +199,8 @@ enum ToastUndo: Sendable, Equatable {
     /// Clear Today: the archive entries it made, in sidebar order.
     case restore([ArchiveID])
     /// Delete Space: the space, its dock position and the archive entries of its tabs.
-    case space(Space, index: Int, entries: [ArchiveID])
+    /// A deleted Space: its archived tabs come back, and the conversations that moved out of it go back to it.
+    case space(Space, index: Int, entries: [ArchiveID], conversations: [AIRequestID] = [])
     /// Remove Group Header: the header and the tabs it held.
     case regroup(id: ItemID, folder: Folder, parent: ItemID, children: [ItemID])
     /// Use Original on a translated page (P50-e "Translated back to French! Use ⌘Z to undo."): the translation again.

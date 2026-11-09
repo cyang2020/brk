@@ -37,6 +37,8 @@ public struct WindowFrames: Sendable, Equatable, Codable {
     /// Brk's AI panel: a column at the window's right edge, beside the cards, nil while no conversation or message is in
     /// it (`AIPanelLayout`).
     public var aiPanel: CGRect? = nil
+    /// The strip between the card and the panel that widens the panel when dragged (docs/design/ai-right-panel.md).
+    public var aiPanelHandle: CGRect? = nil
 
     public init(contentSize: CGSize, sidebar: SidebarFrames?, sidebarFloats: Bool, resizeHandle: CGRect?,
                 revealStrip: CGRect?, contentArea: CGRect, cards: [CardFrame], dividers: [CGRect],
@@ -280,7 +282,7 @@ extension WindowFrames {
     public func frame(of view: ViewID) -> CGRect? {
         switch view {
         case .toolbar: return toolbar
-        case .toolbarAddress: return toolbar.map(AddressToolbarLayout.address(in:))
+        case .toolbarAddress: return toolbar.map { AddressToolbarLayout.address(in: $0) }
         case .toolbarButton, .spaceToolsControl, .boostControl: return nil
         case .sidebar: return sidebarFloats ? nil : sidebar?.frame
         case .floatingSidebar: return sidebarFloats ? sidebar?.frame : nil

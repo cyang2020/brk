@@ -1,19 +1,22 @@
 import BrkBase
 import Foundation
 
-// Conversations as tabs and the pages agents draw in their answers (docs/design/ai-native.md, 对话是 tab, 在回答里显示页面;
-// docs/design/ai-conversations.md). A conversation is saved in `Doc.conversations` once its first message goes out, and
-// its sidebar row is a tab at `ConversationPage.url(id)`: it moves, pins, archives and restores like any tab, has no
-// browser, and its card draws the conversation natively. A page an agent renders is a file written by the app
+// Saved conversations and the pages agents draw in their answers (docs/design/ai-conversations.md, ai-right-panel.md). A
+// conversation is saved in `Doc.conversations` once its first message goes out. It lives only in the AI panel: it has no
+// sidebar row (step 8), and it records its own Space (`StoredConversation.space`). `ConversationPage.url(id)` is only
+// its name in links and tool results; a tab that ends up at such an address is taken out of the sidebar and the
+// conversation shows in the panel (`Work.dropConversationRows`). A page an agent renders is a file written by the app
 // (`AIPageRecord.html`) and an item in the transcript; kept as a tab, its row is a tab at `AIPageTab.url(id)` whose card
-// shows the page in the page sandbox. Both live in files of their own beside state.json (BrkApp/ConversationFiles.swift),
-// so a long transcript is not written again every time a tab title changes.
+// shows the page in the page sandbox under a caption row that leads back to its conversation. Both live in files of
+// their own beside state.json (BrkApp/ConversationFiles.swift), so a long transcript is not written again every time a
+// tab title changes.
 
 public enum AIPageTag {}
 /// One page an agent rendered in a conversation.
 public typealias AIPageID = ID<AIPageTag>
 
-/// The address of a conversation's row. A tab at such an address has no browser: its card draws the conversation.
+/// A conversation's address, `brk://conversation/<id>`: how the tools and the agent name it, and what a link to it opens
+/// (in the panel). No tab shows it.
 public enum ConversationPage {
     public static let host = "conversation"
 
@@ -29,7 +32,7 @@ public enum ConversationPage {
 
     public static func shows(_ url: URL?) -> Bool { id(of: url) != nil }
 
-    /// `[Title](brk://conversation/<id>)`: how the tools and the agent name a conversation; a click opens its tab.
+    /// `[Title](brk://conversation/<id>)`: how the tools and the agent name a conversation; a click opens it in the panel.
     public static func markdown(_ id: AIRequestID, title: String) -> String {
         let shown = String(title.prefix(80)).replacingOccurrences(of: "[", with: "(").replacingOccurrences(of: "]", with: ")")
             .replacingOccurrences(of: "\n", with: " ")
@@ -38,15 +41,14 @@ public enum ConversationPage {
 
     public static let untitled = "New Conversation"
 
-    /// A row's title from the first message: its first line, at most 60 characters.
+    /// A conversation's first title, from its first message: its first line, at most 60 characters.
     public static func title(from message: String) -> String {
         let line = message.split(whereSeparator: \.isNewline).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
         guard !line.isEmpty else { return untitled }
         return line.count > 60 ? String(line.prefix(59)) + "…" : line
     }
 
-    /// The row's icon: two speech bubbles in the Space's foreground grey, drawn by the sidebar's favicon loader like any
-    /// other (an SVG data URL).
+    /// Its icon in the command bar's rows: two speech bubbles in the Space's foreground grey (an SVG data URL).
     public static let favicon = URL(string: "data:image/svg+xml;base64," + Data((
         #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32">"#
             + ##"<g fill="none" stroke="#5C5C66" stroke-width="1.4" stroke-linejoin="round">"##
@@ -78,7 +80,8 @@ public enum AIPageTab {
     ).utf8).base64EncodedString())!
 }
 
-/// Brk's own pages that a card draws natively, without a browser: History, Easels, conversations and kept pages.
+/// Brk's own pages that a card draws natively, without a browser: History, Easels and kept pages. A conversation's
+/// address is in the list too, so no browser ever loads it in the moment before its row is taken away.
 public enum NativePages {
     public static func shows(_ url: URL?) -> Bool {
         HistoryPage.shows(url) || EaselPage.shows(url) || ConversationPage.shows(url) || AIPageTab.shows(url)
@@ -109,10 +112,15 @@ public struct StoredConversation: Equatable, Sendable, Codable {
     /// The injection check flagged a page this conversation read.
     public var flagged: Bool = false
     public var items: [AIConversationItem]
-    /// The Space it was started in: where it belongs while it has no row in any Space (docs/design/ai-threads.md).
+    /// The Space it belongs to: the one it was started in, or the one it was last moved to (docs/design/ai-right-panel.md).
+    /// A Space that is gone gives way to the profile's first (`AppState.conversationSpaces`).
     public var space: SpaceID?
-    /// When its last reply finished, and when it was last shown in the panel or its tab after one did: a reply finished
-    /// later than it was seen is unread ("等你处理").
+    /// The tabs it used, oldest first: those the user gave it (a drop, @, Ask AI, the right edge) and those its agent read,
+    /// opened or showed with Brk's tab tools. By tab, not by address: a tab that went to another page still counts.
+    /// Hovering its list row lights those still open in the window's Space.
+    public var usedTabs: [ItemID]?
+    /// When its last reply finished, and when it was last shown in the panel after one did: a reply finished later than it
+    /// was seen is unread ("等你处理").
     public var repliedAt: Instant?
     public var seenAt: Instant?
     /// The small model named it (its title is that name), or the user did (never named again).
@@ -220,6 +228,10 @@ public struct AIPageSnapshot: Hashable, Sendable, Codable {
     public let data: String?
     /// Already a sidebar tab: its Keep as Tab is done.
     public var kept: Bool
+    /// The conversation that made it, while it is saved: a kept page's caption row leads back to it.
+    public var conversation: AIRequestID? = nil
+    /// The language of Brk's words on its caption row: its conversation's.
+    public var language: AILanguage = .en
     /// What the page saved itself, read as `window.brk.saved`.
     public var saved: String? = nil
     /// The shape its saves must have (JSON Schema text); nil: any JSON object.
@@ -233,14 +245,8 @@ public struct AIPageSnapshot: Hashable, Sendable, Codable {
     }
 }
 
-/// A card that shows a conversation (`PaneContent.conversation`): its live state, or its saved transcript.
-public struct ConversationCard: Equatable, Sendable, Codable {
-    public let page: PageID
-    public let answer: AIAnswerSnapshot
-    public init(page: PageID, answer: AIAnswerSnapshot) { self.page = page; self.answer = answer }
-}
-
-/// A card that shows a kept page (`PaneContent.aiPage`).
+/// A card that shows a kept page (`PaneContent.aiPage`), under its caption row: the page's name and how often it refreshes,
+/// and a button back to the conversation that made it.
 public struct AIPageCard: Equatable, Sendable, Codable {
     public let page: PageID
     public let content: AIPageSnapshot?

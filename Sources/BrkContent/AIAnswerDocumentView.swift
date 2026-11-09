@@ -4,27 +4,23 @@ import BrkDomain
 import BrkLayout
 import BrkUIKit
 
-/// Where a conversation is drawn: the AI panel at the window's right edge, or its own tab, filling the card.
-enum AIDocumentStyle { case panel, tab }
-
-/// A conversation with the user's local agent (docs/design/ai-panel.md). In the panel it is a column at the window's
-/// right edge (`WindowFrames.aiPanel`) drawn straight on the Space's background, with no fill, border or shadow of its
-/// own; in the conversation's tab the same parts sit in a reading column at most 720 pt wide on the web card's color.
-/// Every part copies a part of the sidebar (`AIPanelStyle`), and Brk's own words follow the language the user writes in
-/// (`AIPanelCopy`). Arc has no such view.
+/// A conversation with the user's local agent (docs/design/ai-panel.md, ai-right-panel.md): the panel's conversation page,
+/// a column at the window's right edge (`WindowFrames.aiPanel`) drawn straight on the Space's background, with no fill,
+/// border or shadow of its own. Every part copies a part of the sidebar (`AIPanelStyle`), and Brk's own words follow the
+/// language the user writes in (`AIPanelCopy`). Arc has no such view. A conversation is never drawn anywhere else.
 ///
-/// Top to bottom: the header (the conversation's name, a spinner while the agent works, New Conversation, Open as Tab and
-/// Close), the transcript (`AITranscriptView`), the approval the agent waits for, and the composer (`AIComposerView`)
+/// Top to bottom: the header (the conversation's name, a spinner while the agent works, New Conversation, the list icon
+/// and Close), the transcript (`AITranscriptView`), the approval the agent waits for, and the composer (`AIComposerView`)
 /// with its + menu and @ list over the transcript just above it.
 @MainActor
 final class AIAnswerDocumentView: NSView {
     private let dispatch: Dispatch
-    let style: AIDocumentStyle
     private let heading = aiLabel(Metrics.ai.titleFont.value, weight: .semibold)
     private let progress = NSProgressIndicator()
     /// The panel's list icon (docs/design/ai-threads.md): to this Space's conversation list, with the count of what waits
-    /// for the user in the profile.
-    private let listButton = AIIconButton(symbol: "list.bullet", tip: "")
+    /// for the user in the profile. The chat bubbles, as on the sidebar title row's button and the command bar's row
+    /// (docs/design/ai-right-panel.md).
+    private let listButton = AIIconButton(symbol: "bubble.left.and.bubble.right", tip: "")
     private let badge = aiLabel(9, weight: .semibold)
     private let badgeBack = NSView()
     private var listShown = false
@@ -32,7 +28,6 @@ final class AIAnswerDocumentView: NSView {
     /// Space at the bottom for the panel's page dots.
     var bottomReserve: CGFloat = 0 { didSet { if bottomReserve != oldValue { needsLayout = true } } }
     private let newConversation = AIIconButton(symbol: "square.and.pencil", tip: "")
-    private let openTab = AIIconButton(symbol: "macwindow", tip: "")
     private let close = AIIconButton(symbol: "xmark", tip: "")
     private let scroll = AIPanelScrollView()
     private let transcript = AITranscriptView()
@@ -64,31 +59,25 @@ final class AIAnswerDocumentView: NSView {
     /// A page in the transcript under the pointer scrolls sideways: the panel's swipe leaves the gesture to it.
     func scrollsSideways(atWindowPoint point: CGPoint) -> Bool { !isHidden && transcript.pages.scrollsSideways(atWindowPoint: point) }
 
-    init(dispatch: @escaping Dispatch, style: AIDocumentStyle = .panel) {
+    init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
-        self.style = style
         super.init(frame: .zero)
         isHidden = true
-        if style == .panel { setAccessibilityIdentifier("ai-document") } else { identify(.aiControl("conversation-tab")) }
+        setAccessibilityIdentifier("ai-document")
         wantsLayer = true
-        layer?.masksToBounds = style == .tab
-        heading.setAccessibilityIdentifier(style == .panel ? "ai-heading" : "ai-tab-heading")
-        if style == .tab { heading.font = .systemFont(ofSize: Metrics.ai.tabTitleFont.value, weight: .semibold) }
+        heading.setAccessibilityIdentifier("ai-heading")
         progress.style = .spinning
         progress.controlSize = .small
         progress.isDisplayedWhenStopped = false
         newConversation.identify(.aiControl("new"))
         newConversation.onPress = { dispatch(.assist(.newConversation)) }
-        openTab.identify(.aiControl("open-tab"))
-        openTab.onPress = { dispatch(.assist(.openAsTab)) }
         close.setAccessibilityIdentifier("ai-close")
         close.onPress = { [weak self] in
             guard let self else { return }
             dispatch(.assist(self.answer?.busy == true && self.answer?.conversation == nil ? .cancel : .dismiss))
         }
-        for button in [newConversation, openTab, close, listButton] {
+        for button in [newConversation, close, listButton] {
             button.layer?.cornerRadius = Metrics.ai.iconRadius.value
-            button.isHidden = style == .tab
         }
         listButton.identify(.aiControl("list"))
         listButton.onPress = { [weak self] in self?.onList?() }
@@ -98,7 +87,7 @@ final class AIAnswerDocumentView: NSView {
         badge.alignment = .center
         badge.setAccessibilityIdentifier("ai-list-badge")
         badge.isHidden = true
-        scroll.identify(.aiControl(style == .panel ? "transcript" : "tab-transcript"))
+        scroll.identify(.aiControl("transcript"))
         scroll.documentView = transcript
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
@@ -133,12 +122,13 @@ final class AIAnswerDocumentView: NSView {
         composer.onStop = { [weak self] in self?.send(.stop) }
         composer.onPlus = { [weak self] in self?.toggleMenu() }
         composer.onRemoveChip = { [weak self] id in self?.send(.detach(id)) }
+        composer.onHoverChip = { [weak self] id in self?.send(.hoverChip(id)) }
         composer.onChange = { [weak self] text in self?.textChanged(text) }
         composer.onCommand = { [weak self] selector in self?.command(selector) ?? false }
         composer.onResize = { [weak self] in self?.needsLayout = true }
         mentions.setAccessibilityIdentifier("ai-mentions")
         plusMenu.identify(.aiControl("menu"))
-        for view in [heading, progress, listButton, badgeBack, badge, newConversation, openTab, close, scroll, approval, composer, mentions, plusMenu] as [NSView] { addSubview(view) }
+        for view in [heading, progress, listButton, badgeBack, badge, newConversation, close, scroll, approval, composer, mentions, plusMenu] as [NSView] { addSubview(view) }
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
@@ -148,7 +138,7 @@ final class AIAnswerDocumentView: NSView {
 
     /// The list icon in the header: shown while the panel has a list (a standard window), with the count of what waits.
     func showList(_ panel: AIPanelSnapshot?) {
-        listShown = panel != nil && style == .panel
+        listShown = panel != nil
         listButton.isHidden = !listShown
         let waiting = panel?.waiting ?? 0
         badge.stringValue = waiting > 99 ? "99+" : "\(waiting)"
@@ -166,15 +156,11 @@ final class AIAnswerDocumentView: NSView {
         needsLayout = true
     }
 
-    /// An intent from this view: as it is from the panel, on this conversation from its tab.
-    private func send(_ intent: AIIntent) {
-        if style == .tab, let id = answer?.conversation?.id { dispatch(.assist(.inTab(id, intent))) }
-        else { dispatch(.assist(intent)) }
-    }
+    private func send(_ intent: AIIntent) { dispatch(.assist(intent)) }
 
     private func openLink(_ url: URL) {
         if let tab = AgentTabLink.id(url) { send(.openTabLink(tab)) }
-        else if let conversation = ConversationPage.id(of: url) { send(.openConversation(conversation)) }
+        else if let conversation = ConversationPage.id(of: url) { send(.showConversation(conversation)) }
         else if ["http", "https"].contains(url.scheme?.lowercased()) { dispatch(.commandBar(.submit(url.absoluteString))) }
     }
 
@@ -194,9 +180,8 @@ final class AIAnswerDocumentView: NSView {
         let styleChanged = theme != self.theme
         if styleChanged {
             self.theme = theme
-            panelStyle = AIPanelStyle(theme, onCard: style == .tab)
+            panelStyle = AIPanelStyle(theme)
             appearance = NSAppearance(named: theme.scheme == .light ? .aqua : .darkAqua)
-            layer?.backgroundColor = style == .tab ? AIPanelStyle.cardColor(theme.scheme).cgColor : nil
             let next = PageTheme(theme, background: AIPanelStyle.cardRGBA(theme.scheme))
             if next != pageTheme { pageTheme = next; transcript.pages.apply(next) }
         }
@@ -205,20 +190,18 @@ final class AIAnswerDocumentView: NSView {
         copy = AIPanelCopy(answer.conversation?.items ?? [])
         let conversation = answer.conversation
         heading.stringValue = title(answer)
-        heading.textColor = style == .tab ? panelStyle.cardText : panelStyle.text
+        heading.textColor = panelStyle.text
         heading.toolTip = heading.stringValue
         if answer.busy { progress.startAnimation(nil) } else { progress.stopAnimation(nil) }
         progress.toolTip = copy.working
-        for button in [newConversation, openTab, close] {
+        for button in [newConversation, close] {
             button.tint = panelStyle.secondary
             button.hoverFill = panelStyle.itemHover
             button.pressFill = panelStyle.itemHover
         }
         newConversation.tooltip(copy.newConversation)
-        openTab.tooltip(copy.openInTab)
         close.tooltip(answer.busy && conversation == nil ? copy.cancel : copy.close)
-        newConversation.isHidden = style == .tab || conversation == nil || conversation?.fresh == true && conversation?.items.isEmpty == true
-        openTab.isHidden = style == .tab || conversation == nil || conversation?.ended == true
+        newConversation.isHidden = conversation == nil || conversation?.fresh == true && conversation?.items.isEmpty == true
         showTranscript(answer)
         showComposer(answer)
         approval.show(pending(answer), agent: conversation?.agentName, folder: conversation?.folder, style: panelStyle, copy: copy)
@@ -469,17 +452,11 @@ final class AIAnswerDocumentView: NSView {
     override func layout() {
         super.layout()
         let m = Metrics.ai, gap = m.gap.value
-        // The panel keeps the sidebar's inset; a tab lays the same parts out in a reading column in the middle of its card.
-        let column: CGRect
-        if style == .tab {
-            let width = min(m.tabColumnWidth.value, bounds.width - m.tabColumnInset.value * 2)
-            column = CGRect(x: ((bounds.width - width) / 2).rounded(), y: m.tabColumnInset.value / 2, width: width, height: bounds.height - m.tabColumnInset.value)
-        } else {
-            column = CGRect(x: m.columnInset.value, y: 0, width: bounds.width - m.columnInset.value * 2, height: bounds.height - max(m.bottomInset.value, bottomReserve))
-        }
+        // The panel keeps the sidebar's inset.
+        let column = CGRect(x: m.columnInset.value, y: 0, width: bounds.width - m.columnInset.value * 2, height: bounds.height - max(m.bottomInset.value, bottomReserve))
         let headerY = column.minY + m.headerTop.value, headerHeight = m.headerHeight.value, icon = m.iconSize.value
         var right = column.maxX
-        for button in [close, openTab, newConversation, listButton] where !button.isHidden {
+        for button in [close, newConversation, listButton] where !button.isHidden {
             button.frame = CGRect(x: right - icon, y: headerY + (headerHeight - icon) / 2, width: icon, height: icon)
             right -= icon + 2
         }

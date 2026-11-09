@@ -123,8 +123,8 @@ public final class ContentAreaView: NSView {
                 card.host(surface(page), placeholder: nil)
                 card.dragStrip(content.windowDragging && toolbar == nil && frame.header == nil && frame.rect.minY <= frames.contentArea.minY + 0.5
                                ? frame.pane : nil)
-            case .easel, .conversation, .aiPage:
-                // The board, a conversation or a kept page is drawn over its card by the root, on its own color.
+            case .easel, .aiPage:
+                // The board or a kept page is drawn over its card by the root, on its own color.
                 card.host(nil, placeholder: nil)
                 card.dragStrip(nil)
             case .blank, .history:

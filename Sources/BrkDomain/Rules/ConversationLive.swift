@@ -1,16 +1,17 @@
 import BrkBase
 import Foundation
 
-// Conversations as tabs (docs/design/ai-conversations.md). A conversation's live state is an `AIAnswerSnapshot` in one
-// of two places: a window's panel (`AISession.answers`, as before) or its own entry in `AISession.tabAnswers` while its
-// tab shows it or a turn of it still runs out of sight. Once its first message goes out it is saved in
-// `Doc.conversations` and gets a sidebar row; every finished turn writes the transcript back. A conversation shows in one
-// place at a time: showing its tab takes it out of any panel.
+// Live conversations (docs/design/ai-conversations.md, ai-right-panel.md). A conversation's live state is an
+// `AIAnswerSnapshot` in one of two places: a window's panel (`AISession.answers`), or out of sight in
+// `AISession.awayAnswers` while a turn of it still runs after the panel closed, the window moved to another Space or
+// another conversation took the panel. Once its first message goes out it is saved in `Doc.conversations` with the Space
+// it was started in; it gets no sidebar row. Every finished turn writes the transcript back.
 
 /// Where a live conversation is.
 enum AIAnswerHost: Hashable, Sendable {
     case panel(WindowID)
-    case tab(AIRequestID)
+    /// Out of sight: its turn runs on and its answer lands in the saved transcript.
+    case away(AIRequestID)
 }
 
 extension AISession {
@@ -18,13 +19,13 @@ extension AISession {
         get {
             switch host {
             case .panel(let window): answers[window]
-            case .tab(let id): tabAnswers[id]
+            case .away(let id): awayAnswers[id]
             }
         }
         set {
             switch host {
             case .panel(let window): answers[window] = newValue
-            case .tab(let id): tabAnswers[id] = newValue
+            case .away(let id): awayAnswers[id] = newValue
             }
         }
     }
@@ -32,18 +33,18 @@ extension AISession {
     /// The live answer whose running turn is `id`.
     func host(ofRequest id: AIRequestID) -> AIAnswerHost? {
         if let window = answers.first(where: { $0.value.request == id })?.key { return .panel(window) }
-        if let conversation = tabAnswers.first(where: { $0.value.request == id })?.key { return .tab(conversation) }
+        if let conversation = awayAnswers.first(where: { $0.value.request == id })?.key { return .away(conversation) }
         return nil
     }
 
     func host(ofConversation id: AIRequestID) -> AIAnswerHost? {
         if let window = answers.first(where: { $0.value.conversation?.id == id })?.key { return .panel(window) }
-        return tabAnswers[id] != nil ? .tab(id) : nil
+        return awayAnswers[id] != nil ? .away(id) : nil
     }
 
     /// Every conversation with live state, wherever it is.
     var liveConversations: Set<AIRequestID> {
-        Set(answers.values.compactMap { $0.conversation?.id }).union(tabAnswers.keys)
+        Set(answers.values.compactMap { $0.conversation?.id }).union(awayAnswers.keys)
     }
 }
 
@@ -114,13 +115,9 @@ extension AppState {
         return out
     }
 
-    /// What a conversation is called: its tab's own title once someone (the user, Name Tabs) gave it one, else its saved
-    /// title, which starts as its first message.
-    func conversationName(_ id: AIRequestID) -> String? {
-        let url = ConversationPage.url(id)
-        if let custom = doc.tree.allTabs().lazy.compactMap({ tab($0) }).first(where: { $0.url == url })?.customTitle, !custom.isEmpty { return custom }
-        return doc.conversations[id]?.title
-    }
+    /// What a conversation is called: its saved title, which starts as its first message and changes when the small model
+    /// names it or the user renames it.
+    func conversationName(_ id: AIRequestID) -> String? { doc.conversations[id]?.title }
 
     func pageSnapshot(_ record: AIPageRecord, height: Int? = nil) -> AIPageSnapshot {
         let kept = doc.tree.allTabs().contains { AIPageTab.id(of: tab($0)?.url) == record.id }
@@ -130,26 +127,22 @@ extension AppState {
         snapshot.saveSchema = record.saveSchema
         snapshot.revision = record.revision ?? 0
         snapshot.schedule = record.live?.schedule
+        if doc.conversations[record.conversation] != nil { snapshot.conversation = record.conversation }
         return snapshot
     }
 
-    /// The conversation tabs a window's cards show, with what each shows: its live state or its saved transcript.
-    func conversationCards(in window: WindowID) -> [ConversationCard] {
-        shownNativePages(in: window).compactMap { page, url in
-            guard let id = ConversationPage.id(of: url) else { return nil }
-            if case .tab? = session.ai.host(ofConversation: id), let live = session.ai.tabAnswers[id] { return ConversationCard(page: page, answer: withPages(live)) }
-            guard let stored = doc.conversations[id] else {
-                return ConversationCard(page: page, answer: AIAnswerSnapshot(request: nil, title: ConversationPage.untitled,
-                                                                             text: "This conversation is no longer saved.", busy: false, sources: []))
-            }
-            return ConversationCard(page: page, answer: withPages(stored.snapshot()))
-        }
-    }
-
-    func aiPageCards(in window: WindowID) -> [AIPageCard] {
+    /// The kept pages a window's cards show. Their caption rows speak their conversation's language.
+    func aiPageCards(in window: WindowID, system: String) -> [AIPageCard] {
         shownNativePages(in: window).compactMap { page, url in
             guard let id = AIPageTab.id(of: url) else { return nil }
-            return AIPageCard(page: page, content: doc.aiPages[id].map { pageSnapshot($0) })
+            let content = doc.aiPages[id].map { record -> AIPageSnapshot in
+                var snapshot = pageSnapshot(record)
+                if let stored = doc.conversations[record.conversation] {
+                    snapshot.language = AILanguage.of(liveAnswer(stored.id)?.conversation?.items ?? stored.items, system: system)
+                } else { snapshot.language = AILanguage.system(system) }
+                return snapshot
+            }
+            return AIPageCard(page: page, content: content)
         }
     }
 
@@ -163,49 +156,23 @@ extension AppState {
         }
     }
 
-    /// Conversations some window's cards show now.
-    var shownConversations: Set<AIRequestID> {
-        Set(doc.windows.keys.flatMap { window in shownNativePages(in: window).compactMap { ConversationPage.id(of: $0.1) } })
-    }
-
-    /// A conversation is busy in a panel or tab.
+    /// A conversation's turn runs, in a panel or out of sight.
     func conversationBusy(_ id: AIRequestID) -> Bool {
         session.ai.host(ofConversation: id).flatMap { session.ai[host: $0]?.busy } ?? false
     }
 }
 
 extension Work {
-    /// Where a conversation intent from `window` acts: the conversation tab that sent it, else the window's panel.
-    func host(for window: WindowID, tab: AIRequestID?) -> AIAnswerHost {
-        guard let tab else { return .panel(window) }
-        if case .panel(let other)? = state.session.ai.host(ofConversation: tab) { return .panel(other) }
-        return .tab(tab)
-    }
-
     /// The window a live conversation's turns run in.
     func window(of host: AIAnswerHost) -> WindowID? {
         switch host {
         case .panel(let window): window
-        case .tab(let id): state.session.ai.tabWindows[id]
+        case .away(let id): state.session.ai.awayWindows[id]
         }
     }
 
-    /// The conversation's live state, made from its saved transcript when it has none (a tab shown after a relaunch,
-    /// a conversation put away). Only the window's own profile. The session starts with the next message.
-    mutating func reviveConversation(_ id: AIRequestID, in window: WindowID) -> AIAnswerHost? {
-        if let host = state.session.ai.host(ofConversation: id) {
-            if case .tab = host { state.session.ai.tabWindows[id] = window }
-            return host
-        }
-        guard let stored = state.doc.conversations[id], stored.profile == state.agentProfile(in: window) else { return nil }
-        state.session.ai.tabAnswers[id] = stored.snapshot()
-        state.session.ai.tabWindows[id] = window
-        state.session.ai.turnText[id] = 0
-        return .tab(id)
-    }
-
-    /// The first message of a conversation went out: it is saved, and gets a row at the top of the window's Today
-    /// (where a new tab goes), not shown; the panel keeps showing it.
+    /// The first message of a conversation went out: it is saved, with the Space the window shows. It gets no sidebar row;
+    /// the panel keeps showing it, and this Space's list has it.
     mutating func saveConversation(_ id: AIRequestID, title: String, in window: WindowID) {
         guard state.doc.conversations[id] == nil, let profile = state.agentProfile(in: window),
               let live = state.session.ai.host(ofConversation: id).flatMap({ state.session.ai[host: $0]?.conversation }) else { return }
@@ -213,7 +180,6 @@ extension Work {
         stored.items = Self.kept(live.items)
         stored.space = state.doc.windows[window]?.space
         state.doc.conversations[id] = stored
-        _ = conversationRow(id, in: window, create: true)
     }
 
     /// The live transcript written back into the saved conversation.
@@ -236,64 +202,9 @@ extension Work {
         items.filter { if case .approval(let a) = $0 { a.answer != nil } else { true } }
     }
 
-    /// The row that shows conversation `id`: one of this profile's open rows (Pinned and Today of every Space, then
-    /// Favorites); else one from the archive, brought back; else a new one at the top of the window's Today.
-    mutating func conversationRow(_ id: AIRequestID, in window: WindowID, create: Bool) -> ItemID? {
-        rowShowing(ConversationPage.url(id), in: window, create: create, title: state.doc.conversations[id]?.title ?? ConversationPage.untitled,
-                   favicon: ConversationPage.favicon)
-    }
-
-    private mutating func rowShowing(_ url: URL, in window: WindowID, create: Bool, title: String, favicon: URL) -> ItemID? {
-        guard let doc = state.doc.windows[window], doc.kind == .standard, let profile = state.agentProfile(in: window) else { return nil }
-        let same: (ItemID) -> Bool = { [state] row in state.tab(row)?.url == url && state.browsingContext(of: row) == .profile(profile) }
-        let order = [doc.space] + state.doc.spaceOrder.filter { $0 != doc.space }
-        for space in order.compactMap({ state.doc.spaces[$0] }) where space.profile == profile {
-            if let row = (state.doc.tree.tabs(under: space.pinnedRoot) + state.doc.tree.tabs(under: space.todayRoot)).first(where: same) { return row }
-        }
-        if let root = state.doc.favorites[profile], let row = state.doc.tree.tabs(under: root).first(where: same) { return row }
-        if let archived = state.doc.archive.first(where: { $0.tab.url == url }) {
-            let before = Set(state.doc.tree.allTabs())
-            run(.archive(.restore(archived.id)), in: window)
-            if let row = state.doc.tree.allTabs().first(where: { !before.contains($0) && state.tab($0)?.url == url }) { return row }
-        }
-        guard create, let today = state.doc.spaces[doc.space]?.todayRoot else { return nil }
-        let row = ItemID(ctx.newID())
-        do {
-            try state.doc.tree.insert(row, .tab(Tab(url: url, title: title, favicon: favicon, lastActiveAt: ctx.now)), at: .into(parent: today, index: 0), createdAt: ctx.now)
-        } catch { return nil }
-        return row
-    }
-
-    /// Shows conversation `id` in its tab in `window`. Its live state, if a panel had it, moves with it.
-    mutating func openConversationTab(_ id: AIRequestID, in window: WindowID) {
-        guard let stored = state.doc.conversations[id], stored.profile == state.agentProfile(in: window),
-              let row = conversationRow(id, in: window, create: true) else { return }
-        focus(row, in: window)
-        request(ConversationPage.url(id), for: PageID(window: window, item: row))
-        moveToTab(id, window: window)
-    }
-
-    /// A panel's conversation becomes a tab conversation: same session, same turn.
-    mutating func moveToTab(_ id: AIRequestID, window: WindowID) {
-        guard case .panel(let panel)? = state.session.ai.host(ofConversation: id), let answer = state.session.ai.answers[panel] else { return }
-        state.session.ai.answers[panel] = nil
-        state.session.ai.answerContexts[panel] = nil
-        state.session.ai.tabAnswers[id] = answer
-        state.session.ai.tabWindows[id] = window
-    }
-
-    /// The panel's Open as Tab. A conversation that has no message yet is saved first, so it has a row.
-    mutating func openPanelAsTab(in window: WindowID) {
-        guard let conversation = state.session.ai.answers[window]?.conversation, !conversation.ended else { return }
-        if state.doc.conversations[conversation.id] == nil {
-            let first = conversation.items.lazy.compactMap { if case .user(let text) = $0 { text } else { nil } }.first
-            saveConversation(conversation.id, title: first ?? ConversationPage.untitled, in: window)
-        }
-        openConversationTab(conversation.id, in: window)
-    }
-
     /// The panel is about to show something else, or close. A saved conversation in it is put away: a running turn
-    /// goes on out of sight and lands in the saved transcript; an idle one keeps nothing live. True when it was moved.
+    /// goes on out of sight and lands in the saved transcript (its list row shows the spinner); an idle one keeps nothing
+    /// live. True when it was moved.
     @discardableResult
     mutating func putAwayPanelConversation(in window: WindowID) -> Bool {
         guard let answer = state.session.ai.answers[window], let id = answer.conversation?.id, state.doc.conversations[id] != nil,
@@ -302,8 +213,8 @@ extension Work {
         state.session.ai.answers[window] = nil
         state.session.ai.answerContexts[window] = nil
         if answer.busy {
-            state.session.ai.tabAnswers[id] = answer
-            state.session.ai.tabWindows[id] = window
+            state.session.ai.awayAnswers[id] = answer
+            state.session.ai.awayWindows[id] = window
         }
         return true
     }
@@ -327,6 +238,29 @@ extension Work {
         commitConversation(id)
     }
     static let waitingText = "Waiting for the local AI tool…"
+
+    /// The row that shows `url`: one of this profile's open rows (Pinned and Today of every Space, then Favorites); else one
+    /// from the archive, brought back; else, with `create`, a new one at the top of the window's Today.
+    private mutating func rowShowing(_ url: URL, in window: WindowID, create: Bool, title: String, favicon: URL) -> ItemID? {
+        guard let doc = state.doc.windows[window], doc.kind == .standard, let profile = state.agentProfile(in: window) else { return nil }
+        let same: (ItemID) -> Bool = { [state] row in state.tab(row)?.url == url && state.browsingContext(of: row) == .profile(profile) }
+        let order = [doc.space] + state.doc.spaceOrder.filter { $0 != doc.space }
+        for space in order.compactMap({ state.doc.spaces[$0] }) where space.profile == profile {
+            if let row = (state.doc.tree.tabs(under: space.pinnedRoot) + state.doc.tree.tabs(under: space.todayRoot)).first(where: same) { return row }
+        }
+        if let root = state.doc.favorites[profile], let row = state.doc.tree.tabs(under: root).first(where: same) { return row }
+        if let archived = state.doc.archive.first(where: { $0.tab.url == url }) {
+            let before = Set(state.doc.tree.allTabs())
+            run(.archive(.restore(archived.id)), in: window)
+            if let row = state.doc.tree.allTabs().first(where: { !before.contains($0) && state.tab($0)?.url == url }) { return row }
+        }
+        guard create, let today = state.doc.spaces[doc.space]?.todayRoot else { return nil }
+        let row = ItemID(ctx.newID())
+        do {
+            try state.doc.tree.insert(row, .tab(Tab(url: url, title: title, favicon: favicon, lastActiveAt: ctx.now)), at: .into(parent: today, index: 0), createdAt: ctx.now)
+        } catch { return nil }
+        return row
+    }
 
     /// Keep as Tab on a page in a transcript, or `brk_page_save`: the page gets a row at the top of the window's Today,
     /// shown when the user asked for it. Nil when the page is unknown or another profile's.
@@ -368,23 +302,20 @@ extension Work {
 
     // MARK: After every input
 
-    /// Conversations shown in a tab leave any panel; tab conversations that are neither shown nor running keep nothing
-    /// live. A conversation that lost its live state closes its session and every process it started.
+    /// Conversations out of sight that are idle keep nothing live (their transcript is saved); a conversation that lost
+    /// its live state closes its session and every process it started. A conversation row that came back into the
+    /// sidebar (an old folder restored from the archive, an undo, a typed `brk://conversation/` address) goes again, and
+    /// the conversation shows in that window's panel instead.
     mutating func reconcileConversations(from previous: AppState) {
-        let shown = state.shownConversations
-        for id in shown {
-            guard case .panel? = state.session.ai.host(ofConversation: id),
-                  let window = state.doc.windows.keys.sorted().first(where: { w in state.shownNativePages(in: w).contains { ConversationPage.id(of: $0.1) == id } }) else { continue }
-            moveToTab(id, window: window)
-        }
-        for (id, answer) in state.session.ai.tabAnswers where !answer.busy && !shown.contains(id) {
+        dropConversationRows(showing: true)
+        for (id, answer) in state.session.ai.awayAnswers where !answer.busy {
             commitConversation(id)
-            state.session.ai.tabAnswers[id] = nil
-            state.session.ai.tabWindows[id] = nil
+            state.session.ai.awayAnswers[id] = nil
+            state.session.ai.awayWindows[id] = nil
         }
-        for (id, window) in state.session.ai.tabWindows where state.doc.windows[window] == nil {
-            state.session.ai.tabWindows[id] = nil
-            if state.session.ai.tabAnswers[id]?.busy == true { state.session.ai.tabAnswers[id] = nil }
+        for (id, window) in state.session.ai.awayWindows where state.doc.windows[window] == nil {
+            state.session.ai.awayWindows[id] = nil
+            if state.session.ai.awayAnswers[id]?.busy == true { state.session.ai.awayAnswers[id] = nil }
         }
         for (window, prompt) in state.session.ai.linkPrompts where state.doc.windows[window] == nil || state.doc.aiPages[prompt.page] == nil {
             state.session.ai.linkPrompts[window] = nil
@@ -395,10 +326,34 @@ extension Work {
             state.session.ai.turnText[id] = nil
         }
     }
+
+    /// Takes every conversation row out of the shared sidebar: Pinned, Today, folders, splits and Favorites. With
+    /// `showing`, a window that showed one shows its conversation in the panel instead.
+    mutating func dropConversationRows(showing: Bool) {
+        let rows = state.doc.tree.allTabs().compactMap { row -> (ItemID, AIRequestID)? in
+            guard let tab = state.tab(row), let id = ConversationPage.id(of: tab.url) ?? ConversationPage.id(of: tab.pinnedURL) else { return nil }
+            return (row, id)
+        }
+        guard !rows.isEmpty else { return }
+        for (row, id) in rows {
+            let showers = showing ? state.doc.windows.keys.sorted().filter { state.shownItem(in: $0).map { $0 == row || state.panes(of: $0).contains(row) } ?? false } : []
+            _ = removeItem(row)
+            unload(row)
+            replaceShown(row)
+            for window in showers where state.doc.conversations[id] != nil { showConversationInPanel(id, in: window) }
+        }
+    }
 }
 
 extension Work {
     /// The saved conversations and pages, read at launch. Those of a profile that is gone are left out.
+    ///
+    /// Before step 8 (docs/design/ai-right-panel.md) every conversation had a sidebar row, and its Space was where the row
+    /// was. The first launch after it moves that into the conversation: each one records the Space its row was in (an
+    /// archived row's Space before it was archived; a Favorite's, or none, the Space it was started in; a Space that is gone,
+    /// the profile's first), takes a name the user gave the row, and gets the tabs it used back from its transcript. Then
+    /// every conversation row and archived conversation entry goes. Folders left empty stay, as Arc keeps them; kept AI
+    /// pages' rows are untouched.
     mutating func conversationsLoaded(_ conversations: [StoredConversation], _ pages: [AIPageRecord]) {
         for conversation in conversations where state.doc.profiles[conversation.profile] != nil && state.doc.conversations[conversation.id] == nil {
             var kept = conversation
@@ -408,5 +363,91 @@ extension Work {
         for page in pages where state.doc.profiles[page.profile] != nil && state.doc.aiPages[page.id] == nil {
             state.doc.aiPages[page.id] = page
         }
+        migrateConversationRows()
+    }
+
+    private mutating func migrateConversationRows() {
+        let places = state.legacyConversationPlaces()
+        for (id, place) in places {
+            guard var stored = state.doc.conversations[id] else { continue }
+            let before = stored
+            stored.space = place.space
+            if let name = place.name, stored.userNamed != true, name != stored.title {
+                stored.title = name
+                stored.userNamed = true
+            }
+            if stored != before { state.doc.conversations[id] = stored }
+        }
+        for (id, stored) in state.doc.conversations where stored.usedTabs == nil {
+            let recovered = state.recoveredTabs(stored)
+            if !recovered.isEmpty { state.doc.conversations[id]?.usedTabs = recovered }
+        }
+        state.doc.archive.removeAll { $0.structure == nil && ConversationPage.shows($0.tab.url) }
+        dropConversationRows(showing: false)
+    }
+}
+
+extension AppState {
+    /// Where the conversations of every profile were before step 8: the Space whose Pinned or Today held a row of it; a
+    /// Favorite, or one with no row at all, the Space it was started in; an archived one the Space it was archived from. A
+    /// Space that is gone gives way to the profile's first. With the name the user gave a row, if any.
+    func legacyConversationPlaces() -> [AIRequestID: (space: SpaceID?, name: String?)] {
+        var out: [AIRequestID: (space: SpaceID?, name: String?)] = [:]
+        func id(_ row: ItemID) -> AIRequestID? { ConversationPage.id(of: tab(row)?.url) ?? ConversationPage.id(of: tab(row)?.pinnedURL) }
+        func name(_ row: ItemID) -> String? { tab(row)?.customTitle.flatMap { $0.isEmpty ? nil : $0 } }
+        for sid in doc.spaceOrder {
+            guard let space = doc.spaces[sid] else { continue }
+            for row in doc.tree.tabs(under: space.pinnedRoot) + doc.tree.tabs(under: space.todayRoot) {
+                guard let conversation = id(row), out[conversation] == nil, doc.conversations[conversation]?.profile == space.profile else { continue }
+                out[conversation] = (sid, name(row))
+            }
+        }
+        for (profile, root) in doc.favorites {
+            for row in doc.tree.tabs(under: root) {
+                guard let conversation = id(row), out[conversation] == nil, let stored = doc.conversations[conversation], stored.profile == profile else { continue }
+                out[conversation] = (stored.space, name(row))
+            }
+        }
+        for entry in doc.archive where entry.structure == nil {
+            guard let conversation = ConversationPage.id(of: entry.tab.url), out[conversation] == nil, let stored = doc.conversations[conversation] else { continue }
+            out[conversation] = (entry.fromSpace ?? stored.space, entry.tab.customTitle.flatMap { $0.isEmpty ? nil : $0 })
+        }
+        for (key, place) in out {
+            guard let profile = doc.conversations[key]?.profile else { continue }
+            let spaces = doc.spaceOrder.filter { doc.spaces[$0]?.profile == profile }
+            if place.space.map({ !spaces.contains($0) }) ?? true { out[key]?.space = spaces.first }
+        }
+        return out
+    }
+
+    /// The tabs an older conversation used, as far as its transcript tells: the `brk://tab/<id>` links in the agent's
+    /// answers that name a tab still in the sidebar, and the tabs named in Brk's "附上 …" lines, found by their title in the
+    /// conversation's Space and the profile's Favorites. The chips' ids were never saved, so a title is the best left.
+    func recoveredTabs(_ stored: StoredConversation) -> [ItemID] {
+        var out: [ItemID] = []
+        func add(_ id: ItemID) { if !out.contains(id) { out.append(id) } }
+        let pattern = try? NSRegularExpression(pattern: #"brk://tab/([^)\s\]]+)"#)
+        var spaceTabs: [ItemID] = []
+        if let space = stored.space.flatMap({ doc.spaces[$0] }) { spaceTabs = doc.tree.tabs(under: space.pinnedRoot) + doc.tree.tabs(under: space.todayRoot) }
+        if let root = doc.favorites[stored.profile] { spaceTabs += doc.tree.tabs(under: root) }
+        for item in stored.items {
+            switch item {
+            case .assistant(let text):
+                guard let pattern else { continue }
+                for match in pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+                    guard let range = Range(match.range(at: 1), in: text) else { continue }
+                    let raw = String(text[range])
+                    let id = ItemID(raw.removingPercentEncoding ?? raw)
+                    if locate(id) == .global, tab(id) != nil, browsingContext(of: id) == .profile(stored.profile) { add(id) }
+                }
+            case .notice(let text):
+                guard let names = AIWords.attachedNames(text) else { continue }
+                for name in names {
+                    if let row = spaceTabs.first(where: { !out.contains($0) && tab($0)?.displayTitle == name }) { add(row) }
+                }
+            default: continue
+            }
+        }
+        return out
     }
 }

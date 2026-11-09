@@ -8,9 +8,10 @@ public enum AddressToolbarLayout {
     public static var height: Double { Metrics.spaceTools.toolbarHeight.value }
     /// The control row above the hairline.
     static var rowHeight: Double { Metrics.spaceTools.controlSize.value }
-    /// Everything between the third left button and the first right one; a click there edits the address.
-    public static func address(in rect: CGRect) -> CGRect {
-        let start = button(2, in: rect).maxX, end = trailingButton(2, in: rect).minX
+    /// Everything between the third left button and the first right one; a click there edits the address. With the AI
+    /// chat button (`ai`, Brk's own) the right buttons move over by one.
+    public static func address(in rect: CGRect, ai: Bool = false) -> CGRect {
+        let start = button(2, in: rect).maxX, end = trailingButton(2, in: rect, ai: ai).minX
         return CGRect(x: start, y: rect.minY, width: max(0, end - start), height: rowHeight)
     }
     /// Back (0), forward (1) and reload (2) from the left edge.
@@ -19,11 +20,17 @@ public enum AddressToolbarLayout {
         return CGRect(x: rect.minX + m.toolbarControlInset.value + Double(index) * m.controlPitch.value, y: rect.minY,
                       width: m.controlSize.value, height: rowHeight)
     }
-    /// The right buttons, 0 nearest the address.
-    public static func trailingButton(_ index: Int, in rect: CGRect) -> CGRect {
+    /// The right buttons, 0 nearest the address; with the AI chat button they move over by one.
+    public static func trailingButton(_ index: Int, in rect: CGRect, ai: Bool = false) -> CGRect {
         let m = Metrics.spaceTools
-        let x = rect.maxX - m.toolbarControlInset.value - m.controlSize.value - Double(2 - index) * m.controlPitch.value
+        let x = rect.maxX - m.toolbarControlInset.value - m.controlSize.value - Double(2 - index + (ai ? 1 : 0)) * m.controlPitch.value
         return CGRect(x: x, y: rect.minY, width: m.controlSize.value, height: rowHeight)
+    }
+
+    /// Brk's AI chat button at the toolbar's right end (docs/design/ai-right-panel.md).
+    public static func aiButton(in rect: CGRect) -> CGRect {
+        let m = Metrics.spaceTools
+        return CGRect(x: rect.maxX - m.toolbarControlInset.value - m.controlSize.value, y: rect.minY, width: m.controlSize.value, height: rowHeight)
     }
 }
 

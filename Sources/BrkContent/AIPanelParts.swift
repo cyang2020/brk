@@ -16,7 +16,9 @@ class AIControl: NSView {
     var isEnabled = true { didSet { refresh() } }
     /// Drawn as hovered whatever the pointer does: the @ list's keyboard choice.
     var highlighted = false { didSet { if highlighted != oldValue { refresh() } } }
-    private(set) var hovered = false
+    private(set) var hovered = false { didSet { if hovered != oldValue { onHover?(hovered) } } }
+    /// The pointer went over the control (true) or left it.
+    var onHover: ((Bool) -> Void)?
     private var pressed = false
     private var tracking: NSTrackingArea?
 
@@ -54,6 +56,8 @@ class AIControl: NSView {
         onPress()
     }
     override func accessibilityPerformPress() -> Bool { guard isEnabled else { return false }; onPress(); return true }
+    /// The press became something else (a drag): no click, and the pressed fill goes.
+    func cancelPress() { pressed = false; refresh() }
 
     func refresh() {
         let fill = !isEnabled ? restFill : pressed ? (pressFill ?? hoverFill ?? restFill) : (hovered || highlighted) ? (hoverFill ?? restFill) : restFill
@@ -196,6 +200,24 @@ final class AIChipView: NSView {
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
+
+    /// The pointer went over the chip (true) or left it: its tab lights up in the sidebar (docs/design/ai-right-panel.md).
+    var onHover: ((Bool) -> Void)?
+    private var tracking: NSTrackingArea?
+    private var over = false
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways], owner: self)
+        addTrackingArea(area)
+        tracking = area
+    }
+    override func mouseEntered(with event: NSEvent) { if !over { over = true; onHover?(true) } }
+    override func mouseExited(with event: NSEvent) { if over { over = false; onHover?(false) } }
+    override func removeFromSuperview() {
+        if over { over = false; onHover?(false) }
+        super.removeFromSuperview()
+    }
 
     func apply(_ style: AIPanelStyle) {
         layer?.backgroundColor = style.item.cgColor

@@ -617,13 +617,26 @@ public struct SiteControlsMetrics: MetricGroup {
     public let fallbackAnchor = Metric(CGPoint(x: 24, y: 12), .guess("Content area's top-left corner, clear of the traffic lights"))
 }
 
-/// Brk's AI panel and conversation tabs (docs/design/ai-panel.md). Arc has none: these are Brk's choices, taken from the
+/// Brk's AI panel (docs/design/ai-panel.md, ai-right-panel.md). Arc has none: these are Brk's choices, taken from the
 /// sidebar's own sizes where the panel copies one of its parts.
 public struct AIMetrics: MetricGroup {
     // The column (AIPanelLayout).
     public let width = Metric(360.0, .guess("the panel column at its widest: a 344 pt reading width, where a three-column price table and a short chart fit"))
     public let minimumWidth = Metric(280.0, .guess("the panel column at its narrowest, still a 264 pt reading width"))
     public let minimumCardWidth = Metric(400.0, .guess("the web card keeps at least this much beside the panel; the panel gives way first"))
+    public let maximumShare = Metric(0.5, .guess("the panel dragged wider stops at half the window (docs/design/ai-right-panel.md)"))
+    public let maximumStoredWidth = Metric(4000.0, .guess("the widest width a window keeps for its panel; the layout still stops at half the window"))
+    public let resizeHitWidth = Metric(8.0, .derived(rule: "the sidebar's resize handle is 8 wide centred on its edge (SidebarMetrics.resizeHitWidth); the panel's is the same on the card's other edge", from: ["Sidebar resize handle"]))
+    // The drop area at the window's right edge while the panel is closed (docs/design/ai-right-panel.md).
+    public let edgeDropBand = Metric(40.0, .guess("the spec's band: the drop area shows once the pointer is this close to the window's right edge"))
+    public let edgeDropDash = Metric([6.0, 4.0], .guess("the drop area's dashed outline: dash and gap"))
+    public let edgeDropFont = Metric(14.0, .guess("the drop area's words, a little over the panel's body text"))
+    // Lit sidebar rows while the pointer is over a list row or a chip.
+    public let litBorderWidth = Metric(1.5, .guess("the outline in the Space's color round a lit row or tile"))
+    public let litTint = Metric(0.12, .guess("the Space's color laid over a lit row's fill, light enough to read the title"))
+    // The title row's chat button.
+    public let toggleBadgeHeight = Metric(13.0, .guess("the count on the chat button, a little under the list icon's 14"))
+    public let toggleBadgeFont = Metric(9.0, .guess("the count's digits, as on the panel's list icon"))
     public let columnInset = Metric(8.0, .derived(rule: "the sidebar keeps its rows this far from its edges (TablistMetrics.selectionInset); the panel mirrors it, so the gap to the card is the same on both sides", from: ["Row selection background"]))
     public let headerTop = Metric(4.0, .derived(rule: "the sidebar's title row starts 4 below the window's top (SidebarMetrics.headerTopInset)", from: ["Sidebar header top inset"]))
     public let headerHeight = Metric(40.0, .guess("the sidebar's title row height, so the header's centre is the traffic lights' (Metrics.window.trafficLightCenterY)"))
@@ -633,7 +646,7 @@ public struct AIMetrics: MetricGroup {
     public let bodyFont = Metric(13.0, .guess("messages and answers, as sidebar row titles"))
     public let stepFont = Metric(12.0, .guess("the step line, approvals' sentence, the + menu and chips"))
     public let noticeFont = Metric(11.0, .guess("the centred notice pill"))
-    public let tabTitleFont = Metric(15.0, .guess("a conversation tab's header title"))
+    public let libraryTitleFont = Metric(15.0, .guess("the Library's \"AI 对话\" page: the selected conversation's name over its transcript"))
     // Parts.
     public let iconSize = Metric(24.0, .guess("the header's icon buttons, hit area"))
     public let iconGlyph = Metric(13.0, .guess("the header's icon glyphs"))
@@ -665,9 +678,12 @@ public struct AIMetrics: MetricGroup {
     public let stripHeight = Metric(26.0, .guess("a strip for another Space's conversation at the list's top, the step line's height"))
     public let searchHeight = Metric(28.0, .guess("the list's search box, the URL pill's height less its border"))
     public let dotsHeight = Metric(50.0, .derived(rule: "the page dots' row at the panel's foot is the dock's height, so its dots sit on the line of the sidebar's Space dots", from: ["Dock (space switcher) height"]))
-    // The conversation tab.
-    public let tabColumnWidth = Metric(720.0, .guess("a conversation tab's reading column, like a chat app's"))
-    public let tabColumnInset = Metric(28.0, .guess("a conversation tab's margin around its column"))
+    // A kept page shown as a tab: its caption row, then the page.
+    public let keptPageInset = Metric(28.0, .guess("a kept page's margin inside its card, at the sides and the foot"))
+    public let keptPageGap = Metric(12.0, .guess("between a kept page's caption row and the page"))
+    // The Library's "AI 对话" page: the selected conversation over the content card.
+    public let libraryColumnWidth = Metric(720.0, .guess("the Library preview's reading column, like a chat app's"))
+    public let libraryColumnInset = Metric(28.0, .guess("the Library preview's margin around its column"))
     // The card that asks before a page's link opens.
     public let cornerRadius = Metric(12.0, .guess("the link prompt's corners"))
     public let borderWidth = Metric(1.0, .guess("the link prompt's hairline"))

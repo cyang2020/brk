@@ -11,6 +11,10 @@ import BrkUIKit
 /// conversation in this Space. Every part copies a part of the sidebar through `AIPanelStyle`, as the conversation page
 /// does: a row is a tab row, the current one the current tab's, the search box and the strips the URL pill's fill, group
 /// names the "Today" header. A row's menu is the domain's (`PopupMenuRequest.conversation`).
+///
+/// Step 8 (docs/design/ai-right-panel.md): the pointer over a row lights the tabs its conversation used in the sidebar
+/// (`AIIntent.hoverConversation`) and its second line says how many; a row dragged onto a Space's dot in the sidebar's dock
+/// moves the conversation there (`AIIntent.moveConversation`), as a tab dragged onto the dot moves the tab.
 @MainActor
 final class AIThreadListView: NSView, NSTextFieldDelegate {
     private let dispatch: Dispatch
@@ -33,6 +37,11 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
     var bottomReserve: CGFloat = 0 { didSet { if bottomReserve != oldValue { needsLayout = true } } }
     /// The header's Back: to the conversation page.
     var onBack: (() -> Void)?
+    /// The Space whose dock dot is under a window point, and the dot to show as the drop target (the sidebar's).
+    var dockSpace: ((CGPoint) -> SpaceID?)?
+    var showDockDrop: ((SpaceID?) -> Void)?
+    private var dragImage: NSImageView?
+    private var dropSpace: SpaceID?
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -74,6 +83,7 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
         guard changed else { return }
         let structure = panel.groups != self.panel?.groups || panel.strips != self.panel?.strips || style != self.style || panel.renaming != self.panel?.renaming
         self.panel = panel
+        defer { for row in rows { row.usedDetail = row.row.id == panel.hovered ? panel.hoveredDetail : nil } }
         self.style = style
         let language = panel.language
         heading.stringValue = AIThreadWords.listTitle(panel.spaceTitle, language)
@@ -126,6 +136,15 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
                     guard let self, let root = self.window?.contentView else { return }
                     self.dispatch(.sidebar(.popupMenu(.conversation(row.id), at: root.convert(point, from: nil))))
                 }
+                view.onHover = { [weak self] over in
+                    // Off one row onto the next: the next one's enter comes after this exit, so an exit clears only its own.
+                    if over { self?.dispatch(.assist(.hoverConversation(row.id))) }
+                    else if self?.panel?.hovered == row.id { self?.dispatch(.assist(.hoverConversation(nil))) }
+                }
+                view.onDrag = { [weak self, weak view] event, phase in
+                    guard let self, let view else { return }
+                    self.dragRow(view, event: event, phase: phase)
+                }
                 list.addSubview(view)
                 rows.append(view)
             }
@@ -155,6 +174,46 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
             }
         } else if let field = renameField {
             list.addSubview(field, positioned: .above, relativeTo: nil)
+        }
+    }
+
+    // MARK: Dragging a row onto a Space's dot
+
+    /// The row's image follows the pointer out of the panel; over a Space's dot the dot shows the drop target, and the
+    /// release there moves the conversation. Anywhere else the image just goes.
+    private func dragRow(_ view: AIThreadRowView, event: NSEvent, phase: AIThreadRowView.DragPhase) {
+        guard let root = window?.contentView else { return }
+        let point = event.locationInWindow
+        switch phase {
+        case .began:
+            let image = NSImageView()
+            if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: rep)
+                let picture = NSImage(size: view.bounds.size)
+                picture.addRepresentation(rep)
+                image.image = picture
+            }
+            image.wantsLayer = true
+            image.alphaValue = 0.85
+            image.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
+            image.layer?.backgroundColor = style?.color(style?.tokens.tabCurrent ?? RGBA(1, 1, 1)).cgColor
+            image.frame = CGRect(origin: .zero, size: view.bounds.size)
+            image.identify(.aiControl("thread-drag"))
+            root.addSubview(image, positioned: .above, relativeTo: nil)
+            dragImage = image
+            fallthrough
+        case .moved:
+            let local = root.convert(point, from: nil)
+            dragImage?.frame.origin = CGPoint(x: local.x - (dragImage?.frame.width ?? 0) / 2, y: local.y - (dragImage?.frame.height ?? 0) / 2)
+            let space = dockSpace?(point)
+            if space != dropSpace { dropSpace = space; showDockDrop?(space) }
+        case .ended:
+            let space = dockSpace?(point)
+            dragImage?.removeFromSuperview()
+            dragImage = nil
+            dropSpace = nil
+            showDockDrop?(nil)
+            if let space { dispatch(.assist(.moveConversation(view.row.id, space))) }
         }
     }
 
@@ -251,6 +310,21 @@ final class AIThreadRowView: AIControl {
     private let spaceDot = NSView()
     private let spinner = NSProgressIndicator()
     var onMenu: ((CGPoint) -> Void)?
+    enum DragPhase { case began, moved, ended }
+    /// The pointer's travel before a press becomes a drag: the sidebar rows' (AppKit's own threshold).
+    static let dragThreshold: CGFloat = 3
+    /// A press that travelled past the drag threshold: the row is being dragged (a list row only).
+    var onDrag: ((NSEvent, DragPhase) -> Void)?
+    private var pressAt: CGPoint?
+    private var dragging = false
+    /// The second line while the pointer is over the row: how many tabs the conversation used.
+    var usedDetail: String? {
+        didSet {
+            guard usedDetail != oldValue else { return }
+            detail.stringValue = usedDetail ?? row.snippet ?? row.detail
+            detail.setAccessibilityIdentifier(usedDetail == nil ? nil : "ai-thread-used-" + row.id.rawValue)
+        }
+    }
 
     init(_ row: AIThreadRow, kind: Kind, style: AIPanelStyle) {
         self.row = row
@@ -268,7 +342,7 @@ final class AIThreadRowView: AIControl {
         }
         hoverFill = row.current && kind == .row ? restFill : style.itemHover
         pressFill = style.itemHover
-        title.textColor = row.state == .archived ? style.secondary : style.text
+        title.textColor = style.text
         detail.stringValue = row.snippet ?? row.detail
         detail.textColor = style.secondary
         toolTip = row.title + "\n" + (row.snippet ?? row.detail)
@@ -300,7 +374,27 @@ final class AIThreadRowView: AIControl {
     override func rightMouseDown(with event: NSEvent) { onMenu?(event.locationInWindow) }
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.control) { onMenu?(event.locationInWindow); return }
+        pressAt = kind == .row ? event.locationInWindow : nil
+        dragging = false
         super.mouseDown(with: event)
+    }
+    override func mouseDragged(with event: NSEvent) {
+        guard let start = pressAt, onDrag != nil else { return super.mouseDragged(with: event) }
+        if !dragging {
+            guard hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) >= AIThreadRowView.dragThreshold else { return }
+            dragging = true
+            onDrag?(event, .began)
+        } else { onDrag?(event, .moved) }
+    }
+    override func mouseUp(with event: NSEvent) {
+        pressAt = nil
+        if dragging {
+            dragging = false
+            onDrag?(event, .ended)
+            cancelPress()
+            return
+        }
+        super.mouseUp(with: event)
     }
 
     override func layout() {

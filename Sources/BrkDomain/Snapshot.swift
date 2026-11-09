@@ -112,8 +112,14 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     /// The panel's pages and this Space's conversation list while the panel is open in a standard window
     /// (docs/design/ai-threads.md). Nil in incognito and Little windows, and while the panel is closed.
     public var aiPanel: AIPanelSnapshot? = nil
-    /// The conversation tabs the cards show (`PaneContent.conversation`), in pane order.
-    public var conversations: [ConversationCard] = []
+    /// The width this window keeps for its panel, once dragged (docs/design/ai-right-panel.md); nil: the default.
+    public var aiPanelWidth: Double? = nil
+    /// The sidebar title row's chat button (at the toolbar's right end with the toolbar shown); nil while the window cannot
+    /// open the AI panel, so the row stays as Arc draws it.
+    public var aiToggle: AIToggleSnapshot? = nil
+    /// The drop area at the right edge for tabs dragged from the sidebar while the panel is closed; nil when the window
+    /// cannot open the panel or it is open.
+    public var aiEdgeDrop: AIEdgeDropSnapshot? = nil
     /// The kept pages the cards show (`PaneContent.aiPage`), in pane order.
     public var aiPages: [AIPageCard] = []
     /// A link in an agent's page that asks before it opens.
@@ -134,6 +140,9 @@ public struct SidebarSnapshot: Sendable, Equatable, Codable {
     public var toolbarVisible: Bool = false
     public var spaceHeaderVisible: Bool = true
     public var hapticsEnabled: Bool = true
+    /// The rows lit while the pointer is over an AI list row or chip (docs/design/ai-right-panel.md): tab, folder, split
+    /// rows and Favorites tiles, by id. Empty while the sidebar is hidden.
+    public var lit: Set<ItemID> = []
 }
 
 public struct URLPillSnapshot: Sendable, Equatable, Codable {
@@ -467,8 +476,6 @@ public enum PaneContent: Sendable, Equatable, Codable {
     case history(PageID)
     /// An Easel's board (`EaselPage`): no browser; the card draws `WindowSnapshot.easels`.
     case easel(PageID, EaselID)
-    /// A conversation's tab (`ConversationPage`): no browser; the card draws `WindowSnapshot.conversations`.
-    case conversation(PageID, AIRequestID)
     /// A kept page (`AIPageTab`): the card shows `WindowSnapshot.aiPages` in the page sandbox, no profile's browser.
     case aiPage(PageID, AIPageID)
 }
@@ -708,12 +715,11 @@ public struct ArchiveEntry: Sendable, Equatable, Codable {
     public var archivedAt: Instant
     public var reason: ArchiveReason
     public var fromSpaceTitle: String?
-    /// A conversation (with the number of pages it made) or a kept page: the archive can delete it for good.
+    /// A kept page: the archive can delete it for good. (Conversations have no rows, so none is in the archive.)
     public var deletable: ArchiveDeletable? = nil
 }
 
 public enum ArchiveDeletable: Sendable, Equatable, Codable {
-    case conversation(pages: Int)
     case page
 }
 

@@ -17,13 +17,13 @@ enum AIThreadsScenarios {
                  cefOnly: "native panel", spaces),
         Scenario("AIAgentThreads-Waiting", "an approval in another Space: the strip at the list's top, the ring on its dot, the count on the list icon; the strip's click shows the approval there; Allow clears all three; a notification while Brk is not in front opens the conversation",
                  cefOnly: "native panel", waiting),
-        Scenario("AIAgentThreads-Archive", "the row menu archives a conversation; the list shows it grey as archived; a click brings its row back and opens it; rename and move from the same menu",
-                 cefOnly: "native panel and menus", archive),
+        Scenario("AIAgentThreads-Menu", "the row menu has rename, move to another Space and delete for good only (step 8: no archive, no Open in Tab); rename by typing; move to Other",
+                 cefOnly: "native panel and menus", menu),
         Scenario("AIAgentThreads-Library", "the Library's AI conversations page: a word said only in a reply finds its conversation, the Space filter narrows the list, Continue opens it in its Space, Delete for Good asks and deletes",
                  cefOnly: "native Library", library),
         Scenario("AIAgentThreads-Bar", "the command bar finds a conversation by a word said in it, names its Space, and opens it",
                  cefOnly: "native command bar", bar),
-        Scenario("AIAgentThreads-Names", "with Name Tabs on, the first answer names the conversation with the small model in a schema; the name shows in the header, the row and the list; a name the user typed is kept",
+        Scenario("AIAgentThreads-Names", "with Name Tabs on, the first answer names the conversation with the small model in a schema; the name shows in the header and the list; a name the user typed is kept",
                  cefOnly: "native panel", names),
         Scenario("AIAgentThreads-Models", "the + menu's Agent and Model opens the ready agents with their models, the current one checked; a pick goes to the next message",
                  cefOnly: "native panel", models),
@@ -180,17 +180,18 @@ enum AIThreadsScenarios {
             try app.waitUntil("the conversation by the list's back") { try panel(app)?.page == .conversation }
             return "icon → list, row → conversation, dot → list, back → conversation"
         }
-        log.check("⌥⌘A with the panel closed opens it on the list") {
-            try app.dispatch(.assist(.dismiss))
-            try app.waitUntil("the panel closed") { try panel(app) == nil }
+        log.check("⌥⌘A closes the panel and opens it again on the page it showed (step 8: a toggle)") {
             try WindowServerKeys.ensureFrontmost(app, app.window!)
             try key([.option, .command], .a)
-            try app.waitUntil("the list by ⌥⌘A", timeout: 5) { try panel(app)?.page == .list }
-            try app.waitUntil("the list on screen") { try shown(app, .aiControl("thread-list")) }
+            try app.waitUntil("the panel closed by ⌥⌘A") { try panel(app) == nil && app.view().ai == nil }
+            try key([.option, .command], .a)
+            try app.waitUntil("the conversation again by ⌥⌘A", timeout: 5) { try panel(app)?.page == .conversation && app.view().ai?.conversation?.id == id }
+            try click(app, .aiControl("list"))
+            try app.waitUntil("the list") { try panel(app)?.page == .list }
             try expect(try shown(app, .aiControl("thread-\(id.rawValue)")), "the conversation's row is not in the list")
             try click(app, .aiControl("thread-\(id.rawValue)"))
             try app.waitUntil("the conversation by its row") { try panel(app)?.page == .conversation }
-            return "⌥⌘A → list with the row; row → conversation"
+            return "⌥⌘A → closed; ⌥⌘A → the conversation; list icon → list with the row; row → conversation"
         }
         log.check("the sidebar's own swipe still switches Spaces, with the panel open") {
             let second = try createSpace(app, title: "Second")
@@ -229,7 +230,11 @@ enum AIThreadsScenarios {
             try app.waitUntil("the new conversation's answer", timeout: 20) { try app.view().ai?.busy == false && app.view().ai?.text.contains("weekly report") == true }
             feishu = try XCTUnwrapValue(try app.view().ai?.conversation?.id)
             try expect(try panel(app)?.page == .conversation, "the composer's message did not open its conversation")
-            try expect(try app.view().space.today.rows.contains { if case .tab(let t) = $0 { t.url == ConversationPage.url(feishu) } else { false } }, "its row is not in Work's Today")
+            try expect(try !app.view().space.today.rows.contains { if case .tab(let t) = $0 { t.url == ConversationPage.url(feishu) } else { false } }, "a conversation row is in Work's Today")
+            try click(app, .aiControl("list"))
+            try app.waitUntil("Work's list has it") { try rows(app).first { $0.id == feishu }?.space == work }
+            try click(app, .aiControl("thread-\(feishu.rawValue)"))
+            try app.waitUntil("its conversation again") { try panel(app)?.page == .conversation }
             return "\(feishu.rawValue) in Work"
         }
         log.check("switching Space on the left brings back each Space's last conversation") {
@@ -334,13 +339,13 @@ enum AIThreadsScenarios {
         try log.finish()
     }
 
-    // MARK: Archive, rename, move
+    // MARK: The row menu: rename, move, delete
 
-    @Sendable static func archive(_ app: AppUnderTest) throws {
+    @Sendable static func menu(_ app: AppUnderTest) throws {
         try prepare(app)
         let log = Log(app)
         let home = try app.view().space.id
-        let id = try ask(app, "archive me")
+        let id = try ask(app, "move me")
         let other = try createSpace(app, title: "Other")
         try click(app, .dockSpace(home))
         try app.waitUntil("home") { try app.view().space.id == home }
@@ -356,29 +361,20 @@ enum AIThreadsScenarios {
             try click(app, .aiControl("list"))
             try app.waitUntil("the list") { try panel(app)?.page == .list }
             let items = try menu("Rename")
-            try expect(items == ["Open in Tab", "Rename", "Archive", "Move to Another Space", "Delete for Good…"], "menu \(items)")
+            try expect(items == ["Rename", "Move to Another Space", "Delete for Good…"], "menu \(items)")
             try app.waitUntil("the rename field") { try shown(app, .aiControl("thread-rename")) }
             try key(.command, .a)
             try type("renamed", enter: true)
             try app.waitUntil("the new name") { try rows(app).first { $0.id == id }?.title == "renamed" }
             return items.joined(separator: " · ") + "; renamed by typing"
         }
-        log.check("Archive takes its row out of the sidebar; the list shows it grey") {
-            _ = try menu("Archive")
-            try app.waitUntil("archived", timeout: 5) { try rows(app).first { $0.id == id }?.state == .archived }
-            try expect(try !app.view().space.today.rows.contains { if case .tab(let t) = $0 { t.url == ConversationPage.url(id) } else { false } }, "its row is still in Today")
-            shot(app, "1-archived")
-            return "state archived, “\(try rows(app).first { $0.id == id }?.detail ?? "")”"
-        }
-        log.check("a click on the archived row brings its row back and opens it") {
-            try click(app, .aiControl("thread-\(id.rawValue)"))
-            try app.waitUntil("restored and shown", timeout: 6) { try app.view().ai?.conversation?.id == id && panel(app)?.page == .conversation }
-            try expect(try app.view().space.today.rows.contains { if case .tab(let t) = $0 { t.url == ConversationPage.url(id) } else { false } }, "its row did not come back")
-            shot(app, "2-restored")
-            return "row back in Today, conversation in the panel"
+        log.check("no row anywhere in the sidebar") {
+            try expect(try !app.view().space.today.rows.contains { if case .tab(let t) = $0 { t.url == ConversationPage.url(id) } else { false } }, "a conversation row is in Today")
+            try expect(try !app.view().space.pinned.rows.contains { if case .tab(let t) = $0 { t.url == ConversationPage.url(id) } else { false } }, "a conversation row is in Pinned")
+            shot(app, "1-list")
+            return "Pinned and Today hold no conversation row"
         }
         log.check("Move to Another Space › Other") {
-            try click(app, .aiControl("list"))
             try app.waitUntil("the list") { try panel(app)?.page == .list }
             _ = try menu("Move to Another Space › Other")
             try app.waitUntil("its row in Other", timeout: 5) { try rows(app).allSatisfy { $0.id != id } }
@@ -492,8 +488,9 @@ enum AIThreadsScenarios {
             try expect(subtitle != nil, "no “\(space) · …narwhal…” beside it")
             shot(app, "1-bar")
             try PhysicalPointer.click(app, at: CGPoint(x: row!.minX + 12, y: row!.midY), window: app.window!)
-            try app.waitUntil("its tab", timeout: 8) { try app.view().conversations.first?.answer.conversation?.id == id }
-            return "row “bar question”, subtitle “\(subtitle!.text.prefix(60))”, opened"
+            try app.waitUntil("it in the panel", timeout: 8) { try app.view().ai?.conversation?.id == id && panel(app)?.page == .conversation }
+            try expect(try !app.view().space.today.rows.contains { if case .tab(let t) = $0 { t.url == ConversationPage.url(id) } else { false } }, "the bar opened a conversation row")
+            return "row “bar question”, subtitle “\(subtitle!.text.prefix(60))”, opened in the panel"
         }
         try log.finish()
     }
@@ -508,11 +505,10 @@ enum AIThreadsScenarios {
             try app.waitUntil("the name", timeout: 20) { try app.view().ai?.name == "Named plan my" }
             let calls = (try? String(contentsOf: app.dataDirectory.appendingPathComponent("ai-fixture.jsonl"), encoding: .utf8)) ?? ""
             try expect(calls.contains("conversation_name"), "no structured request with the conversation_name schema in the fixture's log")
-            try expect(try app.view().space.today.rows.contains { if case .tab(let t) = $0 { t.url == ConversationPage.url(id) && t.title == "Named plan my" } else { false } }, "the row keeps its first message")
             try click(app, .aiControl("list"))
             try app.waitUntil("the list") { try rows(app).first { $0.id == id }?.title == "Named plan my" }
             shot(app, "1-named")
-            return "header, row and list read “Named plan my”"
+            return "header and list read “Named plan my”"
         }
         log.check("a name typed by the user is kept") {
             try app.dispatch(.assist(.renameConversation(id, "my trip")))

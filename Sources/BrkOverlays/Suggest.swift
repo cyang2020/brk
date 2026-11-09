@@ -305,7 +305,7 @@ public enum Suggest {
             let score = needle.isEmpty ? 0 : score(needle, title: action.barTitle(appName: appName), triggers: action.barTriggers(appName: appName))
             guard needle.isEmpty || score != nil else { continue }
             scored.append((score ?? 0, Suggestion(kind: .action, title: action.barTitle(appName: appName), subtitle: nil, symbol: action.spec.commandBar?.symbol, favicon: nil,
-                                                  hint: bar.keys[action]?.glyphs, command: action.spec.command)))
+                                                  hint: bar.keys[action]?.glyphs, command: action.spec.barCommand)))
         }
         let named = scored.filter { $0.score >= 3 }.map(\.row), others = scored.filter { $0.score < 3 }.map(\.row)
         let where_ = OverlayCopy.newPane(side)
@@ -355,7 +355,7 @@ public enum Suggest {
         let existing = [ActionID.fullscreen, .minimize, .toggleStayOnTop].filter { action in
             bar.actions.contains(action) && (needle.isEmpty || score(needle, title: action.barTitle(appName: appName), triggers: action.barTriggers(appName: appName)) != nil)
         }.map { action in
-            Suggestion(kind: .action, title: action.barTitle(appName: appName), subtitle: nil, symbol: action.spec.commandBar?.symbol, favicon: nil, hint: bar.keys[action]?.glyphs, command: action.spec.command)
+            Suggestion(kind: .action, title: action.barTitle(appName: appName), subtitle: nil, symbol: action.spec.commandBar?.symbol, favicon: nil, hint: bar.keys[action]?.glyphs, command: action.spec.barCommand)
         }
         return places + existing
     }
@@ -403,23 +403,16 @@ public enum Suggest {
     private static let conversationCap = 2
 
     /// Saved conversations the shared conversation search finds (`ConversationSearch`, the one the Library's "AI 对话" page
-    /// and the panel's list use): the title has the text, then every word of it was said, newest first; none whose row
-    /// another row already offers. The subtitle names the Space it is in, then what was said around the words. Choosing one
-    /// opens its conversation tab.
+    /// and the panel's list use): the title has the text, then every word of it was said, newest first. The subtitle names
+    /// the Space it is in, then what was said around the words. Choosing one opens it in the AI panel, switching to its
+    /// Space first.
     private static func conversationRows(_ needle: String, isAddress: Bool, shown: [Suggestion], bar: CommandBarSnapshot) -> [Suggestion] {
         guard !isAddress, !bar.fillsPane, !needle.isEmpty, !bar.conversations.isEmpty else { return [] }
-        var taken = Set<String>()
-        for row in shown {
-            if case .tab(.focus(let id)) = row.command, let tab = bar.tabs.first(where: { $0.tab == id }), let conversation = ConversationPage.id(of: tab.url) {
-                taken.insert(conversation.rawValue)
-            }
-        }
-        let candidates = bar.conversations.filter { !taken.contains($0.id.rawValue) }
-        return ConversationSearch.search(needle, in: candidates).prefix(conversationCap).map { conversation, found in
+        return ConversationSearch.search(needle, in: bar.conversations).prefix(conversationCap).map { conversation, found in
             let snippet: String? = if case .text(let snippet) = found { snippet } else { nil }
             let subtitle = [conversation.space, snippet].compactMap { $0 }.joined(separator: " · ")
             return Suggestion(kind: .conversation, title: conversation.title, subtitle: subtitle.isEmpty ? nil : subtitle, symbol: "bubble.left.and.bubble.right",
-                              favicon: ConversationPage.favicon, hint: OverlayCopy.conversation, command: .assist(.openConversation(conversation.id)))
+                              favicon: ConversationPage.favicon, hint: OverlayCopy.conversation, command: .assist(.showConversation(conversation.id)))
         }
     }
 
@@ -432,7 +425,7 @@ public enum Suggest {
             switch row.command {
             case .tab(.focus(let id)): if let tab = bar.tabs.first(where: { $0.tab == id }) { taken.insert(tab.url.absoluteString) }
             case .commandBar(.submit(let address)): taken.insert(address)
-            case .assist(.openConversation(let id)): taken.insert(ConversationPage.url(id).absoluteString)
+            case .assist(.showConversation(let id)): taken.insert(ConversationPage.url(id).absoluteString)
             default: break
             }
         }
@@ -443,7 +436,7 @@ public enum Suggest {
             let title = found.title.isEmpty ? displayURL(found.url) : found.title
             if found.place == .conversation, let conversation = ConversationPage.id(of: found.url) {
                 rows.append(Suggestion(kind: .meaning, title: title, subtitle: nil, symbol: "sparkle.magnifyingglass", favicon: nil,
-                                       hint: OverlayCopy.conversation, command: .assist(.openConversation(conversation))))
+                                       hint: OverlayCopy.conversation, command: .assist(.showConversation(conversation))))
                 continue
             }
             rows.append(Suggestion(kind: .meaning, title: title, subtitle: nil, symbol: "sparkle.magnifyingglass", favicon: nil,
@@ -632,7 +625,7 @@ public enum Suggest {
         for action in bar.actions {
             guard let listing = action.spec.commandBar else { continue }
             candidates.append((action.barTitle(appName: appName), action.barTriggers(appName: appName), listing.symbol,
-                               bar.keys[action]?.glyphs, action.spec.command))
+                               bar.keys[action]?.glyphs, action.spec.barCommand))
         }
         if let app = bar.newDocument {
             candidates.append((app.newDocumentTitle, ["New Document", "New Doc", "New " + app.title], "doc.badge.plus", nil, .tab(.newDocument)))

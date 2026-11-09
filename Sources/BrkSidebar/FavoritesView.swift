@@ -88,9 +88,12 @@ final class FavoritesView: NSView {
     }
 
     /// `sliding`: the tiles move to their new cells over `Draw.favoritesReflow`, as during a drag and right after one.
-    func render(_ favorites: FavoritesSnapshot, renaming: ItemID?, frames: SidebarFrames, palette: Palette, now: Instant, sliding: Bool = false) {
+    /// `lit`: tiles an AI list row or chip under the pointer lights (docs/design/ai-right-panel.md).
+    func render(_ favorites: FavoritesSnapshot, renaming: ItemID?, frames: SidebarFrames, palette: Palette, now: Instant, sliding: Bool = false,
+                lit: Set<ItemID> = []) {
         self.now = now
         cards.validateCards { id in favorites.tiles.first { $0.id == id }?.hoverCard }
+        for (id, tile) in tiles { tile.lit = lit.contains(id) }
         if let last, last.0 == favorites, last.1 == renaming, last.2 == frames, last.3 == palette { return }
         last = (favorites, renaming, frames, palette)
         self.palette = palette
@@ -118,6 +121,7 @@ final class FavoritesView: NSView {
             if awaited { tile.alphaValue = 0 }
             tile.trayWidth = frames.favoritesTray.width
             tile.render(row, renaming: row.id == renaming, palette: palette)
+            tile.lit = lit.contains(row.id)
         }
         placeGlow(sliding: sliding)
         let empty = favorites.tiles.isEmpty && !favorites.hintDismissed
@@ -220,6 +224,9 @@ final class FavoriteTileView: HoverView {
     private let wash = CALayer()
     private let rim = CALayer()
     private let rimMask = CAShapeLayer()
+    /// Brk's own: the outline and tint in the Space's color while an AI conversation under the pointer used this tab.
+    private let litLayer = CALayer()
+    var lit = false { didSet { if lit != oldValue { stateChanged() } } }
     private var row: TabRow?
     /// The tray's width sizes the picture.
     var trayWidth = 0.0
@@ -248,6 +255,10 @@ final class FavoriteTileView: HoverView {
         layer?.addSublayer(wash)
         layer?.addSublayer(rim)
         layer?.addSublayer(ring)
+        litLayer.cornerCurve = .continuous
+        litLayer.cornerRadius = Metrics.favorites.tileRadius.value
+        litLayer.isHidden = true
+        layer?.addSublayer(litLayer)
         wash.masksToBounds = true
         wash.cornerCurve = .continuous
         wash.cornerRadius = Metrics.favorites.tileRadius.value
@@ -341,6 +352,7 @@ final class FavoriteTileView: HoverView {
         rim.frame = bounds
         rimMask.frame = bounds
         rimMask.path = ring.path
+        litLayer.frame = bounds
         let window = FaviconWash.window(tile: bounds.size, trayWidth: trayWidth)
         wash.contentsRect = window
         rim.contentsRect = window
@@ -376,6 +388,13 @@ final class FavoriteTileView: HoverView {
         // A resting tile that is not current shows no picture: Q18-navy-window-arc.png's black and white icons have the
         // same tile (#7790AA, #7890AA), and so do those in Q18-user-arc-sidebar.png.
         wash.opacity = Float(picture == nil || !(current || isHovered) ? 0 : FavoriteTileView.washOpacity(scheme: palette.scheme, hovered: isHovered))
+        litLayer.isHidden = !lit
+        if lit {
+            litLayer.borderWidth = Metrics.ai.litBorderWidth.value
+            litLayer.borderColor = palette.focusColor.cgColor
+            litLayer.backgroundColor = palette.focusColor.withAlphaComponent(Metrics.ai.litTint.value).cgColor
+        }
+        setAccessibilityValue(lit ? "lit" : nil)
         CATransaction.commit()
     }
 

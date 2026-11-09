@@ -122,6 +122,7 @@ public final class SidebarView: NSView {
         var favoritesDrag: FavoritesDrag?
         var miniPlayers: [MiniPlayerSnapshot]
         var miniPlayerHover: MiniPlayerHover?
+        var aiToggle: AIToggleSnapshot?
     }
 
     public init(dispatch: @escaping Dispatch) {
@@ -238,7 +239,7 @@ public final class SidebarView: NSView {
                           dock: dockItems, plusMenu: snapshot.plusMenu, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
                           newTabCurrent: newTabCurrent, creatingSpace: snapshot.dialog == .newSpace, favoritesDrag: favoritesDrag,
-                          miniPlayers: snapshot.miniPlayers, miniPlayerHover: miniPlayers.hover)
+                          miniPlayers: snapshot.miniPlayers, miniPlayerHover: miniPlayers.hover, aiToggle: snapshot.aiToggle)
         guard slice != last else { return }
         let previous = last
         // While a drag changes the grid, and as it ends, the tiles and everything under them slide.
@@ -267,20 +268,22 @@ public final class SidebarView: NSView {
         let local = { (r: CGRect) in r.offsetBy(dx: -f.frame.minX, dy: -f.frame.minY) }
         header.frame = local(f.titleRow)
         // In a split each pane has its own back, forward and reload (Arc moves them off the title row).
-        header.render(snapshot.urlPill, frames: f, toolbar: snapshot.sidebar.toolbarVisible, palette: palette, navigation: snapshot.content.split == nil)
+        header.render(snapshot.urlPill, frames: f, toolbar: snapshot.sidebar.toolbarVisible, palette: palette, navigation: snapshot.content.split == nil,
+                      ai: snapshot.aiToggle)
         urlPill.frame = local(f.urlPill)
         urlPill.isHidden = f.urlPill.height == 0
         // Any window with no page reads as a search field, a new space's as well (Arc, P24 e).
         urlPill.render(snapshot.urlPill, palette: palette, searchField: true)
         favorites.isHidden = thisWindow
         favorites.frame = local(f.favoritesTray)
-        favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette, now: snapshot.now, sliding: sliding)
+        favorites.render(snapshot.favorites, renaming: snapshot.renaming, frames: f, palette: palette, now: snapshot.now, sliding: sliding,
+                         lit: snapshot.sidebar.lit)
         spaceHeader.isHidden = !snapshot.sidebar.spaceHeaderVisible
         Slide.place(spaceHeader, at: local(f.spaceHeader), sliding: sliding)
         spaceHeader.render(space, palette: palette, interactive: !thisWindow)
         Slide.place(tablist, at: local(f.tablistViewport), sliding: sliding)
         tablist.render(space, renaming: snapshot.renaming, frames: f, palette: palette, tools: snapshot.tabTools,
-                       newTabCurrent: newTabCurrent, now: snapshot.now)
+                       newTabCurrent: newTabCurrent, now: snapshot.now, lit: snapshot.sidebar.lit)
         miniPlayers.frame = bounds
         miniPlayers.isHidden = slice.creatingSpace || snapshot.miniPlayers.isEmpty
         miniPlayers.render(snapshot.miniPlayers, frames: f.miniPlayers, origin: f.frame.origin, palette: palette,
@@ -513,6 +516,22 @@ public final class SidebarView: NSView {
         tablist.focusList()
     }
 
+    // MARK: Brk's AI panel (docs/design/ai-right-panel.md)
+
+    /// The Space whose dot in the dock is under `point` (window coordinates): where an AI list row dragged out of the panel
+    /// would move its conversation. Nil while the sidebar is hidden or the point is over no dot.
+    public func dockSpace(atWindowPoint point: CGPoint) -> SpaceID? {
+        guard !isHidden, let frames = drag.context?.frames else { return nil }
+        let root = rootPoint(fromWindow: point)
+        return frames.dockSpaces.first { $0.value.contains(root) }?.key
+    }
+
+    /// The dot under such a drag shows the drop target, as under a dragged tab.
+    public func showDockDrop(_ space: SpaceID?) { dock.showDrop(space: space) }
+
+    /// What a dragged row stands for: the whole Cmd+click selection it belongs to, else the row itself.
+    public func dragGroup(for item: ItemID) -> [ItemID] { tablist.selectionGroup(containing: item) }
+
     /// Coming back from hidden, the column slides in from its parked position (x = -(width + 10)) over Arc's
     /// show/hide duration and curve. Otherwise frames apply at once.
     private func place(_ target: CGRect, slideIn: Bool) {
@@ -551,6 +570,11 @@ public final class SidebarView: NSView {
 /// When the toggle and the three buttons do not fit (Arc at 164) the row keeps back and forward and folds the toggle
 /// and reload into a "…" menu, on 28 pt buttons without gaps. With the toolbar shown only the toggle stays: the
 /// navigation buttons are in the toolbar.
+///
+/// Brk's own (docs/design/ai-right-panel.md): while the window can open the AI panel a chat button ends the row, the
+/// panel's switch as the toggle is the sidebar's. It keeps its hover fill while the panel is open and carries the count of
+/// what waits for the user. Narrower, reload goes into "…" first (with the toggle, as Arc folds them), then the chat
+/// button, whose "…" item carries the count. Without it the row is Arc's, unchanged.
 @MainActor
 final class TitleRowView: NSView {
     private let toggle = GlyphButton()
@@ -558,9 +582,12 @@ final class TitleRowView: NSView {
     private let forward = GlyphButton()
     private let reload = GlyphButton()
     private let more = GlyphButton()
+    private let ai = GlyphButton()
+    private let aiBadge = AIToggleBadge()
     private let dispatch: Dispatch
     private var loading = false
-    private var last: (URLPillSnapshot, SidebarFrames, Bool, Palette, Bool)?
+    private var aiFolded = false
+    private var last: (URLPillSnapshot, SidebarFrames, Bool, Palette, Bool, AIToggleSnapshot?)?
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -573,7 +600,11 @@ final class TitleRowView: NSView {
         toggle.toolTip = SidebarCopy.showHideSidebar
         back.toolTip = SidebarCopy.goBack
         forward.toolTip = SidebarCopy.goForward
-        for button in [toggle, back, forward, reload, more] { addSubview(button) }
+        ai.action = { _ in dispatch(.assist(.togglePanel)) }
+        ai.identify(.aiControl("toggle"))
+        aiBadge.identify(.aiControl("toggle-badge"))
+        for button in [toggle, back, forward, reload, more, ai] { addSubview(button) }
+        addSubview(aiBadge)
         identify(.titleRow)
     }
 
@@ -586,17 +617,40 @@ final class TitleRowView: NSView {
 
     /// `navigation` false hides back, forward and reload (a split shows them in each pane's header); with the
     /// toolbar shown they are in the toolbar.
-    func render(_ pill: URLPillSnapshot, frames f: SidebarFrames, toolbar: Bool, palette: Palette, navigation: Bool = true) {
-        if let last, last.0 == pill, last.1 == f, last.2 == toolbar, last.3 == palette, last.4 == navigation { return }
-        last = (pill, f, toolbar, palette, navigation)
+    /// `ai`: the chat button's state while the window can open the AI panel; nil leaves Arc's row as it is.
+    func render(_ pill: URLPillSnapshot, frames f: SidebarFrames, toolbar: Bool, palette: Palette, navigation: Bool = true, ai toggleState: AIToggleSnapshot? = nil) {
+        if let last, last.0 == pill, last.1 == f, last.2 == toolbar, last.3 == palette, last.4 == navigation, last.5 == toggleState { return }
+        last = (pill, f, toolbar, palette, navigation, toggleState)
         loading = pill.loading
         let w = Metrics.window, size = Draw.navButton.value, gap = Draw.navGap.value
         let y = (f.titleRow.height - size) / 2
         let lightsEnd = f.trafficLightsOrigin.x - f.titleRow.minX + 3 * w.trafficLightSize.value + 2 * w.trafficLightSpacing.value
         toggle.frame = CGRect(x: lightsEnd + Draw.toggleGap.value, y: y, width: size, height: size)
-        let right = f.titleRow.width - Metrics.sidebar.titleRowRightInset.value
-        let fits = right - 3 * size - 2 * gap >= toggle.frame.maxX + gap
+        var right = f.titleRow.width - Metrics.sidebar.titleRowRightInset.value
+        // With the toolbar shown the chat button is the toolbar's; a split's row keeps it at the end.
+        let chat = toggleState != nil && !toolbar
         let offRow = toolbar || !navigation
+        aiFolded = false
+        var aiCompact = false
+        ai.isHidden = !chat
+        if chat, offRow {
+            ai.frame = CGRect(x: right - size, y: y, width: size, height: size)
+        } else if chat, right - 4 * size - 3 * gap >= toggle.frame.maxX + gap {
+            ai.frame = CGRect(x: right - size, y: y, width: size, height: size)
+            right -= size + gap
+        } else if chat {
+            // Too narrow for five: Arc's compact row with the chat button at its end, else the chat button in "…" too.
+            let compact = Draw.navButtonCompact.value, cy = (f.titleRow.height - compact) / 2
+            if right - 4 * compact >= lightsEnd {
+                ai.frame = CGRect(x: right - compact, y: cy, width: compact, height: compact)
+                right -= compact
+                aiCompact = true
+            } else {
+                ai.isHidden = true
+                aiFolded = true
+            }
+        }
+        let fits = !aiFolded && !aiCompact && right - 3 * size - 2 * gap >= toggle.frame.maxX + gap
         more.isHidden = offRow || fits
         toggle.isHidden = !offRow && !fits
         if fits || offRow {
@@ -625,6 +679,14 @@ final class TitleRowView: NSView {
         forward.render(.forward, size: glyph, palette: palette, radius: radius, hoverFill: fill)
         reload.render(pill.loading ? .stop : .reload, size: glyph, palette: palette, radius: radius, hoverFill: fill)
         more.render(.more, size: glyph, palette: palette, radius: radius, hoverFill: fill)
+        if let toggleState {
+            ai.renderSymbol(AIToggleBadge.symbol, size: glyph, palette: palette, radius: radius, hoverFill: fill)
+            ai.latchedFill = toggleState.open ? fill : nil
+            ai.toolTip = AIThreadWords.toggleTip(toggleState.language)
+            ai.setAccessibilityLabel(AIThreadWords.toggleName(toggleState.language))
+            ai.setAccessibilityValue(toggleState.open ? "open" : "closed")
+        }
+        aiBadge.show(ai.isHidden ? 0 : toggleState?.waiting ?? 0, on: ai.frame, palette: palette)
     }
 
     private func reloadOrStop(_ modifiers: NSEvent.ModifierFlags) {
@@ -642,11 +704,56 @@ final class TitleRowView: NSView {
         toggleItem.target = self
         menu.autoenablesItems = false
         menu.items = [reloadItem, toggleItem]
+        // The chat button folded in: its item, with the count of what waits for the user.
+        if aiFolded, let state = last?.5 {
+            let item = NSMenuItem(title: AIThreadWords.toggleName(state.language), action: #selector(menuAI), keyEquivalent: "")
+            item.target = self
+            if state.waiting > 0 { item.badge = NSMenuItemBadge(count: state.waiting) }
+            item.state = state.open ? .on : .off
+            menu.items.append(item)
+        }
         menu.popUp(positioning: nil, at: CGPoint(x: more.frame.minX, y: more.frame.maxY), in: self)
     }
 
     @objc private func menuReload() { reloadOrStop([]) }
     @objc private func menuToggle() { dispatch(.sidebar(.toggle)) }
+    @objc private func menuAI() { dispatch(.assist(.togglePanel)) }
+}
+
+/// The count on the title row's chat button (and the toolbar's): what waits for the user in the profile, in the Space's
+/// color, at the button's top right, as on the panel's list icon.
+@MainActor
+final class AIToggleBadge: NSView {
+    /// The chat bubbles: the same icon as the command bar's "AI Conversations" row and the panel's list icon.
+    static let symbol = "bubble.left.and.bubble.right"
+    private let label = NSTextField(labelWithString: "")
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        label.font = .systemFont(ofSize: Metrics.ai.toggleBadgeFont.value, weight: .semibold)
+        label.alignment = .center
+        label.isSelectable = false
+        addSubview(label)
+        isHidden = true
+    }
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func show(_ count: Int, on button: CGRect, palette: Palette) {
+        isHidden = count == 0
+        guard count > 0 else { return }
+        label.stringValue = count > 99 ? "99+" : "\(count)"
+        label.textColor = palette.scheme == .light ? .white : NSColor(srgbRed: 0x1F / 255, green: 0x1E / 255, blue: 0x24 / 255, alpha: 1)
+        layer?.backgroundColor = palette.focusColor.cgColor
+        let height = Metrics.ai.toggleBadgeHeight.value, width = max(height, ceil(label.intrinsicContentSize.width) + 6)
+        frame = CGRect(x: button.maxX - width + 4, y: button.minY - 2, width: width, height: height)
+        layer?.cornerRadius = height / 2
+        let lh = ceil(label.intrinsicContentSize.height)
+        label.frame = CGRect(x: 0, y: ((height - lh) / 2).rounded(), width: width, height: lh)
+        setAccessibilityLabel(label.stringValue)
+    }
 }
 
 /// The URL pill (Arc: `CommandBarPlaceholderView`): the focused tab's host or "Search or Enter URL…". While the pointer

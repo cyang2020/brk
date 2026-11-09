@@ -255,12 +255,13 @@ enum AILivePagesScenarios {
         pid = again.pid
         if moved > 0 { _ = try app.advanceClock(seconds: moved) }
     }
-    /// The page's sandbox view on screen in the page's card: its frame in root coordinates.
+    /// The page's sandbox view on screen in the page's card, under its caption row: its frame in root coordinates.
     private static func pageCard(_ app: AppUnderTest) throws -> CGRect {
         let card = try XCTUnwrapValue(try app.native().actual[ViewID.aiControl("page-card").identifier])
         try expect(!card.hidden && card.frame.height > 150, "the page card: \(card)")
-        let inset = Metrics.ai.tabColumnInset.value
-        return card.frame.insetBy(dx: inset, dy: inset)
+        let m = Metrics.ai, inset = m.keptPageInset.value
+        let top = inset / 2 + m.pageHeaderHeight.value + m.keptPageGap.value
+        return CGRect(x: card.frame.minX + inset, y: card.frame.minY + top, width: card.frame.width - inset * 2, height: card.frame.height - top - inset)
     }
     /// Shows the fixture's home tab: its row, or, when something covers the row, the command bar's Switch to Tab.
     private static func lookAway(_ app: AppUnderTest) throws {
@@ -372,8 +373,8 @@ enum AILivePagesScenarios {
         }
 
         log.check("Keep as Tab from the page's own menu, then Refresh ▸ Every Hour from its row's menu") {
-            // The conversation is saved; opening it is what its link or its row does.
-            try app.dispatch(.assist(.openConversation(conversation)))
+            // The conversation is saved; opening it is what its link does (in the panel).
+            try app.dispatch(.assist(.showConversation(conversation)))
             try app.waitUntil("the page in the transcript", timeout: 10) { try app.native().actual[ViewID.aiControl("page-" + page.rawValue).identifier]?.hidden == false }
             app.sleep(1.5)
             let frame = try XCTUnwrapValue(try app.native().actual[ViewID.aiControl("page-" + page.rawValue).identifier]?.frame)
@@ -556,7 +557,7 @@ enum AILivePagesScenarios {
         }
 
         if ProcessInfo.processInfo.environment["BRK_E2E_LIVE_FIXTURE_FROM"] == "bar" { log.write("(probe)") }
-        log.check("the command bar finds the conversation by what was said, and opens its tab") {
+        log.check("the command bar finds the conversation by what was said, and opens it in the panel") {
             try key(.command, .t)
             try app.waitUntil("the command bar") { if case .commandBar? = try app.view().overlay { true } else { false } }
             try type("toaster is cheapest")
@@ -582,36 +583,22 @@ enum AILivePagesScenarios {
             try clickScreen(point)
             app.sleep(0.8)
             screenCapture(app, prefix + "-bar-conversation-clicked-screen")
-            try app.waitUntil("the conversation's tab", timeout: 8) { try app.view().conversations.first?.answer.conversation?.id == conversation }
-            return "found by “toaster is cheapest” (said in it, not in its title) and opened by a click"
+            try app.waitUntil("the conversation in the panel", timeout: 8) { try app.view().ai?.conversation?.id == conversation }
+            try expect(try !tabRows(app.view().space.today.rows).contains { $0.url == ConversationPage.url(conversation) }, "the bar opened a conversation row")
+            return "found by “toaster is cheapest” (said in it, not in its title) and opened in the panel by a click"
         }
 
-        log.check("closing the conversation's row archives it; the archive deletes it for good after asking") {
-            let row = try todayRow(app) { $0.url == ConversationPage.url(conversation) }
-            try WindowServerKeys.ensureFrontmost(app, app.window!)
-            try key(.command, .w)
-            try app.waitUntil("the row archived", timeout: 6) { try !tabRows(app.view().space.today.rows).contains { $0.id == row.id } }
-            // The archive from the command bar's View Archive row, as a person finds it.
-            try key(.command, .t)
-            try app.waitUntil("the command bar") { if case .commandBar? = try app.view().overlay { true } else { false } }
-            try type("View Archive")
-            app.sleep(0.8)
-            try key([], .returnKey)
-            try app.waitUntil("the archive", timeout: 8) { if case .library? = try app.view().overlay { true } else { false } }
-            app.sleep(1)
-            var entry: CGRect?
-            try app.waitUntil("the conversation's entry", timeout: 8) {
-                guard case .library(let library)? = try app.view().overlay,
-                      let found = library.archive?.groups.flatMap(\.entries).first(where: { $0.url == ConversationPage.url(conversation) }) else { return false }
-                entry = try app.native().actual[ViewID.archiveEntry(found.id).identifier]?.frame
-                return entry != nil
+        log.check("the list row's Delete for Good… asks, then deletes the transcript, its page and the page's row") {
+            // Step 8: a conversation has no row to archive; its list row's menu deletes it for good.
+            try clickControl(app, "list")
+            try app.waitUntil("the list", timeout: 6) { try app.view().aiPanel?.page == .list }
+            let frame = try stillFrame(app, .aiControl("thread-" + conversation.rawValue))
+            guard case .menuItems = try app.send(.captureContextMenu(window: app.window, point: CGPoint(x: frame.midX, y: frame.midY), choose: "Delete for Good…")) else {
+                throw Check(description: "no row menu")
             }
-            try click(app, at: centre(entry!), right: true)
-            try chooseMenu(["Delete Conversation…"])
-            var button: CGRect?
-            try app.waitUntil("the confirmation", timeout: 6) { button = NativeSystemInput.frame(pid: pid, title: "Delete", roles: ["AXButton"]); return button != nil }
+            try app.waitUntil("the confirmation", timeout: 6) { try app.view().pendingConversationDeletion?.id == conversation }
             screenCapture(app, prefix + "-delete-confirm-screen")
-            try clickScreen(centre(button!))
+            try click(app, at: centre(stillFrame(app, .spaceToolsControl("alert-confirm"))))
             try app.waitUntil("the files gone", timeout: 8) {
                 !FileManager.default.fileExists(atPath: app.dataDirectory.appendingPathComponent("Conversations/\(conversation.rawValue).json").path)
                     && !FileManager.default.fileExists(atPath: app.dataDirectory.appendingPathComponent("AI Pages/\(page.rawValue).json").path)
@@ -645,10 +632,9 @@ enum AILivePagesScenarios {
         guard let parts = ProcessInfo.processInfo.environment["BRK_E2E_REAL_LIVE_PART"], !parts.isEmpty else { return true }
         return parts.split(separator: ",").contains { $0 == part }
     }
-    private enum Place { case panel, tab }
-    private static func answer(_ app: AppUnderTest, _ place: Place) throws -> AIAnswerSnapshot? {
-        place == .panel ? try app.view().ai : try app.view().conversations.first?.answer
-    }
+    /// Where a conversation shows: only the panel since step 8 (docs/design/ai-right-panel.md).
+    private enum Place { case panel }
+    private static func answer(_ app: AppUnderTest, _ place: Place) throws -> AIAnswerSnapshot? { try app.view().ai }
     private static func pending(_ ai: AIAnswerSnapshot?) -> AIAgentApproval? {
         ai?.conversation?.items.lazy.compactMap { if case .approval(let a) = $0, a.answer == nil { a } else { nil } }.first
     }
@@ -801,13 +787,13 @@ enum AILivePagesScenarios {
         }
 
         if wanted("edits"), let page {
-            log.check("asked in the conversation, the agent adds a box to tick and a note to each item") {
-                let row = try todayRow(app) { $0.url == ConversationPage.url(conversation!) }
-                try click(app, at: centre(stillFrame(app, .row(row.id))))
-                try app.waitUntil("the conversation's tab", timeout: 8) { try app.view().conversations.first?.answer.conversation?.id == conversation }
+            log.check("back to the conversation from the kept page's button; asked there, the agent adds a box to tick and a note to each item") {
+                try showPage(app, page)
+                try click(app, at: centre(stillFrame(app, .aiControl("page-conversation"))))
+                try app.waitUntil("the conversation in the panel", timeout: 8) { try app.view().ai?.conversation?.id == conversation }
                 app.sleep(1)
-                try send(app, .tab, "给这个价格页面的每个商品加一个可以勾选的框和一个备注输入框，勾选和备注要用 window.brk.save 保存")
-                let ai = try run(app, log, .tab, "edits")
+                try send(app, .panel, "给这个价格页面的每个商品加一个可以勾选的框和一个备注输入框，勾选和备注要用 window.brk.save 保存")
+                let ai = try run(app, log, .panel, "edits")
                 log.write("  steps: \(steps(ai))")
                 try expect(steps(ai).contains { $0.hasPrefix("Change a page") }, "the page was not changed: \(steps(ai))")
                 return "steps \(steps(ai)); saveSchema \(short(record(app, page)?["saveSchema"] as? String))"
