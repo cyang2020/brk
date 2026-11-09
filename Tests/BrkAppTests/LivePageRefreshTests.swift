@@ -274,5 +274,6 @@ final class LivePageRefreshTests: XCTestCase {
         XCTAssertTrue(BrkToolCatalog.pageRules.contains("Save on every `input` event of a text field and every tick, not only on `change` or blur"))
         XCTAssertTrue(BrkToolCatalog.rules.contains("`window.brk.save` on every input event, not only on change or blur"))
         for spec in BrkToolCatalog.specs where [.render, .updatePage].contains(spec.name) { XCTAssertTrue(spec.description.contains("Save on every `input` event"), "\(spec.name)") }
+        XCTAssertTrue(BrkToolCatalog.specs.first { $0.name == .updatePage }?.description.contains("Leave `data` out unless the user asked to change the data itself") == true)
     }
 }

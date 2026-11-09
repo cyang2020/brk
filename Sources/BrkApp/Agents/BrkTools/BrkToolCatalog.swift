@@ -203,7 +203,7 @@ enum BrkToolCatalog {
                           required: ["pageId"]),
              readOnly: false, destructive: false),
         Spec(name: .updatePage, title: "Change a Brk page",
-             description: "Change one of this conversation's pages when the user asks: new `html`, `data`, `dataSchema`, `title` or `height`; what you leave out stays. A kept page's tab shows the change. Check new HTML with `brk_html_preview` first.\n" + pageRules,
+             description: "Change one of this conversation's pages when the user asks: new `html`, `data`, `dataSchema`, `title` or `height`; what you leave out stays. Leave `data` out unless the user asked to change the data itself: Brk refreshes a kept page's data, so what you last saw may be older. A kept page's tab shows the change. Check new HTML with `brk_html_preview` first.\n" + pageRules,
              schema: object(["pageId": string("From `brk_html_render`."), "html": string("A complete HTML document."), "data": ["type": "object", "description": "The page's new `window.brk.data`."],
                              "dataSchema": ["type": "object", "description": "The data's new JSON Schema."],
                              "saveSchema": ["type": "object", "description": "The new JSON Schema of what the page saves with `window.brk.save`."], "title": string("1 to \(AIPageLimits.titleMax) characters."),

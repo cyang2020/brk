@@ -689,9 +689,14 @@ enum AILivePagesScenarios {
     /// those inside the page's card on screen: the transcript's copy of the page lists its own (real-live-claude-1 typed
     /// its second note into the first field of that copy's list).
     private static func pageControls(_ role: String) -> [CGRect] {
-        guard let app, let card = try? pageCard(app), let origin = try? screen(app, card.origin) else { return axNodes(role).map(\.frame) }
+        guard let app, let card = try? pageCard(app), let origin = try? screen(app, card.origin) else { return [] }
         let shown = CGRect(origin: origin, size: card.size)
         return axNodes(role).map(\.frame).filter { shown.contains(CGPoint(x: $0.midX, y: $0.midY)) }
+    }
+    /// What `pageControls` chose from, for the step's line.
+    private static func controlsReport(_ role: String) -> String {
+        let card = app.flatMap { try? pageCard($0) }
+        return "\(role) all \(axNodes(role).map { "(\(Int($0.frame.minX)),\(Int($0.frame.minY)))" }.joined(separator: " ")); card \(card.map { "\(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))×\(Int($0.height))" } ?? "none"); chosen \(pageControls(role).map { "(\(Int($0.minX)),\(Int($0.minY)))" }.joined(separator: " "))"
     }
     private static func axNodes(_ role: String) -> [(frame: CGRect, value: String)] { NativeSystemInput.elements(pid: pid, role: role) }
 
@@ -811,6 +816,8 @@ enum AILivePagesScenarios {
                 var boxes: [CGRect] = [], fields: [CGRect] = []
                 try app.waitUntil("the page's boxes", timeout: 10) { boxes = pageControls("AXCheckBox"); return !boxes.isEmpty }
                 fields = pageControls("AXTextField") + pageControls("AXTextArea")
+                log.write("  " + controlsReport("AXCheckBox"))
+                log.write("  " + controlsReport("AXTextField"))
                 shot(app, prefix, "edits-page")
                 try clickScreen(centre(boxes[0]))
                 guard let field = fields.first else { throw Check(description: "the page has no note field: \(boxes.count) boxes") }

@@ -116,7 +116,10 @@ final class TranscriptPages {
             // New data or HTML: the page loads again, once it has committed what is being typed. Its own saves never
             // reload it.
             if let old = views[page.id], revisions[page.id] != page.revision { replace(old, page: page.id) }
-            if views[page.id] == nil, revisions[page.id] == page.revision, let back = leaving.removeValue(forKey: page.id) { views[page.id] = back }
+            if views[page.id] == nil, revisions[page.id] == page.revision, let back = leaving.removeValue(forKey: page.id) {
+                back.identify(.aiControl("page-" + page.id.rawValue))
+                views[page.id] = back
+            }
             let view = views[page.id] ?? make(page)
             if view.superview !== text { text.addSubview(view) }
             view.frame = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - Self.captionHeight)
@@ -146,6 +149,7 @@ final class TranscriptPages {
         views[page] = nil
         leaving[page] = view
         view.frame.origin.x = -100_000
+        view.identify(.aiControl("page-leaving-" + page.rawValue))
         Task { @MainActor [weak self] in
             await view.commitEdits()
             guard let self, self.leaving[page] === view else { return }
@@ -351,10 +355,13 @@ final class AIPageCardsView {
         entry.view.apply(theme)
     }
 
-    /// The card went: out of sight, still in the window so the page runs, until it has committed its edits.
+    /// The card went: out of sight, still in the window so the page runs, until it has committed its edits. It answers
+    /// to other identifiers meanwhile, so nothing takes it for the shown page.
     private func retire(_ entry: Entry) {
         leaving[entry.page] = entry
         entry.back.frame.origin.x = -100_000
+        entry.back.identify(.aiControl("page-card-leaving"))
+        entry.view.identify(.aiControl("page-card-view-leaving"))
         Task { @MainActor [weak self] in
             await entry.view.commitEdits()
             guard let self, self.leaving[entry.page]?.view === entry.view else { return }
@@ -367,6 +374,8 @@ final class AIPageCardsView {
     private func comeBack(_ page: AIPageID, revision: Int) -> Entry? {
         guard let entry = leaving[page], entry.revision == revision else { return nil }
         leaving[page] = nil
+        entry.back.identify(.aiControl("page-card"))
+        entry.view.identify(.aiControl("page-card-view"))
         return entry
     }
 
