@@ -34,7 +34,7 @@ final class AIAnswerDocumentView: NSView {
     private let newConversation = AIIconButton(symbol: "square.and.pencil", tip: "")
     private let openTab = AIIconButton(symbol: "macwindow", tip: "")
     private let close = AIIconButton(symbol: "xmark", tip: "")
-    private let scroll = NSScrollView()
+    private let scroll = AIPanelScrollView()
     private let transcript = AITranscriptView()
     private let approval = AIApprovalView()
     private let composer = AIComposerView()

@@ -4,6 +4,14 @@ import BrkDomain
 import BrkLayout
 import BrkUIKit
 
+/// A scroll view of the panel's that lets every scroll event go through the window, one at a time, as the sidebar's list
+/// does (`TablistView`): with AppKit's responsive scrolling it would take a whole gesture after its first event, and the
+/// panel's swipe between its pages would never see it.
+@MainActor
+final class AIPanelScrollView: NSScrollView {
+    override class var isCompatibleWithResponsiveScrolling: Bool { false }
+}
+
 /// The AI panel's column (docs/design/ai-threads.md): two pages side by side, this Space's conversation list and then the
 /// conversation, the way the sidebar holds the Library and then the Spaces. A two-finger swipe with the pointer over the
 /// panel moves between them with the sidebar's own gesture, tracking and spring (`PageSwipeGesture`, `PagePager`); the

@@ -359,8 +359,7 @@ final class ControlExecutor {
             return .ok
         case .readPasteboard: return .text(NSPasteboard.general.string(forType: .string) ?? "")
         case .aiNotifications:
-            let data = (try? JSONEncoder().encode(store.aiNotifications.recorded)) ?? Data("[]".utf8)
-            return .text(String(decoding: data, as: UTF8.self))
+            return .menuItems(store.aiNotifications.recorded.map { [$0.kind.rawValue, $0.conversation.rawValue, $0.title, $0.body].joined(separator: "\t") })
         case .openAINotification(let conversation):
             store.aiNotifications.open(conversation)
             return .ok

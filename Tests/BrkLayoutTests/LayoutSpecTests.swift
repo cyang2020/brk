@@ -121,11 +121,12 @@ final class LayoutSpecTests: XCTestCase {
         XCTAssertNil(archive.sidebar)
         XCTAssertNil(archive.resizeHandle)
         XCTAssertNil(archive.revealStrip)
-        // One 78 pt cell per page in Arc's order, 100 apart from y 94 in a 776 pt window (P32); the exit button is the
-        // dock's Library button, the gift button level with it at the column's right.
-        XCTAssertEqual(LibraryPage.allCases, [.media, .downloads, .easelsAndNotes, .spaces, .boosts, .archive])
+        // One 78 pt cell per page in Arc's order, spread evenly from y 94 in a 776 pt window (P32: Arc's six are 100 apart;
+        // Brk's AI Conversations after Archived Tabs makes seven, 83 apart); the exit button is the dock's Library button,
+        // the gift button level with it at the column's right.
+        XCTAssertEqual(LibraryPage.allCases, [.media, .downloads, .easelsAndNotes, .spaces, .boosts, .archive, .conversations])
         XCTAssertEqual(LibraryPage.allCases.map { archive.library?.pageCells[$0] },
-                       (0..<6).map { CGRect(x: 9.5, y: 94 + 100 * Double($0), width: 94.5, height: 78) })
+                       (0..<7).map { CGRect(x: 9.5, y: 94 + 83 * Double($0), width: 94.5, height: 78) })
         XCTAssertEqual(LibraryLayout.closeButton(in: panel), CGRect(x: 8, y: 735, width: 32, height: 32))
         XCTAssertEqual(LibraryLayout.giftButton(in: archive.library!.nav), CGRect(x: 73, y: 735, width: 32, height: 32))
         XCTAssertEqual(LibraryLayout.trafficLightsOrigin(in: panel), bar.sidebar?.trafficLightsOrigin, "the window buttons stay put")

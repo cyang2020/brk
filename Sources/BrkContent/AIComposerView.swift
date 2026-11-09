@@ -35,7 +35,7 @@ final class AIInputTextView: NSTextView {
 final class AIComposerView: NSView, NSTextViewDelegate {
     private let back = NSView()
     let input = AIInputTextView(usingTextLayoutManager: false)
-    private let scroll = NSScrollView()
+    private let scroll = AIPanelScrollView()
     let plus = AIIconButton(symbol: "plus", tip: "", glyph: 13)
     let send = AIIconButton(symbol: "arrow.up", tip: "", glyph: 11)
     private(set) var chips: [AIChipView] = []

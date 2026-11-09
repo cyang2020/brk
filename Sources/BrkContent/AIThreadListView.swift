@@ -18,7 +18,7 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
     private let back = AIIconButton(symbol: "bubble.left.and.text.bubble.right", tip: "")
     private let close = AIIconButton(symbol: "xmark", tip: "")
     private let search = AIThreadSearchField()
-    private let scroll = NSScrollView()
+    private let scroll = AIPanelScrollView()
     private let list = AIFlippedView()
     private let empty = NSTextField(wrappingLabelWithString: "")
     let composer = AIComposerView(prefix: "list-")
