@@ -138,6 +138,14 @@ final class LibraryFilterButton: NSButton {
         label.textColor = colors.filterInk
     }
 
+    /// Brk's own pages name the button in their language ("筛选").
+    func setTitle(_ title: String) {
+        guard label.stringValue != title else { return }
+        label.stringValue = title
+        setAccessibilityLabel(title)
+        needsLayout = true
+    }
+
     override func layout() {
         super.layout()
         let g = LibraryDraw.column.searchGlyph.value + 1

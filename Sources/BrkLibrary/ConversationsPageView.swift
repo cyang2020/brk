@@ -71,7 +71,7 @@ final class ConversationsPageView: NSView {
         }
         let language = snapshot.language
         searchField.placeholder = AIThreadWords.librarySearch(language)
-        filterButton.setAccessibilityLabel(AIThreadWords.filter(language))
+        filterButton.setTitle(AIThreadWords.filter(language))
         if changed { rebuild(snapshot, now: now) }
         needsLayout = true
     }
