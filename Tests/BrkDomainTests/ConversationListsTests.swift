@@ -54,6 +54,17 @@ final class ConversationListsTests: XCTestCase {
         XCTAssertNil(d.view.ai)
     }
 
+    func testOptionCommandAOrTheCommandBarOpensTheListWithThePanelClosed() {
+        let spec = ActionID.aiConversations.spec
+        XCTAssertEqual(spec.bindings.map(\.chord), [KeyChord([.option, .command], .a)])
+        XCTAssertEqual(KeyMap().lookup(KeyChord([.option, .command], .a))?.action, .aiConversations)
+        XCTAssertTrue(spec.commandBar?.triggers.contains("AI 对话") == true, "the command bar finds it by its Chinese name too")
+        let d = enabled()
+        XCTAssertNil(d.view.aiPanel)
+        d.user(spec.command)
+        XCTAssertEqual(d.view.aiPanel?.page, .list)
+    }
+
     func testTheListIconOpensAClosedPanelOnTheListAndCloseClosesIt() {
         let d = enabled()
         XCTAssertNil(d.view.aiPanel)
