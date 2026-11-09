@@ -15283,8 +15283,8 @@
       "arc_evidence": "None: Brk's own.",
       "description": "window.brk.save(object) is the one page-world message that changes anything: a JSON object of at most 64 KB that fits the page's saveSchema (or any object), at most 60 a minute, answered so the page's promise settles; kept with the page and read back as window.brk.saved; a refresh reads it and never writes it; a preview saves nothing.",
       "historical_status": "planned",
-      "status": "partial",
-      "acceptance": "Tick an item and type a note in a page; quit and relaunch; they are still there and the next refresh keeps them. Gap found at the parent's gate: a typed note is kept only when the agent-written page saves on input; in real-live-claude-2 the tick was saved and the note was not. Follow-up: Brk saves pending edits when a page is hidden or Brk quits, and the scenario checks the note text.",
+      "status": "verified",
+      "acceptance": "Tick an item and type a note in a page; quit and relaunch; they are still there and the next refresh keeps them. Brk commits a page's edits before its view goes (hidden, switched, window closed, quit), so a note is kept even when the agent's page saves only on change.",
       "owner": "ai-native-e-live-pages",
       "required_checks": [
         "unit",
@@ -15311,6 +15311,13 @@
           "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/merge-gate-e/run-native.py <name> --only AIRealPagesLive-claude",
           "artifact": "verify/ai-native/merge-gate-e/real-live-claude-2/shots/real-live-claude.txt",
           "scope": "Parent's rerun at 7e682e99: 10 of 10 on real Claude (Haiku 5.5)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/merge-gate-e2/run-native.py <name> --only AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-e2/real-live-claude/shots/real-live-claude.txt",
+          "scope": "Parent's run at ffc7066a: both notes and the tick kept through ⌘Q, a relaunch and a refresh; AIAgentLivePages covers a page that saves only on change."
         }
       ]
     },
