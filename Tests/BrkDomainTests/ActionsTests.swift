@@ -88,8 +88,8 @@ final class ActionsTests: XCTestCase {
         XCTAssertEqual(referenceActions.count, 134)
         XCTAssertEqual(referenceActions.filter { $0.spec.later == nil }.count, 131)   // R3-5 Help/Developer rows plus New Easel (R3-3)
         XCTAssertEqual(ActionID.allCases.count, 175)
-        XCTAssertEqual(ActionID.allCases.filter { $0.spec.row > 189 }.count, 40)
-        XCTAssertEqual(ActionID.allCases.filter { $0.spec.later == nil }.count, 171)
+        XCTAssertEqual(ActionID.allCases.filter { $0.spec.row > 189 }.count, 41)
+        XCTAssertEqual(ActionID.allCases.filter { $0.spec.later == nil }.count, 172)
         XCTAssertEqual(Set(ActionID.allCases.map(\.spec.row)).count, ActionID.allCases.count)
     }
 
