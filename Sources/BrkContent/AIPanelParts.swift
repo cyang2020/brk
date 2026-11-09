@@ -117,11 +117,12 @@ final class AIIconButton: AIControl {
     }
 }
 
-/// A button with words: the accent fill (Allow, the primary action), the item fill (Deny, actions), or plain text in
-/// the accent (a link-like row).
+/// A button with words: the accent fill (Allow, the primary action), the item fill (Deny, actions), plain text in the
+/// accent (a link-like row), or plain text in the secondary grey (Show Command on the approval card: the accent on the
+/// card's fill reads too faintly in a dark Space).
 @MainActor
 final class AITextButton: AIControl {
-    enum Kind { case accent, item, link }
+    enum Kind { case accent, item, link, quiet }
     let label = aiLabel(Metrics.ai.stepFont.value, weight: .medium)
     var kind: Kind = .item
     var alignment: NSTextAlignment = .center { didSet { label.alignment = alignment; needsLayout = true } }
@@ -151,6 +152,9 @@ final class AITextButton: AIControl {
         case .link:
             restFill = nil; hoverFill = style.item; pressFill = style.itemHover
             label.textColor = style.accent
+        case .quiet:
+            restFill = nil; hoverFill = style.itemHover; pressFill = style.itemHover
+            label.textColor = style.secondary
         }
     }
 

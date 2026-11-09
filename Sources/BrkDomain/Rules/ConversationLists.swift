@@ -158,6 +158,15 @@ extension AppState {
                                renaming: session.ai.renamingConversation[window].flatMap { id in mine.contains { $0.id == id } ? id : nil })
     }
 
+    /// The + menu's agent list: what Settings → Max lists, the ready agents with their models.
+    var agentMenu: AIAgentMenu? {
+        let ready = AIProviderKind.allCases.compactMap { session.ai.agents[$0] }.filter { $0.state == .ready }
+        guard !ready.isEmpty else { return nil }
+        var models: [AIProviderKind: String] = [:]
+        for status in ready { if let model = doc.settings.max.agentOptions?[status.kind]?.model { models[status.kind] = model } }
+        return AIAgentMenu(agents: ready, models: models, active: activeAgent)
+    }
+
     /// The command bar's conversations: the newest of the profile, each with all that was said and the Space it is in.
     func conversationCandidates(_ profile: ProfileID) -> [ConversationCandidate] {
         let places = conversationPlaces(profile)
@@ -247,9 +256,66 @@ extension Work {
         case .archiveConversation(let id): archiveConversation(id, in: window)
         case .restoreConversation(let id): _ = restoreConversation(id, in: window)
         case .moveConversation(let id, let space): moveConversation(id, to: space, in: window)
+        case .pickAgent(let kind, let model): pickAgent(kind, model: model, at: .panel(window))
         default: return false
         }
         return true
+    }
+
+    /// The + menu's agent list: the conversation's next messages go to this agent and model. A session already running
+    /// is changed by the app at the next turn (another agent: a new session with the transcript, this agent's own session
+    /// continued where it can be). Only an agent that is ready on this Mac.
+    mutating func pickAgent(_ kind: AIProviderKind, model: String?, at host: AIAnswerHost) {
+        guard var conversation = state.session.ai[host: host]?.conversation, !conversation.ended,
+              state.session.ai.agents[kind]?.state == .ready || state.session.detectedAI.contains(kind) else { return }
+        if let model, let models = state.session.ai.agents[kind]?.models, !models.isEmpty, !models.contains(where: { $0.id == model }) { return }
+        let pick = AIAgentPick(kind: kind, model: model)
+        conversation.pick = pick
+        state.session.ai[host: host]?.conversation = conversation
+        if state.doc.conversations[conversation.id] != nil { state.doc.conversations[conversation.id]?.pick = pick }
+        effects.append(.aiPick(conversation.id, pick))
+    }
+
+    // MARK: Names
+
+    /// A conversation is named by the basic model after an answer, once, as Name Tabs names tabs and under its switch: a
+    /// short name in the conversation's language in place of its first message. Never one the user named, and nothing
+    /// without a route for the basic model (no agent, no key): it keeps its first message.
+    mutating func nameConversationIfDue(_ id: AIRequestID) {
+        guard state.doc.settings.max.enabled(.tabNames), let stored = state.doc.conversations[id], stored.aiNamed != true, stored.userNamed != true,
+              !state.session.ai.namedAsked.contains(id), !conversationRowNamed(id) else { return }
+        if case .unavailable = state.basicRoute { return }
+        let items = state.liveAnswer(id)?.conversation?.items ?? stored.items
+        guard let question = items.lazy.compactMap({ if case .user(let text) = $0 { text } else { nil } }).first,
+              let answer = items.lazy.compactMap({ if case .assistant(let text) = $0, !text.isEmpty { text } else { nil } }).first else { return }
+        state.session.ai.namedAsked.insert(id)
+        let task = AITask.nameConversation(id, question: String(question.prefix(1_000)), answer: String(answer.prefix(1_500)),
+                                           language: AILanguage.of(items, system: ctx.systemLanguage))
+        let host = state.session.ai.host(ofConversation: id)
+        let owner: WindowID? = host.flatMap { self.window(of: $0) }
+        let request = requestAI(task, from: owner)
+        state.session.ai.conversationNaming[request] = id
+    }
+
+    /// One of its rows has a name someone typed (the sidebar's rename).
+    private func conversationRowNamed(_ id: AIRequestID) -> Bool {
+        let url = ConversationPage.url(id)
+        return state.doc.tree.allTabs().contains { row in
+            guard let tab = state.tab(row), tab.url == url else { return false }
+            return tab.userNamed || !(tab.customTitle ?? "").isEmpty
+        }
+    }
+
+    mutating func applyConversationName(_ request: AIRequestID, _ raw: String) {
+        guard let id = state.session.ai.conversationNaming.removeValue(forKey: request), let stored = state.doc.conversations[id],
+              stored.userNamed != true, !conversationRowNamed(id), let name = AIValidation.name(raw, limit: AINaming.maxLength) else { return }
+        state.doc.conversations[id]?.title = name
+        state.doc.conversations[id]?.aiNamed = true
+        let url = ConversationPage.url(id)
+        for row in state.doc.tree.allTabs() where state.tab(row)?.url == url {
+            state.doc.tree.updateTab(row) { $0.title = name }
+        }
+        if let host = state.session.ai.host(ofConversation: id) { state.session.ai[host: host]?.title = name }
     }
 
     /// The list row's menu, in the conversation's language.
@@ -344,6 +410,7 @@ extension Work {
         let trimmed = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120))
         guard !trimmed.isEmpty else { return }
         state.doc.conversations[id]?.title = trimmed
+        state.doc.conversations[id]?.userNamed = true
         let url = ConversationPage.url(id)
         for row in state.doc.tree.allTabs() where state.tab(row)?.url == url && state.browsingContext(of: row) == .profile(profile) {
             // The item rule itself: a nested `run` would apply the overlay rule and close the Library.

@@ -242,6 +242,10 @@ extension Work {
         case .decide(_, let asked, _):
             state.session.ai.basic.placements[id] = nil
             feature = asked
+        case .nameConversation:
+            state.session.ai.conversationNaming[id] = nil
+            state.session.ai.basic.pausedUntil = ctx.now.advanced(by: AINaming.backoff)
+            feature = .tabNames
         case .nameFolder:
             // Asked for by a click: always said.
             state.session.ai.basic.folderNaming[id] = nil

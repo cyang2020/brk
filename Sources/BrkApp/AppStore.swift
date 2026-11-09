@@ -678,6 +678,7 @@ public final class AppStore {
             case .aiApprove(let conversation, let approval, let option): aiServices.approve(conversation: conversation, approval: approval, option: option)
             case .aiCloseConversation(let id): aiServices.closeConversation(id)
             case .aiNotify(let notice): aiNotifications.post(notice)
+            case .aiPick(let id, let pick): aiServices.pick(id, pick)
             case .aiRefreshPage(let run): aiServices.refreshPage(run, max: snapshot.settings.max)
             case .aiStopRefresh(let id): aiServices.stopRefresh(id)
             case .aiRefreshAgents: aiServices.refreshAgents(detected: snapshot.settings.max.detected)

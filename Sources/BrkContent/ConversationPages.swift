@@ -150,7 +150,7 @@ final class ConversationCardsView {
 
     init(dispatch: @escaping Dispatch) { self.dispatch = dispatch }
 
-    func render(_ cards: [ConversationCard], frames: [CardFrame], theme: ResolvedTheme) {
+    func render(_ cards: [ConversationCard], frames: [CardFrame], theme: ResolvedTheme, agents: AIAgentMenu? = nil) {
         var seen = Set<PageID>()
         for card in cards {
             guard let frame = frames.first(where: { if case .conversation(let page, _) = $0.content { page == card.page } else { false } }) else { continue }
@@ -164,6 +164,7 @@ final class ConversationCardsView {
                 if let below { parent.addSubview(view, positioned: .below, relativeTo: below) } else { parent.addSubview(view) }
             }
             view.layer?.cornerRadius = frame.cornerRadius
+            view.agents = agents
             view.render(card.answer, in: frame.rect, theme: theme)
         }
         for (page, view) in views where !seen.contains(page) {

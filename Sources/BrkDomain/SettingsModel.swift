@@ -546,6 +546,9 @@ public enum AITask: Hashable, Sendable, Codable {
     case nameTabs([AITab])
     /// A name for a folder or group from the tabs in it; the outcome is `AIReply.text`.
     case nameFolder(ItemID, tabs: [AITab])
+    /// A short name for a conversation from its first question and answer, in `language` (docs/design/ai-threads.md);
+    /// the outcome is `AIReply.text`.
+    case nameConversation(AIRequestID, question: String, answer: String, language: AILanguage)
     /// The command bar's `translate` prefix: the text in `target`; the outcome is `AIReply.text`.
     case translateText(String, target: String)
     /// A decision (`DecisionRequest`) for a feature; the outcome is `AIReply.decision`. `hint` is what a local decision

@@ -190,6 +190,9 @@ extension Work {
         case .mention(let query):
             guard let host = query == nil ? state.session.ai.host(ofConversation: id) : reviveConversation(id, in: window) else { return }
             mentionChanged(query, at: host, window: window)
+        case .pickAgent(let kind, let model):
+            guard let host = reviveConversation(id, in: window) else { return }
+            pickAgent(kind, model: model, at: host)
         case .openTabLink, .openConversation, .keepPage, .pageLink, .answerPageLink, .pageSave, .livePage:
             assist(intent, in: window)
         default: break
@@ -282,11 +285,16 @@ extension Work {
             state.session.ai.requests[id] = AIRequest(window: window, context: state.libraryContext(in: window), task: .ask(q), purpose: .answer)
             state.session.ai.turnText[id] = 0
             state.session.ai.turnStarted[id] = ctx.now
-            effects.append(.aiOpenConversation(id, folder: nil, choice: state.doc.settings.max.provider, tabs: window))
+            // The + menu's choice, made before the first message, starts the session.
+            if let pick = conversation.pick { effects.append(.aiPick(id, pick)) }
+            let choice = conversation.pick.flatMap { AIProviderChoice(rawValue: $0.kind.rawValue) } ?? state.doc.settings.max.provider
+            effects.append(.aiOpenConversation(id, folder: nil, choice: choice, tabs: window))
             if !attached.isEmpty { effects.append(.aiAttach(id, attached)) }
             effects.append(.aiWatch(id, seconds: Self.panelSeconds))
-            sendAI(id, task: .ask(q))
+            sendAI(id, task: .ask(q), choice: choice)
             saveConversation(id, title: q, in: window)
+            // What was chosen before the first message stays with it.
+            if let pick = conversation.pick { state.doc.conversations[id]?.pick = pick }
             return
         }
         let turn = AIRequestID(ctx.newID())
@@ -300,7 +308,9 @@ extension Work {
             // A saved conversation shown again: its session starts now, continuing the agent's own where it kept one.
             conversation.dormant = false
             let stored = state.doc.conversations[conversation.id]
-            let choice = stored?.agent.flatMap { AIProviderChoice(rawValue: $0.rawValue) } ?? state.doc.settings.max.provider
+            // The agent the + menu chose, else the one it talked to, else Settings → Max's.
+            if let pick = conversation.pick { effects.append(.aiPick(conversation.id, pick)) }
+            let choice = (conversation.pick?.kind ?? stored?.agent).flatMap { AIProviderChoice(rawValue: $0.rawValue) } ?? state.doc.settings.max.provider
             effects.append(.aiOpenConversation(conversation.id, folder: conversation.folder, choice: choice, tabs: conversation.tabs ? window : nil,
                                                resume: AIResume(session: stored?.resume, history: stored?.history() ?? "")))
         }
@@ -649,6 +659,7 @@ extension Work {
             completeAI(id, text: String(text.prefix(60_000)), success: true, answered: true)
         case (.nameTabs, .tabNames(let names)): applyTabNames(id, names)
         case (.nameFolder, .text(let name)): applyFolderName(id, name, in: background)
+        case (.nameConversation, .text(let name)): applyConversationName(id, name)
         case (.decide(let request, _, _), .decision(let answers)):
             guard request.accepts(answers) else { return Self.wrongShape }
             applyDecision(id, answers)
@@ -727,6 +738,7 @@ extension Work {
             if let started = state.session.ai.turnStarted[conversation.id], ctx.now.since(started) >= .seconds(60) {
                 notify(conversation.id, .replied, items: state.session.ai[host: host]?.conversation?.items ?? conversation.items, body: nil)
             }
+            if answered { nameConversationIfDue(conversation.id) }
         }
         state.session.ai.turnStarted[conversation.id] = nil
     }
@@ -869,7 +881,7 @@ extension Work {
             switch task {
             case .renameTab(let tab, _, let url): valid = state.doc.settings.max.titlesOn && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.tab(tab)?.pinnedURL == url && state.tab(tab)?.customTitle == nil && (state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites)
             case .renameDownload(let download, _): valid = state.doc.settings.max.enabled(.downloadRename) && state.session.ai.backgroundContexts[id] == backgroundAIContext(task) && state.doc.downloads.contains { $0.id == download && $0.state == .finished && state.doc.profiles[$0.profile] != nil }
-            case .nameTabs: valid = state.doc.settings.max.enabled(.tabNames)
+            case .nameTabs, .nameConversation: valid = state.doc.settings.max.enabled(.tabNames)
             case .nameFolder(let folder, _): valid = state.doc.settings.max.enabled(.folderNames) && state.doc.tree[folder] != nil
             case .decide(_, let feature, _): valid = state.doc.settings.max.enabled(feature)
             default: valid = true

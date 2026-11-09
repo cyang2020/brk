@@ -57,6 +57,10 @@ def structured(prompt, schema):
             return {'names': [{'id': t['id'], 'name': 'Named ' + ' '.join(t['title'].split()[:2])} for t in data['tabs']]}
         return {'names': [{'group': g['group'], 'name': 'Group ' + str(g['group'] + 1)} for g in data['groups']]}
     if keys == {'title'}: return {'title': 'Fixture Tab'}
+    if keys == {'conversation_name'}:
+        # A conversation's name (docs/design/ai-threads.md): short, in the question's language.
+        q = data['question']
+        return {'conversation_name': ('名字·' + q[:4]) if re.search(r'[\u4e00-\u9fff]', q) else 'Named ' + ' '.join(q.split()[:2])}
     if keys == {'name'}: return {'name': 'Fixture Folder'}
     if keys == {'groups'}: return {'groups': [{'name': 'Reading', 'tabs': [t['id'] for t in data['tabs']]}]}
     if keys == {'blocked', 'quickSummary', 'details'}:

@@ -56,6 +56,8 @@ public enum Effect: Hashable, Sendable {
     case aiCloseConversation(AIRequestID)
     /// A macOS notification, posted only while Brk is not the frontmost app (docs/design/ai-threads.md).
     case aiNotify(AINotification)
+    /// The agent and model a conversation's next messages go to (the + menu's choice); the app applies it at the next turn.
+    case aiPick(AIRequestID, AIAgentPick)
     /// Refresh a live page: a session of its own with Brk's read tools and `brk_page_update_data` only
     /// (`SystemEvent.aiPageRefresh`).
     case aiRefreshPage(AIPageRefreshRun)

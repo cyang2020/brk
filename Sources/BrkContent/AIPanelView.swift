@@ -52,7 +52,7 @@ final class AIPanelView: NSView {
     /// The conversation page's view, for the drop target and the page edits it commits.
     var answerView: AIAnswerDocumentView { conversation }
 
-    func render(_ answer: AIAnswerSnapshot?, panel: AIPanelSnapshot?, in area: CGRect, theme: ResolvedTheme?) {
+    func render(_ answer: AIAnswerSnapshot?, panel: AIPanelSnapshot?, agents: AIAgentMenu? = nil, in area: CGRect, theme: ResolvedTheme?) {
         guard answer != nil || panel != nil else {
             self.answer = nil; self.panel = nil
             isHidden = true
@@ -67,6 +67,7 @@ final class AIPanelView: NSView {
         self.style = style
         self.answer = answer
         self.panel = panel
+        conversation.agents = agents
         let reserve = panel == nil ? 0 : Metrics.ai.dotsHeight.value
         conversation.bottomReserve = reserve
         list.bottomReserve = reserve

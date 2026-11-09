@@ -121,6 +121,10 @@ final class AIServices {
         else { send(.aiConversation(id, .notice("No local AI tool is available. Choose an installed agent in Settings → Max."))) }
     }
     private var opening: Set<AIRequestID> = []
+    /// The agent and model the + menu chose for each conversation's next messages (`Effect.aiPick`).
+    private var picks: [AIRequestID: AIAgentPick] = [:]
+
+    func pick(_ id: AIRequestID, _ pick: AIAgentPick) { picks[id] = pick }
 
     /// The session for a conversation, or why there can be none. Read-only ones work in an empty folder of their own,
     /// deleted when they close; a session with tools on works in the folder the user chose.
@@ -136,7 +140,10 @@ final class AIServices {
         }
         let options = max.settings.agentOptions?[resolved.kind]
         let access: AgentAccess = folder != nil ? .tools : tabs != nil && !resolved.plain ? .browser : .readOnly
-        var spec = AgentSpec(kind: resolved.kind, executable: resolved.executable, model: options?.model, effort: options?.effort, access: access, directory: directory)
+        // The + menu's model for this agent, else Settings → Max's.
+        let picked = picks[id].flatMap { $0.kind == resolved.kind ? $0 : nil }
+        var spec = AgentSpec(kind: resolved.kind, executable: resolved.executable, model: picked != nil ? picked?.model : options?.model,
+                             effort: picked != nil && picked?.model != options?.model ? nil : options?.effort, access: access, directory: directory)
         spec.account = AIAccounts.choice(for: resolved.kind)
         // Read-only sessions keep nothing to continue; the others continue the agent's own session.
         if access != .readOnly { spec.resume = resume?.session }
@@ -302,9 +309,21 @@ final class AIServices {
             send(.aiResult(turn, .failed("This conversation has ended. Ask again from the command bar.")))
             return
         }
-        // A model or effort picked in the Max pane since the session started (the panel's Agent… button leads there,
-        // and an agent out of quota says to switch model) applies from this message on.
-        if let max, !session.plain {
+        // The + menu's agent and model for this conversation (docs/design/ai-threads.md): another agent gets a session of
+        // its own with the transcript ahead of the message; another model of the same agent continues its session.
+        if let pick = picks[conversation], let max, !session.plain {
+            if pick.kind != session.spec.kind {
+                guard let switched = switchAgent(conversation, session, to: pick, max: max) else {
+                    send(.aiResult(turn, .failed(AgentCopy.missing(pick.kind))))
+                    return
+                }
+                session = switched
+            } else if pick.model != session.spec.model {
+                session = renew(conversation, session, model: pick.model, effort: pick.model == max.settings.agentOptions?[pick.kind]?.model ? max.settings.agentOptions?[pick.kind]?.effort : nil)
+            }
+        } else if let max, !session.plain {
+            // A model or effort picked in the Max pane since the session started (the panel's Agent… button leads there,
+            // and an agent out of quota says to switch model) applies from this message on.
             let wanted = max.settings.agentOptions?[session.spec.kind]
             if wanted?.model != session.spec.model || wanted?.effort != session.spec.effort {
                 session = renew(conversation, session, model: wanted?.model, effort: wanted?.effort)
@@ -323,6 +342,22 @@ final class AIServices {
             guard let self, self.turns[turn] == conversation, let current = self.conversations[conversation] else { return }
             current.send(prefix + text, turn: turn)
         }
+    }
+
+    /// The conversation's session with another agent: the old one closes, the new one starts in the same folder with the
+    /// same tools and gets the transcript ahead of the next message, since it cannot continue another agent's session.
+    private func switchAgent(_ id: AIRequestID, _ old: AgentSession, to pick: AIAgentPick, max: MaxSnapshot) -> AgentSession? {
+        guard let choice = AIProviderChoice(rawValue: pick.kind.rawValue) else { return nil }
+        let window = toolServices[id]?.window
+        let folder = old.spec.access == .tools ? old.spec.directory.path : nil
+        let history = state()?.savedConversations[id]?.history() ?? ""
+        conversations[id] = nil
+        for (turn, owner) in turns where owner == id { turns[turn] = nil }
+        closing.append(Task { await old.close() })
+        guard makeSession(id, folder: folder, choice: choice, max: max, tabs: old.spec.access == .browser ? window : nil,
+                          resume: AIResume(session: nil, history: history)) == nil, let session = conversations[id] else { return nil }
+        if folder != nil { session.begin() }
+        return session
     }
 
     /// The conversation's session again with another model or effort. A session with tools on continues the agent's
@@ -354,6 +389,7 @@ final class AIServices {
 
     func closeConversation(_ id: AIRequestID) {
         opening.remove(id)
+        picks[id] = nil
         tabWindows[id] = nil
         pendingAttachments[id] = nil
         toolServices.removeValue(forKey: id)?.stop()

@@ -336,6 +336,96 @@ final class ConversationListsTests: XCTestCase {
         XCTAssertEqual(AIThreadWords.pages(1, .zh), "1 个 AI 页面")
     }
 
+    // MARK: AI names
+
+    private func naming(_ t: Transition) -> (AIRequestID, AITask)? {
+        for case .ai(let id, let task, _) in t.effects { if case .nameConversation = task { return (id, task) } }
+        return nil
+    }
+    private func namesOn() -> Driver {
+        let d = enabled()
+        d.user(.settings(.max(.feature(.tabNames, true))))
+        return d
+    }
+
+    func testTheFirstAnswerNamesTheConversationWithTheSmallModelInItsLanguage() throws {
+        let d = namesOn()
+        let id = try firstTurn(d.user(.assist(.ask("盯着这三个商品页的价格，每小时更新一次"))))
+        let t = d.system(.aiResult(id, .text("好的，已经设好了。")))
+        let (request, task) = try XCTUnwrap(naming(t), "one request for a name: \(t.effects)")
+        guard case .nameConversation(let asked, let question, let answer, let language) = task else { return XCTFail() }
+        XCTAssertEqual(asked, id)
+        XCTAssertEqual(question, "盯着这三个商品页的价格，每小时更新一次")
+        XCTAssertEqual(answer, "好的，已经设好了。")
+        XCTAssertEqual(language, .zh)
+        XCTAssertTrue(task.isBasic, "the basic channel, answered in a schema")
+        d.system(.aiResult(request, .reply(.text("商品价格监控"))))
+        XCTAssertEqual(d.state.savedConversations[id]?.title, "商品价格监控")
+        XCTAssertEqual(row(of: id, d)?.title, "商品价格监控", "the sidebar row")
+        XCTAssertEqual(d.view.ai?.name, "商品价格监控", "the panel's header")
+        d.user(.assist(.panelPage(.list)))
+        XCTAssertEqual(rows(d).first?.title, "商品价格监控", "the list")
+        let next = try turn(d.user(.assist(.followUp("再加一个"))))
+        XCTAssertNil(naming(d.system(.aiResult(next, .text("好。")))), "named once")
+    }
+
+    func testANameTheUserGaveIsNeverReplacedAndNothingIsAskedWithoutARouteOrWithNameTabsOff() throws {
+        let d = namesOn()
+        let id = try firstTurn(d.user(.assist(.ask("Why?"))))
+        d.user(.assist(.renameConversation(id, "Mine")))
+        XCTAssertNil(naming(d.system(.aiResult(id, .text("Because.")))), "the user named it")
+        XCTAssertEqual(d.state.savedConversations[id]?.title, "Mine")
+        // A name asked for before the user typed one does not replace it either.
+        let other = try firstTurn(d.user(.assist(.ask("How?"))))
+        let (request, _) = try XCTUnwrap(naming(d.system(.aiResult(other, .text("Like this.")))))
+        let tab = try XCTUnwrap(row(of: other, d))
+        d.user(.item(.rename(tab.id, title: "Typed")))
+        d.system(.aiResult(request, .reply(.text("How To"))))
+        XCTAssertEqual(row(of: other, d)?.title, "Typed")
+        XCTAssertNotEqual(d.state.savedConversations[other]?.title, "How To")
+        // Name Tabs off: the first message stays.
+        let off = enabled()
+        let plain = try firstTurn(off.user(.assist(.ask("Where?"))))
+        XCTAssertNil(naming(off.system(.aiResult(plain, .text("Here.")))))
+        // No agent and no key: nothing to ask.
+        let none = Driver()
+        for feature in AIFeature.allCases { none.user(.settings(.max(.feature(feature, true)))) }
+        none.system(.aiProvidersDetected([.gemini]))
+        none.user(.settings(.max(.provider(.gemini))))
+        let lonely = try firstTurn(none.user(.assist(.ask("When?"))))
+        XCTAssertNil(naming(none.system(.aiResult(lonely, .text("Now.")))), "Gemini has no basic route and there is no key")
+        XCTAssertEqual(none.state.savedConversations[lonely]?.title, "When?")
+    }
+
+    // MARK: The + menu's agents
+
+    func testTheMenusAgentListAndAChoiceForTheNextMessage() throws {
+        let d = enabled()
+        d.system(.aiAgents([AIAgentStatus(kind: .claude, state: .ready, models: [AIAgentModel(id: "haiku", name: "Haiku 5.5", isDefault: true), AIAgentModel(id: "opus", name: "Opus 5.5")]),
+                            AIAgentStatus(kind: .codex, state: .ready, models: [AIAgentModel(id: "sol", name: "GPT-6 Sol")])]))
+        let menu = try XCTUnwrap(d.view.aiAgents)
+        XCTAssertEqual(menu.agents.map(\.kind), [.claude, .codex], "what Settings → Max lists")
+        let id = try answered(d, "Why?")
+        var t = d.user(.assist(.pickAgent(.codex, model: "sol")))
+        XCTAssertTrue(t.effects.contains(.aiPick(id, AIAgentPick(kind: .codex, model: "sol"))), "\(t.effects)")
+        XCTAssertEqual(d.view.ai?.conversation?.pick, AIAgentPick(kind: .codex, model: "sol"))
+        XCTAssertEqual(d.state.savedConversations[id]?.pick, AIAgentPick(kind: .codex, model: "sol"), "kept for its next messages")
+        XCTAssertTrue(d.user(.assist(.pickAgent(.codex, model: "nope"))).effects.isEmpty, "a model the agent does not offer")
+        // Put away and shown again: the next message starts the chosen agent.
+        d.user(.assist(.dismiss))
+        d.user(.assist(.showConversation(id)))
+        t = d.user(.assist(.followUp("And then?")))
+        XCTAssertTrue(t.effects.contains(.aiPick(id, AIAgentPick(kind: .codex, model: "sol"))))
+        XCTAssertTrue(t.effects.contains { if case .aiOpenConversation(id, _, .codex, _, _) = $0 { true } else { false } }, "\(t.effects)")
+        // Before the first message of a new conversation.
+        d.user(.assist(.newConversation))
+        let fresh = try XCTUnwrap(d.view.ai?.conversation?.id)
+        d.user(.assist(.pickAgent(.claude, model: "opus")))
+        t = d.user(.assist(.followUp("Hi")))
+        XCTAssertTrue(t.effects.contains { if case .ai(fresh, _, .claude) = $0 { true } else { false } }, "\(t.effects)")
+        XCTAssertEqual(d.state.savedConversations[fresh]?.pick, AIAgentPick(kind: .claude, model: "opus"))
+    }
+
     // MARK: Not in incognito
 
     func testAnIncognitoWindowHasNoList() throws {

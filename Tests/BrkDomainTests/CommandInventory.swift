@@ -30,7 +30,7 @@ enum CommandInventory {
         .assist(.pageSave(AIPageID("ghost"), "{}")), .assist(.livePage(AIPageID("ghost"), .refreshNow)), .archive(.delete(ArchiveID("ghost"))),
         .assist(.panelPage(.list)), .assist(.showConversation(AIRequestID("ghost"))), .assist(.listSearch("x")), .assist(.listAsk("why")),
         .assist(.beginRenameConversation(AIRequestID("ghost"))), .assist(.renameConversation(AIRequestID("ghost"), "x")), .assist(.archiveConversation(AIRequestID("ghost"))),
-        .assist(.restoreConversation(AIRequestID("ghost"))), .assist(.moveConversation(AIRequestID("ghost"), space)),
+        .assist(.restoreConversation(AIRequestID("ghost"))), .assist(.moveConversation(AIRequestID("ghost"), space)), .assist(.pickAgent(.codex, model: nil)),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
         .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
         .capture(.act(.copy)),
@@ -262,6 +262,7 @@ enum CommandInventory {
             case .renameConversation: "renameConversation"
             case .archiveConversation: "archiveConversation"
             case .restoreConversation: "restoreConversation"
+            case .pickAgent: "pickAgent"
             case .moveConversation: "moveConversation"
             }
         case .easel(let c):

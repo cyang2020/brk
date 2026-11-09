@@ -124,6 +124,26 @@ public enum AIIntent: Hashable, Sendable, Codable {
     case archiveConversation(AIRequestID)
     case restoreConversation(AIRequestID)
     case moveConversation(AIRequestID, SpaceID)
+    /// The + menu's agent list: this agent and model for the conversation's next messages.
+    case pickAgent(AIProviderKind, model: String?)
+}
+
+/// An agent and one of its models (`AIAgentModel.id`; nil: the agent's default), chosen for a conversation's next
+/// messages in the panel's + menu.
+public struct AIAgentPick: Hashable, Sendable, Codable {
+    public let kind: AIProviderKind
+    public let model: String?
+    public init(kind: AIProviderKind, model: String?) { self.kind = kind; self.model = model }
+}
+
+/// What the + menu's agent list shows: the agents that are ready on this Mac with the models each offers (what
+/// Settings → Max lists), and the model Settings → Max has chosen for each.
+public struct AIAgentMenu: Hashable, Sendable, Codable {
+    public var agents: [AIAgentStatus]
+    public var models: [AIProviderKind: String]
+    /// The agent Settings → Max resolves to now (`.auto` included).
+    public var active: AIProviderKind?
+    public init(agents: [AIAgentStatus], models: [AIProviderKind: String], active: AIProviderKind?) { self.agents = agents; self.models = models; self.active = active }
 }
 
 /// What the user gave the conversation, before Brk looks it up.
@@ -273,6 +293,8 @@ public struct AIConversationSnapshot: Equatable, Sendable, Codable {
     /// Shown from its saved transcript with no session behind it (after a relaunch, or put away): the next message
     /// starts one, continuing the agent's own session where the agent keeps one.
     public var dormant = false
+    /// The agent and model chosen in the + menu for its next messages; nil: Settings → Max's.
+    public var pick: AIAgentPick? = nil
     public init(id: AIRequestID, folder: String? = nil, tabs: Bool = false) { self.id = id; self.folder = folder; self.tabs = tabs }
 }
 public enum AIConversationItem: Equatable, Sendable, Codable {
@@ -469,6 +491,9 @@ struct AISession: Equatable, Sendable {
     var renamingConversation: [WindowID: AIRequestID] = [:]
     /// Delete for good, waiting for Cancel or Delete in the window's dialog.
     var pendingConversationDeletion: [WindowID: ConversationDeletionRequest] = [:]
+    /// Conversation names asked of the basic model, by request; and the conversations asked about this session.
+    var conversationNaming: [AIRequestID: AIRequestID] = [:]
+    var namedAsked: Set<AIRequestID> = []
 }
 /// A Space's panel as it was left.
 struct AIPanelMemory: Equatable, Sendable {

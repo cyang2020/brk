@@ -211,7 +211,7 @@ public final class WindowRootView: NSView {
         let easelCard = easelCards.first { card in snapshot.content.panes.indices.contains(card.pane) && snapshot.content.panes[card.pane].focused } ?? easelCards.first
         let shownEasel = easelCard.flatMap { card in snapshot.easels.first { if case .easel(let page, _) = card.content { $0.page == page } else { false } } }
         easel.render(shownEasel, in: easelCard?.rect, cornerRadius: easelCard?.cornerRadius ?? 0)
-        conversationCards.render(snapshot.conversations, frames: frames.cards, theme: snapshot.theme)
+        conversationCards.render(snapshot.conversations, frames: frames.cards, theme: snapshot.theme, agents: snapshot.aiAgents)
         pageCards.render(snapshot.aiPages, frames: frames.cards, theme: snapshot.theme)
         toolbar.render(snapshot.urlPill, rect: frames.toolbar, palette: palette)
         let focusedCard = snapshot.content.panes.firstIndex(where: \.focused).flatMap { i in frames.cards.first { $0.pane == i }?.rect } ?? frames.cards.first?.rect
@@ -235,7 +235,7 @@ public final class WindowRootView: NSView {
         peek.render(peekSnapshot, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         findBar.render(snapshot.find, frames: frames.find, palette: palette)
         // The panel's column (none over the Library: the panel waits, as it is, until the Library closes).
-        if let panel = frames.aiPanel { aiAnswer.render(snapshot.ai, panel: snapshot.aiPanel, in: panel, theme: snapshot.theme) }
+        if let panel = frames.aiPanel { aiAnswer.render(snapshot.ai, panel: snapshot.aiPanel, agents: snapshot.aiAgents, in: panel, theme: snapshot.theme) }
         else if snapshot.ai == nil && snapshot.aiPanel == nil { aiAnswer.render(nil, panel: nil, in: .zero, theme: nil) }
         else { aiAnswer.isHidden = true }
         linkPrompt.render(snapshot.pageLinkPrompt, in: frames.contentArea)

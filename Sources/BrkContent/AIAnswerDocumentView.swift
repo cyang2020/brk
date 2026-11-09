@@ -47,6 +47,10 @@ final class AIAnswerDocumentView: NSView {
     private var pageTheme: PageTheme?
     private var shownConversation: AIRequestID?
     private var menuOpen = false
+    /// The + menu shows its main rows, or the agents and their models ("换 agent 和模型").
+    private var menuAgents = false
+    /// The agents ready on this Mac and their models (`WindowSnapshot.aiAgents`), for the + menu's agent list.
+    var agents: AIAgentMenu? { didSet { if agents != oldValue, menuOpen { showMenu() } } }
     private var menuMonitor: Any?
     private var mentionIndex = 0
     private var mention: AIMentionSnapshot?
@@ -305,12 +309,25 @@ final class AIAnswerDocumentView: NSView {
         guard let answer, let conversation = answer.conversation, let panelStyle, let theme else { closeMenu(); return }
         let open = !conversation.ended
         var rows: [AIMenuView.Row] = []
+        if menuAgents, open, let agents, !agents.agents.isEmpty {
+            rows = agentRows(conversation, agents)
+            mentions.hide()
+            plusMenu.show(rows, style: panelStyle, fill: Self.opaque(panelStyle.composer, over: theme))
+            for control in plusMenu.controls where control.accessibilityIdentifier().hasPrefix(ViewID.aiControl("agent-header").identifier) { control.hoverFill = nil }
+            needsLayout = true
+            return
+        }
+        menuAgents = false
         if open, conversation.folder == nil {
             rows.append(.init(id: "folder", title: copy.workInFolder, tip: copy.workInFolderTip) { [weak self] in self?.closeMenu(); self?.send(.chooseFolder) })
         }
-        let agent = ([conversation.agentName ?? copy.localAgent] + [conversation.model, conversation.effort].compactMap { $0 }).joined(separator: " · ")
-        rows.append(.init(id: "agent", title: copy.language == .zh ? "换 agent 和模型" : "Agent and Model", detail: agent, tip: copy.chooseAgentTip) { [weak self] in
-            self?.closeMenu(); self?.dispatch(.settings(.openPane(.max)))
+        let agent = pickedLine(conversation) ?? ([conversation.agentName ?? copy.localAgent] + [conversation.model, conversation.effort].compactMap { $0 }).joined(separator: " · ")
+        // The agents and their models, one level in; without a list yet (nothing has reported), Settings → Max.
+        let canPick = open && agents?.agents.isEmpty == false
+        rows.append(.init(id: "agent", title: (copy.language == .zh ? "换 agent 和模型" : "Agent and Model") + (canPick ? " ›" : ""), detail: agent,
+                          tip: canPick ? copy.pickAgentTip : copy.chooseAgentTip) { [weak self] in
+            guard let self else { return }
+            if canPick { self.menuAgents = true; self.showMenu() } else { self.closeMenu(); self.dispatch(.settings(.openPane(.max))) }
         })
         rows.append(.init(id: "permissions", title: copy.language == .zh ? "权限" : "Permissions",
                           detail: copy.permissions(folder: conversation.folder, tabs: conversation.tabs),
@@ -334,7 +351,42 @@ final class AIAnswerDocumentView: NSView {
         needsLayout = true
     }
 
+    /// "Codex · GPT-6 Sol" for a choice the + menu made; nil without one.
+    private func pickedLine(_ conversation: AIConversationSnapshot) -> String? {
+        guard let pick = conversation.pick else { return nil }
+        let status = agents?.agents.first { $0.kind == pick.kind }
+        let model = pick.model.flatMap { id in status?.models.first { $0.id == id }?.name ?? id }
+        return ([pick.kind.displayName] + [model].compactMap { $0 }).joined(separator: " · ")
+    }
+
+    /// The agent list: a way back, then each ready agent with its models, the one the next message goes to checked.
+    private func agentRows(_ conversation: AIConversationSnapshot, _ agents: AIAgentMenu) -> [AIMenuView.Row] {
+        let zh = copy.language == .zh
+        var rows: [AIMenuView.Row] = [.init(id: "agents-back", title: "‹ " + (zh ? "换 agent 和模型" : "Agent and Model")) { [weak self] in
+            self?.menuAgents = false; self?.showMenu()
+        }]
+        // What the next message goes to: the choice made here, else the agent talked to with Settings → Max's model.
+        let kind = conversation.pick?.kind ?? conversation.agent ?? agents.active
+        let current: (AIProviderKind?, String?) = conversation.pick.map { ($0.kind, $0.model) }
+            ?? (kind, kind.flatMap { k in agents.models[k] ?? agents.agents.first { $0.kind == k }?.models.first { $0.isDefault }?.id })
+        for status in agents.agents {
+            rows.append(.init(id: "agent-header-" + status.kind.rawValue, title: status.kind.displayName, enabled: false) {})
+            let models = status.models.isEmpty ? [AIAgentModel(id: "", name: zh ? "默认模型" : "Default Model", isDefault: true)] : status.models
+            for model in models {
+                let id = model.id.isEmpty ? nil : model.id
+                let on = current.0 == status.kind && (current.1 == id || (current.1 == nil && model.isDefault))
+                rows.append(.init(id: "agent-pick-\(status.kind.rawValue)-\(model.id.isEmpty ? "default" : model.id)", title: "   " + model.name,
+                                  detail: on ? "✓" : nil, tip: model.id.isEmpty ? nil : model.id) { [weak self] in
+                    self?.closeMenu()
+                    self?.send(.pickAgent(status.kind, model: id))
+                })
+            }
+        }
+        return rows
+    }
+
     private func closeMenu() {
+        menuAgents = false
         menuOpen = false
         plusMenu.hide()
         if let menuMonitor { NSEvent.removeMonitor(menuMonitor) }
@@ -474,7 +526,7 @@ final class AIAnswerDocumentView: NSView {
 @MainActor
 final class AIApprovalView: NSView {
     private let sentence = NSTextField(wrappingLabelWithString: "")
-    private let toggle = AITextButton("", kind: .link)
+    private let toggle = AITextButton("", kind: .quiet)
     private let detail = NSTextField(wrappingLabelWithString: "")
     private var buttons: [AITextButton] = []
     private var shown: AIAgentApproval?

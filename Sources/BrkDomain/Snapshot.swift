@@ -107,6 +107,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var miniPlayers: [MiniPlayerSnapshot] = []
     public var boostEditor: BoostEditor? = nil
     public var ai: AIAnswerSnapshot? = nil
+    /// The agents ready on this Mac and their models, for the + menu's agent list (docs/design/ai-threads.md).
+    public var aiAgents: AIAgentMenu? = nil
     /// The panel's pages and this Space's conversation list while the panel is open in a standard window
     /// (docs/design/ai-threads.md). Nil in incognito and Little windows, and while the panel is closed.
     public var aiPanel: AIPanelSnapshot? = nil

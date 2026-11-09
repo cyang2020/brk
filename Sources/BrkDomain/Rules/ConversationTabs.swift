@@ -70,12 +70,13 @@ extension StoredConversation {
         conversation.effort = effort
         conversation.items = items
         conversation.dormant = true
+        conversation.pick = pick
         return AIAnswerSnapshot(request: nil, title: title, text: "", busy: false, sources: [], conversation: conversation)
     }
 
     /// The transcript as text, for an agent that cannot continue its own session: what the user and the agent said,
     /// the newest last, at most `limit` characters.
-    func history(limit: Int = 24_000) -> String {
+    public func history(limit: Int = 24_000) -> String {
         var lines: [String] = []
         for (_, item) in messages {
             switch item {

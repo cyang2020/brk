@@ -86,6 +86,7 @@ struct AIPanelCopy {
     var agentSettings: String { zh ? "agent 设置…" : "Agent Settings…" }
     var agentSettingsTip: String { zh ? "在 设置 → Max 里选 agent、模型和思考强度。" : "Choose the agent, model and effort in Settings → Max." }
     var chooseAgentTip: String { zh ? "在 设置 → Max 里换 agent 和模型，下一条消息就用新的。" : "Change the agent and model in Settings → Max; the next message uses them." }
+    var pickAgentTip: String { zh ? "选这次对话接下来用的 agent 和模型。" : "Choose the agent and model this conversation's next messages go to." }
     func permissions(folder: String?, tabs: Bool) -> String {
         if let folder { return zh ? "在 \((folder as NSString).lastPathComponent) 里可以用工具，每次先问" : "Tools on in \((folder as NSString).lastPathComponent), each one asks" }
         if tabs { return zh ? "tab 工具直接用，其他都先问" : "Tab tools on · others ask" }

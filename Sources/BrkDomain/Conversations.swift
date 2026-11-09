@@ -115,6 +115,11 @@ public struct StoredConversation: Equatable, Sendable, Codable {
     /// later than it was seen is unread ("等你处理").
     public var repliedAt: Instant?
     public var seenAt: Instant?
+    /// The small model named it (its title is that name), or the user did (never named again).
+    public var aiNamed: Bool?
+    public var userNamed: Bool?
+    /// The agent and model chosen in the + menu, kept for its next messages.
+    public var pick: AIAgentPick?
     /// A reply finished that nobody has seen yet.
     public var unread: Bool { repliedAt.map { $0 > (seenAt ?? Instant(milliseconds: 0)) } ?? false }
 
