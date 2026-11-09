@@ -228,7 +228,8 @@ final class LivePagesTests: XCTestCase {
         let runs = refreshes(d.system(.clockTick))
         XCTAssertEqual(runs.count, 1, "the sweep left it in Today, so its slot runs")
         XCTAssertNotNil(pageRow(d, page))
-        XCTAssertTrue(d.state.doc.archive.contains { $0.tab.url == ConversationPage.url(conversation) }, "its conversation's row is an ordinary row and was swept")
+        XCTAssertFalse(d.state.doc.archive.contains { $0.tab.url == ConversationPage.url(conversation) }, "its conversation has no row to sweep (step 8)")
+        XCTAssertNotNil(d.state.savedConversations[conversation])
         d.system(.aiPageRefresh(page, run: runs[0].run, .finished(.updated, detail: nil)))
         d.user(.tab(.close(.item(try XCTUnwrap(pageRow(d, page)).id))))
         XCTAssertTrue(d.state.doc.archive.contains { $0.tab.url == AIPageTab.url(page) }, "the × archives it")
@@ -437,19 +438,17 @@ final class LivePagesTests: XCTestCase {
 
     // MARK: Delete for good
 
-    func testDeletingAnArchivedConversationDeletesItsTranscriptPagesAndRows() throws {
+    func testDeletingAConversationForGoodDeletesItsTranscriptPagesAndTheirRows() throws {
         let d = enabled()
         let (conversation, page) = try keptPage(d)
-        let row = try XCTUnwrap(d.allTabRows.first { $0.url == ConversationPage.url(conversation) })
-        d.user(.tab(.close(.item(row.id))))
-        let entry = try XCTUnwrap(d.archive().first { $0.url == ConversationPage.url(conversation) }, "closing a conversation row archives it like a tab")
-        XCTAssertEqual(entry.deletable, .conversation(pages: 1))
-        XCTAssertNotNil(d.state.savedConversations[conversation], "archived, not deleted")
-        d.user(.archive(.delete(entry.id)))
+        XCTAssertFalse(d.allTabRows.contains { $0.url == ConversationPage.url(conversation) }, "a conversation has no row (step 8)")
+        d.user(.library(.requestDeleteConversation(conversation)))
+        let request = try XCTUnwrap(d.view.pendingConversationDeletion)
+        XCTAssertEqual(request.pages, 1)
+        d.user(.library(.confirmDeleteConversation(conversation, token: request.token, confirmed: true)))
         XCTAssertNil(d.state.savedConversations[conversation])
         XCTAssertNil(d.state.savedPages[page])
         XCTAssertNil(pageRow(d, page), "the kept page's row goes too")
-        XCTAssertFalse(d.archive().contains { $0.url == ConversationPage.url(conversation) })
         XCTAssertFalse(d.state.doc.archive.contains { $0.tab.url == AIPageTab.url(page) })
     }
 
@@ -504,23 +503,23 @@ final class LivePagesTests: XCTestCase {
     func testTheTabToolsListNoArchivedConversationOrPage() throws {
         let d = enabled()
         let (conversation, page) = try keptPage(d)
-        for url in [ConversationPage.url(conversation), AIPageTab.url(page)] {
-            d.user(.tab(.close(.item(try XCTUnwrap(d.allTabRows.first { $0.url == url }).id))))
-        }
-        XCTAssertTrue(d.state.doc.archive.contains { $0.tab.url == ConversationPage.url(conversation) })
+        _ = conversation
+        d.user(.tab(.close(.item(try XCTUnwrap(d.allTabRows.first { $0.url == AIPageTab.url(page) }).id))))
+        XCTAssertTrue(d.state.doc.archive.contains { $0.tab.url == AIPageTab.url(page) })
         let archived = d.state.agentArchivedTabs(profile: .default)
         XCTAssertFalse(archived.contains { NativePages.shows($0.url) }, "\(archived.map(\.url))")
         XCTAssertFalse(d.state.agentHistory(profile: .default).contains { NativePages.shows($0.url) })
     }
 
-    func testChoosingAConversationInTheCommandBarOpensItsTab() throws {
+    func testChoosingAConversationInTheCommandBarOpensItInThePanel() throws {
         let d = enabled()
         let (conversation, _) = try keptPage(d)
+        d.user(.assist(.dismiss))
         d.user(.commandBar(.open(.newTab)))
-        d.user(.assist(.openConversation(conversation)))
+        d.user(.assist(.showConversation(conversation)))
         XCTAssertNil(d.bar, "the bar closed")
-        XCTAssertEqual(d.view.conversations.first?.answer.conversation?.id, conversation)
-        XCTAssertEqual(d.current?.url, ConversationPage.url(conversation))
+        XCTAssertEqual(d.view.ai?.conversation?.id, conversation)
+        XCTAssertNotEqual(d.current?.url, ConversationPage.url(conversation), "no tab shows it")
     }
 
     func testConversationsGoIntoTheMeaningIndexByTitleAndQuestionsOnly() throws {

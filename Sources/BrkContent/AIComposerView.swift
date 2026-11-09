@@ -156,6 +156,7 @@ final class AIComposerView: NSView, NSTextViewDelegate {
             chips = zip(attached, titles).map { attachment, title in
                 let chip = AIChipView(id: attachment.id, title: title, removeTip: copy.removeChip)
                 chip.toolTip = attachment.tabs.prefix(12).map { $0.title + ($0.url.map { " — " + $0.absoluteString } ?? "") }.joined(separator: "\n")
+                chip.identify(.aiControl(prefix + "chip-" + attachment.id))
                 chip.setAccessibilityIdentifier("ai-chip-" + attachment.id)
                 chip.remove.identify(.aiControl("chip-remove-" + attachment.id))
                 chip.remove.onPress = { [weak self] in self?.onRemoveChip?(attachment.id) }

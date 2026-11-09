@@ -2,9 +2,10 @@ import BrkBase
 @testable import BrkDomain
 import XCTest
 
-/// Conversations as tabs in the reducer: saved on the first message with a row in Today, continued after a relaunch,
-/// moved between the panel and their tab, pages kept as tabs, and page links that ask first.
-final class ConversationTabsTests: XCTestCase {
+/// Saved conversations in the reducer (step 8, docs/design/ai-right-panel.md): saved on the first message with their
+/// Space and no sidebar row, running on out of sight, continued after a relaunch, pages kept as tabs, and page links
+/// that ask first.
+final class ConversationPanelTests: XCTestCase {
     private func enabled() -> Driver {
         let d = Driver()
         for feature in AIFeature.allCases { d.user(.settings(.max(.feature(feature, !AIFeature.basicLayer.contains(feature))))) }
@@ -31,26 +32,24 @@ final class ConversationTabsTests: XCTestCase {
         return id
     }
 
-    // MARK: Saved, with a row
+    // MARK: Saved, with no row (step 8, docs/design/ai-right-panel.md)
 
-    func testTheFirstMessageSavesTheConversationAndPutsItsRowAtTheTopOfToday() throws {
+    func testTheFirstMessageSavesTheConversationInItsSpaceAndAddsNoRow() throws {
         let d = enabled()
-        let before = d.todayIDs
+        let before = d.allTabRows.map(\.id)
         let id = try firstTurn(d.user(.assist(.ask("这几个 tab 哪个最便宜, 画个对比图"))))
         let stored = try XCTUnwrap(d.state.savedConversations[id])
         XCTAssertEqual(stored.title, "这几个 tab 哪个最便宜, 画个对比图")
         XCTAssertEqual(stored.items, [.user("这几个 tab 哪个最便宜, 画个对比图")])
         XCTAssertEqual(stored.profile, .default)
         XCTAssertTrue(stored.tabs)
-        XCTAssertEqual(d.todayIDs.count, before.count + 1)
-        let row = try XCTUnwrap(row(of: id, d))
-        XCTAssertEqual(d.todayIDs.first, row.id, "a new conversation's row goes where a new tab goes")
-        XCTAssertEqual(row.title, "这几个 tab 哪个最便宜, 画个对比图")
-        XCTAssertEqual(row.favicon, ConversationPage.favicon)
-        XCTAssertNotEqual(row.status, .current, "the panel shows it; the page stays")
-        XCTAssertTrue(row.loading, "the row shows the turn running")
+        XCTAssertEqual(stored.space, d.view.space.id, "it records the Space it was started in")
+        XCTAssertEqual(d.allTabRows.map(\.id), before, "no sidebar row")
+        XCTAssertNil(row(of: id, d))
+        XCTAssertEqual(d.view.aiPanel?.groups.flatMap(\.rows).map(\.id), [id], "this Space's list has it")
+        XCTAssertEqual(d.view.aiPanel?.groups.first?.kind, .running)
         d.system(.aiResult(id, .text("The second one.")))
-        XCTAssertFalse(try XCTUnwrap(self.row(of: id, d)).loading)
+        XCTAssertEqual(d.view.aiPanel?.groups.flatMap(\.rows).first?.state, .idle)
     }
 
     func testAFinishedTurnWritesTheTranscriptAndTheAgentsSessionBack() throws {
@@ -79,18 +78,16 @@ final class ConversationTabsTests: XCTestCase {
         XCTAssertFalse(d.state.savedConversations[id]!.items.contains { if case .approval = $0 { true } else { false } })
     }
 
-    func testConversationRowsAndTheirTranscriptsSurviveARelaunch() throws {
+    func testTranscriptsSurviveARelaunchOutsideStateJSON() throws {
         let d = enabled()
         let id = try answered(d)
         let file = d.savedFile
-        // state.json keeps the row; the transcript is in its own file, handed back at launch.
         XCTAssertFalse(String(decoding: file, as: UTF8.self).contains("The second one."), "transcripts are not in state.json")
         let saved = d.state.savedConversations
         let next = Driver(file: file)
         next.system(.conversationsLoaded(Array(saved.values), []))
-        let row = try XCTUnwrap(next.allTabRows.first { $0.url == ConversationPage.url(id) }, "the row is restored with its brk:// address")
-        XCTAssertEqual(row.title, "这几个 tab 哪个最便宜")
         XCTAssertEqual(next.state.savedConversations[id]?.items.last, .assistant("The second one."))
+        XCTAssertNil(next.allTabRows.first { $0.url == ConversationPage.url(id) })
     }
 
     func testConversationsOfAProfileThatIsGoneAreLeftOut() {
@@ -100,41 +97,7 @@ final class ConversationTabsTests: XCTestCase {
         XCTAssertNil(d.state.savedConversations[AIRequestID("stray")])
     }
 
-    // MARK: Panel and tab
-
-    func testOpenAsTabMovesTheRunningConversationIntoItsTabWithoutEndingIt() throws {
-        let d = enabled()
-        let id = try firstTurn(d.user(.assist(.ask("Why?"))))
-        d.system(.aiPartial(id, "Because"))
-        let t = d.user(.assist(.openAsTab))
-        XCTAssertFalse(t.effects.contains(.aiCloseConversation(id)), "the session goes on: \(t.effects)")
-        XCTAssertFalse(t.effects.contains(.aiCancel(id)))
-        XCTAssertNil(d.view.ai, "the panel closes")
-        XCTAssertEqual(d.current?.url, ConversationPage.url(id), "its row is the shown tab")
-        let card = try XCTUnwrap(d.view.conversations.first)
-        XCTAssertEqual(card.answer.conversation?.id, id)
-        XCTAssertEqual(card.answer.busy, true, "the turn is still running, in the tab")
-        XCTAssertTrue(d.view.content.panes.contains { if case .conversation(_, id) = $0.content { true } else { false } })
-        d.system(.aiPartial(id, "Because of this"))
-        d.system(.aiResult(id, .text("Because of this.")))
-        XCTAssertEqual(d.view.conversations.first?.answer.conversation?.items.last, .assistant("Because of this."))
-        XCTAssertEqual(d.state.savedConversations[id]?.items.last, .assistant("Because of this."))
-        // A follow-up typed in the tab is a turn of the same session.
-        let next = try turn(d.user(.assist(.inTab(id, .followUp("And then?")))))
-        XCTAssertEqual(next.conversation, id)
-        XCTAssertEqual(d.view.conversations.first?.answer.busy, true)
-        XCTAssertNil(d.view.ai, "the panel stays closed")
-    }
-
-    func testClickingTheRowOfThePanelsConversationTakesItOutOfThePanel() throws {
-        let d = enabled()
-        let id = try answered(d)
-        let row = try XCTUnwrap(row(of: id, d)).id
-        let t = d.user(.tab(.focus(row)))
-        XCTAssertNil(d.view.ai)
-        XCTAssertEqual(d.view.conversations.first?.answer.conversation?.id, id)
-        XCTAssertFalse(t.effects.contains(.aiCloseConversation(id)), "shown in its tab, it keeps its session")
-    }
+    // MARK: Out of sight
 
     func testClosingThePanelPutsARunningConversationAwayAndItsAnswerStillLands() throws {
         let d = enabled()
@@ -143,7 +106,10 @@ final class ConversationTabsTests: XCTestCase {
         XCTAssertFalse(t.effects.contains(.aiCancel(id)), "the turn goes on out of sight")
         XCTAssertFalse(t.effects.contains(.aiCloseConversation(id)))
         XCTAssertNil(d.view.ai)
-        XCTAssertTrue(try XCTUnwrap(row(of: id, d)).loading)
+        // ⌥⌘A opens the list again: the running row shows its spinner.
+        d.user(.assist(.panelPage(.list)))
+        XCTAssertEqual(d.view.aiPanel?.groups.flatMap(\.rows).first { $0.id == id }?.state, .running)
+        d.user(.assist(.dismiss))
         let done = d.system(.aiResult(id, .text("Because.")))
         XCTAssertEqual(d.state.savedConversations[id]?.items.last, .assistant("Because."))
         XCTAssertTrue(done.effects.contains(.aiCloseConversation(id)), "neither shown nor running: its session ends")
@@ -157,7 +123,6 @@ final class ConversationTabsTests: XCTestCase {
         XCTAssertEqual(d.view.ai?.conversation?.id, second)
         d.system(.aiResult(first, .text("One.")))
         XCTAssertEqual(d.state.savedConversations[first]?.items.last, .assistant("One."))
-        // Stop in the panel stops the panel's turn only.
         let third = try firstTurn(d.user(.assist(.ask("Third?"))))
         _ = third
         XCTAssertTrue(d.user(.assist(.stop)).effects.allSatisfy { if case .aiCancel(let id) = $0 { id != first } else { true } })
@@ -174,12 +139,11 @@ final class ConversationTabsTests: XCTestCase {
         for feature in AIFeature.allCases { next.user(.settings(.max(.feature(feature, !AIFeature.basicLayer.contains(feature))))) }
         next.system(.aiProvidersDetected([.claude, .codex]))
         next.system(.conversationsLoaded(Array(saved.values), []))
-        let row = try XCTUnwrap(next.allTabRows.first { $0.url == ConversationPage.url(id) }).id
-        next.user(.tab(.focus(row)))
-        let card = try XCTUnwrap(next.view.conversations.first)
-        XCTAssertEqual(card.answer.conversation?.dormant, true, "shown from its saved transcript, no session yet")
-        XCTAssertEqual(card.answer.conversation?.items.last, .assistant("The second one."))
-        let t = next.user(.assist(.inTab(id, .followUp("我上次问的是什么"))))
+        next.user(.assist(.showConversation(id)))
+        let shown = try XCTUnwrap(next.view.ai)
+        XCTAssertEqual(shown.conversation?.dormant, true, "shown from its saved transcript, no session yet")
+        XCTAssertEqual(shown.conversation?.items.last, .assistant("The second one."))
+        let t = next.user(.assist(.followUp("我上次问的是什么")))
         let resume = try XCTUnwrap(t.effects.lazy.compactMap { effect -> AIResume? in
             if case .aiOpenConversation(id, _, _, next.window, let resume) = effect { resume } else { nil }
         }.first, "\(t.effects)")
@@ -189,28 +153,24 @@ final class ConversationTabsTests: XCTestCase {
         let open = try XCTUnwrap(t.effects.firstIndex { if case .aiOpenConversation = $0 { true } else { false } })
         let turnAt = try XCTUnwrap(t.effects.firstIndex { if case .aiTurn = $0 { true } else { false } })
         XCTAssertLessThan(open, turnAt, "the session exists before its turn")
-        XCTAssertEqual(next.view.conversations.first?.answer.busy, true)
+        XCTAssertEqual(next.view.ai?.busy, true)
     }
 
-    func testAConversationLinkOpensItsTabAndBringsAnArchivedRowBack() throws {
+    func testAConversationAddressOpensItInThePanelNotInATab() throws {
         let d = enabled()
         let id = try answered(d)
         d.user(.assist(.dismiss))
-        let row = try XCTUnwrap(row(of: id, d)).id
-        d.user(.tab(.close(.item(row))))
-        XCTAssertNil(self.row(of: id, d), "closed like any Today tab: archived")
-        d.user(.assist(.openConversation(id)))
-        XCTAssertEqual(d.current?.url, ConversationPage.url(id))
-        XCTAssertEqual(d.view.conversations.first?.answer.conversation?.id, id)
-        XCTAssertEqual(d.todayIDs.filter { d.row($0)?.url == ConversationPage.url(id) }.count, 1, "one row, the restored one")
+        let rows = d.allTabRows.map(\.id)
+        d.user(.commandBar(.open(.newTab)))
+        d.user(.commandBar(.submit(ConversationPage.url(id).absoluteString)))
+        XCTAssertEqual(d.view.ai?.conversation?.id, id)
+        XCTAssertEqual(d.allTabRows.map(\.id), rows, "no tab for it")
     }
 
-    func testAnotherProfilesConversationDoesNotOpen() {
+    func testAnUnknownConversationDoesNotOpen() {
         let d = enabled()
-        let other = StoredConversation(id: AIRequestID("theirs"), profile: .default, title: "x", createdAt: T0, tabs: true)
-        d.system(.conversationsLoaded([other], []))
-        d.user(.assist(.openConversation(AIRequestID("missing"))))
-        XCTAssertNil(d.current.flatMap { ConversationPage.id(of: $0.url) })
+        d.user(.assist(.showConversation(AIRequestID("missing"))))
+        XCTAssertNil(d.view.ai)
     }
 
     func testHistoryIsTheMessagesOnlyNewestKept() {
@@ -266,6 +226,8 @@ final class ConversationTabsTests: XCTestCase {
         let card = try XCTUnwrap(d.view.aiPages.first)
         XCTAssertEqual(card.content?.id, pageID)
         XCTAssertEqual(card.content?.data, #"{"rows":3}"#)
+        XCTAssertEqual(card.content?.conversation, id, "its caption row leads back to its conversation")
+        XCTAssertEqual(card.content?.language, .zh, "in its conversation's language")
         XCTAssertEqual(d.state.savedPages[pageID]?.conversation, id, "the page keeps the conversation that made it")
         XCTAssertTrue(d.view.content.panes.contains { if case .aiPage(_, pageID) = $0.content { true } else { false } })
         XCTAssertTrue(d.snapshot.pages.allSatisfy { !AIPageTab.shows($0.initialURL) }, "no profile's browser loads it")

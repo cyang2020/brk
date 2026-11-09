@@ -626,7 +626,7 @@ public struct AIMetrics: MetricGroup {
     public let minimumCardWidth = Metric(400.0, .guess("the web card keeps at least this much beside the panel; the panel gives way first"))
     public let maximumShare = Metric(0.5, .guess("the panel dragged wider stops at half the window (docs/design/ai-right-panel.md)"))
     public let maximumStoredWidth = Metric(4000.0, .guess("the widest width a window keeps for its panel; the layout still stops at half the window"))
-    public let resizeHitWidth = Metric(8.0, .derived(rule: "the sidebar's resize handle is 8 wide centred on its edge (SidebarMetrics.resizeHitWidth); the panel's is the same on the card's other edge", from: ["Sidebar resize handle"]))
+    public let resizeHitWidth = Metric(8.0, .guess("as wide as the sidebar's resize handle (SidebarMetrics.resizeHitWidth), centred on the card's other edge"))
     // The drop area at the window's right edge while the panel is closed (docs/design/ai-right-panel.md).
     public let edgeDropBand = Metric(40.0, .guess("the spec's band: the drop area shows once the pointer is this close to the window's right edge"))
     public let edgeDropDash = Metric([6.0, 4.0], .guess("the drop area's dashed outline: dash and gap"))

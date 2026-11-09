@@ -41,13 +41,13 @@ extension Work {
             state.session.windows[window]?.barClock = ctx.now
         case .submit(let text):
             // Searches use the current space's profile's engine (Profiles pane, "Default Search Engine").
-            guard let url = resolveTypedInput(text, engine: state.searchEngine(in: window)) else { return }
             // A conversation's address shows it in the panel: no tab shows a conversation (docs/design/ai-right-panel.md).
-            if let conversation = ConversationPage.id(of: url) {
+            if let conversation = ConversationPage.id(of: URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines))) {
                 state.session.windows[window]?.overlay = nil
                 showConversationInPanel(conversation, in: window)
                 return
             }
+            guard let url = resolveTypedInput(text, engine: state.searchEngine(in: window)) else { return }
             apply(url, in: window)
         case .submitSearch(let engine, let query):
             // Site search: Tab or Space on a known engine's name, then the query (F4 ranks the hint rows).

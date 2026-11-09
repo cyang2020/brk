@@ -600,6 +600,7 @@ final class TitleRowView: NSView {
         toggle.toolTip = SidebarCopy.showHideSidebar
         back.toolTip = SidebarCopy.goBack
         forward.toolTip = SidebarCopy.goForward
+        more.identify(.tabTool("title-more"))
         ai.action = { _ in dispatch(.assist(.togglePanel)) }
         ai.identify(.aiControl("toggle"))
         aiBadge.identify(.aiControl("toggle-badge"))

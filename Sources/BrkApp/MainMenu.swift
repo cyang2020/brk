@@ -98,8 +98,8 @@ enum MainMenu {
     /// works). View > Developer's last row names the focused site's Developer Mode ("Turn on/off Developer Mode for
     /// this site", read from Arc 1.170). Arc 1.170 shows no Note rows (File has New Easel only); Brk has no Notes,
     /// so New Note, New Note (in Split) and Export Notes are hidden too. While a trace records, Record Trace reads
-    /// "Stop Recording Trace" and the nib's hidden Cancel Trace shows. Applied each time the menu opens
-    /// (`MenuTarget.menuNeedsUpdate`).
+    /// "Stop Recording Trace" and the nib's hidden Cancel Trace shows. Brk's Show/Hide AI Conversations under the sidebar's
+    /// row shows only while the window can open the AI panel. Applied each time the menu opens (`MenuTarget.menuNeedsUpdate`).
     static func presentation(of action: ActionID, window: WindowSnapshot?, fullScreen: Bool, tracing: Bool = false) -> (title: String?, hidden: Bool)? {
         switch action {
         case .toggleDeveloperMode:
@@ -109,6 +109,10 @@ enum MainMenu {
         case .cancelTrace: (nil, !tracing)
         case .showSidebar: (window?.sidebar.visible == false ? "Show Sidebar" : "Hide Sidebar", false)
         case .toggleToolbar: (window?.sidebar.toolbarVisible == true ? "Hide Toolbar" : "Show Toolbar", false)
+        // Brk's own (docs/design/ai-right-panel.md): named like the sidebar's row, and only while the window can open the
+        // panel, so with AI off the View menu is Arc's (⌥⌘A still works hidden).
+        case .aiConversations:
+            (window?.aiToggle?.open == true ? "Hide AI Conversations" : "Show AI Conversations", window?.aiToggle == nil)
         case .collapsePinnedSection: (window?.space.pinned.collapsed == true ? "Expand Pinned Tabs" : "Collapse Pinned Tabs", false)
         case .expandPinnedSection, .exit: (nil, true)
         case .fullscreen: (fullScreen ? "Exit Full Screen" : "Enter Full Screen", false)

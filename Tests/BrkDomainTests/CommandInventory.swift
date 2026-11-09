@@ -25,12 +25,13 @@ enum CommandInventory {
         .assist(.useOriginal), .assist(.languageSettings), .assist(.previewHover(true)), .assist(.sharePreview),
         .assist(.followUp("why")), .assist(.stop), .assist(.chooseFolder), .assist(.approve(approval: "a", option: "b")),
         .assist(.attach([.tab("ghost"), .folder(ItemID("ghost")), .space(SpaceID("ghost"))])), .assist(.detach("ghost")), .assist(.mention("x")), .assist(.openTabLink("ghost")),
-        .assist(.inTab(AIRequestID("ghost"), .followUp("x"))), .assist(.openAsTab), .assist(.newConversation), .assist(.openConversation(AIRequestID("ghost"))), .assist(.keepPage(AIPageID("ghost"))),
+        .assist(.newConversation), .assist(.keepPage(AIPageID("ghost"))),
         .assist(.pageLink(AIPageID("ghost"), URL(string: "https://ghost.example/")!)), .assist(.answerPageLink(true)),
         .assist(.pageSave(AIPageID("ghost"), "{}")), .assist(.livePage(AIPageID("ghost"), .refreshNow)), .archive(.delete(ArchiveID("ghost"))),
         .assist(.panelPage(.list)), .assist(.showConversation(AIRequestID("ghost"))), .assist(.listSearch("x")), .assist(.listAsk("why")),
-        .assist(.beginRenameConversation(AIRequestID("ghost"))), .assist(.renameConversation(AIRequestID("ghost"), "x")), .assist(.archiveConversation(AIRequestID("ghost"))),
-        .assist(.restoreConversation(AIRequestID("ghost"))), .assist(.moveConversation(AIRequestID("ghost"), space)), .assist(.pickAgent(.codex, model: nil)),
+        .assist(.beginRenameConversation(AIRequestID("ghost"))), .assist(.renameConversation(AIRequestID("ghost"), "x")),
+        .assist(.moveConversation(AIRequestID("ghost"), space)), .assist(.pickAgent(.codex, model: nil)),
+        .assist(.togglePanel), .assist(.panelWidth(500)), .assist(.hoverConversation(AIRequestID("ghost"))), .assist(.hoverChip("ghost")),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
         .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
         .capture(.act(.copy)),
@@ -245,10 +246,7 @@ enum CommandInventory {
             case .detach: "detach"
             case .mention: "mention"
             case .openTabLink: "openTabLink"
-            case .inTab: "inTab"
-            case .openAsTab: "openAsTab"
             case .newConversation: "newConversation"
-            case .openConversation: "openConversation"
             case .keepPage: "keepPage"
             case .pageLink: "pageLink"
             case .answerPageLink: "answerPageLink"
@@ -256,12 +254,14 @@ enum CommandInventory {
             case .livePage: "livePage"
             case .panelPage: "panelPage"
             case .showConversation: "showConversation"
+            case .togglePanel: "togglePanel"
+            case .panelWidth: "panelWidth"
+            case .hoverConversation: "hoverConversation"
+            case .hoverChip: "hoverChip"
             case .listSearch: "listSearch"
             case .listAsk: "listAsk"
             case .beginRenameConversation: "beginRenameConversation"
             case .renameConversation: "renameConversation"
-            case .archiveConversation: "archiveConversation"
-            case .restoreConversation: "restoreConversation"
             case .pickAgent: "pickAgent"
             case .moveConversation: "moveConversation"
             }

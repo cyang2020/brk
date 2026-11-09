@@ -23,8 +23,6 @@ final class PageEditsCommitTests: XCTestCase {
         XCTAssertNil(harness.store.snapshot.windows[harness.window]?.overlay, "other input is dropped while quitting")
         harness.store.dispatch(.user(harness.window, .assist(.pageSave(page, #"{"note":"wait for a sale"}"#))))
         XCTAssertEqual(harness.store.state.savedPages[page]?.saved, #"{"note":"wait for a sale"}"#)
-        harness.store.dispatch(.user(harness.window, .assist(.inTab(conversation, .pageSave(page, #"{"note":"from the tab"}"#)))))
-        XCTAssertEqual(harness.store.state.savedPages[page]?.saved, #"{"note":"from the tab"}"#)
         harness.store.dispatch(.user(WindowID("a window already gone"), .assist(.pageSave(page, #"{"note":"from a closed window"}"#))))
         XCTAssertEqual(harness.store.state.savedPages[page]?.saved, #"{"note":"from a closed window"}"#)
         XCTAssertNotNil(AppStore.pageSave(.assist(.pageSave(page, "{}"))))

@@ -11,12 +11,18 @@ steps 3 and 4). Built on slice C's MCP server, bridge, approvals and typed tool 
   top of the Space's Today, where a new tab goes: a two-bubble icon and the first message as its title. The row is an
   ordinary tab. It can be pinned, renamed, moved into a folder, found by its title in the command bar, archived by its ×
   or by auto-archive, and brought back from the archive. While a turn runs, the row shows the loading state.
+
+  > 第 8 步改了这条：对话照样在第一句话发出时存下来，但不再在侧边栏多一行。对话记住自己属于哪个 Space，只出现在右边面板的列表里；旧数据里的对话行在更新后第一次启动时拿掉。
 - **The panel and the tab.** The Max panel stays the quick place: the command bar's question, Ask AI on tabs, a drop of
   tabs. Its header has **Open as Tab**, which moves the conversation into its tab, shown full size in the content area.
   A click on the row does the same. The session and a running turn go on; nothing is asked again. A conversation is in
   one place at a time: showing its tab takes it out of any panel.
+
+  > 第 8 步改了这条：没有"在 tab 里打开"了，对话也不再整页显示在中间。想看宽一点就拖宽面板，最宽到窗口的一半。
 - **Close keeps it.** The panel's Close puts a saved conversation away. A running turn goes on out of sight, its answer
   lands in the saved transcript, and the row shows it is still working.
+
+  > 第 8 步改了这条：关掉面板后回复照样在后台跑完，但显示"还在跑"的是右边列表里那一行的转圈，不再是侧边栏的一行。
 - **Another day.** A conversation tab shown after a relaunch shows its saved transcript. Its next message starts a
   session that continues the agent's own session: Claude `--resume <session id>`, Codex `thread/resume`. If the agent
   no longer has that session, the same message goes to a new session with the transcript ahead of it, and a notice
