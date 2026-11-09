@@ -180,6 +180,18 @@ enum AIThreadsScenarios {
             try app.waitUntil("the conversation by the list's back") { try panel(app)?.page == .conversation }
             return "icon → list, row → conversation, dot → list, back → conversation"
         }
+        log.check("⌥⌘A with the panel closed opens it on the list") {
+            try app.dispatch(.assist(.dismiss))
+            try app.waitUntil("the panel closed") { try panel(app) == nil }
+            try WindowServerKeys.ensureFrontmost(app, app.window!)
+            try key([.option, .command], .a)
+            try app.waitUntil("the list by ⌥⌘A", timeout: 5) { try panel(app)?.page == .list }
+            try app.waitUntil("the list on screen") { try shown(app, .aiControl("thread-list")) }
+            try expect(try shown(app, .aiControl("thread-\(id.rawValue)")), "the conversation's row is not in the list")
+            try click(app, .aiControl("thread-\(id.rawValue)"))
+            try app.waitUntil("the conversation by its row") { try panel(app)?.page == .conversation }
+            return "⌥⌘A → list with the row; row → conversation"
+        }
         log.check("the sidebar's own swipe still switches Spaces, with the panel open") {
             let second = try createSpace(app, title: "Second")
             try click(app, .dockSpace(home))
