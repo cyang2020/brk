@@ -153,7 +153,7 @@ enum CommandInventory {
         .localModels(LocalModelsSnapshot()),
         .agentRead(AgentReadRequest(call: "ghost", window: WindowID("ghost"), tab: "ghost", part: .text)),
         .agentAct(AgentActRequest(call: "ghost", window: WindowID("ghost"), act: .close([ItemID("ghost")]))), .aiMentionMatches(WindowID("ghost"), query: "x", ["ghost"]),
-        .aiPageRefresh(AIPageID("ghost"), run: AIRequestID("ghost"), .finished(.failed, detail: nil)),
+        .aiPageRefresh(AIPageID("ghost"), run: AIRequestID("ghost"), .finished(.failed, detail: nil)), .aiPageSaved(AIPageID("ghost"), "{}"),
         .page(siteTarget.document.browser, .linkHovered(nil)),
     ]
 
@@ -624,6 +624,7 @@ enum CommandInventory {
         case .agentAct: "agentAct"
         case .aiMentionMatches: "aiMentionMatches"
         case .aiPageRefresh: "aiPageRefresh"
+        case .aiPageSaved: "aiPageSaved"
         }
     }
 

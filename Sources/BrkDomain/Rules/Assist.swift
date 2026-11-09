@@ -26,7 +26,7 @@ extension Work {
         case .keepPage(let id): _ = keepPage(id, title: nil, in: window, show: true); return
         case .pageLink(let page, let url): pageLink(page, url, in: window); return
         case .answerPageLink(let open): answerPageLink(open, in: window); return
-        case .pageSave(let page, let text): pageSave(page, text, in: window); return
+        case .pageSave(let page, let text): pageSave(page, text); return
         case .livePage(let page, let change): livePage(page, change, in: window); return
         case .undoOrganize: undoAIOrganize(in: window); return
         case .neverTranslateSite, .neverTranslateLanguage:

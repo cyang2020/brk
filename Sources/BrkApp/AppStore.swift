@@ -167,9 +167,14 @@ public final class AppStore {
 
     /// Every user command, system event and page event enters here.
     public func dispatch(_ input: Input) {
-        // While Brk quits, user input is dropped, except what a page saves of itself: the quit makes pages commit their
-        // edits in progress first (`commitPageEdits`), and those saves must land.
-        if isTerminating, case .user(_, let command) = input, !Self.isPageSave(command) { return }
+        // What a page saves of itself is data for its page, whatever window showed it: applied as a system event, so a
+        // save made as its window closes (the window is already gone from the state) or as Brk quits (user input is
+        // dropped then) still lands.
+        if case .user(_, let command) = input, let save = Self.pageSave(command) {
+            dispatch(.system(.aiPageSaved(save.page, save.text)))
+            return
+        }
+        if isTerminating, case .user = input { return }
         queue.append(input)
         guard !dispatching else { return }
         drain()
@@ -290,11 +295,10 @@ public final class AppStore {
     /// Every page of an AI page commits what is being typed, before anything is torn down (quit).
     func commitPageEdits() async { await PageSandboxView.commitAll() }
 
-    static func isPageSave(_ command: Command) -> Bool {
+    static func pageSave(_ command: Command) -> (page: AIPageID, text: String)? {
         switch command {
-        case .assist(.pageSave): true
-        case .assist(.inTab(_, .pageSave)): true
-        default: false
+        case .assist(.pageSave(let page, let text)), .assist(.inTab(_, .pageSave(let page, let text))): (page, text)
+        default: nil
         }
     }
 
@@ -332,7 +336,7 @@ public final class AppStore {
 
     private func apply(_ input: Input) -> KeyHandling {
         if case .system(.window(let owner, .closed)) = input { spacePanels.ownerGone(owner) }
-        if isTerminating, case .user(_, let command) = input, !Self.isPageSave(command) { return KeyHandling(handled: false, shortcut: false) }
+        if isTerminating, case .user = input { return KeyHandling(handled: false, shortcut: false) }
         if case .user(let window, .commandBar(let command)) = input {
             switch command {
             case .queryChanged, .queryChangedForSite, .prefixQuery, .dismiss:
@@ -396,6 +400,14 @@ public final class AppStore {
                 sheet.orderOut(nil)
             }
             windows[id]?.window.orderOut(nil)
+            // A window closed while others stay goes from the state at once; its AI pages first commit what is being
+            // typed (`PageSandboxView.commitEdits`), out of sight, then it goes.
+            if let controller = windows[id], PageSandboxView.anyCanSave(in: controller.window) {
+                Task { @MainActor in
+                    await PageSandboxView.commitAll(in: controller.window)
+                    _ = controller
+                }
+            }
             windows[id] = nil
         }
         for id in snapshot.windows.keys.sorted() where windows[id] == nil {

@@ -174,7 +174,7 @@ struct Work {
             switch event {
             case .imageImported(let window, _, _, _, _, _), .shared(let window, _, _), .failed(let window, _, _): begin(window: window)
             }
-        case .boost, .currencyRates, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .aiConversation, .conversationsLoaded, .aiAgents, .aiAgentsWanted, .aiFolderChosen, .aiKeys, .aiUsage, .aiBasicTick, .aiDuplicateCandidates, .localModels, .aiPageRefresh: begin(window: nil)
+        case .boost, .currencyRates, .profileDataCleared, .capture, .extensionOperationFailed, .websiteRulesLoaded, .globalShortcut, .filterListFetched, .extensionsRead, .siteDataCleared, .output, .sidebarData, .find, .siteResult, .download, .contextDisposed, .page, .clockTick, .externalURL, .aiProvidersDetected, .aiResult, .aiPartial, .aiPageRead, .aiDeadline, .aiHoverReady, .aiTranslated, .aiDownloadRenamed, .aiConversation, .conversationsLoaded, .aiAgents, .aiAgentsWanted, .aiFolderChosen, .aiKeys, .aiUsage, .aiBasicTick, .aiDuplicateCandidates, .localModels, .aiPageRefresh, .aiPageSaved: begin(window: nil)
         }
         switch event {
         case .find(let update): findUpdated(update)
@@ -263,6 +263,7 @@ struct Work {
         case .agentAct(let request): agentAct(request)
         case .aiMentionMatches(let window, let query, let ids): aiMentionMatches(window, query: query, ids: ids)
         case .aiPageRefresh(let page, let run, let event): aiPageRefresh(page, run: run, event)
+        case .aiPageSaved(let page, let text): pageSave(page, text)
         }
     }
 

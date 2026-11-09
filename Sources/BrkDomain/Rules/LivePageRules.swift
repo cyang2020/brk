@@ -9,10 +9,10 @@ import Foundation
 extension Work {
     // MARK: The page's own saves
 
-    /// `window.brk.save` from a page in a window: JSON text that fits the page's save shape, within the size and rate
-    /// caps. Anything else changes nothing.
-    mutating func pageSave(_ id: AIPageID, _ text: String, in window: WindowID) {
-        guard var record = state.doc.aiPages[id], record.profile == state.agentProfile(in: window) else { return }
+    /// `window.brk.save`: JSON text that fits the page's save shape, within the size and rate caps, for the page whose
+    /// view Brk made (the view names its page; the page cannot name another). Anything else changes nothing.
+    mutating func pageSave(_ id: AIPageID, _ text: String) {
+        guard var record = state.doc.aiPages[id] else { return }
         let minute = ctx.now.milliseconds / 60_000
         var count = state.session.ai.pageSaves[id] ?? AIPageSaveCount(minute: minute, saves: 0)
         if count.minute != minute { count = AIPageSaveCount(minute: minute, saves: 0) }

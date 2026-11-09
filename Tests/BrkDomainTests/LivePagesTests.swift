@@ -366,6 +366,17 @@ final class LivePagesTests: XCTestCase {
         XCTAssertEqual(decoded, record)
     }
 
+    func testAPagesSaveLandsAsASystemEventWithNoWindow() throws {
+        let d = enabled()
+        let (_, page) = try keptPage(d)
+        d.system(.aiPageSaved(page, #"{"notes":{"kettle":"wait for a sale"}}"#))
+        XCTAssertEqual(d.state.savedPages[page]?.saved, #"{"notes":{"kettle":"wait for a sale"}}"#)
+        d.system(.aiPageSaved(page, "[1]"))
+        d.system(.aiPageSaved(AIPageID("no-such-page"), #"{"a":1}"#))
+        XCTAssertEqual(d.state.savedPages[page]?.saved, #"{"notes":{"kettle":"wait for a sale"}}"#, "the same checks as a save from a window")
+        XCTAssertNil(d.state.savedPages[AIPageID("no-such-page")])
+    }
+
     func testSavesAreCappedCheckedAndRateLimited() throws {
         let d = enabled()
         let (_, page) = try keptPage(d)

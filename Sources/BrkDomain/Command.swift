@@ -694,6 +694,9 @@ public enum SystemEvent: Sendable, Equatable {
     case aiMentionMatches(WindowID, query: String, [String])
     /// A live page's refresh `run` reported (`Effect.aiRefreshPage`).
     case aiPageRefresh(AIPageID, run: AIRequestID, AIPageRefreshEvent)
+    /// The page saved its own state (`window.brk.save`), from the view Brk made for page `AIPageID`: applied whatever
+    /// window showed it, so a save made as its window closes or Brk quits still lands.
+    case aiPageSaved(AIPageID, String)
     // Later: case liveFolder(ItemID, [URL])   -- a live folder fetch finished.
 }
 

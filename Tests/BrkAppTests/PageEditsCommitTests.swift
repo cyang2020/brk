@@ -4,8 +4,8 @@ import Foundation
 import XCTest
 @testable import BrkApp
 
-/// While Brk quits, user input is dropped, except what a page saves of itself: the quit makes pages commit their edits
-/// first, and those saves must reach the page's record before the state is written.
+/// What a page saves of itself is applied as a system event, whatever window showed it: while Brk quits (user input is
+/// dropped then) and after its window has gone from the state, a page committing its edits still saves.
 @MainActor
 final class PageEditsCommitTests: XCTestCase {
     func testAPagesSaveDuringTheQuitStillLands() throws {
@@ -25,7 +25,9 @@ final class PageEditsCommitTests: XCTestCase {
         XCTAssertEqual(harness.store.state.savedPages[page]?.saved, #"{"note":"wait for a sale"}"#)
         harness.store.dispatch(.user(harness.window, .assist(.inTab(conversation, .pageSave(page, #"{"note":"from the tab"}"#)))))
         XCTAssertEqual(harness.store.state.savedPages[page]?.saved, #"{"note":"from the tab"}"#)
-        XCTAssertTrue(AppStore.isPageSave(.assist(.pageSave(page, "{}"))))
-        XCTAssertFalse(AppStore.isPageSave(.assist(.keepPage(page))))
+        harness.store.dispatch(.user(WindowID("a window already gone"), .assist(.pageSave(page, #"{"note":"from a closed window"}"#))))
+        XCTAssertEqual(harness.store.state.savedPages[page]?.saved, #"{"note":"from a closed window"}"#)
+        XCTAssertNotNil(AppStore.pageSave(.assist(.pageSave(page, "{}"))))
+        XCTAssertNil(AppStore.pageSave(.assist(.keepPage(page))))
     }
 }
