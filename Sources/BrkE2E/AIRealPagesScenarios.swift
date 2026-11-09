@@ -123,7 +123,11 @@ enum AIRealPagesScenarios {
         try mouse(right ? .rightMouseUp : .leftMouseUp, at: target, button: right ? .right : .left, flags: flags); usleep(400_000)
     }
     private static func centre(_ r: CGRect) -> CGPoint { CGPoint(x: r.midX, y: r.midY) }
-    private static func frame(_ app: AppUnderTest, _ id: ViewID) throws -> CGRect { try visible(app.native(), id).frame }
+    /// A control's frame, read after the window is clear of the dialogs again (something can widen it after the start).
+    private static func frame(_ app: AppUnderTest, _ id: ViewID) throws -> CGRect {
+        if try app.native().windowFrame.maxX > 1280 { try clearOfSystemDialogs(app) }
+        return try visible(app.native(), id).frame
+    }
     private static func clickControl(_ app: AppUnderTest, _ name: String) throws { try click(app, at: centre(frame(app, .aiControl(name)))) }
     private static func chooseMenu(_ title: String) throws {
         var found: CGRect?
