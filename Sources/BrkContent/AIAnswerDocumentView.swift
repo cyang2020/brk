@@ -525,7 +525,7 @@ final class AIApprovalView: NSView {
         shown = approval
         layer?.backgroundColor = style.item.cgColor
         sentence.stringValue = AIStepWords.approval(approval, agent: agent, folder: folder, copy.language)
-        sentence.toolTip = approval.title
+        sentence.toolTip = [folder, approval.title].compactMap { $0 }.joined(separator: "\n")
         sentence.textColor = style.onCard ? style.cardText : style.text
         detail.stringValue = approval.detail
         detail.textColor = style.secondary
