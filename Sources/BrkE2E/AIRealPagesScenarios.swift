@@ -92,6 +92,15 @@ enum AIRealPagesScenarios {
         process.waitUntilExit()
         return String(decoding: data, as: UTF8.self)
     }
+    /// At the screen's left edge and no wider than 1280 points: the dialogs start at x 1295 on this screen.
+    private static func clearOfSystemDialogs(_ app: AppUnderTest) throws {
+        try AIPanelLookScenarios.clearOfSystemDialogs(app)
+        var frame = try app.native().windowFrame
+        guard frame.width > 1280 else { return }
+        frame.size.width = 1280
+        try app.setWindowFrame(frame)
+        app.sleep(0.5)
+    }
     private static func screen(_ app: AppUnderTest, _ point: CGPoint) throws -> CGPoint {
         let facts = try app.native()
         let top = CGDisplayBounds(CGMainDisplayID()).height - facts.windowFrame.maxY
@@ -278,7 +287,7 @@ enum AIRealPagesScenarios {
         Self.app = app
         let name = choice.rawValue, kind = choice.kind!
         // macOS's own permission dialogs can sit at the screen's right, over the panel; only the user answers them.
-        try AIPanelLookScenarios.clearOfSystemDialogs(app)
+        try clearOfSystemDialogs(app)
         let log = Log(app.shotsDirectory.appendingPathComponent("real-pages-\(name).txt"))
         defer { try? NativeSystemInput.setShift(false); PhysicalKeys.clearSystemModifiers(KeyChord([.command, .shift, .option, .control], .a)) }
 
@@ -385,7 +394,7 @@ enum AIRealPagesScenarios {
             try app.launch()
             guard case .hello(let again) = try app.send(.hello) else { throw Check(description: "no hello after the relaunch") }
             Self.pid = again.pid
-            try AIPanelLookScenarios.clearOfSystemDialogs(app)
+            try clearOfSystemDialogs(app)
             try app.waitUntil("the rows are back", timeout: 15) {
                 let rows = tabRows(try app.view().space.today.rows)
                 return rows.contains { $0.url == ConversationPage.url(conversation) } && rows.contains { $0.url == AIPageTab.url(page) }
