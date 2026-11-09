@@ -299,6 +299,95 @@ final class PageSandboxTests: XCTestCase {
         XCTAssertEqual(answer5, "refused: Saving is off here.")
     }
 
+    // MARK: Committing edits before a page view goes
+
+    /// A page that saves its note only when the field changes (on leaving it), as some agents write them.
+    private let changeOnly = """
+    <!doctype html><input id="note" style="width:300px;height:30px"><script>
+    const note = document.getElementById('note');
+    note.addEventListener('change', () => window.brk.save({ note: note.value }));
+    </script>
+    """
+
+    func testAFieldLeftWithTypingInItIsCommittedBeforeTheViewGoes() async throws {
+        let view = PageSandboxView(html: changeOnly, data: nil, theme: theme, page: AIPageID("p"))
+        var saves: [String] = []
+        view.onSave = { saves.append($0) }
+        _ = window(for: view, front: true)
+        try await loaded(view)
+        let focused = await view.evaluateInPage("document.getElementById('note').focus(); return document.activeElement.id")
+        XCTAssertEqual(focused, "note")
+        view.typeText("wait for a sale")
+        try await Task.sleep(for: .milliseconds(400))
+        let typed = await view.evaluateInPage("return document.getElementById('note').value")
+        XCTAssertEqual(typed, "wait for a sale", "typed as a user types")
+        XCTAssertEqual(saves, [], "the page saves only when the field changes, and it has not yet")
+        let started = ProcessInfo.processInfo.systemUptime
+        await view.commitEdits()
+        XCTAssertEqual(saves, [#"{"note":"wait for a sale"}"#], "the field lost focus, its change handler ran and the page saved")
+        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - started, PageSandboxView.commitLimit + 0.3)
+        let after = await view.evaluateInPage("return document.activeElement === document.body")
+        XCTAssertEqual(after, "1", "the focus left the field")
+        XCTAssertEqual(view.allowedNavigations, [PageSandboxPolicy.documentURL], "a commit loads and navigates nothing")
+    }
+
+    func testACommitWaitsForADebouncedSaveAndForSavesThatKeepComing() async throws {
+        let html = """
+        <!doctype html><input id="note"><script>
+        const note = document.getElementById('note'); let timer;
+        note.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => window.brk.save({ note: note.value }), 250); });
+        </script>
+        """
+        let view = PageSandboxView(html: html, data: nil, theme: theme, page: AIPageID("p"))
+        var saves: [String] = []
+        view.onSave = { saves.append($0) }
+        _ = window(for: view, front: true)
+        try await loaded(view)
+        _ = await view.evaluateInPage("document.getElementById('note').focus(); return true")
+        view.typeText("tea")
+        await view.commitEdits()
+        XCTAssertEqual(saves.last, #"{"note":"tea"}"#, "the save the page had pending landed before the commit returned")
+    }
+
+    func testACommitWithNothingToSaveIsShortAndAPreviewCommitsNothing() async throws {
+        let view = PageSandboxView(html: "<!doctype html><p>nothing to edit</p>", data: nil, theme: theme, page: AIPageID("p"))
+        view.onSave = { _ in XCTFail("nothing was edited") }
+        _ = window(for: view)
+        try await loaded(view)
+        var started = ProcessInfo.processInfo.systemUptime
+        await view.commitEdits()
+        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - started, PageSandboxView.commitWait + 0.3)
+        let preview = PageSandboxView(html: changeOnly, data: nil, theme: theme)
+        _ = window(for: preview)
+        try await loaded(preview)
+        started = ProcessInfo.processInfo.systemUptime
+        await preview.commitEdits()
+        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - started, 0.1, "a preview cannot save, so nothing is waited for")
+    }
+
+    func testCommitAllTakesTheViewsOfOneWindowOrOfAll() async throws {
+        var saved: [String] = []
+        let a = PageSandboxView(html: changeOnly, data: nil, theme: theme, page: AIPageID("a"))
+        a.onSave = { saved.append("a " + $0) }
+        let first = window(for: a, front: true)
+        try await loaded(a)
+        let b = PageSandboxView(html: changeOnly, data: nil, theme: theme, page: AIPageID("b"))
+        b.onSave = { saved.append("b " + $0) }
+        _ = window(for: b, front: true)
+        try await loaded(b)
+        for (view, text) in [(a, "one"), (b, "two")] {
+            _ = await view.evaluateInPage("document.getElementById('note').focus(); return true")
+            view.typeText(text)
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertFalse(PageSandboxView.anyCanSave(in: NSWindow()))
+        XCTAssertTrue(PageSandboxView.anyCanSave(in: first))
+        await PageSandboxView.commitAll(in: first)
+        XCTAssertEqual(saved, [#"a {"note":"one"}"#], "only the closing window's page")
+        await PageSandboxView.commitAll()
+        XCTAssertEqual(saved, [#"a {"note":"one"}"#, #"b {"note":"two"}"#], "a quit commits every window's")
+    }
+
     func testAPreviewPicturesThePageAtItsContentHeightWithItsConsole() async throws {
         let html = """
         <!doctype html><div style="height:300px;background:var(--card);border-radius:var(--radius)">chart</div>

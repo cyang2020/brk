@@ -23,6 +23,10 @@ import WebKit
 //   own state (ticks, notes), a JSON object within `AIPageLimits.saved` bytes that fits the page's save shape, at most
 //   `AIPageLimits.savesPerMinute` times a minute. It goes to Brk as `onSave` and is kept with the page; nothing else
 //   crosses, and a preview saves nothing.
+// - Before a page view goes (its tab hidden or switched away, its window closing, Brk quitting), Brk makes the page
+//   commit an edit in progress (`commitEdits`): from its own script world it takes focus away from the focused field,
+//   so the page's change and blur handlers run, and gives the page a moment to save. A page's save code is the agent's,
+//   and some save a note only when its field loses focus.
 
 /// Brk's theme as the page's CSS variables (T3 Code's names), for light, dark and the Space's color.
 public struct PageTheme: Equatable, Sendable {
@@ -143,6 +147,8 @@ public final class PageSandboxView: NSView {
     public var menuItems: (() -> [NSMenuItem])?
     /// The page saved its own state: JSON text that passed the checks. Nil: saving is off (a preview).
     public var onSave: ((String) -> Void)?
+    /// When the page last saved (system uptime), for `commitEdits` to wait while saves still come.
+    private var lastSave: TimeInterval?
     private let web: SandboxWebView
     private let handler: DocumentHandler
     private let bridge = Bridge()
@@ -188,6 +194,7 @@ public final class PageSandboxView: NSView {
         addSubview(web)
         bridge.owner = self
         saver.owner = self
+        Self.live.add(self)
         Task { @MainActor [weak self] in
             // No rule list, no page: CSP alone lets preconnect through.
             guard let rules = await Self.rules() else {
@@ -357,9 +364,62 @@ public final class PageSandboxView: NSView {
         switch AIPageShape.check(text, schema: saveShape, limit: AIPageLimits.saved) {
         case .failure(let refusal): return "Brk did not save it: \(refusal.message)."
         case .success(let normalized):
+            lastSave = ProcessInfo.processInfo.systemUptime
             onSave(normalized)
             return nil
         }
+    }
+
+    // MARK: Committing edits before the view goes
+
+    /// Every page view alive, for committing their edits before a window closes or Brk quits.
+    private static let live = NSHashTable<PageSandboxView>.weakObjects()
+
+    /// How long a page gets to save after its field lost focus, and the most a commit waits while saves keep coming.
+    static let commitWait: TimeInterval = 0.35, commitQuiet: TimeInterval = 0.15, commitLimit: TimeInterval = 1.2
+
+    /// Makes the page commit an edit in progress: the focused element loses focus (from Brk's own script world, so the
+    /// page's change, blur and focusout handlers run as when the user leaves the field), then the page gets a moment to
+    /// call `window.brk.save`, longer while its saves keep coming. Nothing is sent to the page and nothing else crosses.
+    /// Returns at once for a page that cannot save (a preview).
+    public func commitEdits() async {
+        guard onSave != nil, loadedDocument else { return }
+        let started = ProcessInfo.processInfo.systemUptime
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            web.evaluateJavaScript(Self.blurScript, in: nil, in: .world(name: "brk-sandbox")) { _ in done.resume() }
+        }
+        while true {
+            try? await Task.sleep(for: .milliseconds(50))
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - started >= Self.commitLimit { return }
+            if now - started < Self.commitWait { continue }
+            guard let lastSave, lastSave >= started else { return }
+            if now - lastSave >= Self.commitQuiet { return }
+        }
+    }
+    private static let blurScript = """
+    (() => {
+      let element = document.activeElement;
+      while (element && element.shadowRoot && element.shadowRoot.activeElement) element = element.shadowRoot.activeElement;
+      if (!element || element === document.body || element === document.documentElement || typeof element.blur !== 'function') return false;
+      element.blur();
+      return true;
+    })()
+    """
+
+    /// Text into the focused field the way the user's keystrokes go (tests: a change event then follows a blur).
+    func typeText(_ text: String) {
+        web.window?.makeFirstResponder(web)
+        web.insertText(text)
+    }
+
+    /// Some page view in `window` can save (a window without one closes at once).
+    public static func anyCanSave(in window: NSWindow) -> Bool { live.allObjects.contains { $0.window === window && $0.onSave != nil } }
+
+    /// Commits the edits of every page view in `window` (every window when nil), all at once.
+    public static func commitAll(in window: NSWindow? = nil) async {
+        let commits = live.allObjects.filter { window == nil || $0.window === window }.map { view in Task { @MainActor in await view.commitEdits() } }
+        for commit in commits { await commit.value }
     }
 
     /// The one page-world message that changes anything (`window.brk.save`), answered so the page's promise settles.
@@ -370,7 +430,7 @@ public final class PageSandboxView: NSView {
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage,
                                    replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void) {
-            guard message.name == "brkSave", message.frameInfo.isMainFrame, let owner else { replyHandler(nil, "Saving is off here."); return }
+            guard message.name == "brkSave", message.frameInfo.isMainFrame, let owner, owner.onSave != nil else { replyHandler(nil, "Saving is off here."); return }
             if let refusal = owner.save(message.body) { replyHandler(nil, refusal) } else { replyHandler(true, nil) }
         }
     }

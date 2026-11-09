@@ -21,6 +21,8 @@ final class AIAnswerDocumentView: NSView, NSTextViewDelegate, NSTextFieldDelegat
     /// TextKit 1: pages are laid over their attachments' glyph rects, and the answers' tables are text tables.
     private let text = NSTextView(usingTextLayoutManager: false)
     private lazy var pages = TranscriptPages(text: text)
+    /// Its pages commit their edits in progress (the view is about to go).
+    func commitPageEdits() async { await pages.commitEdits() }
     private let close = AIActionButton("Close")
     private let openTab = AIActionButton("Open as Tab")
     private var pageTheme: PageTheme?

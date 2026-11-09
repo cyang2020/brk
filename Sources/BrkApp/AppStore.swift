@@ -167,7 +167,9 @@ public final class AppStore {
 
     /// Every user command, system event and page event enters here.
     public func dispatch(_ input: Input) {
-        if isTerminating, case .user = input { return }
+        // While Brk quits, user input is dropped, except what a page saves of itself: the quit makes pages commit their
+        // edits in progress first (`commitPageEdits`), and those saves must land.
+        if isTerminating, case .user(_, let command) = input, !Self.isPageSave(command) { return }
         queue.append(input)
         guard !dispatching else { return }
         drain()
@@ -285,6 +287,17 @@ public final class AppStore {
 
     func stopAI() async { await aiServices.stop() }
 
+    /// Every page of an AI page commits what is being typed, before anything is torn down (quit).
+    func commitPageEdits() async { await PageSandboxView.commitAll() }
+
+    static func isPageSave(_ command: Command) -> Bool {
+        switch command {
+        case .assist(.pageSave): true
+        case .assist(.inTab(_, .pageSave)): true
+        default: false
+        }
+    }
+
     /// "Warn before quitting" (`QuitWarning`): `answer` gets whether to go on quitting. Asks only while the setting is
     /// on, as a sheet on `window`; "Quit, and don’t ask again" turns it off through the reducer, so the answer is saved
     /// before the ordered quit flushes.
@@ -319,7 +332,7 @@ public final class AppStore {
 
     private func apply(_ input: Input) -> KeyHandling {
         if case .system(.window(let owner, .closed)) = input { spacePanels.ownerGone(owner) }
-        if isTerminating, case .user = input { return KeyHandling(handled: false, shortcut: false) }
+        if isTerminating, case .user(_, let command) = input, !Self.isPageSave(command) { return KeyHandling(handled: false, shortcut: false) }
         if case .user(let window, .commandBar(let command)) = input {
             switch command {
             case .queryChanged, .queryChangedForSite, .prefixQuery, .dismiss:

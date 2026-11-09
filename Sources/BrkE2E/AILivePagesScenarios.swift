@@ -297,7 +297,8 @@ enum AILivePagesScenarios {
     private static let page = AIPageID("5E0C0A11-0000-4000-8000-00000000E1FE")
 
     /// A price list drawn from `window.brk.data`, with a box to tick and a note per item, saved with `window.brk.save`.
-    /// Rows are 44 points tall from the top; the box's middle is 17 points in, the note's 416.
+    /// Rows are 44 points tall from the top; the box's middle is 17 points in, the note's 416. A note is saved only when
+    /// its field changes (on leaving it), as some agents write their pages: Brk must commit a note left in its field.
     static let fixtureHTML = """
     <!doctype html><html><head><style>
     .row { display: flex; align-items: center; height: 44px; gap: 10px; padding: 0 8px; }
@@ -317,7 +318,7 @@ enum AILivePagesScenarios {
       const name = document.createElement('span'); name.className = 'name'; name.textContent = item.name;
       const price = document.createElement('span'); price.className = 'price'; price.textContent = '€' + item.price.toFixed(2);
       const note = document.createElement('input'); note.className = 'note'; note.value = state.notes[item.id] || ''; note.placeholder = 'Note';
-      note.addEventListener('input', () => { state.notes[item.id] = note.value; save(); });
+      note.addEventListener('change', () => { state.notes[item.id] = note.value; save(); });
       row.append(box, name, price, note); document.getElementById('list').append(row);
     }
     </script></body></html>
@@ -424,34 +425,78 @@ enum AILivePagesScenarios {
             return "tools \(tools); brk_tab_open: \(short(open["text"] as? String)); unlisted: \(short(unlisted["text"] as? String)); \(reads.count) source reads"
         }
 
-        log.check("showing the page clears the mark; a real tick and a typed note are saved") {
+        log.check("showing the page clears the mark; a real tick is saved, a note typed and left in its field is not yet") {
             try showPage(app, page)
             try app.waitUntil("the mark cleared", timeout: 6) { try pageRow(app, page)?.liveMark == nil }
             shot(app, prefix, "page-refreshed")
             let view = try pageCard(app)
             // The toaster's row is the second: its box, then its note.
             try click(app, at: CGPoint(x: view.minX + 17, y: view.minY + 44 + 22))
+            try app.waitUntil("the tick in the page's file", timeout: 8) { (record(app, page)?["saved"] as? String)?.contains(#""ticked":["toaster"]"#) == true }
             try click(app, at: CGPoint(x: view.minX + 416, y: view.minY + 44 + 22))
             try type("wait for a sale")
-            try app.waitUntil("the save in the page's file", timeout: 8) { (record(app, page)?["saved"] as? String)?.contains("wait for a sale") == true }
+            app.sleep(1.5)
             let saved = try XCTUnwrapValue(record(app, page)?["saved"] as? String)
-            try expect(saved.contains(#""ticked":["toaster"]"#), "saved: \(saved)")
+            try expect(!saved.contains("wait for a sale"), "the page saved its note on typing; this step is for one that saves on change: \(saved)")
             shot(app, prefix, "ticked")
-            return "saved \(saved)"
+            return "saved \(saved); the note is still in its field, unsaved by the page"
         }
 
-        log.check("⌘Q and a relaunch: the tick and the note are still there") {
+        log.check("⌘Q with the note still in its field: after the relaunch the note and the tick are there") {
             try quitAndRelaunch(app)
             try app.waitUntil("the page's row is back", timeout: 15) { try pageRow(app, page) != nil }
             try showPage(app, page)
             let saved = try XCTUnwrapValue(record(app, page)?["saved"] as? String)
-            try expect(saved.contains("wait for a sale") && saved.contains("toaster"), "saved after the relaunch: \(saved)")
+            try expect(saved.contains(#""toaster":"wait for a sale""#) && saved.contains(#""ticked":["toaster"]"#), "saved after the relaunch: \(saved)")
             try expect(try app.view().aiPages.first?.content?.saved == saved, "the card's page is given what was saved")
             shot(app, prefix, "relaunch-ticked")
             return "saved \(saved)"
         }
 
-        log.check("the next refresh keeps the tick and the note") {
+        log.check("a note typed and left in its field is saved when its row is switched away") {
+            let view = try pageCard(app)
+            // The blender's note, the third row; then another tab's row, without leaving the field.
+            try click(app, at: CGPoint(x: view.minX + 416, y: view.minY + 88 + 22))
+            try type("too dear")
+            app.sleep(1)
+            try expect(!(record(app, page)?["saved"] as? String ?? "").contains("too dear"), "saved before the switch")
+            try lookAway(app)
+            try app.waitUntil("the note in the page's file", timeout: 6) { (record(app, page)?["saved"] as? String)?.contains(#""blender":"too dear""#) == true }
+            return "saved \(record(app, page)?["saved"] as? String ?? "nil")"
+        }
+
+        log.check("a note typed and left in its field is saved when its window closes") {
+            // A second window (⌘N) shows the page; its note is typed there and the window closed with ⌘⇧W.
+            guard case .hello(let before) = try app.send(.hello) else { throw Check(description: "no hello") }
+            try WindowServerKeys.ensureFrontmost(app, app.window!)
+            try key(.command, .n)
+            var second: WindowID?
+            try app.waitUntil("a second window", timeout: 8) {
+                guard case .hello(let now) = try app.send(.hello) else { return false }
+                second = now.windows.first { !before.windows.contains($0) }
+                return second != nil
+            }
+            let first = app.window
+            app.window = second
+            defer { app.window = first }
+            try WindowServerKeys.ensureFrontmost(app, second!)
+            try showPage(app, page)
+            let view = try pageCard(app)
+            try click(app, at: CGPoint(x: view.minX + 416, y: view.minY + 22))
+            try type("check on Friday")
+            app.sleep(1)
+            try expect(!(record(app, page)?["saved"] as? String ?? "").contains("check on Friday"), "saved before the close")
+            try key([.command, .shift], .w)
+            try app.waitUntil("the second window closed", timeout: 8) {
+                guard case .hello(let now) = try app.send(.hello) else { return false }
+                return !now.windows.contains(second!)
+            }
+            app.window = first
+            try app.waitUntil("the note in the page's file", timeout: 6) { (record(app, page)?["saved"] as? String)?.contains(#""kettle":"check on Friday""#) == true }
+            return "saved \(record(app, page)?["saved"] as? String ?? "nil")"
+        }
+
+        log.check("the next refresh keeps the tick and the three notes") {
             let kettle = try todayRow(app) { $0.url?.absoluteString.hasSuffix("shop-kettle.html") == true }
             try click(app, at: centre(stillFrame(app, .row(kettle.id))))
             app.site.replace(in: "/shop-blender.html", "€59.90", with: "€55.00")
@@ -460,6 +505,7 @@ enum AILivePagesScenarios {
             try expect(kind == "updated", "the outcome: \(kind) \(outcomeDetail(app, page))")
             let after = record(app, page)?["saved"] as? String
             try expect(after == before, "saved changed: \(before ?? "nil") → \(after ?? "nil")")
+            try expect(["wait for a sale", "too dear", "check on Friday"].allSatisfy { after?.contains($0) == true }, "a note is missing: \(after ?? "nil")")
             let data = record(app, page)?["data"] as? String ?? ""
             try expect(data.contains("55"), "the blender's new price: \(data)")
             return "saved kept: \(after ?? "nil"); data \(data)"
@@ -752,7 +798,8 @@ enum AILivePagesScenarios {
                 try expect(steps(ai).contains { $0.hasPrefix("Change a page") }, "the page was not changed: \(steps(ai))")
                 return "steps \(steps(ai)); saveSchema \(short(record(app, page)?["saveSchema"] as? String))"
             }
-            log.check("a real tick and a typed note in the page are saved") {
+            var secondField: CGRect?
+            log.check("a real tick and a typed note in the page are saved, the note's text included") {
                 try showPage(app, page)
                 _ = NativeSystemInput.wakeAccessibilityTree(pid: pid)
                 var boxes: [CGRect] = [], fields: [CGRect] = []
@@ -760,20 +807,34 @@ enum AILivePagesScenarios {
                 fields = pageControls("AXTextField") + pageControls("AXTextArea")
                 shot(app, prefix, "edits-page")
                 try clickScreen(centre(boxes[0]))
-                if let field = fields.first {
-                    try clickScreen(centre(field))
-                    try type("wait for a sale")
+                guard let field = fields.first else { throw Check(description: "the page has no note field: \(boxes.count) boxes") }
+                secondField = fields.dropFirst().first
+                try clickScreen(centre(field))
+                try type("wait for a sale")
+                // A page that saves on input has it at once; one that saves on change gets it when Brk commits the field as
+                // the page goes out of sight.
+                var how = "the page saved it as it was typed"
+                if (try? app.waitUntil("the note in the page's file", timeout: 3) { (record(app, page)?["saved"] as? String)?.contains("wait for a sale") == true }) == nil {
+                    how = "the page saved it when Brk committed the field as the row was switched away"
                 }
-                try app.waitUntil("the save in the page's file", timeout: 10) { record(app, page)?["saved"] is String }
-                app.sleep(1)
+                try lookAway(app)
+                try app.waitUntil("the note in the page's file", timeout: 6) { (record(app, page)?["saved"] as? String)?.contains("wait for a sale") == true }
                 let saved = record(app, page)?["saved"] as? String ?? ""
-                return "\(boxes.count) boxes, \(fields.count) fields; saved \(saved)"
+                return "\(boxes.count) boxes, \(fields.count) fields; \(how); saved \(saved)"
             }
-            log.check("⌘Q and a relaunch: the tick and the note are still there, and the next refresh keeps them") {
-                let before = record(app, page)?["saved"] as? String
+            log.check("⌘Q with a second note still in its field; after the relaunch both notes and the tick are there, and the next refresh keeps them") {
+                try showPage(app, page)
+                if let secondField {
+                    _ = NativeSystemInput.wakeAccessibilityTree(pid: pid)
+                    let fields = pageControls("AXTextField") + pageControls("AXTextArea")
+                    try clickScreen(centre(fields.dropFirst().first ?? secondField))
+                    try type("ask in store")
+                }
                 try quitAndRelaunch(app)
                 try app.waitUntil("the page's row is back", timeout: 15) { try pageRow(app, page) != nil }
-                try expect(record(app, page)?["saved"] as? String == before, "saved after the relaunch: \(record(app, page)?["saved"] ?? "nil")")
+                let before = record(app, page)?["saved"] as? String ?? ""
+                try expect(before.contains("wait for a sale"), "the note is gone after the relaunch: \(before)")
+                if secondField != nil { try expect(before.contains("ask in store"), "the note left in its field at ⌘Q is gone: \(before)") }
                 try showPage(app, page)
                 shot(app, prefix, "edits-relaunch")
                 _ = NativeSystemInput.wakeAccessibilityTree(pid: pid)
@@ -781,9 +842,10 @@ enum AILivePagesScenarios {
                 try lookAway(app)
                 app.site.replace(in: "/shop-blender.html", "€59.90", with: "€55.00")
                 let kind = try passTheHour(app, page)
-                let after = record(app, page)?["saved"] as? String
-                try expect(after == before, "the refresh changed what was saved: \(after ?? "nil")")
-                return "saved \(before ?? "nil"); boxes after the relaunch \(checked); refresh \(kind), data \(short(record(app, page)?["data"] as? String))"
+                let after = record(app, page)?["saved"] as? String ?? ""
+                try expect(after == before, "the refresh changed what was saved: \(after)")
+                try expect(after.contains("wait for a sale"), "the note is gone after the refresh: \(after)")
+                return "saved \(before); boxes after the relaunch \(checked); refresh \(kind), the notes kept; data \(short(record(app, page)?["data"] as? String))"
             }
         }
 

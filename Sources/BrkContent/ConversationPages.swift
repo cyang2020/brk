@@ -113,11 +113,10 @@ final class TranscriptPages {
             rect.origin.x += origin.x
             rect.origin.y += origin.y
             rect.size = cell.size
-            // New data or HTML: the page loads again. Its own saves never reload it.
-            if let old = views[page.id], revisions[page.id] != page.revision {
-                old.removeFromSuperview()
-                views[page.id] = nil
-            }
+            // New data or HTML: the page loads again, once it has committed what is being typed. Its own saves never
+            // reload it.
+            if let old = views[page.id], revisions[page.id] != page.revision { replace(old, page: page.id) }
+            if views[page.id] == nil, revisions[page.id] == page.revision, let back = leaving.removeValue(forKey: page.id) { views[page.id] = back }
             let view = views[page.id] ?? make(page)
             if view.superview !== text { text.addSubview(view) }
             view.frame = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - Self.captionHeight)
@@ -132,12 +131,50 @@ final class TranscriptPages {
             caption.show(page)
         }
         for (id, view) in views where !seen.contains(id) {
-            view.removeFromSuperview()
-            views[id] = nil
-            revisions[id] = nil
+            retire(view, page: id)
             captions.removeValue(forKey: id)?.removeFromSuperview()
             cache[id] = nil
         }
+    }
+
+    /// Views committing their page's edits on their way out, by page.
+    private var leaving: [AIPageID: PageSandboxView] = [:]
+    private var replacing: Set<AIPageID> = []
+
+    /// The page left the transcript: out of sight, still in the window so it runs, until it has committed its edits.
+    private func retire(_ view: PageSandboxView, page: AIPageID) {
+        views[page] = nil
+        leaving[page] = view
+        view.frame.origin.x = -100_000
+        Task { @MainActor [weak self] in
+            await view.commitEdits()
+            guard let self, self.leaving[page] === view else { return }
+            self.leaving[page] = nil
+            if self.views[page] == nil { self.revisions[page] = nil }
+            view.removeFromSuperview()
+        }
+    }
+
+    /// New data or HTML: the shown page commits first, then the transcript is laid out again and the page made anew.
+    private func replace(_ view: PageSandboxView, page: AIPageID) {
+        guard replacing.insert(page).inserted else { return }
+        Task { @MainActor [weak self] in
+            await view.commitEdits()
+            guard let self else { return }
+            self.replacing.remove(page)
+            if self.views[page] === view {
+                view.removeFromSuperview()
+                self.views[page] = nil
+                self.revisions[page] = nil
+            }
+            self.onHeight?()
+        }
+    }
+
+    /// Commits every page's edits in progress (the transcript's view is about to go).
+    func commitEdits() async {
+        let commits = (Array(views.values) + Array(leaving.values)).map { page in Task { @MainActor in await page.commitEdits() } }
+        for commit in commits { await commit.value }
     }
 
     func apply(_ theme: PageTheme) {
@@ -146,10 +183,10 @@ final class TranscriptPages {
     }
 
     func removeAll() {
-        for view in views.values { view.removeFromSuperview() }
+        for (page, view) in views { retire(view, page: page) }
         for caption in captions.values { caption.removeFromSuperview() }
-        views = [:]
         captions = [:]
+        cache = [:]
     }
 
     private func make(_ page: AIPageSnapshot) -> PageSandboxView {
@@ -221,8 +258,13 @@ final class ConversationCardsView {
             view.render(card.answer, in: frame.rect, theme: theme)
         }
         for (page, view) in views where !seen.contains(page) {
-            view.removeFromSuperview()
+            // Its pages commit what is being typed first, out of sight but still in the window.
             views[page] = nil
+            view.frame.origin.x = -100_000
+            Task { @MainActor in
+                await view.commitPageEdits()
+                view.removeFromSuperview()
+            }
         }
     }
 
@@ -232,59 +274,113 @@ final class ConversationCardsView {
     var allViews: [NSView] { Array(views.values) }
 }
 
-/// The kept pages a window's cards show, each in the sandbox, filling its card.
+/// The kept pages a window's cards show, each in the sandbox, filling its card. A page whose card goes (its tab hidden
+/// or switched away) first commits an edit in progress (`PageSandboxView.commitEdits`), out of sight but still in the
+/// window; shown again meanwhile, the same view comes back. New data or HTML for a shown page waits for the old page to
+/// commit before the new one loads.
 @MainActor
 final class AIPageCardsView {
+    private typealias Entry = (page: AIPageID, revision: Int, view: PageSandboxView, back: NSView)
     private let dispatch: Dispatch
-    private var views: [PageID: (page: AIPageID, revision: Int, view: PageSandboxView, back: NSView)] = [:]
+    private var views: [PageID: Entry] = [:]
+    /// Views committing their page's edits on their way out, by page.
+    private var leaving: [AIPageID: Entry] = [:]
+    /// Cards whose shown page commits before new data or HTML replaces it.
+    private var replacing: Set<PageID> = []
+    private var last: (cards: [AIPageCard], frames: [CardFrame], theme: ResolvedTheme)?
     weak var parent: NSView?
     var below: NSView?
 
     init(dispatch: @escaping Dispatch) { self.dispatch = dispatch }
 
     func render(_ cards: [AIPageCard], frames: [CardFrame], theme: ResolvedTheme) {
+        last = (cards, frames, theme)
         var seen = Set<PageID>()
         let pageTheme = PageTheme(theme, background: theme.scheme == .light ? RGBA(1, 1, 1) : RGBA(hex: "#202124"))
         for card in cards {
             guard let frame = frames.first(where: { if case .aiPage(let page, _) = $0.content { page == card.page } else { false } }) else { continue }
             seen.insert(card.page)
             let content = card.content
-            // Another page, or new data or HTML for this one: load it again. The page's own saves never reload it.
-            if let existing = views[card.page], existing.page != content?.id || existing.revision != (content?.revision ?? 0) {
-                existing.back.removeFromSuperview()
+            let revision = content?.revision ?? 0
+            if let existing = views[card.page], existing.page != content?.id || existing.revision != revision {
+                if existing.page == content?.id {
+                    // New data or HTML for this page: it is loaded again once the page has committed what is being typed.
+                    replace(existing, of: card.page)
+                    place(existing, in: frame, theme: pageTheme)
+                    continue
+                }
+                retire(existing)
                 views[card.page] = nil
             }
-            let entry = views[card.page] ?? {
-                let back = NSView()
-                back.wantsLayer = true
-                back.layer?.masksToBounds = true
-                back.identify(.aiControl("page-card"))
-                let html = content.flatMap { try? String(contentsOf: $0.html, encoding: .utf8) } ?? TranscriptPages.missing
-                let view = PageSandboxView(html: html, data: content?.data, saved: content?.saved, saveSchema: content?.saveSchema, theme: pageTheme, page: content?.id)
-                view.identify(.aiControl("page-card-view"))
-                let id = content?.id
-                view.onEvent = { [weak self] event in
-                    if case .link(let url) = event, let id { self?.dispatch(.assist(.pageLink(id, url))) }
-                }
-                if let id { view.onSave = { [weak self] text in self?.dispatch(.assist(.pageSave(id, text))) } }
-                back.addSubview(view)
-                let made = (page: content?.id ?? AIPageID(""), revision: content?.revision ?? 0, view: view, back: back)
-                views[card.page] = made
-                return made
-            }()
-            if entry.back.superview == nil, let parent {
-                if let below { parent.addSubview(entry.back, positioned: .below, relativeTo: below) } else { parent.addSubview(entry.back) }
-            }
-            entry.back.frame = frame.rect
-            entry.back.layer?.cornerRadius = frame.cornerRadius
-            entry.back.layer?.backgroundColor = pageTheme.backgroundColor.cgColor
-            let inset = Metrics.ai.tabColumnInset.value
-            entry.view.frame = entry.back.bounds.insetBy(dx: inset, dy: inset)
-            entry.view.apply(pageTheme)
+            let entry = views[card.page] ?? content.flatMap { comeBack($0.id, revision: revision) } ?? make(content, theme: pageTheme)
+            views[card.page] = entry
+            place(entry, in: frame, theme: pageTheme)
         }
         for (page, entry) in views where !seen.contains(page) {
-            entry.back.removeFromSuperview()
+            retire(entry)
             views[page] = nil
+        }
+    }
+
+    private func make(_ content: AIPageSnapshot?, theme: PageTheme) -> Entry {
+        let back = NSView()
+        back.wantsLayer = true
+        back.layer?.masksToBounds = true
+        back.identify(.aiControl("page-card"))
+        let html = content.flatMap { try? String(contentsOf: $0.html, encoding: .utf8) } ?? TranscriptPages.missing
+        let view = PageSandboxView(html: html, data: content?.data, saved: content?.saved, saveSchema: content?.saveSchema, theme: theme, page: content?.id)
+        view.identify(.aiControl("page-card-view"))
+        let id = content?.id
+        view.onEvent = { [weak self] event in
+            if case .link(let url) = event, let id { self?.dispatch(.assist(.pageLink(id, url))) }
+        }
+        if let id { view.onSave = { [weak self] text in self?.dispatch(.assist(.pageSave(id, text))) } }
+        back.addSubview(view)
+        return (page: content?.id ?? AIPageID(""), revision: content?.revision ?? 0, view: view, back: back)
+    }
+
+    private func place(_ entry: Entry, in frame: CardFrame, theme: PageTheme) {
+        if entry.back.superview == nil, let parent {
+            if let below { parent.addSubview(entry.back, positioned: .below, relativeTo: below) } else { parent.addSubview(entry.back) }
+        }
+        entry.back.frame = frame.rect
+        entry.back.layer?.cornerRadius = frame.cornerRadius
+        entry.back.layer?.backgroundColor = theme.backgroundColor.cgColor
+        let inset = Metrics.ai.tabColumnInset.value
+        entry.view.frame = entry.back.bounds.insetBy(dx: inset, dy: inset)
+        entry.view.apply(theme)
+    }
+
+    /// The card went: out of sight, still in the window so the page runs, until it has committed its edits.
+    private func retire(_ entry: Entry) {
+        leaving[entry.page] = entry
+        entry.back.frame.origin.x = -100_000
+        Task { @MainActor [weak self] in
+            await entry.view.commitEdits()
+            guard let self, self.leaving[entry.page]?.view === entry.view else { return }
+            self.leaving[entry.page] = nil
+            entry.back.removeFromSuperview()
+        }
+    }
+
+    /// The page's view that is on its way out, back on screen as it is (its edits in progress included).
+    private func comeBack(_ page: AIPageID, revision: Int) -> Entry? {
+        guard let entry = leaving[page], entry.revision == revision else { return nil }
+        leaving[page] = nil
+        return entry
+    }
+
+    private func replace(_ entry: Entry, of card: PageID) {
+        guard replacing.insert(card).inserted else { return }
+        Task { @MainActor [weak self] in
+            await entry.view.commitEdits()
+            guard let self else { return }
+            self.replacing.remove(card)
+            if self.views[card]?.view === entry.view {
+                entry.back.removeFromSuperview()
+                self.views[card] = nil
+            }
+            if let last = self.last { self.render(last.cards, frames: last.frames, theme: last.theme) }
         }
     }
 

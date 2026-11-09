@@ -234,6 +234,24 @@ public class WindowController: NSObject, NSWindowDelegate {
 
     public func windowDidResize(_ notification: Notification) { reportGeometry() }
     public func windowDidMove(_ notification: Notification) { reportGeometry() }
+    /// An AI page in this window first commits what is being typed (`PageSandboxView.commitEdits`), then the window closes.
+    public func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if pageEditsCommitted || !PageSandboxView.anyCanSave(in: window) { return true }
+        guard !committingPageEdits else { return false }
+        committingPageEdits = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await PageSandboxView.commitAll(in: self.window)
+            self.committingPageEdits = false
+            self.pageEditsCommitted = true
+            self.window.performClose(nil)
+            if self.window.isVisible { self.pageEditsCommitted = false }
+        }
+        return false
+    }
+    private var committingPageEdits = false
+    private var pageEditsCommitted = false
+
     public func windowWillClose(_ notification: Notification) {
         root.cancelDrag()
         send(.system(.window(id, .closed)))
