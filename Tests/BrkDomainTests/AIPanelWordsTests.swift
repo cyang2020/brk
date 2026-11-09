@@ -20,9 +20,10 @@ final class AIPanelWordsTests: XCTestCase {
     func testARunOfStepsIsOnePlainLine() {
         func step(_ kind: AIStepKind?, _ title: String = "x") -> AIAgentStep { AIAgentStep(id: UUID().uuidString, title: title, state: .done, kind: kind) }
         let run = [step(.listTabs), step(.readTab), step(.readTab), step(.readTab), step(.makePage), step(.keepPage)]
-        XCTAssertEqual(AIStepWords.summary(run, .zh), "看了 tab，读了 3 个 tab，做了一个页面，存成了 tab")
-        XCTAssertEqual(AIStepWords.summary(run, .en), "looked through tabs, read 3 tabs, made a page, kept it as a tab")
+        XCTAssertEqual(AIStepWords.summary(run, .zh), "读了 3 个 tab，做了一个页面，存成了 tab")
+        XCTAssertEqual(AIStepWords.summary(run, .en), "read 3 tabs, made a page, kept it as a tab")
         XCTAssertEqual(AIStepWords.summary([step(.command), step(.command), step(nil, "Mystery")], .zh), "运行了 2 条命令，做了一步")
+        XCTAssertEqual(AIStepWords.summary([step(.listTabs), step(.makePage)], .zh), "看了 tab，做了一个页面", "looking at tabs without reading one still shows")
         XCTAssertEqual(AIStepWords.title(AIAgentStep(id: "s", title: "Run: ls -la", state: .done, kind: .command, subject: "ls -la"), .zh), "运行了命令：ls -la")
         XCTAssertEqual(AIStepWords.title(AIAgentStep(id: "s", title: "Run: ls -la", state: .done, kind: .command, subject: "ls -la"), .en), "Ran: ls -la")
         XCTAssertEqual(AIStepWords.title(AIAgentStep(id: "s", title: "An agent's own tool", state: .done), .zh), "An agent's own tool", "a tool Brk has no name for keeps the agent's words")
@@ -33,6 +34,7 @@ final class AIPanelWordsTests: XCTestCase {
         let command = AIAgentApproval(id: "a", title: "Run: ls", detail: "ls", options: [], kind: .command, subject: "ls")
         XCTAssertEqual(AIStepWords.approval(command, agent: "Claude", folder: home + "/Desktop", .zh), "Claude 想在 ~/Desktop 里运行一条命令")
         XCTAssertEqual(AIStepWords.approval(command, agent: "Claude", folder: home + "/Desktop", .en), "Claude wants to run a command in ~/Desktop")
+        XCTAssertEqual(AIStepWords.approval(command, agent: "Claude", folder: "/private/tmp/brk-bp-zb1nxu2q/brk-e2e-25333/ai-work", .zh), "Claude 想在 ai-work 里运行一条命令")
         let close = AIAgentApproval(id: "b", title: "Close 3 tabs?", detail: "", options: [], kind: .closeTabs, subject: "3")
         XCTAssertEqual(AIStepWords.approval(close, agent: "Codex", folder: nil, .zh), "Codex 想关掉 3 个 tab")
         XCTAssertEqual(AIStepWords.approval(close, agent: "Codex", folder: nil, .en), "Codex wants to close 3 tabs")

@@ -160,6 +160,8 @@ public enum AIStepWords {
             let group = Group(step.kind)
             if let index = groups.firstIndex(where: { $0.group == group }) { groups[index].count += 1 } else { groups.append((group, 1)) }
         }
+        // Reading tabs already says the agent looked at them: "看了 tab，读了 3 个 tab" says the same thing twice.
+        if groups.contains(where: { $0.group == .readTabs }) { groups.removeAll { $0.group == .lookTabs } }
         let parts = groups.map { $0.group.words($0.count, language) }
         return parts.joined(separator: language == .zh ? "，" : ", ")
     }
@@ -217,7 +219,7 @@ public enum AIStepWords {
     /// The approval card's first line: who wants to do what, and where. "Claude 想在 ~/Desktop 里运行一条命令".
     public static func approval(_ approval: AIAgentApproval, agent: String?, folder: String?, _ language: AILanguage) -> String {
         let who = agent ?? (language == .zh ? "agent" : "The agent")
-        let place = folder.map(Self.shortPath)
+        let place = folder.map(Self.folderName)
         guard let kind = approval.kind else {
             return language == .zh ? "\(who) 想：\(approval.title)" : "\(who) wants to: \(approval.title)"
         }
@@ -252,6 +254,15 @@ public enum AIStepWords {
         guard let n = count.flatMap({ Int($0) }) else { return language == .zh ? " tab" : "tabs" }
         if language == .zh { return n == 1 ? "一个 tab" : " \(n) 个 tab" }
         return n == 1 ? "a tab" : "\(n) tabs"
+    }
+
+    /// A folder in one sentence: "~/Desktop" when that is short, otherwise only the folder's own name, so the sentence
+    /// stays one line ("/tmp/a/b/c/ai-work" as "ai-work"). The full path is in the sentence's tooltip and the command.
+    public static func folderName(_ path: String) -> String {
+        let short = shortPath(path)
+        guard short.count > 24 else { return short }
+        let name = (path as NSString).lastPathComponent
+        return name.isEmpty ? short : name
     }
 
     /// "/Users/me/Desktop" as "~/Desktop".
