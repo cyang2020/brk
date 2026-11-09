@@ -1,0 +1,76 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+.cap{font-size:13px;font-weight:600;margin:0 0 4px}
+.sub{font-size:12px;color:#6e6e73;margin:0 0 10px;line-height:1.45}
+.f{font-family:-apple-system,"PingFang SC",sans-serif;font-size:10.5px;line-height:1.4}
+.beige{--bg:linear-gradient(180deg,#ece5dd,#e6ded5);--fg:#221811;--fg2:rgba(0,0,0,.45);--fg3:rgba(0,0,0,.3);--item:rgba(14,15,16,.05);--cur:rgba(255,255,255,.85);--shadow:0 1px 2px rgba(0,0,0,.12);--accent:#7a5a40}
+.sky{--bg:linear-gradient(180deg,#e4edf8,#d8e4f3);--fg:#0b1a2e;--fg2:rgba(0,0,0,.45);--fg3:rgba(0,0,0,.3);--item:rgba(14,15,16,.05);--cur:rgba(255,255,255,.85);--shadow:0 1px 2px rgba(0,0,0,.12);--accent:#3d6fb6}
+.lane{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.lab{width:92px;font-size:11.5px;color:#6e6e73;line-height:1.35;flex:none}
+.pg{background:var(--bg);color:var(--fg);border-radius:10px;padding:7px;width:120px;height:118px;display:flex;flex-direction:column;gap:3px;flex:none;position:relative}
+.pg.cur{outline:2px solid var(--accent);outline-offset:1px}
+.pg .tt{font-weight:600;font-size:10.5px;margin-bottom:2px}
+.r{background:var(--item);border-radius:5px;height:13px;padding:0 5px;font-size:9px;color:var(--fg2);white-space:nowrap;overflow:hidden}
+.r.c{background:var(--cur);box-shadow:var(--shadow);color:var(--fg)}
+.me{align-self:flex-end;background:var(--cur);box-shadow:var(--shadow);border-radius:7px;padding:1px 6px;font-size:9px}
+.tx{font-size:9px;color:var(--fg)}
+.arr{color:#6e6e73;font-size:16px;flex:none}
+.dots{position:absolute;bottom:6px;left:0;right:0;display:flex;justify-content:center;gap:5px}
+.dots i{width:5px;height:5px;border-radius:50%;background:var(--fg3)}.dots i.on{background:var(--fg)}
+.win{background:var(--bg);color:var(--fg);border-radius:10px;padding:6px;display:flex;gap:5px;height:236px;flex:1;min-width:0}
+.sd{width:78px;display:flex;flex-direction:column;gap:3px;padding-top:12px}
+.sd .h{font-size:9.5px;color:var(--fg3);padding:2px 4px}
+.tab{padding:3px 5px;border-radius:6px;font-size:9.5px;white-space:nowrap;overflow:hidden}
+.tab.c{background:var(--cur);box-shadow:var(--shadow)}
+.card{flex:1;background:#fff;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.12);min-width:0}
+.pn{width:150px;display:flex;flex-direction:column;gap:3px}
+.pn .hd{font-weight:600;font-size:10.5px;padding:2px 3px 3px}
+.row{display:flex;align-items:center;gap:5px;padding:3px 5px;border-radius:6px;font-size:9.5px}
+.row .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.c{background:var(--cur);box-shadow:var(--shadow)}
+.g{font-size:9px;color:var(--fg3);padding:4px 5px 0}
+.wait{background:var(--item);border-radius:7px;padding:4px 6px;font-size:9px;color:var(--fg2);display:flex;align-items:center;gap:5px}
+.wait b{width:6px;height:6px;border-radius:50%;flex:none}
+.pill{font-size:8.5px;background:var(--accent);color:#fff;border-radius:99px;padding:0 5px}
+.spin{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--fg3);border-top-color:var(--fg);flex:none}
+.two{display:flex;gap:10px}
+.wl{font-size:11px;color:#6e6e73;margin:5px 2px 0}
+</style></head><body>
+<p class="cap">① 右边面板横滑，和左边换 Space 是同一个手势</p>
+<p class="sub">指针在哪一栏上，两指横滑就动哪一栏。左边已经是"Library ← Space 1 → Space 2"；右边照着排："对话列表 ← 当前对话"，列表排在最前，和 Library 排在第一个 Space 前面一样。</p>
+<div class="f">
+ <div class="lane"><div class="lab">左边侧边栏<br>（现在就有）</div>
+  <div class="pg beige"><div class="tt">Library</div><div class="r">媒体</div><div class="r">下载</div><div class="r">已归档</div><div class="r">AI 对话</div></div>
+  <span class="arr">⇄</span>
+  <div class="pg beige cur"><div class="tt">购物</div><div class="r">商品价格监控</div><div class="r c">Steel Kettle</div><div class="r">Toaster</div><div class="dots"><i></i><i class="on"></i><i></i></div></div>
+  <span class="arr">⇄</span>
+  <div class="pg sky"><div class="tt">工作</div><div class="r">飞书周报</div><div class="r">Brk 设计</div><div class="dots"><i></i><i></i><i class="on"></i></div></div>
+ </div>
+ <div class="lane"><div class="lab">右边面板<br>（新加）</div>
+  <div class="pg beige"><div class="tt">购物 的对话</div><div class="r c">盯着三个商品页的价格</div><div class="r">比较三款降噪耳机</div><div class="r">这家店能退货吗</div><div class="dots"><i class="on"></i><i></i></div></div>
+  <span class="arr">⇄</span>
+  <div class="pg beige cur"><div class="tt">盯着三个商品页…</div><div class="me">每小时更新一次</div><div class="r">✓ 读了 3 个 tab ›</div><div class="tx">已经设好…</div><div class="dots"><i></i><i class="on"></i></div></div>
+  <div style="flex:1;font-size:11.5px;color:#6e6e73;line-height:1.45;padding-left:6px">底部两个小点表示在哪一页，和侧边栏底部的 Space 圆点一样。用鼠标的人点标题栏的列表图标也能到列表。</div>
+ </div>
+</div>
+<p class="cap" style="margin-top:16px">② 每个 Space 有自己的对话列表</p>
+<p class="sub">左边换了 Space，右边面板跟着换成那个 Space 的列表，并回到你在那个 Space 上次看的对话。别的 Space 里只有"等你处理"的对话会显示在列表最上面，点一下就跳过去。</p>
+<div class="two f">
+ <div style="flex:1;min-width:0"><div class="win beige">
+  <div class="sd"><div class="h">购物</div><div class="tab">商品价格监控</div><div class="tab c">Steel Kettle</div><div class="tab">Toaster</div></div>
+  <div class="card"></div>
+  <div class="pn"><div class="hd">购物 的对话</div>
+   <div class="wait"><b style="background:#3d6fb6"></b><span style="flex:1">工作 · 飞书文档</span><span class="pill">等你确认</span></div>
+   <div class="g">进行中</div><div class="row"><span class="t">比较三款降噪耳机</span><span class="spin"></span></div>
+   <div class="g">今天</div><div class="row c"><span class="t">盯着三个商品页的价格</span></div><div class="row"><span class="t">这家店能退货吗</span></div>
+   <div class="g">更早</div><div class="row"><span class="t">双十一买什么</span></div>
+  </div></div><p class="wl">在"购物"Space 里</p></div>
+ <div style="flex:1;min-width:0"><div class="win sky">
+  <div class="sd"><div class="h">工作</div><div class="tab">飞书周报</div><div class="tab c">Brk 设计</div></div>
+  <div class="card"></div>
+  <div class="pn"><div class="hd">工作 的对话</div>
+   <div class="g">等你处理</div><div class="row"><span class="t">把这几个 tab 总结成飞书文档</span><span class="pill">等你确认</span></div>
+   <div class="g">今天</div><div class="row c"><span class="t">Brk 面板设计</span></div><div class="row"><span class="t">周会纪要整理</span></div>
+   <div class="g">昨天</div><div class="row"><span class="t">Swift 6 并发资料</span></div>
+  </div></div><p class="wl">滑到"工作"Space，面板跟着换</p></div>
+</div>
+</body></html>
