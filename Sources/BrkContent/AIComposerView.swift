@@ -56,9 +56,13 @@ final class AIComposerView: NSView, NSTextViewDelegate {
     var onResize: (() -> Void)?
     private var lastHeight: CGFloat = 0
 
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        identify(.aiControl("composer"))
+    /// Put before every control's name: a second composer (the conversation list's, "list-") keeps its own names.
+    let prefix: String
+
+    init(prefix: String = "") {
+        self.prefix = prefix
+        super.init(frame: .zero)
+        identify(.aiControl(prefix + "composer"))
         back.wantsLayer = true
         back.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
         back.layer?.cornerCurve = .continuous
@@ -77,14 +81,14 @@ final class AIComposerView: NSView, NSTextViewDelegate {
         input.isHorizontallyResizable = false
         input.autoresizingMask = [.width]
         input.delegate = self
-        input.identify(.aiControl("input"))
+        input.identify(.aiControl(prefix + "input"))
         scroll.documentView = input
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.scrollerStyle = .overlay
         scroll.borderType = .noBorder
-        plus.identify(.aiControl("plus"))
+        plus.identify(.aiControl(prefix + "plus"))
         plus.layer?.cornerRadius = Metrics.ai.plusSize.value / 2
         plus.onPress = { [weak self] in self?.onPlus?() }
         send.weight = .bold
@@ -116,7 +120,7 @@ final class AIComposerView: NSView, NSTextViewDelegate {
         plus.pressFill = style.itemHover
         plus.tooltip(copy.more)
         send.show(symbol: busy ? "stop.fill" : "arrow.up")
-        send.identify(.aiControl(busy ? "stop" : "send"))
+        send.identify(.aiControl(prefix + (busy ? "stop" : "send")))
         send.tooltip(busy ? copy.stop : copy.send)
         send.restFill = style.accent
         send.hoverFill = style.accent.blended(withFraction: 0.12, of: style.scheme == .light ? .black : .white)

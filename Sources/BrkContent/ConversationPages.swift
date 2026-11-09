@@ -78,6 +78,11 @@ final class TranscriptPages {
         }
     }
 
+    /// A page on screen under `point` (window coordinates) that scrolls sideways there: it takes a two-finger swipe first.
+    func scrollsSideways(atWindowPoint point: CGPoint) -> Bool {
+        views.values.contains { !$0.isHiddenOrHasHiddenAncestor && $0.window != nil && $0.scrollsSideways(atWindowPoint: point) }
+    }
+
     /// Commits every page's edits in progress (the transcript's view is about to go).
     func commitEdits() async {
         let commits = (Array(views.values) + Array(leaving.values)).map { page in Task { @MainActor in await page.commitEdits() } }

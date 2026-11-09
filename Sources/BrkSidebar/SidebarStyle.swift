@@ -194,6 +194,9 @@ struct SidebarDrawMetrics: MetricGroup {
     let dockDot = Metric(8.0, .guess("dot for a space without an icon, measured on P25-a-arc.png (16 px at 2x)"))
     let dockActiveInk = Metric(0.47, .guess("black (white in dark) over the sidebar for the current space's icon or dot, sampled on P25 a (#817E7C on #EFEAE6)"))
     let dockInactiveInk = Metric(0.22, .guess("the same for the other spaces, sampled on P25 a (#BAB6B2)"))
+    let dockRingWidth = Metric(1.5, .guess("Brk's own: the ring around a Space's dot while a conversation there waits for the user (docs/design/ai-threads-library-mockup.html draws 1.5)"))
+    let dockRingGap = Metric(2.0, .guess("Brk's own: between the dot and its ring, as the mockup's 2 pt of sidebar color"))
+    let dockRingLuminance = Metric(0.15, .guess("Brk's own: the ring's shade of the Space's color on a light sidebar, about the mockup's #3D6FB6"))
     let dockPlusGlyph = Metric(17.0, .anatomy("verify/visual-pairs/run-20261103 Q11-b-arc: the + spans x 394 to 422 px"))
     let dockPlusInk = Metric(0.53, .anatomy("verify/visual-pairs/run-20261103 Q11-a-arc, Q11-b-arc: + and × read #717878 and #6B6F70 on #EFFAFB"))
     let dockGlyphInkDark = Metric(0.62, .anatomy("verify/visual-pairs/run-20261103/Q18/Q18-navy-row-hover-arc.png: the Library glyph and the + read white at this strength over the theme"))
@@ -358,4 +361,12 @@ enum SidebarCopy {
     static let untitled = "Untitled"
     static let spaceOptions = "Space Options"
     static let dismiss = "Dismiss"
+}
+
+/// The dock's Space dots as another column draws them: the AI panel's page dots (docs/design/ai-threads.md) look the same.
+public enum DockDots {
+    public static var size: Double { Draw.dockDot.value }
+    /// Black (white on dark) at this alpha for the current page's dot, and for the others.
+    public static var activeInk: Double { Draw.dockActiveInk.value }
+    public static var inactiveInk: Double { Draw.dockInactiveInk.value }
 }

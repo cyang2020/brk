@@ -85,6 +85,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var pendingSpaceDeletion: SpaceDeletionRequest? = nil
     /// Arc's "Are you sure you want to delete this Easel?" (Q09 c), from a Library card's menu.
     public var pendingEaselDeletion: EaselDeletionRequest? = nil
+    /// Delete for good of a conversation, asked in the same dialog (Brk's own).
+    public var pendingConversationDeletion: ConversationDeletionRequest? = nil
     /// The boards of the cards that show an Easel (`PaneContent.easel`), in pane order.
     public var easels: [EaselSnapshot] = []
     public var spaceProfiles: [ProfileRow] = []
@@ -105,6 +107,9 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var miniPlayers: [MiniPlayerSnapshot] = []
     public var boostEditor: BoostEditor? = nil
     public var ai: AIAnswerSnapshot? = nil
+    /// The panel's pages and this Space's conversation list while the panel is open in a standard window
+    /// (docs/design/ai-threads.md). Nil in incognito and Little windows, and while the panel is closed.
+    public var aiPanel: AIPanelSnapshot? = nil
     /// The conversation tabs the cards show (`PaneContent.conversation`), in pane order.
     public var conversations: [ConversationCard] = []
     /// The kept pages the cards show (`PaneContent.aiPage`), in pane order.
@@ -414,6 +419,9 @@ public struct DockItem: Sendable, Equatable, Codable {
     public var active: Bool
     /// Primary theme color, for the dot drawn when `icon` is `.none`.
     public var color: RGBA
+    /// Another Space of the window's profile has a conversation that waits for the user: its dot gets a ring in its own
+    /// color (docs/design/ai-threads.md).
+    public var attention: Bool = false
 }
 
 /// The content card(s). Frames come from BrkLayout; this says what goes in them.
@@ -514,6 +522,10 @@ public struct LibrarySnapshot: Sendable, Equatable, Codable {
     public var canManageSpaces: Bool = true
     /// The Easels page: the profile's Easels, most recently edited first (P32 c).
     public var easels: [EaselCard] = []
+    /// The "AI 对话" page (Brk's own).
+    public var conversations: LibraryConversationsSnapshot? = nil
+    /// The language of that page's name in the navigation column: the most recent conversations' (`AIThreadWords`).
+    public var conversationsLanguage: AILanguage = .en
 }
 
 public struct DownloadRow: Sendable, Equatable, Codable {
@@ -643,10 +655,12 @@ public enum CommandBarPlacement: String, Sendable, Equatable, Codable {
 public struct ConversationCandidate: Sendable, Equatable, Codable {
     public var id: AIRequestID
     public var title: String
-    /// What the user and the agent said, oldest first, at most `ConversationCandidate.textLimit` characters.
+    /// What the user and the agent said, oldest first: all of it, so the bar finds what the Library finds
+    /// (`ConversationSearch`).
     public var text: String
-    public init(id: AIRequestID, title: String, text: String) { self.id = id; self.title = title; self.text = text }
-    public static let textLimit = 6_000
+    /// The Space it belongs to, for the row's subtitle.
+    public var space: String? = nil
+    public init(id: AIRequestID, title: String, text: String, space: String? = nil) { self.id = id; self.title = title; self.text = text; self.space = space }
     /// The newest conversations the bar searches.
     public static let limit = 200
 }

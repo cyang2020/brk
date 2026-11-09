@@ -108,6 +108,22 @@ public enum AIIntent: Hashable, Sendable, Codable {
     case pageSave(AIPageID, String)
     /// A kept page's schedule, weekdays, refresh model, or Refresh Now, from its row's menu.
     case livePage(AIPageID, AIPageLiveChange)
+    /// The panel's page: a swipe over the panel, the list icon. `.list` opens a closed panel on the list.
+    case panelPage(AIPanelPage)
+    /// A conversation shown in the panel: a list row, a strip, the Library's Continue, a notification. Another Space's
+    /// switches the window there first; an archived one comes back from the archive.
+    case showConversation(AIRequestID)
+    /// The list's search box.
+    case listSearch(String)
+    /// The list page's composer: a new conversation in this Space.
+    case listAsk(String)
+    /// The list's row menu. Rename makes the row a text field (`AIPanelSnapshot.renaming`); its end sends the name, nil
+    /// cancels. Delete for good asks first (`.library(.requestDeleteConversation)`).
+    case beginRenameConversation(AIRequestID)
+    case renameConversation(AIRequestID, String?)
+    case archiveConversation(AIRequestID)
+    case restoreConversation(AIRequestID)
+    case moveConversation(AIRequestID, SpaceID)
 }
 
 /// What the user gave the conversation, before Brk looks it up.
@@ -436,6 +452,28 @@ struct AISession: Equatable, Sendable {
     var refreshChanged: Set<AIPageID> = []
     /// Each page's saves in the current minute (the rate cap).
     var pageSaves: [AIPageID: AIPageSaveCount] = [:]
+    /// The panel's page while the panel is open in a standard window (Rules/ConversationLists.swift); absent: closed.
+    var panelPage: [WindowID: AIPanelPage] = [:]
+    /// The Space whose list and conversation the open panel shows: a window that moves to another Space swaps them.
+    var panelSpace: [WindowID: SpaceID] = [:]
+    /// What each Space's panel showed last in a window: the conversation and the page.
+    var panelMemory: [WindowID: [SpaceID: AIPanelMemory]] = [:]
+    /// The list's search text.
+    var panelSearch: [WindowID: String] = [:]
+    /// When each conversation's running turn began (a reply that ran over a minute is told when Brk is not in front).
+    var turnStarted: [AIRequestID: Instant] = [:]
+    /// The Library's "AI 对话" page: its search and filters, and the conversation it shows in full.
+    var libraryQuery: [WindowID: ConversationLibraryQuery] = [:]
+    var librarySelection: [WindowID: AIRequestID] = [:]
+    /// The list row being renamed.
+    var renamingConversation: [WindowID: AIRequestID] = [:]
+    /// Delete for good, waiting for Cancel or Delete in the window's dialog.
+    var pendingConversationDeletion: [WindowID: ConversationDeletionRequest] = [:]
+}
+/// A Space's panel as it was left.
+struct AIPanelMemory: Equatable, Sendable {
+    var conversation: AIRequestID?
+    var page: AIPanelPage
 }
 struct AIPageSaveCount: Equatable, Sendable {
     var minute: Int64

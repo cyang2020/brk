@@ -133,6 +133,10 @@ public enum ControlOp: Codable, Sendable, Equatable {
     /// `press`, clicks that answer (a `settingsField` name) as `siteControlInput` does.
     case sitePrompt(window: WindowID, path: String?, press: String? = nil)
     case mediaSounds
+    /// The AI notifications a test instance kept instead of posting (`AINotifications`), oldest first, as JSON in `.text`.
+    case aiNotifications
+    /// What a click on the notification for `conversation` does: Brk in front, the conversation opened.
+    case openAINotification(conversation: AIRequestID)
     case mediaWindowScreenshot(number: Int, path: String)
     case captureProbe(page: PageID, directory: URL)
     case pageObservations

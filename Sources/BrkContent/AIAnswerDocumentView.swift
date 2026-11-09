@@ -22,6 +22,15 @@ final class AIAnswerDocumentView: NSView {
     let style: AIDocumentStyle
     private let heading = aiLabel(Metrics.ai.titleFont.value, weight: .semibold)
     private let progress = NSProgressIndicator()
+    /// The panel's list icon (docs/design/ai-threads.md): to this Space's conversation list, with the count of what waits
+    /// for the user in the profile.
+    private let listButton = AIIconButton(symbol: "list.bullet", tip: "")
+    private let badge = aiLabel(9, weight: .semibold)
+    private let badgeBack = NSView()
+    private var listShown = false
+    var onList: (() -> Void)?
+    /// Space at the bottom for the panel's page dots.
+    var bottomReserve: CGFloat = 0 { didSet { if bottomReserve != oldValue { needsLayout = true } } }
     private let newConversation = AIIconButton(symbol: "square.and.pencil", tip: "")
     private let openTab = AIIconButton(symbol: "macwindow", tip: "")
     private let close = AIIconButton(symbol: "xmark", tip: "")
@@ -48,6 +57,9 @@ final class AIAnswerDocumentView: NSView {
     /// Its pages commit their edits in progress (the view is about to go).
     func commitPageEdits() async { await transcript.pages.commitEdits() }
 
+    /// A page in the transcript under the pointer scrolls sideways: the panel's swipe leaves the gesture to it.
+    func scrollsSideways(atWindowPoint point: CGPoint) -> Bool { !isHidden && transcript.pages.scrollsSideways(atWindowPoint: point) }
+
     init(dispatch: @escaping Dispatch, style: AIDocumentStyle = .panel) {
         self.dispatch = dispatch
         self.style = style
@@ -70,10 +82,18 @@ final class AIAnswerDocumentView: NSView {
             guard let self else { return }
             dispatch(.assist(self.answer?.busy == true && self.answer?.conversation == nil ? .cancel : .dismiss))
         }
-        for button in [newConversation, openTab, close] {
+        for button in [newConversation, openTab, close, listButton] {
             button.layer?.cornerRadius = Metrics.ai.iconRadius.value
             button.isHidden = style == .tab
         }
+        listButton.identify(.aiControl("list"))
+        listButton.onPress = { [weak self] in self?.onList?() }
+        listButton.isHidden = true
+        badgeBack.wantsLayer = true
+        badgeBack.isHidden = true
+        badge.alignment = .center
+        badge.setAccessibilityIdentifier("ai-list-badge")
+        badge.isHidden = true
         scroll.identify(.aiControl(style == .panel ? "transcript" : "tab-transcript"))
         scroll.documentView = transcript
         scroll.hasVerticalScroller = true
@@ -114,13 +134,33 @@ final class AIAnswerDocumentView: NSView {
         composer.onResize = { [weak self] in self?.needsLayout = true }
         mentions.setAccessibilityIdentifier("ai-mentions")
         plusMenu.identify(.aiControl("menu"))
-        for view in [heading, progress, newConversation, openTab, close, scroll, approval, composer, mentions, plusMenu] as [NSView] { addSubview(view) }
+        for view in [heading, progress, listButton, badgeBack, badge, newConversation, openTab, close, scroll, approval, composer, mentions, plusMenu] as [NSView] { addSubview(view) }
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     override var isFlipped: Bool { true }
 
     /// The conversation this view shows.
     var conversationID: AIRequestID? { answer?.conversation?.id }
+
+    /// The list icon in the header: shown while the panel has a list (a standard window), with the count of what waits.
+    func showList(_ panel: AIPanelSnapshot?) {
+        listShown = panel != nil && style == .panel
+        listButton.isHidden = !listShown
+        let waiting = panel?.waiting ?? 0
+        badge.stringValue = waiting > 99 ? "99+" : "\(waiting)"
+        badge.isHidden = !listShown || waiting == 0
+        badgeBack.isHidden = badge.isHidden
+        let language = panel?.language ?? copy.language
+        listButton.tooltip(AIThreadWords.listTip(waiting: waiting, language))
+        if let panelStyle {
+            listButton.tint = panelStyle.secondary
+            listButton.hoverFill = panelStyle.itemHover
+            listButton.pressFill = panelStyle.itemHover
+            badgeBack.layer?.backgroundColor = panelStyle.accent.cgColor
+            badge.textColor = panelStyle.onAccent
+        }
+        needsLayout = true
+    }
 
     /// An intent from this view: as it is from the panel, on this conversation from its tab.
     private func send(_ intent: AIIntent) {
@@ -383,13 +423,20 @@ final class AIAnswerDocumentView: NSView {
             let width = min(m.tabColumnWidth.value, bounds.width - m.tabColumnInset.value * 2)
             column = CGRect(x: ((bounds.width - width) / 2).rounded(), y: m.tabColumnInset.value / 2, width: width, height: bounds.height - m.tabColumnInset.value)
         } else {
-            column = CGRect(x: m.columnInset.value, y: 0, width: bounds.width - m.columnInset.value * 2, height: bounds.height - m.bottomInset.value)
+            column = CGRect(x: m.columnInset.value, y: 0, width: bounds.width - m.columnInset.value * 2, height: bounds.height - max(m.bottomInset.value, bottomReserve))
         }
         let headerY = column.minY + m.headerTop.value, headerHeight = m.headerHeight.value, icon = m.iconSize.value
         var right = column.maxX
-        for button in [close, openTab, newConversation] where !button.isHidden {
+        for button in [close, openTab, newConversation, listButton] where !button.isHidden {
             button.frame = CGRect(x: right - icon, y: headerY + (headerHeight - icon) / 2, width: icon, height: icon)
             right -= icon + 2
+        }
+        if !badge.isHidden {
+            let height: CGFloat = 12, width = max(height, ceil(badge.intrinsicContentSize.width) + 6)
+            badgeBack.frame = CGRect(x: listButton.frame.maxX - width + 3, y: listButton.frame.minY - 2, width: width, height: height)
+            badgeBack.layer?.cornerRadius = height / 2
+            let lh = ceil(badge.intrinsicContentSize.height)
+            badge.frame = CGRect(x: badgeBack.frame.minX, y: badgeBack.frame.minY + ((height - lh) / 2).rounded(), width: width, height: lh)
         }
         let spinner: CGFloat = 16
         progress.frame = CGRect(x: right - spinner - 2, y: headerY + (headerHeight - spinner) / 2, width: spinner, height: spinner)

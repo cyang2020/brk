@@ -185,6 +185,8 @@ final class DockCellView: HoverView {
     private var didDrag = false { didSet { if didDrag != oldValue { stateChanged() } } }
     private let dispatch: Dispatch
     private let icon = IconView()
+    /// Brk's own: the ring in the Space's color while one of its conversations waits for the user (docs/design/ai-threads.md).
+    private let ring = CAShapeLayer()
     private var item: DockItem?
     private var palette: Palette?
     private var showsDot = false
@@ -197,8 +199,15 @@ final class DockCellView: HoverView {
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = Metrics.dock.cellRadius.value
         addSubview(icon)
+        ring.fillColor = nil
+        ring.lineWidth = Draw.dockRingWidth.value
+        ring.isHidden = true
+        layer?.addSublayer(ring)
         identify(.dockSpace(id))
     }
+
+    /// The ring is on (for the e2e check, which reads it through accessibility).
+    var ringShown: Bool { !ring.isHidden }
 
     /// How much this cell reads as the current Space while the column moves; nil at rest.
     var selectionFactor: Double? {
@@ -223,6 +232,13 @@ final class DockCellView: HoverView {
         // Emoji keep their own colors, so only they are dimmed.
         if case .custom(.emoji) = item.icon, !compact { icon.alphaValue = item.active ? 1 : Draw.inactiveSpaceAlpha.value } else { icon.alphaValue = 1 }
         setAccessibilityLabel(item.title)
+        setAccessibilityValue(item.attention ? "waiting" : nil)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        ring.isHidden = !item.attention
+        // The Space's own color, darkened on a light theme and lightened on a dark one until it reads on the sidebar.
+        ring.strokeColor = Self.ringColor(item.color, scheme: palette.scheme).cgColor
+        CATransaction.commit()
         stateChanged()
         needsLayout = true
     }
@@ -232,6 +248,25 @@ final class DockCellView: HoverView {
         let side = min(showsDot ? Draw.dockDot.value : Draw.dockGlyph.value, bounds.width)
         icon.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
         layer?.transform = isPressed ? Self.scaled(Metrics.dock.pressScale.value, size: bounds.size) : CATransform3DIdentity
+        // Around the dot or glyph, a ring's width away from it.
+        let outer = side + (Draw.dockRingGap.value + Draw.dockRingWidth.value) * 2
+        let rect = CGRect(x: (bounds.width - outer) / 2, y: (bounds.height - outer) / 2, width: outer, height: outer).insetBy(dx: Draw.dockRingWidth.value / 2, dy: Draw.dockRingWidth.value / 2)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        ring.frame = bounds
+        ring.path = showsDot ? CGPath(ellipseIn: rect, transform: nil) : CGPath(roundedRect: rect, cornerWidth: rect.width * 0.3, cornerHeight: rect.width * 0.3, transform: nil)
+        CATransaction.commit()
+    }
+
+    /// A Space's color made to read on the sidebar: its hue at a mid-dark shade on light, bright on dark.
+    static func ringColor(_ color: RGBA, scheme: Scheme) -> NSColor {
+        if scheme == .light {
+            let shade = themeShade(color, luminance: Draw.dockRingLuminance.value)
+            return NSColor(srgbRed: shade.red, green: shade.green, blue: shade.blue, alpha: 1)
+        }
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        return NSColor(hue: hue, saturation: min(0.6, saturation * 9), brightness: 0.85, alpha: 1)
     }
 
     /// A scale about the centre (a layer-backed view's anchor is its corner).

@@ -501,6 +501,8 @@ public struct SearchEngine: Hashable, Sendable, Codable {
 /// area (`HistoryPage`), as Arc opens arc://history.
 public enum LibraryPage: String, Hashable, Sendable, Codable, CaseIterable {
     case media, downloads, easelsAndNotes, spaces, boosts, archive
+    /// Brk's own: every Space's AI conversations of the profile (docs/design/ai-threads.md), after Archived Tabs.
+    case conversations
 }
 
 /// One file download (Arc: `StorableDownloadMetadata`; Library "Downloads" page, `DownloadMenu`).

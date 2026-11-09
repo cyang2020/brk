@@ -54,6 +54,8 @@ public enum Effect: Hashable, Sendable {
     case aiApprove(conversation: AIRequestID, approval: String, option: String)
     /// The conversation is over: its session and every process it started go.
     case aiCloseConversation(AIRequestID)
+    /// A macOS notification, posted only while Brk is not the frontmost app (docs/design/ai-threads.md).
+    case aiNotify(AINotification)
     /// Refresh a live page: a session of its own with Brk's read tools and `brk_page_update_data` only
     /// (`SystemEvent.aiPageRefresh`).
     case aiRefreshPage(AIPageRefreshRun)

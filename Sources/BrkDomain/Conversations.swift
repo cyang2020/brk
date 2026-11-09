@@ -109,6 +109,14 @@ public struct StoredConversation: Equatable, Sendable, Codable {
     /// The injection check flagged a page this conversation read.
     public var flagged: Bool = false
     public var items: [AIConversationItem]
+    /// The Space it was started in: where it belongs while it has no row in any Space (docs/design/ai-threads.md).
+    public var space: SpaceID?
+    /// When its last reply finished, and when it was last shown in the panel or its tab after one did: a reply finished
+    /// later than it was seen is unread ("等你处理").
+    public var repliedAt: Instant?
+    public var seenAt: Instant?
+    /// A reply finished that nobody has seen yet.
+    public var unread: Bool { repliedAt.map { $0 > (seenAt ?? Instant(milliseconds: 0)) } ?? false }
 
     public init(id: AIRequestID, profile: ProfileID, title: String, createdAt: Instant, tabs: Bool, folder: String? = nil, items: [AIConversationItem] = []) {
         self.id = id

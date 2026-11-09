@@ -78,6 +78,18 @@ public final class AppStore {
     /// Beside state.json like the Boost, Capture and Easel files, so a test's store never reads a real index.
     private lazy var localModels = LocalModelServices.live(root: stateFile.url.deletingLastPathComponent(), send: { [weak self] in self?.dispatch($0) })
     private lazy var meaningSearch = MeaningSearchService(models: localModels, send: { [weak self] in self?.dispatch($0) }, state: { [weak self] in self?.state })
+    /// Brk's own AI notifications while it is not in front (docs/design/ai-threads.md).
+    private(set) lazy var aiNotifications: AINotifications = {
+        let notices = AINotifications(recording: LaunchOptions().controlSocket != nil)
+        notices.onOpen = { [weak self] id in
+            guard let self else { return }
+            let standard = { (c: WindowController) in self.snapshot.windows[c.id]?.kind == .standard }
+            guard let controller = self.windowController(nil).flatMap({ standard($0) ? $0 : nil }) ?? self.windows.values.first(where: standard) else { return }
+            controller.window.makeKeyAndOrderFront(nil)
+            self.dispatch(.user(controller.id, .assist(.showConversation(id))))
+        }
+        return notices
+    }()
     private var queue: [Input] = []
     private var dispatching = false
     private(set) var isTerminating = false
@@ -665,6 +677,7 @@ public final class AppStore {
             case .aiTurn(let conversation, let turn, let task): aiServices.turn(conversation: conversation, turn: turn, task: task, max: snapshot.settings.max)
             case .aiApprove(let conversation, let approval, let option): aiServices.approve(conversation: conversation, approval: approval, option: option)
             case .aiCloseConversation(let id): aiServices.closeConversation(id)
+            case .aiNotify(let notice): aiNotifications.post(notice)
             case .aiRefreshPage(let run): aiServices.refreshPage(run, max: snapshot.settings.max)
             case .aiStopRefresh(let id): aiServices.stopRefresh(id)
             case .aiRefreshAgents: aiServices.refreshAgents(detected: snapshot.settings.max.detected)

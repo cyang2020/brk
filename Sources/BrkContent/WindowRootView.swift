@@ -31,7 +31,9 @@ public final class WindowRootView: NSView {
     public let spaceDialog: SpaceDialogHost
     private let zapOverlay: BoostZapOverlayView
     private let boostPanel: BoostPanel
-    private let aiAnswer: AIAnswerDocumentView
+    private let aiAnswer: AIPanelView
+    /// The Library's "AI 对话" page's selected conversation, over the content card.
+    private let libraryConversation: LibraryConversationPreview
     /// Conversation tabs and kept pages, drawn over their cards like History and Easels.
     private let conversationCards: ConversationCardsView
     private let pageCards: AIPageCardsView
@@ -60,7 +62,8 @@ public final class WindowRootView: NSView {
     public init(dispatch: @escaping Dispatch) {
         zapOverlay = BoostZapOverlayView(dispatch: dispatch)
         boostPanel = BoostPanel(dispatch: dispatch)
-        aiAnswer = AIAnswerDocumentView(dispatch: dispatch)
+        aiAnswer = AIPanelView(dispatch: dispatch)
+        libraryConversation = LibraryConversationPreview(dispatch: dispatch)
         conversationCards = ConversationCardsView(dispatch: dispatch)
         pageCards = AIPageCardsView(dispatch: dispatch)
         linkPrompt = PageLinkPromptView(dispatch: dispatch)
@@ -80,7 +83,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, peek, findBar, aiAnswer, linkPrompt, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, libraryConversation, peek, findBar, aiAnswer, linkPrompt, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
         conversationCards.parent = self
         conversationCards.below = toolbar
         pageCards.parent = self
@@ -167,7 +170,8 @@ public final class WindowRootView: NSView {
         }
     }
 
-    public func handleScrollWheel(_ event: NSEvent) -> Bool { sidebar.handleScrollWheel(event) }
+    /// The sidebar's swipe between Spaces, else the AI panel's between its list and its conversation.
+    public func handleScrollWheel(_ event: NSEvent) -> Bool { sidebar.handleScrollWheel(event) || aiAnswer.handleScrollWheel(event) }
 
     /// The title still being typed on Easel `id`'s board, committed first (`EaselBoardView.commitTitle(of:)`).
     public func commitEaselTitle(_ id: EaselID) -> String? { easel.commitTitle(of: id) }
@@ -194,7 +198,7 @@ public final class WindowRootView: NSView {
         renderChrome(snapshot, frames: frames)
         defer { placeForLibrary() }
         let palette = Palette(snapshot.theme)
-        content.isDropEnabled = snapshot.find == nil && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.profileDialog == nil && snapshot.pendingSpaceDeletion == nil && snapshot.pendingEaselDeletion == nil
+        content.isDropEnabled = snapshot.find == nil && snapshot.overlay == nil && snapshot.dialog == nil && snapshot.profileDialog == nil && snapshot.pendingSpaceDeletion == nil && snapshot.pendingEaselDeletion == nil && snapshot.pendingConversationDeletion == nil
         content.render(snapshot.content, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         // Arc's Create a Space flow shows no page: the content area is a blank card over the draft's theme.
         content.isHidden = snapshot.dialog == .newSpace
@@ -222,18 +226,25 @@ public final class WindowRootView: NSView {
         case nil: break
         }
         library.render(librarySnapshot, now: snapshot.now, frames: frames, palette: palette)
+        if let librarySnapshot, librarySnapshot.page == .conversations {
+            // The card keeps its closed width and runs past the window's right edge; the conversation takes its visible part.
+            let card = frames.cards.first?.rect ?? frames.contentArea
+            let visible = card.intersection(CGRect(x: 0, y: 0, width: frames.contentSize.width - Metrics.content.inset.value, height: frames.contentSize.height))
+            libraryConversation.render(librarySnapshot.conversations, card: visible.isNull ? card : visible, cornerRadius: frames.cards.first?.cornerRadius ?? 0, theme: snapshot.theme)
+        } else { libraryConversation.render(nil, card: .zero, cornerRadius: 0, theme: snapshot.theme) }
         peek.render(peekSnapshot, frames: frames, theme: snapshot.theme, palette: palette, surface: surface)
         findBar.render(snapshot.find, frames: frames.find, palette: palette)
         // The panel's column (none over the Library: the panel waits, as it is, until the Library closes).
-        if let panel = frames.aiPanel { aiAnswer.render(snapshot.ai, in: panel, theme: snapshot.theme) }
-        else if snapshot.ai == nil { aiAnswer.render(nil, in: .zero) }
+        if let panel = frames.aiPanel { aiAnswer.render(snapshot.ai, panel: snapshot.aiPanel, in: panel, theme: snapshot.theme) }
+        else if snapshot.ai == nil && snapshot.aiPanel == nil { aiAnswer.render(nil, panel: nil, in: .zero, theme: nil) }
         else { aiAnswer.isHidden = true }
         linkPrompt.render(snapshot.pageLinkPrompt, in: frames.contentArea)
         linkStatus.render(snapshot.overlay == nil ? snapshot.linkStatus : nil, frames: frames)
         aiPreview.render(snapshot.overlay == nil ? snapshot.aiPreview : nil, frames: frames)
         commandBar.render(barSnapshot, frames: frames, palette: palette, window: snapshot.kind)
         spaceDialog.profiles = snapshot.spaceProfiles
-        spaceDialog.render(snapshot.dialog, deletion: snapshot.pendingSpaceDeletion, easelDeletion: snapshot.pendingEaselDeletion, frames: frames, palette: palette)
+        spaceDialog.render(snapshot.dialog, deletion: snapshot.pendingSpaceDeletion, easelDeletion: snapshot.pendingEaselDeletion,
+                           conversationDeletion: snapshot.pendingConversationDeletion, frames: frames, palette: palette)
         ProfileDialogHost.render(snapshot.profileDialog, over: spaceDialog, frames: frames, palette: palette,
                                  spaceNames: Dictionary(snapshot.dock.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first }))
         tabTools.frame = bounds

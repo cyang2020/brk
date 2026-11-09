@@ -32,6 +32,8 @@ public final class LibraryView: NSView {
     let spaces: SpacesPageView
     let media: MediaPageView
     let easels: EaselsPageView
+    /// Brk's own "AI 对话" page; its selected conversation shows over the content card (BrkContent).
+    let conversations: ConversationsPageView
     private var last: Slice?
 
     private struct Slice: Equatable {
@@ -54,6 +56,7 @@ public final class LibraryView: NSView {
         archive = ArchivePageView(dispatch: dispatch)
         downloads = DownloadsPageView(dispatch: dispatch)
         easels = EaselsPageView(dispatch: dispatch)
+        conversations = ConversationsPageView(dispatch: dispatch)
         super.init(frame: .zero)
         panel.identify(.library)
         panel.wantsLayer = true
@@ -83,7 +86,7 @@ public final class LibraryView: NSView {
         exit.target = self
         exit.action = #selector(exitClicked)
         exit.identify(.libraryClose)
-        for view in [archive, downloads, spaces, boosts, media, easels, preview] as [NSView] { addSubview(view) }
+        for view in [archive, downloads, spaces, boosts, media, easels, conversations, preview] as [NSView] { addSubview(view) }
         isHidden = true
     }
 
@@ -116,6 +119,7 @@ public final class LibraryView: NSView {
             easels.hide()
             spaces.hide()
             boosts.hide()
+            conversations.hide()
             preview.hide()
             return
         }
@@ -145,6 +149,7 @@ public final class LibraryView: NSView {
         CATransaction.commit()
         for (page, cell) in cells {
             cell.frame = f.pageCells[page].map(local) ?? .zero
+            if page == .conversations { cell.setTitle(AIThreadWords.libraryTitle(library.conversationsLanguage)) }
             cell.render(selected: page == library.page, colors: colors, accent: palette.color(palette.accent))
         }
         exit.frame = local(LibraryLayout.closeButton(in: f.strip))
@@ -163,6 +168,9 @@ public final class LibraryView: NSView {
             preview.hide()
         }
         if library.page == .easelsAndNotes { easels.show(library, in: page, scheme: scheme) } else { easels.hide() }
+        if library.page == .conversations, let snapshot = library.conversations {
+            conversations.show(snapshot, openID: library.openID, in: page, scheme: scheme, now: now)
+        } else { conversations.hide() }
     }
 
     public func requestClearConfirmation() {
@@ -260,6 +268,14 @@ final class LibraryNavCell: NSButton {
     }
 
     var titleText: String { label.stringValue }
+
+    /// Brk's own page names its cell in the conversations' language.
+    func setTitle(_ title: String) {
+        guard label.stringValue != title else { return }
+        label.stringValue = title
+        setAccessibilityLabel(title)
+        needsLayout = true
+    }
     var glyphImage: NSImage? { glyph.image }
     var isSelected: Bool { selected }
 

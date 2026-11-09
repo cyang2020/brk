@@ -294,6 +294,7 @@ public enum LibraryCopy {
         case .spaces: "Spaces"
         case .boosts: "Boosts"
         case .archive: "Archived Tabs"
+        case .conversations: "AI Conversations"
         }
     }
 
@@ -311,6 +312,7 @@ public enum LibraryCopy {
         case .spaces: "Search Spaces…"
         case .boosts: "Search Boosts…"
         case .archive: "Search Archive…"
+        case .conversations: "Search Conversations…"
         }
     }
     static let filter = "Filter"
@@ -467,6 +469,7 @@ enum LibraryIcon {
         case .spaces: "rectangle.portrait.on.rectangle.portrait.angled"
         case .boosts: "paintbrush.pointed"
         case .archive: "archivebox"
+        case .conversations: "bubble.left.and.bubble.right"
         }
     }
 

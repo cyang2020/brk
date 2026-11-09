@@ -245,6 +245,14 @@ enum BrkToolCatalog {
         case sourceRead(URL, offset: Int, maxChars: Int)
         case updateData(String)
 
+        /// The call opens, shows, closes or rearranges tabs, or keeps a page as a tab: it acts in the window's Space.
+        var changesTabs: Bool {
+            switch self {
+            case .open, .focus, .close, .move, .group, .split, .savePage: true
+            default: false
+            }
+        }
+
         var name: Name {
             switch self {
             case .list: .list

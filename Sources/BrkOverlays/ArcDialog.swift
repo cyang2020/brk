@@ -79,13 +79,13 @@ final class ArcDialogView: NSView {
     var firstField: NSTextField?
 
     init(scheme: Scheme, icon picture: ArcDialogIcon?, title text: NSAttributedString, rows: [ArcDialogRow], buttonGap: Double,
-         buttonRight: Double, confirm confirmTitle: String, destructive: Bool = false) {
+         buttonRight: Double, confirm confirmTitle: String, destructive: Bool = false, cancel cancelTitle: String = ArcDialogCopy.cancel) {
         self.rows = rows
         hasIcon = picture != nil
         self.buttonRight = buttonRight
         self.buttonGap = buttonGap
         let colors = OverlayColors.of(scheme)
-        cancel = AlertButton(title: ArcDialogCopy.cancel, key: "ESC", style: .plain, scheme: scheme)
+        cancel = AlertButton(title: cancelTitle, key: "ESC", style: .plain, scheme: scheme)
         confirm = AlertButton(title: confirmTitle, key: "↵", style: destructive ? .destructive : .primary, scheme: scheme)
         super.init(frame: .zero)
         appearance = .of(scheme)

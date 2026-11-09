@@ -178,7 +178,13 @@ struct BrkPageTools {
         if isRefresh, flagged { return .error("Brk stopped this refresh: something it read was flagged. Stop now.") }
         let call: BrkToolCatalog.Call
         do { call = try BrkToolCatalog.parse(name, arguments) } catch { return .error(error.message) }
-        guard let now = state(), let profile = now.agentProfile(in: window) else { return .error("This conversation's window is gone.") }
+        guard let now = state(), let shown = now.agentProfile(in: window) else { return .error("This conversation's window is gone.") }
+        // The conversation's own profile, whatever Space its window shows now: a window that moved to another profile's
+        // Space leaves its turn running out of sight (docs/design/ai-threads.md), and the agent still sees only its tabs.
+        let profile = now.savedConversations[conversation]?.profile ?? shown
+        if profile != shown, call.changesTabs {
+            return .error("The window shows a Space of another profile now, so Brk does not change tabs for this conversation. Ask the user to go back to its Space.")
+        }
         switch call {
         case .list(let section, let space, let cursor, let limit):
             hasPageText = true

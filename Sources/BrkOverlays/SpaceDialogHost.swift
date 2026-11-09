@@ -34,6 +34,7 @@ public final class SpaceDialogHost: NSView {
     private var dialog: SpaceDialogSnapshot?
     private var deletion: SpaceDeletionRequest?
     private var easelDeletion: EaselDeletionRequest?
+    private var conversationDeletion: ConversationDeletionRequest?
     private var scheme: Scheme = .light
     private var frames: WindowFrames?
 
@@ -90,7 +91,8 @@ public final class SpaceDialogHost: NSView {
         return nil
     }
 
-    public func render(_ dialog: SpaceDialogSnapshot?, deletion: SpaceDeletionRequest?, easelDeletion: EaselDeletionRequest? = nil, frames: WindowFrames, palette: Palette) {
+    public func render(_ dialog: SpaceDialogSnapshot?, deletion: SpaceDeletionRequest?, easelDeletion: EaselDeletionRequest? = nil,
+                       conversationDeletion: ConversationDeletionRequest? = nil, frames: WindowFrames, palette: Palette) {
         if let superview { frame = superview.bounds }
         self.frames = frames
         let schemeChanged = palette.scheme != scheme
@@ -99,6 +101,7 @@ public final class SpaceDialogHost: NSView {
         self.dialog = dialog
         self.deletion = deletion
         self.easelDeletion = easelDeletion
+        self.conversationDeletion = conversationDeletion
 
         // What closed.
         if !Self.sameKind(previous, dialog) {
@@ -106,7 +109,7 @@ public final class SpaceDialogHost: NSView {
             iconPopover?.dismiss(); iconPopover = nil
             themePanel?.dismiss(); themePanel = nil
         }
-        let wantsAlert: SpaceAlertKind? = deletion.map { .delete($0) } ?? easelDeletion.map { .deleteEasel($0) } ?? {
+        let wantsAlert: SpaceAlertKind? = deletion.map { .delete($0) } ?? easelDeletion.map { .deleteEasel($0) } ?? conversationDeletion.map { .deleteConversation($0) } ?? {
             if case .rename(let id, let title)? = dialog { return .rename(id: id, title: title) }
             return nil
         }()
@@ -117,7 +120,7 @@ public final class SpaceDialogHost: NSView {
         }
         alert?.frame = bounds
         // Shown before the popovers open: AppKit shows none relative to a hidden view.
-        isHidden = dialog == nil && deletion == nil && easelDeletion == nil
+        isHidden = dialog == nil && deletion == nil && easelDeletion == nil && conversationDeletion == nil
 
         switch dialog {
         case .newSpace?: showCreate(frames: frames)

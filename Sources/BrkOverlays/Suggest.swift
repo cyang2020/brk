@@ -402,8 +402,10 @@ public enum Suggest {
     /// The most conversation rows among the others.
     private static let conversationCap = 2
 
-    /// Saved conversations whose title has the text, then those where every word of it was said, newest first; none
-    /// whose row another row already offers. Choosing one opens its conversation tab.
+    /// Saved conversations the shared conversation search finds (`ConversationSearch`, the one the Library's "AI 对话" page
+    /// and the panel's list use): the title has the text, then every word of it was said, newest first; none whose row
+    /// another row already offers. The subtitle names the Space it is in, then what was said around the words. Choosing one
+    /// opens its conversation tab.
     private static func conversationRows(_ needle: String, isAddress: Bool, shown: [Suggestion], bar: CommandBarSnapshot) -> [Suggestion] {
         guard !isAddress, !bar.fillsPane, !needle.isEmpty, !bar.conversations.isEmpty else { return [] }
         var taken = Set<String>()
@@ -412,25 +414,13 @@ public enum Suggest {
                 taken.insert(conversation.rawValue)
             }
         }
-        let words = needle.split(whereSeparator: \.isWhitespace).map(String.init)
-        var titled: [Suggestion] = [], said: [Suggestion] = []
-        for conversation in bar.conversations where !taken.contains(conversation.id.rawValue) {
-            let open = Command.assist(.openConversation(conversation.id))
-            if fold(conversation.title).contains(needle) {
-                titled.append(Suggestion(kind: .conversation, title: conversation.title, subtitle: nil, symbol: "bubble.left.and.bubble.right", favicon: ConversationPage.favicon,
-                                         hint: OverlayCopy.conversation, command: open))
-                continue
-            }
-            let text = fold(conversation.text)
-            guard words.allSatisfy(text.contains), let first = words.first, let range = text.range(of: first) else { continue }
-            let at = text.distance(from: text.startIndex, to: range.lowerBound)
-            let characters = Array(conversation.text)
-            let start = max(0, min(at, characters.count) - 30), end = min(characters.count, start + 90)
-            let snippet = (start > 0 ? "…" : "") + String(characters[start..<end]).split(whereSeparator: \.isNewline).joined(separator: " ")
-            said.append(Suggestion(kind: .conversation, title: conversation.title, subtitle: snippet, symbol: "bubble.left.and.bubble.right", favicon: ConversationPage.favicon,
-                                   hint: OverlayCopy.conversation, command: open))
+        let candidates = bar.conversations.filter { !taken.contains($0.id.rawValue) }
+        return ConversationSearch.search(needle, in: candidates).prefix(conversationCap).map { conversation, found in
+            let snippet: String? = if case .text(let snippet) = found { snippet } else { nil }
+            let subtitle = [conversation.space, snippet].compactMap { $0 }.joined(separator: " · ")
+            return Suggestion(kind: .conversation, title: conversation.title, subtitle: subtitle.isEmpty ? nil : subtitle, symbol: "bubble.left.and.bubble.right",
+                              favicon: ConversationPage.favicon, hint: OverlayCopy.conversation, command: .assist(.openConversation(conversation.id)))
         }
-        return Array((titled + said).prefix(conversationCap))
     }
 
     /// The search model's pages for exactly this text, best first, without the focused tab and without a page another

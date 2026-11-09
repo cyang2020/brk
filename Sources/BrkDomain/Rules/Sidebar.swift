@@ -336,6 +336,8 @@ extension Work {
         switch request {
         case .todayCleanup(let space):
             return MenuModel(entries: cleanupMenu(space, in: window))
+        case .conversation(let id):
+            return MenuModel(entries: conversationMenu(id, in: window))
         case .selection(let ids):
             guard let tree = state.tree(of: window) else { return MenuModel(entries: []) }
             let rows = ids.filter { tree[$0] != nil && tree[$0]?.kind != .section }

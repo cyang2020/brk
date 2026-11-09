@@ -358,6 +358,12 @@ final class ControlExecutor {
             if let text { NSPasteboard.general.setString(text, forType: .string) }
             return .ok
         case .readPasteboard: return .text(NSPasteboard.general.string(forType: .string) ?? "")
+        case .aiNotifications:
+            let data = (try? JSONEncoder().encode(store.aiNotifications.recorded)) ?? Data("[]".utf8)
+            return .text(String(decoding: data, as: UTF8.self))
+        case .openAINotification(let conversation):
+            store.aiNotifications.open(conversation)
+            return .ok
 
         case .native(let window):
             return .native(try nativeFacts(try controller(window)))

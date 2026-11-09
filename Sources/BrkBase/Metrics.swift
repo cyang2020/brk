@@ -660,6 +660,11 @@ public struct AIMetrics: MetricGroup {
     public let dropBorderWidth = Metric(2.0, .guess("the composer's outline while tabs are dragged over the panel"))
     public let buttonHeight = Metric(26.0, .guess("Allow and Deny, and the answer's action rows"))
     public let gap = Metric(8.0, .guess("space between controls"))
+    // The conversation list (docs/design/ai-threads.md).
+    public let threadRowHeight = Metric(40.0, .guess("a list row's two lines: the name at 13 pt over the state at 11 pt, the height of a two-line Library row less its icon"))
+    public let stripHeight = Metric(26.0, .guess("a strip for another Space's conversation at the list's top, the step line's height"))
+    public let searchHeight = Metric(28.0, .guess("the list's search box, the URL pill's height less its border"))
+    public let dotsHeight = Metric(50.0, .derived(rule: "the page dots' row at the panel's foot is the dock's height, so its dots sit on the line of the sidebar's Space dots", from: ["Dock (space switcher) height"]))
     // The conversation tab.
     public let tabColumnWidth = Metric(720.0, .guess("a conversation tab's reading column, like a chat app's"))
     public let tabColumnInset = Metric(28.0, .guess("a conversation tab's margin around its column"))

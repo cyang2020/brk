@@ -58,7 +58,7 @@ public enum WindowLayout {
         let left = anchoredWidth + (sidebar != nil && !floats ? Metrics.content.sidebarGap.value : inset)
         // The AI panel is a column at the right edge: the card ends at its edge as it starts at the sidebar's. Not over
         // the Library, whose page runs under the window's right edge.
-        let panel = snapshot.ai != nil && !libraryOpen ? AIPanelLayout.frame(contentSize: contentSize, cardLeft: left) : nil
+        let panel = (snapshot.ai != nil || snapshot.aiPanel != nil) && !libraryOpen ? AIPanelLayout.frame(contentSize: contentSize, cardLeft: left) : nil
         let right = panel.map { contentSize.width - $0.minX } ?? inset
         let toolbarHeight = toolbarVisible && !libraryOpen ? AddressToolbarLayout.height : 0
         let pageOverlap = toolbarHeight > 0 ? Metrics.spaceTools.toolbarPageOverlap.value : 0

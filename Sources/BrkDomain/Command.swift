@@ -321,6 +321,9 @@ public enum PopupMenuRequest: Hashable, Sendable, Codable {
     case spaceCard(SpaceID)
     /// The cleanup button beside Tidy: the space's duplicate and long-unvisited Today tabs.
     case todayCleanup(SpaceID)
+    /// A row of the AI panel's conversation list (Brk's own): Open in Tab, Rename, Archive or Restore, Move to Another
+    /// Space, Delete for Good….
+    case conversation(AIRequestID)
 }
 
 /// What a Library Spaces card's New Folder and Live Folders rows do to the card's space (`SpaceCommand.inSpace`).
@@ -554,6 +557,15 @@ public enum LibraryCommand: Hashable, Sendable, Codable {
     case clearHistory
     /// The History page's search field changed: with the search model ready, its text is also searched by meaning.
     case historySearch(String)
+    /// The "AI 对话" page (docs/design/ai-threads.md): its search and filters, the conversation shown in full, and the
+    /// actions that keep the Library open.
+    case conversationQuery(ConversationLibraryQuery)
+    case selectConversation(AIRequestID?)
+    case moveConversation(AIRequestID, SpaceID)
+    /// Delete for good, from the Library or the panel's list: the window's dialog asks first; Delete there deletes the
+    /// transcript, every page it made and its rows.
+    case requestDeleteConversation(AIRequestID)
+    case confirmDeleteConversation(AIRequestID, token: String, confirmed: Bool)
 }
 
 /// Window commands. The dispatching window is the one the command came from; a new window takes its space.

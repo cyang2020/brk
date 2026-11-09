@@ -28,6 +28,9 @@ enum CommandInventory {
         .assist(.inTab(AIRequestID("ghost"), .followUp("x"))), .assist(.openAsTab), .assist(.newConversation), .assist(.openConversation(AIRequestID("ghost"))), .assist(.keepPage(AIPageID("ghost"))),
         .assist(.pageLink(AIPageID("ghost"), URL(string: "https://ghost.example/")!)), .assist(.answerPageLink(true)),
         .assist(.pageSave(AIPageID("ghost"), "{}")), .assist(.livePage(AIPageID("ghost"), .refreshNow)), .archive(.delete(ArchiveID("ghost"))),
+        .assist(.panelPage(.list)), .assist(.showConversation(AIRequestID("ghost"))), .assist(.listSearch("x")), .assist(.listAsk("why")),
+        .assist(.beginRenameConversation(AIRequestID("ghost"))), .assist(.renameConversation(AIRequestID("ghost"), "x")), .assist(.archiveConversation(AIRequestID("ghost"))),
+        .assist(.restoreConversation(AIRequestID("ghost"))), .assist(.moveConversation(AIRequestID("ghost"), space)),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
         .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
         .capture(.act(.copy)),
@@ -75,6 +78,8 @@ enum CommandInventory {
         .settings(.openBrowserPage(.passwords, profile: .default)),
         .library(.open(.archive)), .library(.close), .library(.openHistory), .library(.cancelDownload(download)), .library(.revealDownload(download)),
         .library(.removeHistoryVisit(HistoryVisitID("ghost"))), .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory), .library(.historySearch("x")),
+        .library(.conversationQuery(ConversationLibraryQuery(text: "x"))), .library(.selectConversation(AIRequestID("ghost"))), .library(.moveConversation(AIRequestID("ghost"), space)),
+        .library(.requestDeleteConversation(AIRequestID("ghost"))), .library(.confirmDeleteConversation(AIRequestID("ghost"), token: "t", confirmed: false)),
         .window(.openInFolder(item)), .window(.newBlank), .window(.toggleStayOnTop), .window(.new), .window(.newIncognito), .window(.newLittle(example)), .window(.openIn(.current)),
         .peek(.email), .peek(.open(example)), .peek(.close), .peek(.openAsTab), .peek(.openInSplit),
         .profile(.create(name: "Work", icon: nil)), .profile(.rename(profile, name: "x")), .profile(.delete(profile)),
@@ -249,6 +254,15 @@ enum CommandInventory {
             case .answerPageLink: "answerPageLink"
             case .pageSave: "pageSave"
             case .livePage: "livePage"
+            case .panelPage: "panelPage"
+            case .showConversation: "showConversation"
+            case .listSearch: "listSearch"
+            case .listAsk: "listAsk"
+            case .beginRenameConversation: "beginRenameConversation"
+            case .renameConversation: "renameConversation"
+            case .archiveConversation: "archiveConversation"
+            case .restoreConversation: "restoreConversation"
+            case .moveConversation: "moveConversation"
             }
         case .easel(let c):
             switch c {
@@ -474,6 +488,11 @@ enum CommandInventory {
             case .removeHistory: "removeHistory"
             case .clearHistory: "clearHistory"
             case .historySearch: "historySearch"
+            case .conversationQuery: "conversationQuery"
+            case .selectConversation: "selectConversation"
+            case .moveConversation: "moveConversation"
+            case .requestDeleteConversation: "requestDeleteConversation"
+            case .confirmDeleteConversation: "confirmDeleteConversation"
             }
         case .window(let c):
             switch c {

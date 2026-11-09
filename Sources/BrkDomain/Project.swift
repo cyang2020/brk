@@ -34,7 +34,7 @@ public struct ProjectionContext: Sendable {
 public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot {
     var windows: [WindowID: WindowSnapshot] = [:]
     for id in state.doc.windows.keys {
-        if var window = projectWindow(id, state, ctx) { window.linkStatus = state.session.windows[id]?.linkStatus; window.ai = state.session.ai.answers[id].map(state.withPages); window.conversations = state.conversationCards(in: id); window.aiPages = state.aiPageCards(in: id); window.pageLinkPrompt = state.session.ai.linkPrompts[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
+        if var window = projectWindow(id, state, ctx) { window.linkStatus = state.session.windows[id]?.linkStatus; window.ai = state.session.ai.answers[id].map(state.withPages); window.aiPanel = state.panelSnapshot(in: id, now: ctx.now, calendar: ctx.calendar, system: ctx.systemLanguage); window.pendingConversationDeletion = state.session.ai.pendingConversationDeletion[id]; window.conversations = state.conversationCards(in: id); window.aiPages = state.aiPageCards(in: id); window.pageLinkPrompt = state.session.ai.linkPrompts[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
     }
     return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state, systemScheme: ctx.systemScheme) + state.session.ai.requests.values.flatMap(\.hidden), settings: projectSettings(state),
                        sites: state.siteSnapshots(),
@@ -312,10 +312,13 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         if here > 0 { neighbors.previous = spacePage(order[here - 1]) }
         if here + 1 < order.count { neighbors.next = spacePage(order[here + 1]) }
     }
+    // Brk's own: another Space of this profile with a conversation that waits for the user rings its dot.
+    let attention = doc.kind == .standard ? state.spacesNeedingUser(space.profile, except: space.id) : []
     let dock = state.doc.spaceOrder.compactMap { sid -> DockItem? in
         guard let s = state.doc.spaces[sid] else { return nil }
         return DockItem(id: sid, title: state.displayTitle(of: sid), icon: s.icon, active: sid == space.id,
-                        color: resolveTheme(s.theme, systemScheme: ctx.systemScheme).gradient.first ?? SpaceTheme.default.colors[0])
+                        color: resolveTheme(s.theme, systemScheme: ctx.systemScheme).gradient.first ?? SpaceTheme.default.colors[0],
+                        attention: attention.contains(sid))
     }
 
     // Content.
@@ -443,7 +446,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             instantLinks: doc.kind != .incognito && state.doc.settings.max.enabled(.instantLinks),
             local: target == .newTab ? session.localResults : nil,
             meaning: session.meaning[.commandBar].map { MeaningCandidates(text: $0.text, rows: state.meaningCandidates($0, profile: profile)) },
-            conversations: doc.kind != .standard ? [] : state.conversations(of: profile).prefix(ConversationCandidate.limit).map(\.candidate),
+            conversations: doc.kind != .standard ? [] : state.conversationCandidates(profile),
             rates: state.session.currencyRates,
             now: session.barClock ?? Instant(milliseconds: 0),
             askAgentFound: state.activeAgent != nil,
@@ -482,7 +485,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             } : [],
             spaceExportMessage: session.spaceExportMessage, spaceExportInProgress: session.spaceExport != nil,
             canManageSpaces: doc.kind == .standard,
-            easels: page == .easelsAndNotes ? state.easelCards(in: id) : []
+            easels: page == .easelsAndNotes ? state.easelCards(in: id) : [],
+            conversations: page == .conversations && doc.kind == .standard ? state.libraryConversations(in: id, now: ctx.now, calendar: ctx.calendar, system: ctx.systemLanguage) : nil,
+            conversationsLanguage: listed.map { state.listLanguage($0, system: ctx.systemLanguage) } ?? AILanguage.system(ctx.systemLanguage)
         ))
     case .peek(let openID, let tab)?:
         // The peeked tab lives in the window's own scratch tree, whatever the window's container is.
@@ -507,7 +512,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     else if session.find?.focusInput == true { focus = .findInput }
     else if case .commandBar? = session.overlay { focus = .commandBarInput }
     else if let renaming = session.renaming { focus = .renameField(renaming) }
-    else if session.pendingSpaceDeletion != nil || session.pendingEaselDeletion != nil { focus = .spaceDialog }
+    else if session.pendingSpaceDeletion != nil || session.pendingEaselDeletion != nil || state.session.ai.pendingConversationDeletion[id] != nil { focus = .spaceDialog }
     else if session.profileDialog != nil { focus = .profileDialog }
     else if session.dialog != nil { focus = .spaceDialog }
     else if session.boostEditor != nil { focus = .none }

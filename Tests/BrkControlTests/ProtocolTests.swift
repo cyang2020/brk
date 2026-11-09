@@ -12,7 +12,7 @@ final class ProtocolTests: XCTestCase {
     /// so a new op does not compile until it has a tag and a sample here.
     enum Tag: String, CaseIterable {
         case chooseOutputFixture, cancelCurrentOutput, selectLinkExportFixture, configureSavePanel, answerSavePanel, cancelPrintPanel, menuAction, pasteboard, readPasteboard, screenshotSheet
-        case mediaWindowScreenshot, mediaSounds, captureProbe, sidebarData, sidebarPanel
+        case mediaWindowScreenshot, mediaSounds, aiNotifications, openAINotification, captureProbe, sidebarData, sidebarPanel
         case hello, view, activate, native, dispatch, load, press, hold, type, click, captureContextMenu, captureClickMenu, hover, screenshot, pixel, advanceClock, evaluate, crash
         case nativeDialogKey, setAppAppearance, simulateSystemAppearance, menuBarItems, appWindowTexts, appWindowLink, siteControlsScreenshot, siteControls, siteControlInput, siteControlTexts, sitePrompt
         case pointerDrag, scrollGesture, sheetButton, selectSheetDirectory
@@ -25,6 +25,8 @@ final class ProtocolTests: XCTestCase {
         switch op {
         case .mediaWindowScreenshot: .mediaWindowScreenshot
         case .mediaSounds: .mediaSounds
+        case .aiNotifications: .aiNotifications
+        case .openAINotification: .openAINotification
         case .captureProbe: .captureProbe
         case .sidebarData: .sidebarData
         case .sidebarPanel: .sidebarPanel
@@ -97,6 +99,8 @@ final class ProtocolTests: XCTestCase {
         switch tag {
         case .mediaWindowScreenshot: return [.mediaWindowScreenshot(number:1,path:"/tmp/owned-pip.png")]
         case .mediaSounds: return [.mediaSounds]
+        case .aiNotifications: return [.aiNotifications]
+        case .openAINotification: return [.openAINotification(conversation: AIRequestID("c1"))]
         case .captureProbe: return [.captureProbe(page: page, directory: URL(fileURLWithPath: "/tmp/owned"))]
         case .sidebarData: return [.sidebarData]
         case .sidebarPanel: return [.sidebarPanel(window: nil, action: .inspect), .sidebarPanel(window: WindowID("w"), action: .save(directory: "/tmp/owned", filename: "tabs.html")), .sidebarPanel(window: nil, action: .open(path: "/tmp/selected.html"))]

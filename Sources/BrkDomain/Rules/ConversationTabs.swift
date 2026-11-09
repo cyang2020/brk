@@ -48,9 +48,9 @@ extension AISession {
 }
 
 extension StoredConversation {
-    /// What the command bar searches: the title, and what was said, cut from the start when it is long.
+    /// What the searches read (`ConversationSearch`): the title, and everything that was said.
     public var candidate: ConversationCandidate {
-        var text = messages.compactMap { _, item -> String? in
+        let text = messages.compactMap { _, item -> String? in
             switch item {
             case .user(let value) where value == title: nil
             case .user(let value), .assistant(let value): value
@@ -58,7 +58,6 @@ extension StoredConversation {
             default: nil
             }
         }.joined(separator: "\n")
-        if text.count > ConversationCandidate.textLimit { text = String(text.prefix(ConversationCandidate.textLimit)) }
         return ConversationCandidate(id: id, title: title, text: text)
     }
 
@@ -211,6 +210,7 @@ extension Work {
               let live = state.session.ai.host(ofConversation: id).flatMap({ state.session.ai[host: $0]?.conversation }) else { return }
         var stored = StoredConversation(id: id, profile: profile, title: ConversationPage.title(from: title), createdAt: ctx.now, tabs: live.tabs, folder: live.folder)
         stored.items = Self.kept(live.items)
+        stored.space = state.doc.windows[window]?.space
         state.doc.conversations[id] = stored
         _ = conversationRow(id, in: window, create: true)
     }

@@ -31,12 +31,15 @@ enum SpaceAlertKind: Equatable {
     case rename(id: SpaceID, title: String)
     case delete(SpaceDeletionRequest)
     case deleteEasel(EaselDeletionRequest)
+    /// Brk's own: a conversation deleted for good, from the AI panel's list or the Library's "AI 对话" page.
+    case deleteConversation(ConversationDeletionRequest)
 
     var cancelCommand: Command {
         switch self {
         case .rename: .sidebar(.openDialog(nil))
         case .delete(let request): .space(.confirmDelete(request.id, token: request.token, confirmed: false))
         case .deleteEasel(let request): .easel(.confirmDelete(request.id, token: request.token, confirmed: false))
+        case .deleteConversation(let request): .library(.confirmDeleteConversation(request.id, token: request.token, confirmed: false))
         }
     }
 
@@ -48,6 +51,7 @@ enum SpaceAlertKind: Equatable {
             return trimmed.isEmpty ? nil : .space(.update(id, title: trimmed, icon: nil, theme: nil))
         case .delete(let request): return .space(.confirmDelete(request.id, token: request.token, confirmed: true))
         case .deleteEasel(let request): return .easel(.confirmDelete(request.id, token: request.token, confirmed: true))
+        case .deleteConversation(let request): return .library(.confirmDeleteConversation(request.id, token: request.token, confirmed: true))
         }
     }
 }
@@ -79,6 +83,12 @@ final class SpaceAlertView: NSView, NSTextFieldDelegate {
                                    rows: [ArcDialogRow(view: ArcDialogView.body(EaselCopy.deleteBody, scheme: scheme), gap: SpaceAlert.deleteBodyGap.value)],
                                    buttonGap: SpaceAlert.deleteButtonGap.value, buttonRight: ArcDialog.buttonRight.value[0],
                                    confirm: EaselCopy.delete, destructive: true)
+        case .deleteConversation(let request):
+            let language = request.language
+            dialog = ArcDialogView(scheme: scheme, icon: .app, title: ArcDialogView.title(AIThreadWords.deleteQuestion(AgentLine.oneLine(request.title, limit: 60), language), scheme: scheme),
+                                   rows: [ArcDialogRow(view: ArcDialogView.body(AIThreadWords.deleteDetail(pages: request.pages, language), scheme: scheme), gap: SpaceAlert.deleteBodyGap.value)],
+                                   buttonGap: SpaceAlert.deleteButtonGap.value, buttonRight: ArcDialog.buttonRight.value[0],
+                                   confirm: AIThreadWords.delete(language), destructive: true, cancel: AIThreadWords.cancel(language))
         }
         super.init(frame: .zero)
         field.delegate = self

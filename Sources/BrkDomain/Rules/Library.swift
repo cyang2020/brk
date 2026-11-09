@@ -85,6 +85,8 @@ extension Work {
             // History removal does not dispose a live request context or schedule profile-directory deletion.
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
             state.doc.history.removeAll { $0.profile == profile }
+        case .conversationQuery, .selectConversation, .moveConversation, .requestDeleteConversation, .confirmDeleteConversation:
+            libraryConversations(command, in: window)
         case .historySearch(let text):
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard case .profile(let profile) = state.libraryContext(in: window), state.searchModelReady,

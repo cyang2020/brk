@@ -5,11 +5,15 @@ extension Work {
     mutating func aiProvidersDetected(_ kinds: [AIProviderKind]) { state.session.detectedAI = kinds }
 
     mutating func assist(_ intent: AIIntent, in window: WindowID) {
+        if threadIntent(intent, in: window) { return }
         switch intent {
         case .inTab(let id, let inner):
             assistInTab(id, inner, in: window)
             return
         case .dismiss:
+            // The panel closes, whichever page it was on (docs/design/ai-threads.md).
+            state.session.ai.panelPage[window] = nil
+            state.session.ai.panelSearch[window] = nil
             // A saved conversation is put away: its row keeps it, and a running turn goes on out of sight.
             if putAwayPanelConversation(in: window) { return }
             cancelAI(in: window, slot: .panel)
@@ -255,6 +259,7 @@ extension Work {
         if let question = state.session.ai.answers[window]?.title { conversation.items = [.user(question)] }
         state.session.ai.answers[window]?.conversation = conversation
         state.session.ai.turnText[id] = 0
+        state.session.ai.turnStarted[id] = ctx.now
         effects.append(.aiOpenConversation(id, folder: nil, choice: choice ?? state.doc.settings.max.provider, tabs: tabs ? window : nil))
         saveConversation(id, title: state.session.ai.answers[window]?.title ?? ConversationPage.untitled, in: window)
     }
@@ -276,6 +281,7 @@ extension Work {
             state.session.ai[host: host] = answer
             state.session.ai.requests[id] = AIRequest(window: window, context: state.libraryContext(in: window), task: .ask(q), purpose: .answer)
             state.session.ai.turnText[id] = 0
+            state.session.ai.turnStarted[id] = ctx.now
             effects.append(.aiOpenConversation(id, folder: nil, choice: state.doc.settings.max.provider, tabs: window))
             if !attached.isEmpty { effects.append(.aiAttach(id, attached)) }
             effects.append(.aiWatch(id, seconds: Self.panelSeconds))
@@ -289,6 +295,7 @@ extension Work {
         appendUserMessage(q, to: &conversation)
         let attached = conversation.tabs ? takeAttachments(&conversation) : []
         state.session.ai.turnText[conversation.id] = 0
+        state.session.ai.turnStarted[conversation.id] = ctx.now
         if conversation.dormant {
             // A saved conversation shown again: its session starts now, continuing the agent's own where it kept one.
             conversation.dormant = false
@@ -362,6 +369,7 @@ extension Work {
             guard state.session.ai[host: host]?.request == turn else { return }
             holdTurnText(conversation.id, at: host)
             conversation.items.append(.approval(approval))
+            notify(conversation.id, .approval, items: conversation.items, body: approval)
         case .approvalClosed(let approval):
             conversation.items = conversation.items.compactMap {
                 if case .approval(let a) = $0, a.id == approval, a.answer == nil { nil } else { $0 }
@@ -713,6 +721,32 @@ extension Work {
             state.session.ai[host: host]?.conversation?.items.append(.notice(words))
         }
         commitConversation(conversation.id)
+        // A reply: unread until its conversation shows (docs/design/ai-threads.md); told outside Brk when it took a minute.
+        if state.doc.conversations[conversation.id] != nil, text != Self.cancelled {
+            state.doc.conversations[conversation.id]?.repliedAt = ctx.now
+            if let started = state.session.ai.turnStarted[conversation.id], ctx.now.since(started) >= .seconds(60) {
+                notify(conversation.id, .replied, items: state.session.ai[host: host]?.conversation?.items ?? conversation.items, body: nil)
+            }
+        }
+        state.session.ai.turnStarted[conversation.id] = nil
+    }
+
+    /// A macOS notification for the app to post while Brk is not in front: the conversation's name, and what it waits for
+    /// or that it replied.
+    private mutating func notify(_ id: AIRequestID, _ kind: AINotification.Kind, items: [AIConversationItem], body approval: AIAgentApproval?) {
+        guard state.doc.conversations[id] != nil else { return }
+        let language = aiLanguage(items)
+        let title = state.conversationName(id) ?? ConversationPage.untitled
+        let body: String
+        switch kind {
+        case .approval:
+            let agent = state.liveAnswer(id)?.conversation?.agentName
+            body = approval.map { AIStepWords.approval($0, agent: agent, folder: state.liveAnswer(id)?.conversation?.folder, language) } ?? AIThreadWords.notificationApproval(language)
+        case .replied:
+            let last = items.reversed().lazy.compactMap { if case .assistant(let text) = $0 { text } else { nil } }.first
+            body = last.map { AgentLine.oneLine($0, limit: 160) } ?? AIThreadWords.notificationReplied(language)
+        }
+        effects.append(.aiNotify(AINotification(conversation: id, kind: kind, title: title, body: body)))
     }
     private mutating func finishInPlace(_ id: AIRequestID, _ request: AIRequest, text: String, success: Bool) {
         let window = request.window
@@ -817,6 +851,8 @@ extension Work {
         state.session.ai.previewHeld.remove(window)
     }
     mutating func reconcileAI(from previous: AppState) {
+        // The panel follows the window's Space before anything below compares contexts (Rules/ConversationLists.swift).
+        reconcilePanels(from: previous)
         let providerChanged = previous.doc.settings.max.provider != state.doc.settings.max.provider
         // Max's Tidy Tab Titles: a Today tab that became Pinned by any route (Pin Tab, a drag into Pinned, a move from
         // the menu) asks for its tidier title; Arc renames a tab dragged into Pinned within a few seconds (P47-a).
@@ -845,7 +881,11 @@ extension Work {
         }
         for (id, request) in state.session.ai.requests {
             let ownerExists = state.doc.windows[request.window] != nil
-            let sameContext = state.libraryContext(in: request.window) == request.context
+            // A saved conversation's turn belongs to the conversation's profile, not to the Space its window shows now: a
+            // window that moves to another profile's Space leaves it running out of sight.
+            let conversationTurn = state.session.ai.host(ofRequest: id).flatMap { state.session.ai[host: $0]?.conversation?.id }
+                .flatMap { state.doc.conversations[$0] }.map { BrowsingContext.profile($0.profile) == request.context } ?? false
+            let sameContext = conversationTurn || state.libraryContext(in: request.window) == request.context
             let sameDocument = request.document.map { document in
                 state.session.live[document.browser.page]?.document == .ready(document) && (request.page != nil || state.findPage(in: request.window) == document.browser.page)
             } ?? true

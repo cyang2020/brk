@@ -138,6 +138,8 @@ public enum PageSandboxEvent: Equatable, Sendable {
     case link(URL)
     /// The document's height in points, whenever it changes.
     case height(Int)
+    /// The parts of the page that scroll sideways (CSS pixels from its top left), whenever they change.
+    case sideways([CGRect])
     case console(String)
     case loaded
 }
@@ -161,6 +163,17 @@ public final class PageSandboxView: NSView {
     private var loadedDocument = false
     public private(set) var console: [String] = []
     public private(set) var contentHeight: Int?
+    /// The parts of the page that scroll sideways, in its own points from its top left.
+    public private(set) var sidewaysAreas: [CGRect] = []
+
+    /// Whether the page scrolls sideways under `point` (window coordinates).
+    public func scrollsSideways(atWindowPoint point: CGPoint) -> Bool {
+        guard !sidewaysAreas.isEmpty else { return false }
+        let local = convert(point, from: nil)
+        guard bounds.contains(local) else { return false }
+        let fromTop = CGPoint(x: local.x, y: isFlipped ? local.y : bounds.height - local.y)
+        return sidewaysAreas.contains { $0.contains(fromTop) }
+    }
     public let pageID: AIPageID?
 
     /// `html` is the whole document; `data` the JSON text the page reads as `window.brk.data`, `saved` what it saved
@@ -267,6 +280,9 @@ public final class PageSandboxView: NSView {
         case .height(let value):
             guard value != contentHeight else { return }
             contentHeight = value
+        case .sideways(let areas):
+            guard areas != sidewaysAreas else { return }
+            sidewaysAreas = areas
         case .loaded: loadedDocument = true
         case .link: break
         }
@@ -345,10 +361,28 @@ public final class PageSandboxView: NSView {
             event.preventDefault();
             if (/^https?:/i.test(link.href)) send({ type: 'open-link', url: link.href });
           }, true);
-          let last = -1;
+          let last = -1, lastSideways = '';
+          // What scrolls sideways (a wide table): the panel's swipe leaves a gesture there to the page.
+          const sideways = () => {
+            const areas = [];
+            const scroller = document.scrollingElement;
+            if (scroller && scroller.scrollWidth > scroller.clientWidth + 1) areas.push([0, 0, innerWidth, innerHeight]);
+            const all = document.body ? document.body.getElementsByTagName('*') : [];
+            for (let i = 0; i < all.length && i < 3000 && areas.length < 20; i++) {
+              const element = all[i];
+              if (element.scrollWidth <= element.clientWidth + 1) continue;
+              const overflow = getComputedStyle(element).overflowX;
+              if (overflow !== 'auto' && overflow !== 'scroll') continue;
+              const r = element.getBoundingClientRect();
+              areas.push([Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]);
+            }
+            const text = JSON.stringify(areas);
+            if (text !== lastSideways) { lastSideways = text; send({ type: 'sideways', areas }); }
+          };
           const measure = () => {
             const height = Math.ceil(root.getBoundingClientRect().height);
             if (height !== last) { last = height; send({ type: 'size', height }); }
+            sideways();
           };
           new ResizeObserver(measure).observe(root);
           window.addEventListener('load', () => { measure(); send({ type: 'loaded' }); });
@@ -470,6 +504,11 @@ public final class PageSandboxView: NSView {
             case "size":
                 guard let height = (body["height"] as? NSNumber)?.intValue, height >= 0 else { return }
                 owner.received(.height(min(height, 100_000)))
+            case "sideways":
+                guard let list = body["areas"] as? [[NSNumber]] else { return }
+                owner.received(.sideways(list.prefix(20).compactMap { a in
+                    a.count == 4 ? CGRect(x: a[0].doubleValue, y: a[1].doubleValue, width: a[2].doubleValue, height: a[3].doubleValue) : nil
+                }))
             case "loaded":
                 owner.received(.loaded)
             default: break
