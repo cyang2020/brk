@@ -181,6 +181,7 @@ enum AIRealUIScenarios {
         let log = Log(app.shotsDirectory.appendingPathComponent("real-ui-\(name).txt"))
         defer { try? NativeSystemInput.setShift(false); PhysicalKeys.clearSystemModifiers(KeyChord([.command, .shift, .option, .control], .a)) }
 
+        try AIPanelLookScenarios.clearOfSystemDialogs(app)
         // A new user: Settings, the Max tab, Turn On Max, the agent.
         var ready = false
         log.check("Max pane: Turn On Max and choose \(kind.displayName)") {
@@ -204,6 +205,11 @@ enum AIRealUIScenarios {
                 return status != nil && status?.state != .checking
             }
             ready = status?.state == .ready
+            // BRK_E2E_REAL_UI_MODEL: the text typed into the model pop-up (spend little: Haiku, GPT-6-Luna).
+            if ready, let model = ProcessInfo.processInfo.environment["BRK_E2E_REAL_UI_MODEL"], !model.isEmpty {
+                try choose(popUp: ViewID.settingsField("agentModel").identifier, typing: model, "the model pop-up")
+                try app.waitUntil("the model chosen") { try settings(app).max.settings.agentOptions?[kind]?.model != nil }
+            }
             app.sleep(0.5)
             try captureSettings(app, "max-pane")
             try key(.command, .w)

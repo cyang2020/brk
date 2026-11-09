@@ -27,6 +27,16 @@ enum AIPanelLookScenarios {
         ("dark", "深色", SpaceTheme(colors: [ThemePresets.drab[0]], texture: .grain, intensity: 0.25, appearance: .dark)),
     ]
 
+    /// macOS's own permission dialogs (UserNotificationCenter, "access files in your Desktop folder") can sit at the
+    /// screen's right, over the panel's + menu and approval card; nobody but the user answers them, so the window moves
+    /// to the screen's left edge, clear of them.
+    static func clearOfSystemDialogs(_ app: AppUnderTest) throws {
+        var frame = try app.native().windowFrame
+        frame.origin.x = CGDisplayBounds(CGMainDisplayID()).minX
+        try app.setWindowFrame(frame)
+        app.sleep(0.5)
+    }
+
     private static func screen(_ app: AppUnderTest, _ point: CGPoint) throws -> CGPoint {
         let facts = try app.native()
         let top = CGDisplayBounds(CGMainDisplayID()).height - facts.windowFrame.maxY
@@ -132,12 +142,7 @@ enum AIPanelLookScenarios {
         guard case .hello(let hello) = try app.send(.hello) else { throw Check(description: "no hello") }
         pid = hello.pid
         let log = Log(app.shotsDirectory.appendingPathComponent("panel-look.txt"))
-        // macOS's own permission dialogs (UserNotificationCenter) can sit at the screen's right, over the panel; nobody
-        // but the user answers them, so the window moves to the screen's left edge, clear of them.
-        var frame = try app.native().windowFrame
-        frame.origin.x = CGDisplayBounds(CGMainDisplayID()).minX
-        try app.setWindowFrame(frame)
-        app.sleep(0.5)
+        try clearOfSystemDialogs(app)
         // Max on with the fixture agent, the basic layer off (Name Tabs would rename the shops).
         try app.dispatch(.settings(.max(.provider(.claude))))
         for feature in AIFeature.allCases { try app.dispatch(.settings(.max(.feature(feature, !AIFeature.basicLayer.contains(feature))))) }

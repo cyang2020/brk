@@ -150,6 +150,7 @@ enum AIAgentScenarios {
 
     private static func tools(_ app: AppUnderTest, _ choice: AIProviderChoice) throws {
         try prepare(app, choice)
+        try AIPanelLookScenarios.clearOfSystemDialogs(app)
         let folder = app.dataDirectory.appendingPathComponent("ai-work", isDirectory: true)
         try app.dispatch(.assist(.ask("hello")))
         try waitAnswer(app, contains: "hello")
