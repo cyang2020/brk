@@ -14934,12 +14934,12 @@
     {
       "id": "B027",
       "section": "AI agent",
-      "feature": "Conversations are saved sidebar tabs",
+      "feature": "Conversations are saved and listed in the AI panel",
       "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md, docs/design/ai-conversations.md).",
-      "description": "Every conversation is saved; a row appears at the top of Today when its first message is sent; pin, search and reopen like a tab.",
+      "description": "Every conversation is saved when its first message is sent and listed in its Space's panel list (step 8: no sidebar row); search it and reopen it from the list, the command bar or Library.",
       "historical_status": "planned",
       "status": "verified",
-      "acceptance": "After ⌘Q and a relaunch the conversation's row and transcript are back.",
+      "acceptance": "After ⌘Q and a relaunch the conversation is in its Space's list with its transcript.",
       "owner": "ai-native-d-conversations-pages",
       "required_checks": [
         "unit",
@@ -14959,18 +14959,25 @@
           "command": "BRK_E2E_REAL_PAGES_AGENT=claude BRK_E2E_REAL_PAGES_MODEL=haiku python3 verify/ai-native/merge-gate-d/run-native.py <name> --only AIRealPages-claude",
           "artifact": "verify/ai-native/merge-gate-d/real-pages-claude/shots/",
           "scope": "Real Claude (Haiku 5.5), real clicks and keys: chart answer, Keep as Tab, ⌘Q and relaunch, continue, recall; slice D also passed it on Codex (gpt-6-luna), verify/ai-native/d-conversations-pages."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Step 8 (docs/design/ai-right-panel.md) changed this row: rechecked at 25158c0c, fixture 53 of 53 and the real Claude runs."
         }
       ]
     },
     {
       "id": "B028",
       "section": "AI agent",
-      "feature": "Panel and conversation tab",
+      "feature": "The AI panel is the only place a conversation shows",
       "arc_evidence": "None: Brk's own, not counted against Arc (user request 2026-11-08; docs/design/ai-native.md, docs/design/ai-conversations.md).",
-      "description": "The panel is for quick questions; Open as Tab or a click on the row shows the same conversation full size; Close keeps a running answer going.",
+      "description": "Conversations open only in the right panel (step 8 removed Open as Tab and the full-size conversation tab); Close keeps a running answer going and the list row shows its spinner.",
       "historical_status": "planned",
       "status": "verified",
-      "acceptance": "The agent session carries on when the conversation moves into its tab.",
+      "acceptance": "Closing the panel keeps a running turn going; its answer lands in the saved transcript.",
       "owner": "ai-native-d-conversations-pages",
       "required_checks": [
         "unit",
@@ -14990,6 +14997,13 @@
           "command": "BRK_E2E_REAL_PAGES_AGENT=claude BRK_E2E_REAL_PAGES_MODEL=haiku python3 verify/ai-native/merge-gate-d/run-native.py <name> --only AIRealPages-claude",
           "artifact": "verify/ai-native/merge-gate-d/real-pages-claude/shots/",
           "scope": "Real Claude (Haiku 5.5), real clicks and keys: chart answer, Keep as Tab, ⌘Q and relaunch, continue, recall; slice D also passed it on Codex (gpt-6-luna), verify/ai-native/d-conversations-pages."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Step 8 (docs/design/ai-right-panel.md) changed this row: rechecked at 25158c0c, fixture 53 of 53 and the real Claude runs."
         }
       ]
     },
@@ -15357,7 +15371,7 @@
       "section": "AI agent",
       "feature": "Delete a conversation or AI page for good",
       "arc_evidence": "None: Brk's own.",
-      "description": "Closing a conversation's row archives it like a tab. In the Library's archive, Delete Conversation… or Delete Page… asks in a sheet, then deletes the transcript, every page it made, their files and their rows.",
+      "description": "Delete for Good… in the list's row menu or the Library's AI 对话 page asks in a sheet, then deletes the transcript, every page it made and their files and rows. The archive's Delete Page… deletes a kept page.",
       "historical_status": "planned",
       "status": "verified",
       "acceptance": "After Delete, the conversation's and its page's files are gone and the kept page's row with them.",
@@ -15380,6 +15394,13 @@
           "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/merge-gate-e/run-native.py <name> --only AIRealPagesLive-claude",
           "artifact": "verify/ai-native/merge-gate-e/real-live-claude-2/shots/real-live-claude.txt",
           "scope": "Parent's rerun at 7e682e99: 10 of 10 on real Claude (Haiku 5.5)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Step 8 (docs/design/ai-right-panel.md) changed this row: rechecked at 25158c0c, fixture 53 of 53 and the real Claude runs."
         }
       ]
     },
@@ -15388,10 +15409,10 @@
       "section": "AI agent",
       "feature": "Find conversations in the command bar",
       "arc_evidence": "None: Brk's own.",
-      "description": "The command bar lists saved conversations whose title has the typed text, then those where it was said (with a snippet), at most two, after the typed row; with the search model on this Mac, conversations are found by meaning too (title and the user's own messages in the index). Choosing one opens its tab.",
+      "description": "The command bar lists saved conversations whose title has the typed text, then those where it was said (with a snippet), at most two, after the typed row; with the search model on this Mac, conversations are found by meaning too (title and the user's own messages in the index). Choosing one opens it in the AI panel.",
       "historical_status": "planned",
       "status": "verified",
-      "acceptance": "Typing words said in a conversation lists it; a click opens its tab.",
+      "acceptance": "Typing words said in a conversation lists it; a click opens it in the panel.",
       "owner": "ai-native-e-live-pages",
       "required_checks": [
         "unit",
@@ -15411,6 +15432,13 @@
           "command": "BRK_E2E_REAL_LIVE_AGENT=claude BRK_E2E_REAL_LIVE_MODEL=Haiku python3 verify/ai-native/merge-gate-e/run-native.py <name> --only AIRealPagesLive-claude",
           "artifact": "verify/ai-native/merge-gate-e/real-live-claude-2/shots/real-live-claude.txt",
           "scope": "Parent's rerun at 7e682e99: 10 of 10 on real Claude (Haiku 5.5)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Step 8 (docs/design/ai-right-panel.md) changed this row: rechecked at 25158c0c, fixture 53 of 53 and the real Claude runs."
         }
       ]
     },
@@ -15457,7 +15485,7 @@
       "section": "AI agent",
       "feature": "The AI panel swipes between this Space's conversation list and the conversation",
       "arc_evidence": "None: Brk's own.",
-      "description": "The panel has two pages, the list first: a two-finger swipe over the panel moves between them with the sidebar's own pager and spring; two dots at the foot and a list icon in the header do the same. ⌥⌘A or the command bar's AI Conversations opens a closed panel on the list. A sideways-scrolling page in the transcript keeps the swipe.",
+      "description": "The panel has two pages, the list first: a two-finger swipe over the panel moves between them with the sidebar's own pager and spring; two dots at the foot and a list icon in the header do the same. ⌥⌘A toggles the panel; the command bar's AI Conversations opens it on the list. A sideways-scrolling page in the transcript keeps the swipe.",
       "historical_status": "planned",
       "status": "verified",
       "acceptance": "A real swipe, the list icon, a row, the dots and ⌥⌘A move between the pages; the sidebar's Space swipe is unchanged (AIAgentThreads-Swipe, R56-SwipeReal).",
@@ -15480,6 +15508,13 @@
           "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
           "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
           "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Step 8 (docs/design/ai-right-panel.md) changed this row: rechecked at 25158c0c, fixture 53 of 53 and the real Claude runs."
         }
       ]
     },
@@ -15488,10 +15523,10 @@
       "section": "AI agent",
       "feature": "One conversation list per Space",
       "arc_evidence": "None: Brk's own.",
-      "description": "Each Space's panel lists that Space's conversations (search, groups 等你处理 / 进行中 / 今天 / 昨天 / 更早, two-line rows with a pill, dot or spinner, archived ones grey and restored on click, a row menu with open in tab, rename, archive, move and delete for good); switching Space switches the list and brings back that Space's last conversation and page; the list's composer starts a conversation in this Space.",
+      "description": "Each Space's panel lists that Space's conversations (search, groups 等你处理 / 进行中 / 今天 / 昨天 / 更早, two-line rows with a pill, dot or spinner, a row menu with rename, move to another Space and delete for good); switching Space switches the list and brings back that Space's last conversation and page; the list's composer starts a conversation in this Space.",
       "historical_status": "planned",
       "status": "verified",
-      "acceptance": "Switching Space switches the list and restores the last conversation and page; search, groups, archive restore, the row menu and the composer work by real input (AIAgentThreads-Spaces, -Archive).",
+      "acceptance": "Switching Space switches the list and restores the last conversation and page; search, groups, the row menu and the composer work by real input (AIAgentThreads-Spaces, -Menu).",
       "owner": "ai-native-g-threads",
       "required_checks": [
         "unit",
@@ -15511,6 +15546,13 @@
           "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
           "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
           "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Step 8 (docs/design/ai-right-panel.md) changed this row: rechecked at 25158c0c, fixture 53 of 53 and the real Claude runs."
         }
       ]
     },
@@ -15557,7 +15599,7 @@
       "section": "AI agent",
       "feature": "Library AI Conversations page",
       "arc_evidence": "None: Brk's own.",
-      "description": "Library gets an AI 对话 page after Archived Tabs: full-text search across the profile's Spaces, a Filter menu (Space, agent, state, AI pages), the chips 全部 / 等你处理 N / 有 AI 页面, and the selected conversation in full with Continue, Open in Tab, Move to Space and Delete for Good.",
+      "description": "Library gets an AI 对话 page after Archived Tabs: full-text search across the profile's Spaces, a Filter menu (Space, agent, state, AI pages), the chips 全部 / 等你处理 N / 有 AI 页面, and the selected conversation in full with Continue, Move to Space and Delete for Good; the state filter has no Archived.",
       "historical_status": "planned",
       "status": "verified",
       "acceptance": "Full-text search finds a word said only in the body, the Space filter narrows, delete for good asks and removes (AIAgentThreads-Library).",
@@ -15580,6 +15622,13 @@
           "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
           "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
           "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Step 8 (docs/design/ai-right-panel.md) changed this row: rechecked at 25158c0c, fixture 53 of 53 and the real Claude runs."
         }
       ]
     },
@@ -15591,7 +15640,7 @@
       "description": "The command bar finds conversations through the same search as the list and Library, over their whole text, and its second line starts with the Space's name.",
       "historical_status": "planned",
       "status": "verified",
-      "acceptance": "Typing a word said in a conversation lists it with its Space; a click opens its tab (AIAgentThreads-Bar).",
+      "acceptance": "Typing a word said in a conversation lists it with its Space; a click opens it in the panel (AIAgentThreads-Bar).",
       "owner": "ai-native-g-threads",
       "required_checks": [
         "unit",
@@ -15611,6 +15660,13 @@
           "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
           "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
           "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Step 8 (docs/design/ai-right-panel.md) changed this row: rechecked at 25158c0c, fixture 53 of 53 and the real Claude runs."
         }
       ]
     },
@@ -15622,7 +15678,7 @@
       "description": "After the first answer the basic channel's small model names the conversation with a JSON schema, short and in the conversation's language, under the Name Tabs switch; a name the user gave is never replaced; with no agent and no key the first message stays.",
       "historical_status": "planned",
       "status": "verified",
-      "acceptance": "A structured naming request after the answer renames the row, panel header and list; a user's name is kept; Name Tabs off keeps the first message (AIAgentThreads-Names; real Haiku named one 电水壶商品价格).",
+      "acceptance": "A structured naming request after the answer renames the panel header and list; a user's name is kept; Name Tabs off keeps the first message (AIAgentThreads-Names; real Haiku named one 电水壶商品价格).",
       "owner": "ai-native-g-threads",
       "required_checks": [
         "unit",
@@ -15649,6 +15705,13 @@
           "command": "BRK_E2E_REAL_*_AGENT=claude BRK_E2E_REAL_*_MODEL=Haiku python3 verify/ai-native/merge-gate-g/run-native.py <name> --only AIRealThreads-claude,AIRealUI-claude,AIRealPages-claude,AIRealTabs-claude,AIRealPagesLive-claude",
           "artifact": "verify/ai-native/merge-gate-g/README.md",
           "scope": "Parent's runs on real Claude (Haiku 5.5): all five pass (AIRealPages after the parent's scenario fix, real-pages-4)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Step 8 (docs/design/ai-right-panel.md) changed this row: rechecked at 25158c0c, fixture 53 of 53 and the real Claude runs."
         }
       ]
     },
@@ -15680,6 +15743,330 @@
           "command": "python3 verify/ai-native/merge-gate-g/run-native.py fixture-1 --only <43 scenarios>",
           "artifact": "verify/ai-native/merge-gate-g/fixture-1/REPORT.md",
           "scope": "Parent's run: 43 of 43, including the nine AIAgentThreads-* scenarios and R56-SwipeReal."
+        }
+      ]
+    },
+    {
+      "id": "B049",
+      "section": "AI agent",
+      "feature": "Conversations live only in the right panel",
+      "arc_evidence": "None: Brk's own (user request 2026-11-09; docs/design/ai-right-panel.md).",
+      "description": "Sending a message adds no sidebar row; each conversation records its own Space; there is no Open as Tab and no full-size conversation tab. The sidebar holds web pages and kept AI pages only.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "No conversation row appears after the first message and the conversation is in this Space's list (AIAgentRightPanel-NoRow, AIRealRightPanel-claude).",
+      "owner": "ai-native-h-right-panel",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Parent's run at 25158c0c: 1726 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/fixture-1/REPORT.md",
+          "scope": "Parent's run at 25158c0c: 53 of 53, the step 7 AI set plus the ten AIAgentRightPanel-* scenarios."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_{RIGHT,THREADS,PAGES,TABS,LIVE}_AGENT=claude (Haiku) python3 verify/ai-native/merge-gate-h/run-native.py real-claude --only AIRealRightPanel-claude,AIRealThreads-claude,AIRealPages-claude,AIRealTabs-claude,AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-h/real-claude/REPORT.md",
+          "scope": "Parent's run at 25158c0c: AIRealRightPanel-claude (the spec's full example), AIRealThreads, AIRealPages, AIRealTabs and AIRealPagesLive (price, edits), 5 of 5."
+        }
+      ]
+    },
+    {
+      "id": "B050",
+      "section": "AI agent",
+      "feature": "Old conversation rows move off the sidebar at the first launch",
+      "arc_evidence": "None: Brk's own (user request 2026-11-09; docs/design/ai-right-panel.md).",
+      "description": "Pinned, foldered, other-Space and archived conversation rows go; each conversation keeps the Space its row was in (a gone Space gives the profile's first) and a name the user gave the row; emptied folders and kept AI page rows stay.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "A data folder from before step 8 launches with no conversation row anywhere and every conversation in its Space's list (AIAgentRightPanel-Migration, RightPanelTests).",
+      "owner": "ai-native-h-right-panel",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Parent's run at 25158c0c: 1726 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/fixture-1/REPORT.md",
+          "scope": "Parent's run at 25158c0c: 53 of 53, the step 7 AI set plus the ten AIAgentRightPanel-* scenarios."
+        }
+      ]
+    },
+    {
+      "id": "B051",
+      "section": "AI agent",
+      "feature": "The conversation list keeps rename, move and delete",
+      "arc_evidence": "None: Brk's own (user request 2026-11-09; docs/design/ai-right-panel.md).",
+      "description": "The row menu is Rename, Move to Another Space and Delete for Good…; no pin, folder or archive. A list row dragged onto a Space dot moves the conversation. Library has no Open in Tab and no Archived filter.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "The row menu by real clicks; a held real drag onto Work's dot moves it (AIAgentThreads-Menu, AIAgentRightPanel-DragToSpace).",
+      "owner": "ai-native-h-right-panel",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Parent's run at 25158c0c: 1726 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/fixture-1/REPORT.md",
+          "scope": "Parent's run at 25158c0c: 53 of 53, the step 7 AI set plus the ten AIAgentRightPanel-* scenarios."
+        }
+      ]
+    },
+    {
+      "id": "B052",
+      "section": "AI agent",
+      "feature": "Hovering a conversation lights the tabs it used",
+      "arc_evidence": "None: Brk's own (user request 2026-11-09; docs/design/ai-right-panel.md).",
+      "description": "The pointer on a list row lights the tabs that conversation was given or that the agent read, opened or showed, still open in this Space: on the row, a collapsed folder's row, a split's row or a Favorite's tile; the row says how many. A chip lights its one tab.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Real pointer moves light the given tabs and a collapsed folder; a chip lights one (AIAgentRightPanel-Hover, AIRealRightPanel-claude).",
+      "owner": "ai-native-h-right-panel",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Parent's run at 25158c0c: 1726 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/fixture-1/REPORT.md",
+          "scope": "Parent's run at 25158c0c: 53 of 53, the step 7 AI set plus the ten AIAgentRightPanel-* scenarios."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_{RIGHT,THREADS,PAGES,TABS,LIVE}_AGENT=claude (Haiku) python3 verify/ai-native/merge-gate-h/run-native.py real-claude --only AIRealRightPanel-claude,AIRealThreads-claude,AIRealPages-claude,AIRealTabs-claude,AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-h/real-claude/REPORT.md",
+          "scope": "Parent's run at 25158c0c: AIRealRightPanel-claude (the spec's full example), AIRealThreads, AIRealPages, AIRealTabs and AIRealPagesLive (price, edits), 5 of 5."
+        }
+      ]
+    },
+    {
+      "id": "B053",
+      "section": "AI agent",
+      "feature": "A chat button at the right end of the sidebar's title row",
+      "arc_evidence": "None: Brk's own (user request 2026-11-09; docs/design/ai-right-panel.md).",
+      "description": "It opens and closes the panel, shows the open fill and the waiting count, folds into … when the row is narrow, moves to the toolbar's end with the toolbar shown, and is absent when the window cannot open the panel, so the row matches Arc with AI off.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "Click opens and closes; count with the panel closed; 228, 190 and 300 pt rows; absent with Ask in Command Bar off (AIAgentRightPanel-Toggle; station scenes without AI unchanged).",
+      "owner": "ai-native-h-right-panel",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Parent's run at 25158c0c: 1726 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/fixture-1/REPORT.md",
+          "scope": "Parent's run at 25158c0c: 53 of 53, the step 7 AI set plus the ten AIAgentRightPanel-* scenarios."
+        }
+      ]
+    },
+    {
+      "id": "B054",
+      "section": "AI agent",
+      "feature": "⌥⌘A and View › Show/Hide AI Conversations toggle the panel",
+      "arc_evidence": "None: Brk's own (user request 2026-11-09; docs/design/ai-right-panel.md).",
+      "description": "⌥⌘A and the View item (under Show/Hide Sidebar, hidden when the window cannot open the panel) close an open panel and reopen it where it was; the command bar's AI Conversations still opens the list.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "A real ⌥⌘A, the View item and the bar row (AIAgentRightPanel-Entries).",
+      "owner": "ai-native-h-right-panel",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Parent's run at 25158c0c: 1726 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/fixture-1/REPORT.md",
+          "scope": "Parent's run at 25158c0c: 53 of 53, the step 7 AI set plus the ten AIAgentRightPanel-* scenarios."
+        }
+      ]
+    },
+    {
+      "id": "B055",
+      "section": "AI agent",
+      "feature": "The panel widens by dragging the gap",
+      "arc_evidence": "None: Brk's own (user request 2026-11-09; docs/design/ai-right-panel.md).",
+      "description": "Dragging the gap between the card and the panel resizes it up to half the window (card at least 400 pt, panel at least 280 pt); the width is kept per window across relaunches and the page width told to the agent follows it.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "A real drag 360 → 540 pt survives ⌘Q and a relaunch (AIAgentRightPanel-Width).",
+      "owner": "ai-native-h-right-panel",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Parent's run at 25158c0c: 1726 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/fixture-1/REPORT.md",
+          "scope": "Parent's run at 25158c0c: 53 of 53, the step 7 AI set plus the ten AIAgentRightPanel-* scenarios."
+        }
+      ]
+    },
+    {
+      "id": "B056",
+      "section": "AI agent",
+      "feature": "Tabs dropped at the window's right edge start a conversation",
+      "arc_evidence": "None: Brk's own (user request 2026-11-09; docs/design/ai-right-panel.md).",
+      "description": "With the panel closed, tabs dragged within 40 pt of the right edge show a dashed drop area; letting go does what Ask AI does. Before that band the split slots work as before.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "One held real drag shows the area and no split slot at the edge, and makes a conversation with the chip; a second drag over the page still splits (AIAgentRightPanel-EdgeDrop).",
+      "owner": "ai-native-h-right-panel",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Parent's run at 25158c0c: 1726 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/fixture-1/REPORT.md",
+          "scope": "Parent's run at 25158c0c: 53 of 53, the step 7 AI set plus the ten AIAgentRightPanel-* scenarios."
+        }
+      ]
+    },
+    {
+      "id": "B057",
+      "section": "AI agent",
+      "feature": "A kept AI page leads back to its conversation",
+      "arc_evidence": "None: Brk's own (user request 2026-11-09; docs/design/ai-right-panel.md).",
+      "description": "A kept page's card has a caption row with its name, refresh frequency and a conversation button; its row's menu has Open Conversation. Both open the conversation in the panel, switching Space when needed.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "The caption button and the menu item open the conversation from another Space (AIAgentRightPanel-PageButton, AIRealPages-claude, AIRealPagesLive-claude).",
+      "owner": "ai-native-h-right-panel",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Parent's run at 25158c0c: 1726 tests, 9 skipped, 0 failures."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 verify/ai-native/merge-gate-h/run-native.py fixture-1 --only <53 scenarios>",
+          "artifact": "verify/ai-native/merge-gate-h/fixture-1/REPORT.md",
+          "scope": "Parent's run at 25158c0c: 53 of 53, the step 7 AI set plus the ten AIAgentRightPanel-* scenarios."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "BRK_E2E_REAL_{RIGHT,THREADS,PAGES,TABS,LIVE}_AGENT=claude (Haiku) python3 verify/ai-native/merge-gate-h/run-native.py real-claude --only AIRealRightPanel-claude,AIRealThreads-claude,AIRealPages-claude,AIRealTabs-claude,AIRealPagesLive-claude",
+          "artifact": "verify/ai-native/merge-gate-h/real-claude/REPORT.md",
+          "scope": "Parent's run at 25158c0c: AIRealRightPanel-claude (the spec's full example), AIRealThreads, AIRealPages, AIRealTabs and AIRealPagesLive (price, edits), 5 of 5."
+        }
+      ]
+    },
+    {
+      "id": "B058",
+      "section": "AI agent",
+      "feature": "Deleting a Space moves its conversations",
+      "arc_evidence": "None: Brk's own (user request 2026-11-09; docs/design/ai-right-panel.md).",
+      "description": "Its conversations move to the profile's first remaining Space and the confirmation says so; ⌘Z moves them back. A profile's only Space leaves them in place, found in Library.",
+      "historical_status": "planned",
+      "status": "verified",
+      "acceptance": "RightPanelTests: the move, the dialog's sentence and the undo.",
+      "owner": "ai-native-h-right-panel",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
+      "verification": [
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "swift test",
+          "artifact": "verify/ai-native/merge-gate-h/README.md",
+          "scope": "Parent's run at 25158c0c: 1726 tests, 9 skipped, 0 failures."
         }
       ]
     }
