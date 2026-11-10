@@ -103,7 +103,24 @@ final class EventInjector {
     /// page), so the event goes straight to the window and the menu never sees it. With a native view focused, a
     /// key-down is offered as a key equivalent to the window's views, then to the menu, then to the first responder.
     private func deliver(_ event: NSEvent, to window: NSWindow) throws {
-        var current = Self.dequeue(event)
+        if [.keyDown, .keyUp, .flagsChanged].contains(event.type) { try handleWaitingKeys(for: window) }
+        try route(Self.dequeue(event), to: window)
+    }
+
+    /// Key events from the keyboard (or the window server's tools) that reached the app before an injected key are handled
+    /// first, in their order, by AppKit when a window is key, else the way the injected key goes. The injected key goes in at
+    /// the head of the queue, so without this it overtakes a real key still waiting while the main thread is busy: the
+    /// README recording (2026-11-10) typed "emoji" through this socket, pressed a real Tab, then typed "define" through the
+    /// socket, and the bar got "emojidefine" before the Tab, which then sent it to the agent.
+    private func handleWaitingKeys(for window: NSWindow) throws {
+        for _ in 0..<64 {
+            guard let waiting = NSApp.nextEvent(matching: [.keyDown, .keyUp, .flagsChanged], until: Date.distantPast, inMode: .default, dequeue: true) else { return }
+            if NSApp.keyWindow != nil { NSApp.sendEvent(waiting) } else { try route(waiting, to: window) }
+        }
+    }
+
+    private func route(_ event: NSEvent, to window: NSWindow) throws {
+        var current = event
         var owner: NSWindow? = window
         while let candidate = owner, !(candidate is NSSavePanel) { owner = candidate.sheetParent }
         if owner is NSSavePanel, current.type == .keyDown || current.type == .keyUp {

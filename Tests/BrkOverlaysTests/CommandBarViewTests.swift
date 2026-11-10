@@ -136,6 +136,36 @@ final class CommandBarViewTests: XCTestCase {
         XCTAssertEqual(chosen, [.commandBar(.submitSearch(engine: google.id, query: "zqvx"))])
     }
 
+    /// Answers that arrive after the last keystroke re-rank the rows, and Return still chooses what the user sees: a row they
+    /// moved to stays that row wherever it now sits, and while they are still typing on, the input completes to the new
+    /// first row, so it never shows one thing while Return does another.
+    func testLateAnswersLeaveReturnOnWhatTheUserSees() throws {
+        let view = makeBar(commandBar([], []))
+        type("zqv", into: view)
+        view.show(commandBar([], [], suggestions: ["zqvx", "zqvy"], suggestedFor: "zqv"), in: box, scheme: .light)
+        press(#selector(NSResponder.moveDown(_:)), in: view)
+        view.show(commandBar([], [], suggestions: ["zqva", "zqvx", "zqvy"], suggestedFor: "zqv"), in: box, scheme: .light)
+        press(#selector(NSResponder.insertNewline(_:)), in: view)
+        XCTAssertEqual(chosen, [.commandBar(.submitSearch(engine: google.id, query: "zqvx"))], "the row moved to, not the one now in its place")
+
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: box, styleMask: [.titled], backing: .buffered, defer: false)
+        let typing = makeBar(commandBar([], []))
+        window.contentView = typing
+        window.orderFront(nil)
+        defer { window.contentView = nil; window.orderOut(nil) }
+        XCTAssertTrue(typing.focusInput())
+        let editor = try XCTUnwrap(typing.input.currentEditor() as? NSTextView)
+        for key in "zqv" { editor.insertText(String(key), replacementRange: editor.selectedRange()) }
+        XCTAssertNil(typing.completion)
+        var answered = commandBar([], [], suggestedFor: "zqv")
+        answered.suggestions = [EngineSuggestion("zqvxyz", kind: .query, relevance: 1500)]
+        typing.show(answered, in: box, scheme: .light)
+        XCTAssertEqual(typing.results.first?.command, .commandBar(.submitSearch(engine: google.id, query: "zqvxyz")))
+        XCTAssertEqual(typing.input.stringValue, "zqvxyz", "the input completes to the new first row")
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: 3, length: 3), "the completed part selected, so the next key replaces it")
+    }
+
     /// Tab with a site-search offer beside the input (or Space after an engine's whole name) enters site search: the
     /// engine's pill, an empty input, Return searches there; Backspace in the empty input or Esc gives the typed name
     /// back, and only a second Esc closes the bar

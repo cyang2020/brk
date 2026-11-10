@@ -22,6 +22,31 @@ final class ControlInputRegressionTests: XCTestCase {
         XCTAssertEqual(h.store.snapshot.settings, before, "raising a window should not mutate settings")
     }
 
+    /// A real key still waiting in the app's queue is handled before keys the control socket types after it. The README
+    /// recording (2026-11-10) typed "emoji" through the socket, pressed a real Tab, then typed "define" through the socket:
+    /// the socket's keys went in at the head of the queue, the bar read "emojidefine" before the Tab came, and that Tab sent
+    /// "emojidefine" to the agent.
+    func testAWaitingRealTabIsHandledBeforeKeysTypedAfterIt() throws {
+        let h = Harness()
+        defer { h.store.dispatch(.user(h.window, .commandBar(.dismiss))); h.cleanUp() }
+        h.store.start()
+        h.store.dispatch(.user(h.window, .commandBar(.open(.newTab))))
+        let window = try XCTUnwrap(h.store.windowController(h.window)?.window)
+        let input = try XCTUnwrap(ViewTree.find("command-bar-input", in: window) as? NSTextField)
+        let injector = EventInjector()
+        try injector.type("emoji", in: window)
+        for down in [true, false] {
+            let tab = try XCTUnwrap(NSEvent.keyEvent(with: down ? .keyDown : .keyUp, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                     windowNumber: window.windowNumber, context: nil, characters: "\t", charactersIgnoringModifiers: "\t",
+                                                     isARepeat: false, keyCode: Key.tab.code))
+            NSApp.postEvent(tab, atStart: false)
+        }
+        try injector.type("define", in: window)
+        let pill = try XCTUnwrap(ViewTree.find("command-bar-pill", in: window))
+        XCTAssertFalse(pill.isHidden, "the Tab entered the emoji prefix before define was typed")
+        XCTAssertEqual(input.stringValue, "define")
+    }
+
     func testSettingsCloseWithoutAKeyWindowDoesNotArchiveABrowserTab() async throws {
         let h = Harness()
         defer { h.store.dispatch(.user(h.window, .settings(.closeWindow))); h.cleanUp() }

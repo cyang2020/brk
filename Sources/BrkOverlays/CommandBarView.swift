@@ -35,8 +35,9 @@ import UniformTypeIdentifiers
 ///
 /// Prefix words (`QuickPrefixes`, Brk's own) go through site search's own keys and pill: a whole word followed by Tab
 /// enters, the word's name sits in the pill, Backspace in the empty input or Esc leaves and gives the word back. An engine
-/// of the same name wins. Space never enters, so a search can start with one of these words. The word, or three letters of
-/// it, offers the prefix beside the input with the Tab key while no site search is on offer.
+/// of the same name wins. Space never enters, so a search can start with one of these words. The word, or two letters of
+/// it, offers the prefix beside the input with the Tab key while no site search is on offer. The offer and the key follow
+/// one rule (`Suggest.tabAction`), which Tab works out again from the text at its press.
 ///
 /// The view fills `frames.commandBar` (Arc's 338 pt box); the visible card sits at the top of it and is as tall as
 /// its rows, and the empty rest of the box lets clicks through.
@@ -73,6 +74,9 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     /// What the user typed; the input shows it followed by the rest of `completion`, selected.
     private(set) var typed = ""
     private(set) var completion: String?
+    /// The last edit typed on at the end of the text (not a deletion, not → or End keeping a completion): the completion may
+    /// still change with the rows (`followFirstRow`).
+    private var typingOn = false
     /// The engine Tab would search, shown beside the input.
     private(set) var offer: SearchEngineCandidate?
     /// The prefix Tab would enter, shown there when no engine is on offer.
@@ -198,9 +202,12 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             pill = nil
             typed = bar.initialQuery
             completion = nil
+            typingOn = false
             input.stringValue = bar.initialQuery
             input.currentEditor()?.selectAll(nil)
             applySiteSearchLook()
+        } else {
+            followFirstRow()
         }
         rerank(keepHighlight: !reopened)
         installEventMonitor()
@@ -287,17 +294,17 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
             if pill != nil { leavePill() } else { dispatch(.commandBar(.dismiss)) }
             return true
         case #selector(NSResponder.insertTab(_:)), #selector(NSResponder.insertBacktab(_:)):
-            // Tab never leaves the bar; with a site-search offer beside the input it enters site search; after the local
-            // tool's name it asks the tool (Arc: start typing "ChatGPT", hit Tab), through the tool's prefix where Brk offers
-            // one; any other text in a new-tab bar goes to the tool as a question (Brk's own, as Raycast's Quick AI).
+            // Tab never leaves the bar. It does what `Suggest.tabAction` makes of the text as the input holds it at this
+            // press, worked out again here rather than read from the offer last drawn beside the input.
             guard pill == nil, let bar else { return true }
-            if let offer { enter(.site(offer), namedBy: typed) }
-            else if let whole = QuickPrefixes.entry(named: typed, in: bar) { enter(.prefix(whole), namedBy: typed) }
-            // What is on offer beside the input is what Tab does: part of the tool's name offers the tool's own prefix.
-            else if let prefixOffer { enter(.prefix(prefixOffer), namedBy: typed) }
-            else if Suggest.asksProvider(typed, bar: bar) { dispatch(.assist(.open(.question))) }
-            else if let blockedPrefix { dispatch(.settings(.openPane(blockedPrefix.pane))) }
-            else if let question = Suggest.tabQuestion(typed, completing: completion, bar: bar, resolve: resolve) { dispatch(.assist(.ask(question))) }
+            switch Suggest.tabAction(typed, completing: completion, bar: bar, resolve: resolve) {
+            case .siteSearch(let engine)?: enter(.site(engine), namedBy: typed)
+            case .prefix(let prefix)?: enter(.prefix(prefix), namedBy: typed)
+            case .blocked(let block)?: dispatch(.settings(.openPane(block.pane)))
+            case .provider?: dispatch(.assist(.open(.question)))
+            case .ask(let question)?: dispatch(.assist(.ask(question)))
+            case nil: break
+            }
             return true
         case #selector(NSResponder.deleteBackward(_:)) where pill != nil && input.stringValue.isEmpty:
             leavePill()
@@ -325,7 +332,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         }
         // Typing (the caret at the end) may complete; a deletion, of the completion itself or of what was typed,
         // never does: the text is then the start of what was there.
-        let typingOn = !typed.hasPrefix(text) && caretAtEnd()
+        typingOn = !typed.hasPrefix(text) && caretAtEnd()
         typed = text
         completion = nil
         if pill == nil, typingOn, let bar, let domain = Suggest.completion(text, bar: bar, appName: Product.name) {
@@ -361,9 +368,28 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         }
     }
 
+    /// Answers that arrive after a keystroke (the engine's suggestions, files, pages found by meaning) re-rank the rows. While
+    /// the user is still typing on at the end, the completion follows the new first row, as it would have had the answer come
+    /// before the keystroke (Arc completes only to its first row). So the input never shows one site while Return opens
+    /// another. Once the caret moves or text is selected otherwise, the input is left alone.
+    private func followFirstRow() {
+        guard pill == nil, typingOn, let bar, let editor = input.currentEditor() else { return }
+        let length = (typed as NSString).length
+        let shown = completion.map { typed + $0.dropFirst(typed.count) } ?? typed
+        let left = NSRange(location: length, length: (shown as NSString).length - length)
+        guard editor.string == shown, editor.selectedRange == left else { return }
+        let next = Suggest.completion(typed, bar: bar, appName: Product.name)
+        guard next != completion else { return }
+        if let next { return complete(to: next) }
+        completion = nil
+        input.stringValue = typed
+        input.currentEditor()?.selectedRange = NSRange(location: length, length: 0)
+    }
+
     private func acceptCompletion() {
         typed = input.stringValue
         completion = nil
+        typingOn = false
         dispatch(.commandBar(.queryChanged(typed)))
         rerank(keepHighlight: false)
     }
@@ -373,6 +399,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         pill = mode
         typed = ""
         completion = nil
+        typingOn = false
         input.stringValue = ""
         applySiteSearchLook()
         dispatch(.commandBar(.queryChanged("")))
@@ -383,6 +410,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         pill = nil
         typed = namedBy
         completion = nil
+        typingOn = false
         input.stringValue = namedBy
         // The caret after the word: setting the text selects it, and the next key would replace it.
         input.currentEditor()?.selectedRange = NSRange(location: (namedBy as NSString).length, length: 0)
@@ -453,13 +481,19 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     // MARK: Results and layout
 
+    /// `keepHighlight` (the same text, new answers): the first row stays the first row, and a row the user moved to, with the
+    /// arrows or the pointer, stays that row wherever it now sits, so Return chooses what was chosen.
     private func rerank(keepHighlight: Bool) {
         guard let bar else { return }
+        let moved = keepHighlight && highlighted > 0 && results.indices.contains(highlighted) ? results[highlighted] : nil
         results = Suggest.rank(query: typed, bar: bar, appName: Product.name, siteSearch: siteSearch, prefix: prefix, resolve: resolve, completing: completion)
-        offer = pill == nil ? Suggest.siteSearchOffer(typed, completing: completion, bar: bar) : nil
-        prefixOffer = pill == nil && offer == nil ? QuickPrefixes.offer(for: typed, in: bar) : nil
-        blockedPrefix = pill == nil && offer == nil && prefixOffer == nil ? QuickPrefixes.blocked(for: typed, in: bar) : nil
-        highlighted = keepHighlight ? min(highlighted, max(results.count - 1, 0)) : 0
+        // Beside the input: what Tab would do now, by Tab's own rule.
+        let tab = pill == nil ? Suggest.tabAction(typed, completing: completion, bar: bar, resolve: resolve) : nil
+        offer = if case .siteSearch(let engine)? = tab { engine } else { nil }
+        prefixOffer = if case .prefix(let prefix)? = tab { prefix } else { nil }
+        blockedPrefix = if case .blocked(let block)? = tab { block } else { nil }
+        if let moved, let same = results.firstIndex(of: moved) ?? results.firstIndex(where: { $0.command == moved.command }) { highlighted = same }
+        else { highlighted = keepHighlight ? min(highlighted, max(results.count - 1, 0)) : 0 }
         while rows.count < results.count {
             let index = rows.count
             let row = ResultRowView()

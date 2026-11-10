@@ -68,10 +68,12 @@ public enum QuickPrefixes {
         return all.first { prefix in prefix.isActive(in: bar) && prefix.words.contains { fold($0) == needle } }
     }
 
-    /// The prefix to offer beside the input, with the Tab key: from two letters of a word, as Arc offers a site search.
+    /// The prefix to offer beside the input, with the Tab key, which is the one Tab enters: the one whose whole word this is,
+    /// else from two letters the first one with a word they start, as Arc offers a site search.
     public static func offer(for typed: String, in bar: CommandBarSnapshot) -> QuickPrefix? {
         let needle = fold(typed)
         guard !needle.isEmpty, !needle.contains(where: \.isWhitespace), accepts(bar) else { return nil }
+        if let whole = entry(named: typed, in: bar) { return whole }
         return all.first { prefix in
             prefix.isActive(in: bar) && prefix.words.contains { word in
                 let word = fold(word)

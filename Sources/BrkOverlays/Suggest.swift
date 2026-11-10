@@ -655,9 +655,35 @@ public enum Suggest {
                    command: .commandBar(.local(.open, path: hit.path)), icon: .file(hit.path))
     }
 
+    /// What Tab does with the text in the input, which is also what the bar shows beside the input for it.
+    public enum TabAction: Equatable, Sendable {
+        /// Site search on this engine ("Search Wikipedia" beside the input).
+        case siteSearch(SearchEngineCandidate)
+        /// This prefix's mode: its whole word, or from two letters the prefix the word starts (its chip beside the input).
+        case prefix(QuickPrefix)
+        /// An AI prefix that cannot work now: its reason beside the input, and Tab opens the settings that change it.
+        case blocked(QuickPrefixBlock)
+        /// The local tool's own name: Tab opens its question mode (Arc: start typing "ChatGPT", hit Tab).
+        case provider
+        /// Any other search in a new-tab bar goes to the tool as a question (Brk's own, as Raycast's Quick AI).
+        case ask(String)
+    }
+
+    /// Tab's one rule, worked out from `typed` alone, with no rows, offer or async answer in between: the bar draws its offer
+    /// from this and the key acts on this, so a Tab struck before the offer shows does what the offer would have said. In this
+    /// order: an engine's site search (a same-named engine wins over a prefix word), a prefix, the tool's name while a tool
+    /// is found, an AI prefix that cannot work, the text as a question. Nil: Tab does nothing (it never leaves the bar).
+    public static func tabAction(_ typed: String, completing: String?, bar: CommandBarSnapshot, resolve: ((String) -> URL?)? = nil) -> TabAction? {
+        if let engine = siteSearchOffer(typed, completing: completing, bar: bar) { return .siteSearch(engine) }
+        if let prefix = QuickPrefixes.offer(for: typed, in: bar) { return .prefix(prefix) }
+        if bar.askAgentFound, asksProvider(typed, bar: bar) { return .provider }
+        if let block = QuickPrefixes.blocked(for: typed, in: bar) { return .blocked(block) }
+        return tabQuestion(typed, completing: completing, bar: bar, resolve: resolve).map(TabAction.ask)
+    }
+
     /// Tab sends the typed text to the local AI: a text in a new-tab bar with Max's tool on and found, not an address and not
-    /// a site being completed. Nil keeps Tab as it was. Site search's offer, a prefix word and the tool's name go first (the
-    /// view).
+    /// a site being completed. Nil keeps Tab as it was. Site search's offer, a prefix word and the tool's name go first
+    /// (`tabAction`).
     public static func tabQuestion(_ typed: String, completing: String?, bar: CommandBarSnapshot, resolve: ((String) -> URL?)? = nil) -> String? {
         let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, completing == nil, bar.createsTab, bar.aiMode == nil, bar.askProvider != nil, bar.askAgentFound else { return nil }

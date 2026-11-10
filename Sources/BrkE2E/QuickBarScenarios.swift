@@ -98,7 +98,7 @@ enum QuickBarScenarios {
     // MARK: Real keys
 
     private static let codes: [Character: (code: CGKeyCode, shift: Bool)] = {
-        var map: [Character: (CGKeyCode, Bool)] = [" ": (49, false), ".": (47, false), ",": (43, false), "/": (44, false), "-": (27, false), "=": (24, false), "'": (39, false),
+        var map: [Character: (CGKeyCode, Bool)] = [" ": (49, false), "\t": (48, false), "\r": (36, false), ".": (47, false), ",": (43, false), "/": (44, false), "-": (27, false), "=": (24, false), "'": (39, false),
                                                    "%": (23, true), "?": (44, true), ":": (41, true), "(": (25, true), ")": (29, true), "+": (24, true), "*": (28, true)]
         for key in Key.allCases {
             let name = key.description
@@ -110,7 +110,8 @@ enum QuickBarScenarios {
         return map
     }()
 
-    /// Text as a US keyboard types it, posted at the window server while this Brk is the active app.
+    /// Text as a US keyboard types it, posted at the window server while this Brk is the active app. "\t" is Tab and "\r"
+    /// Return, struck in the same burst as the letters before them.
     private static func type(_ app: AppUnderTest, _ text: String) throws {
         try WindowServerKeys.ensureFrontmost(app, app.window!)
         let source = CGEventSource(stateID: .hidSystemState)
@@ -539,6 +540,21 @@ enum QuickBarScenarios {
                 else { app.note("\(word) did not enter here: its agent or feature is off") }
                 try dismiss(app)
             }
+            // At a person's speed: the word and Tab in one burst, nothing waiting for the chip or the rows in between. With
+            // the agent on, a Tab that missed the prefix would ask it (the README recording, 2026-11-10).
+            let calls = aiCalls(app).count
+            for word in ["emoji", "define", "window", "split"] {
+                try open(app)
+                try type(app, word + "\t")
+                try app.waitUntil("\(word) and an immediate Tab entered") { try pillShown(app) && inputText(app).isEmpty }
+                try dismiss(app)
+            }
+            // Return at once chooses for the whole text, not for the keystroke before it ("query:split pea sou").
+            try open(app)
+            try type(app, "split pea soup\r")
+            try app.waitUntil("split pea soup searched at once") { currentTab(try app.view())?.title == "query:split pea soup" }
+            app.sleep(0.3)
+            try expect(aiCalls(app).count == calls, "a fast Tab or Return asked the agent: \(aiCalls(app).dropFirst(calls).map { $0["prompt"] ?? "" })")
             for feature in [AIFeature.commandBar, .askPage, .translation] { try app.dispatch(.settings(.max(.feature(feature, false)))) }
 
             // A search can start with any of the words: typed with a real Space it stays a search.

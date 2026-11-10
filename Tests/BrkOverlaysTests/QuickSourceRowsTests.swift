@@ -189,6 +189,29 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(sink.sent, [.assist(.open(.question))])
     }
 
+    /// Tab struck right after a prefix word enters that word's prefix, with the agent on (a missed prefix would ask it) and
+    /// the engine's answer for the keystroke before landing in between: Tab works its rule out from the text at the press,
+    /// the rule that also draws the chip.
+    func testTabRightAfterAPrefixWordEntersIt() {
+        let sink = Box()
+        var snapshot = tabBar()
+        snapshot.actions = [.addSplitView]
+        for word in ["emoji", "define", "window", "split"] {
+            let bar = view(snapshot, sink)
+            type(word, into: bar)
+            var answered = snapshot
+            answered.suggestions = [EngineSuggestion(word + " meaning", kind: .query, relevance: 1400)]
+            answered.suggestedFor = String(word.dropLast())
+            bar.show(answered, in: box, scheme: .light)
+            sink.sent.removeAll()
+            press(#selector(NSResponder.insertTab(_:)), bar)
+            XCTAssertEqual(bar.prefix?.words.first, word)
+            XCTAssertEqual(bar.input.stringValue, "", word)
+            XCTAssertFalse(sink.sent.contains { if case .assist = $0 { true } else { false } }, "\(word): \(sink.sent)")
+            XCTAssertEqual(Suggest.tabAction(word, completing: nil, bar: answered), bar.prefix.map(Suggest.TabAction.prefix), "the chip's rule")
+        }
+    }
+
     func testTabStaysAsItWasWithNoTextAMaxOffOrAnAddress() {
         let sink = Box()
         let empty = view(tabBar(), sink)
