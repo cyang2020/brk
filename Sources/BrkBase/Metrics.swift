@@ -76,6 +76,7 @@ public struct MetricsTable: MetricGroup {
     public let boostPanel = BoostPanelMetrics()
     public let capture = CaptureMetrics()
     public let siteControls = SiteControlsMetrics()
+    public let downloadFlight = DownloadFlightMetrics()
 }
 
 public struct WindowMetrics: MetricGroup {
@@ -566,7 +567,15 @@ public struct LibraryFlyoutMetrics: MetricGroup {
     public let badgeOut = Metric(0.14, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026ada9c: Animation.linear(duration: 0.14)"))
     /// The preview a row's click opens (Arc: `ItemPreviewPresenter`, measured on p15 and p16 of docs/arc-anatomy/library-flyout.md).
     public let previewDim = Metric(0.7, .anatomy("docs/arc-anatomy/library-flyout.md: behind the card the page's white reads #4C4C4C"))
-    public let previewCardWhite = Metric(0.86, .guess("the card behind Quick Look's own view; Arc's reads #DCDCDC to #8A8A8A from a radial shade we do not draw"))
+    /// The card behind Quick Look's view: a radial grey, `previewShade[0]` in the middle falling off with the square of
+    /// the distance to `previewShade[1]` at half the card's width; its vertical radius is `previewShadeAspect` times the
+    /// horizontal one (it barely darkens towards the top and bottom) and its middle sits `previewShadeShift` of the card's
+    /// width left of the card's.
+    public let previewShade = Metric(["#D6D6D6", "#4D4D4D"], .anatomy("docs/arc-anatomy/library-flyout.md, The preview: 20 readings on two rows of a 974 pt card (two Arc pictures agree) fit 214 - 0.00058 ((dx + 9)^2 + (dy / 2.76)^2) within 4 levels; Quick Look draws no background of its own"))
+    public let previewShadeAspect = Metric(2.76, .anatomy("docs/arc-anatomy/library-flyout.md, The preview: the same fit"))
+    public let previewShadeShift = Metric(-0.0092, .anatomy("docs/arc-anatomy/library-flyout.md, The preview: the same fit puts the middle 9 pt left of the card's; the left half reads up to 11 levels lighter than the right at the same distance"))
+    /// The toolbar band is the same grey under a white wash this strong.
+    public let previewToolbarWash = Metric(0.29, .anatomy("docs/arc-anatomy/library-flyout.md, The preview: at five places across the card the toolbar reads 0.23 to 0.30 of the way from the grey below it to white"))
     /// The card's inset from the window: these fractions of its width and height.
     public let previewInsets = Metric([0.12, 0.133], .anatomy("docs/arc-anatomy/library-flyout.md: in the 1280 x 776 window the card spans x 153 to 1127 and y 103 to 674, for an image and for a PDF alike"))
     public let previewRadius = Metric(12.0, .guess("the card's corner; Arc's reads about 12 at 2x"))
@@ -582,6 +591,66 @@ public struct LibraryFlyoutMetrics: MetricGroup {
     public let previewOpenPadding = Metric(13.0, .anatomy("docs/arc-anatomy/library-flyout.md: the button is 146 wide around a 120 pt label"))
     public let previewOpenRadius = Metric(8.0, .guess("the Open button's corner"))
     public let previewMoreGap = Metric(22.0, .anatomy("docs/arc-anatomy/library-flyout.md: the … is centred 22 pt left of the Open button"))
+}
+
+/// A download's flight from the page into the Library button (Arc: `DownloadsUI.DownloadToLibrary`; every number's
+/// source is in docs/arc-anatomy/library-flyout.md, "The download flight"). Points are in the window, y up from its
+/// bottom-left corner, as Arc's view model computes them.
+public struct DownloadFlightMetrics: MetricGroup {
+    /// Downward pull on the thrown icon, points per second squared.
+    public let gravity = Metric(2648.7, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce29f8: DownloadViewModel.init stores g = 2648.7"))
+    /// The upward launch speed is `launch[0] + launch[1] x start height / window height` (1600 at the bottom, 500 at the top).
+    public let launch = Metric([1600.0, -1100.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce23a8: vy0 = (source.y / windowHeight) * -1100 + 1600"))
+    /// The flight starts this far from the pointer (right, and down).
+    public let startOffset = Metric([15.0, -15.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce4e7c and 0x101ce5120: source = (pointer.x + 15, pointer.y - 15) for the first and every later flight; the icon's first frames on Arc sit 12 left of and 7 above that point after 1/60 s"))
+    /// Where the icon goes while the sidebar shows: above and right of the Library button, which it falls into.
+    public let sidebarTarget = Metric([32.0, 40.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce2a84: without the bin the destination is (32, 40)"))
+    /// Where it goes while the sidebar is hidden: the bin's corner. It lands `binLanding` short of it and springs in.
+    public let binTarget = Metric([70.0, 70.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce4e9c: animateDownload(source:destination: (70, 70))"))
+    public let binLanding = Metric(8.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce2a78 and 0x101ce2f70: lands at destination.x - 8, then the bounce targets destination.x + 8"))
+    /// Frames per second of the planned path.
+    public let frameRate = Metric(60.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce2b60: one keyframe per 1/60 s; the bounce is sampled at 60 per second"))
+    /// Without the bin the path runs this many frames past the button, shrinking to nothing.
+    public let overrunFrames = Metric(8.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce2bac: the loop runs to duration + 0.1333 s when the bin is off"))
+    /// Scale (width, height) at the start; both reach `apexScale` at the top of the arc.
+    public let startScale = Metric([0.8, 1.2], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x103783310: before the apex scale = (0.8 p + 0.8, 0.4 p + 1.2) for p = t / apexTime; Arc's first frames read 24 x 31 points"))
+    public let apexScale = Metric(1.6, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce2c2c: 1.6 at the apex; the icon spans 48 x 48 points there on Arc"))
+    /// From the apex to the landing the scale falls by this much (sidebar: to 0.3; bin: to 0.7).
+    public let landingShrink = Metric([1.3, 0.9], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce2d1c and 0x101ce2d48: scale = 1.6 - k (1 - f), k = 1.3 without the bin, 0.9 with it"))
+    /// The bounce into the bin: spring (response, damping ratio), sampled from the landing with the landing speed.
+    public let bounceSpring = Metric([0.48, 0.72], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce2ea4: iconBounceAnimator.configure(response: 0.48, dampingRatio: 0.72); Arc's icon drops 58 points below the bin's corner before it settles, the spring predicts 57.4"))
+    /// The icon: SF Symbol arrow.down.circle on a disc, this wide.
+    public let iconSize = Metric(30.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101cdeb24: Image(systemName: \"arrow.down.circle\").resizable().frame(30, 30)"))
+    /// SwiftUI's resizable symbol fills its frame; NSImage's symbol keeps a margin, so it is drawn this much larger.
+    public let iconGlyphScale = Metric(1.153, .anatomy("docs/arc-anatomy/library-flyout.md, Arc's ring spans 29.4 of the 30 points and is 2.5 thick (47 and 4 at the apex scale 1.6); arrow.down.circle at 24 pt regular drawn into 30 points spans 25.5 and is 2.0 thick, and 1.153 times larger spans 29.25 and 2.5"))
+    /// It turns from `rotation[0]` to `rotation[1]` degrees on a spring (response, damping ratio).
+    public let rotation = Metric([-35.0, 5.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101cde254, 0x101ce0880: @State rotation = -35, set to 5 in onAppear"))
+    public let rotationSpring = Metric([1.2, 1.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101cdeec8: withAnimation(.spring(response: 1.2, dampingFraction: 1))"))
+    public let fadeSpring = Metric([0.3, 1.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101cdef10: alpha 0 to 1 withAnimation(.spring(response: 0.3, dampingFraction: 1))"))
+    /// Shadow: system blue at this opacity, blur radius, offset down.
+    public let iconShadow = Metric([0.25, 8.0, 4.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101cde278: shadow(color: .blue.opacity(0.25), radius: 8, y: 4)"))
+    /// The symbol's ink (Arc's maxContrastColor) and the disc behind it (backgroundExtra), light then dark.
+    public let iconInk = Metric(["#4C4C4C", "#E6E6E6"], .anatomy("docs/arc-anatomy/library-flyout.md, the arrow and ring read #4C4C4C on Arc's light Space; dark is ours (no dark Space in the user's Arc)"))
+    public let iconDisc = Metric(["#FFFFFF", "#2C2C2E"], .anatomy("docs/arc-anatomy/library-flyout.md, the disc reads #FEFEFE on Arc's light Space; dark is ours"))
+    /// Each flight keeps the overlay this long after it lands; when the last one is done the bin leaves.
+    public let hold = Metric(1.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce1d9c: asyncAfter(now + projectileMotionDuration + 1.0) leaves the group"))
+    /// The icons go this long after the bin starts to leave (Arc closes its overlay window on the bin's completion).
+    public let clearDelay = Metric(0.23, .anatomy("docs/arc-anatomy/library-flyout.md, r2: the bin starts out at 3.20 s, the last frame with the icon is 3.43 s"))
+    /// The bin while the sidebar is hidden: a rounded square this wide, its centre this far from the window's left and bottom edges.
+    public let binSize = Metric(46.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101cdf438 and 0x101cdf48c: padding 8 in a 62 x 62 frame; Arc's bin spans x 31 to 76"))
+    public let binRadius = Metric(12.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101cdef98: RoundedRectangle(cornerRadius: 12, style: .continuous)"))
+    public let binCenter = Metric([53.0, 53.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101cddd2c (y = height - 53) and 0x101ce1c68 (x 53 shown); Arc's bin centre reads (53.5, 723.5) in a 776 tall window"))
+    public let binHiddenX = Metric(-80.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce1c28: binPositionX animates to -80 to leave"))
+    /// The bin's slide: Arc's Motion spring default (stiffness, damping, mass 1).
+    public let binSpring = Metric([300.0, 10.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x100b87810: SpringAnimation's default stiffness 300 and damping 10; Arc's bin leaves 5 then 11 points in its first two frames, the spring predicts 5.2 and 14"))
+    /// Arc's overlay window draws its first frame this long after it was made, and its springs (the bin's slide, the
+    /// icon's turn and fade) run from the making while the thrown path starts at the first frame: on the first flight
+    /// of a run the bin appears nearly in place and the icon opaque and almost upright. Later flights start together.
+    public let firstFlightLead = Metric(0.4, .anatomy("docs/arc-anatomy/library-flyout.md, r2: the bin first shows at x 37 and settles at 55 (spring time 0.40 s), r3 at 54 (0.9 s); r1: the icon is opaque in its first frame and upright at the apex (turn spring at about 0.75 s); r4's second flight starts faint and turned"))
+    public let binFill = Metric(["#EBEBEB", "#3A3A3C"], .anatomy("docs/arc-anatomy/library-flyout.md, the bin reads #EBEBEB (Arc's palette background); dark is ours"))
+    public let binGlyph = Metric(["#5C5C5C", "#C7C7C7"], .anatomy("docs/arc-anatomy/library-flyout.md, the Library glyph in the bin reads #5C5C5C; dark is ours"))
+    /// The bin's shadow: (opacity, radius), black on light, white on dark.
+    public let binShadow = Metric([0.3, 0.15, 12.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101cdf190 to 0x101cdf1c4: shadow(color: black 0.3 or white 0.15 in dark, radius: 12)"))
 }
 
 public struct PersistenceMetrics: MetricGroup {

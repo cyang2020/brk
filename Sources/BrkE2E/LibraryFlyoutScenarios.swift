@@ -13,6 +13,7 @@ enum LibraryFlyoutScenarios {
     static let all = [
         Scenario("LibraryFlyout-Hover", "resting the real pointer on the Library button opens the newest four downloads above it as Arc does; a real click on a finished one previews it", cefOnly: "real downloads and window-server pointer", hover),
         Scenario("LibraryFlyout-Running", "a running download shows its disc on the button and a ring, progress and × in its row; the real × cancels it", cefOnly: "real downloads and window-server pointer", running),
+        Scenario("LibraryFlyout-Flight", "a real click on a download link throws the download icon from the pointer into the Library button; with the sidebar hidden it lands in Arc's bin at the corner", cefOnly: "real downloads and window-server pointer", flight),
     ]
 
     /// Arc's pale blue fixture Space (capture-brk-scenes.py's SKY), so the pictures sit beside Arc's.
@@ -167,6 +168,122 @@ enum LibraryFlyoutScenarios {
         try PhysicalPointer.click(app, at: try screen(app, centre(close)), window: app.window!)
         try app.waitUntil("the preview closed", timeout: 3) { !isShown(try app.native(), .tabTool("library-item-preview")) }
         app.passed("a real click on a finished download previews the downloaded file; its × closes the preview")
+    }
+
+    // MARK: The download flight (Arc's DownloadToLibrary)
+
+    /// A window picture as RGBA bytes, with its scale (pixels per point).
+    private struct Picture {
+        let bytes: [UInt8], width: Int, height: Int, scale: Double
+        func pixel(_ point: CGPoint) -> (r: Int, g: Int, b: Int) {
+            let x = min(width - 1, max(0, Int(point.x * scale))), y = min(height - 1, max(0, Int(point.y * scale)))
+            let i = (y * width + x) * 4
+            return (Int(bytes[i]), Int(bytes[i + 1]), Int(bytes[i + 2]))
+        }
+    }
+
+    private static func picture(_ app: AppUnderTest, _ name: String) throws -> Picture {
+        let shot = try app.screenshot(name)
+        guard let provider = CGDataProvider(url: shot.url as CFURL),
+              let image = CGImage(pngDataProviderSource: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else {
+            throw Check(description: "screenshot \(shot.url.lastPathComponent) unreadable")
+        }
+        var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let drawn = bytes.withUnsafeMutableBytes { raw -> Bool in
+            guard let context = CGContext(data: raw.baseAddress, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            return true
+        }
+        guard drawn else { throw Check(description: "no bitmap context") }
+        return Picture(bytes: bytes, width: image.width, height: image.height, scale: Double(image.width) / max(1, try app.native().contentSize.width))
+    }
+
+    /// The thrown icon's ring (Arc's #4C4C4C, a neutral dark grey) where the picture differs from `base`, inside `area`:
+    /// its centre in window points, or nil when it is not there.
+    private static func icon(_ shot: Picture, base: Picture, in area: CGRect) -> CGPoint? {
+        var sx = 0.0, sy = 0.0, n = 0.0
+        var y = area.minY
+        while y < area.maxY {
+            var x = area.minX
+            while x < area.maxX {
+                let p = shot.pixel(CGPoint(x: x, y: y)), q = base.pixel(CGPoint(x: x, y: y))
+                if max(p.r, p.g, p.b) - min(p.r, p.g, p.b) < 14, (40...120).contains(p.g), abs(p.g - q.g) + abs(p.r - q.r) > 60 { sx += x; sy += y; n += 1 }
+                x += 1
+            }
+            y += 1
+        }
+        return n >= 6 ? CGPoint(x: sx / n, y: sy / n) : nil
+    }
+
+    /// Clicks the flight page's link with the real pointer and waits for the window's flight to start.
+    private static func throwOne(_ app: AppUnderTest, link: CGPoint) throws -> TimeInterval {
+        let before = try flyout(app).flights.count
+        try PhysicalPointer.click(app, at: try screen(app, link), window: app.window!)
+        try app.waitUntil("the download's flight", timeout: 8) { try flyout(app).flights.count > before }
+        return ProcessInfo.processInfo.systemUptime
+    }
+
+    @Sendable static func flight(_ app: AppUnderTest) throws {
+        try prepare(app, [])
+        _ = try app.send(.load(window: app.window, url: app.site.url("flyout-flight.html")))
+        try app.settle()
+        app.sleep(0.8)
+        let n = try app.native()
+        let area = n.computed.contentArea
+        let link = CGPoint(x: area.minX + area.width * 0.5, y: area.minY + area.height * 0.5)
+        let base = try picture(app, "LFF-base")
+        // Sidebar shown: the icon rises from the pointer, crosses the page to the left and falls into the Library button.
+        let started = try throwOne(app, link: link)
+        var seen: [(t: Double, at: CGPoint)] = []
+        var index = 0
+        while ProcessInfo.processInfo.systemUptime - started < 1.3 {
+            let shot = try picture(app, "LFF-\(index)")
+            index += 1
+            if let at = icon(shot, base: base, in: CGRect(x: area.minX + 4, y: area.minY + 4, width: area.width - 8, height: area.height - 8)) {
+                seen.append((ProcessInfo.processInfo.systemUptime - started, at))
+            }
+        }
+        app.note("icon seen at " + seen.map { String(format: "%.2fs (%.0f, %.0f)", $0.t, $0.at.x, $0.at.y) }.joined(separator: ", "))
+        try expect(seen.count >= 3, "the icon was seen in \(seen.count) of \(index) pictures of the page")
+        guard let top = seen.map(\.at).min(by: { $0.y < $1.y }) else { throw Check(description: "no icon seen") }
+        try expect(link.y - top.y > 100, "the icon rose only to \(top) from the click at \(link)")
+        try expect(seen.first.map { hypot($0.at.x - link.x, $0.at.y - link.y) < 260 } ?? false, "the first picture shows the icon far from the pointer: \(seen[0])")
+        try expect(seen.last.map { $0.at.x < link.x - 150 } ?? false, "the icon did not cross the page towards the Library button: \(seen.last!)")
+        app.sleep(max(0, 2.6 - (ProcessInfo.processInfo.systemUptime - started)))
+        let after = try picture(app, "LFF-after")
+        try expect(icon(after, base: base, in: area.insetBy(dx: 4, dy: 4)) == nil, "the icon is still on the page 2.6 s after it started")
+        app.passed("a real click on a download link throws the icon from the pointer up and across the page into the Library button, then it is gone")
+
+        // Sidebar hidden: Arc's bin slides in at the bottom left corner and the icon lands on its corner.
+        try app.dispatch(.sidebar(.toggle))
+        try app.waitUntil("the sidebar hidden") { !(try app.view().sidebar.visible) }
+        _ = try app.send(.load(window: app.window, url: app.site.url("flyout-flight.html?file=report.pdf")))
+        try app.settle()
+        app.sleep(0.8)
+        let wide = try app.native().computed.contentArea
+        let hiddenLink = CGPoint(x: wide.minX + wide.width * 0.5, y: wide.minY + wide.height * 0.5)
+        let hiddenBase = try picture(app, "LFF-hidden-base")
+        let height = try app.native().contentSize.height
+        let binSpot = CGPoint(x: 40, y: height - 53), corner = CGRect(x: 50, y: height - 90, width: 40, height: 40)
+        let thrown = try throwOne(app, link: hiddenLink)
+        app.sleep(max(0, 0.35 - (ProcessInfo.processInfo.systemUptime - thrown)))
+        let early = try picture(app, "LFF-bin")
+        let fill = early.pixel(binSpot)
+        try expect(abs(fill.r - 0xEB) < 12 && abs(fill.g - 0xEB) < 12 && abs(fill.b - 0xEB) < 12, "no bin (#EBEBEB) at the corner 0.35 s in: \(fill)")
+        app.sleep(max(0, 2.0 - (ProcessInfo.processInfo.systemUptime - thrown)))
+        let rest = try picture(app, "LFF-bin-rest")
+        let resting = icon(rest, base: hiddenBase, in: corner)
+        try expect(resting.map { hypot($0.x - 70, $0.y - (height - 70)) < 14 } ?? false, "the icon is not on the bin's corner (70, 70 from the bottom left) after 2 s: \(String(describing: resting))")
+        app.passed("with the sidebar hidden the bin slides in at the bottom left corner and the icon comes to rest on its corner")
+        app.sleep(max(0, 3.6 - (ProcessInfo.processInfo.systemUptime - thrown)))
+        let gone = try picture(app, "LFF-bin-gone")
+        let back = gone.pixel(binSpot), was = hiddenBase.pixel(binSpot)
+        try expect(abs(back.r - was.r) + abs(back.g - was.g) + abs(back.b - was.b) < 12 && icon(gone, base: hiddenBase, in: corner) == nil,
+                   "the bin or the icon is still there 3.6 s after the flight started: \(back) vs \(was)")
+        try app.dispatch(.sidebar(.toggle))
+        try app.waitUntil("the sidebar back") { try app.view().sidebar.visible }
+        app.passed("a second after the landing the bin slides out and the icon goes")
     }
 
     @Sendable static func running(_ app: AppUnderTest) throws {

@@ -7,13 +7,17 @@ import QuickLookUI
 
 /// Arc's preview of a Library item (`HomeBadging.ItemPreviewPresenter`, opened by a click on a flyout row): the window
 /// dims, a card over its middle shows the file through Quick Look, and the card's toolbar holds ×, ‹ ›, the name and its
-/// age, a … menu and "Open in <app> ↗". Esc, × or a click on the dimmed window closes it. Measured on Arc 1.170
-/// (docs/arc-anatomy/library-flyout.md, p15 and p16).
+/// age, a … menu and "Open in <app> ↗". Esc, × or a click on the dimmed window closes it. The card is a radial grey
+/// behind the file, the toolbar the same grey under a light wash. Measured on Arc 1.170 (docs/arc-anatomy/library-flyout.md,
+/// "The preview").
 @MainActor
 final class LibraryItemPreviewView: NSView {
     private let dispatch: Dispatch
     private let dim = NSView()
     private let card = TopDownView()
+    /// The radial grey behind the file (Arc's card), in a layer-hosting view under the card's other views.
+    private let shade = CAGradientLayer()
+    private let shadeView = NSView()
     private let toolbar = TopDownView()
     private let close = NSButton()
     private let previous = NSButton()
@@ -39,8 +43,23 @@ final class LibraryItemPreviewView: NSView {
         card.wantsLayer = true
         card.layer?.cornerCurve = .continuous
         card.layer?.masksToBounds = true
-        card.layer?.backgroundColor = NSColor(white: Metrics.libraryFlyout.previewCardWhite.value, alpha: 1).cgColor
+        // The grey falls off with the square of the distance from the middle: five stops along the radius.
+        let shadeEnds = Metrics.libraryFlyout.previewShade.value.map { RGBA(hex: $0) }
+        card.layer?.backgroundColor = NSColor(srgbRed: shadeEnds[1].red, green: shadeEnds[1].green, blue: shadeEnds[1].blue, alpha: 1).cgColor
+        shade.type = .radial
+        shade.startPoint = CGPoint(x: 0.5, y: 0.5)
+        shade.endPoint = CGPoint(x: 1, y: 1)
+        let stops = [0.0, 0.25, 0.5, 0.75, 1.0]
+        shade.locations = stops.map { NSNumber(value: $0) }
+        shade.colors = stops.map { d in
+            let f = d * d
+            return NSColor(srgbRed: shadeEnds[0].red + (shadeEnds[1].red - shadeEnds[0].red) * f, green: shadeEnds[0].green + (shadeEnds[1].green - shadeEnds[0].green) * f,
+                           blue: shadeEnds[0].blue + (shadeEnds[1].blue - shadeEnds[0].blue) * f, alpha: 1).cgColor
+        }
+        shadeView.layer = shade
+        shadeView.wantsLayer = true
         addSubview(card)
+        card.addSubview(shadeView)
         imageView.imageScaling = .scaleProportionallyUpOrDown
         card.addSubview(imageView)
         toolbar.wantsLayer = true
@@ -134,9 +153,13 @@ final class LibraryItemPreviewView: NSView {
         let rect = bounds.insetBy(dx: (bounds.width * insets[0]).rounded(), dy: (bounds.height * insets[1]).rounded())
         card.frame = rect
         card.layer?.cornerRadius = m.previewRadius.value
+        // The shade's ellipse fills its layer: as wide as the card, `previewShadeAspect` times as tall, centred on the
+        // card's middle moved by `previewShadeShift`.
+        let shadeHeight = rect.width * m.previewShadeAspect.value
+        shadeView.frame = CGRect(x: rect.width * m.previewShadeShift.value, y: (rect.height - shadeHeight) / 2, width: rect.width, height: shadeHeight)
         let bar = m.previewToolbar.value
         toolbar.frame = CGRect(x: 0, y: 0, width: rect.width, height: bar)
-        toolbar.layer?.backgroundColor = NSColor(srgbRed: 0.973, green: 0.973, blue: 0.973, alpha: 0.66).cgColor
+        toolbar.layer?.backgroundColor = NSColor(white: 1, alpha: m.previewToolbarWash.value).cgColor
         let content = CGRect(x: 0, y: bar, width: rect.width, height: rect.height - bar).insetBy(dx: m.previewPadding.value, dy: m.previewPadding.value)
         imageView.frame = content
         preview?.frame = content
@@ -199,22 +222,65 @@ final class LibraryItemPreviewView: NSView {
         NSWorkspace.shared.open(file)
     }
 
+    /// Arc's … menu (HomeBadging, bin:0x1026b725c): Send via iMessage, AirDrop, then Show in Finder for a download, or
+    /// Open Source URL and Copy Source URL for a capture (the page it was taken from).
     @objc private func showMenu() {
-        guard let file = item?.file else { return }
+        guard let item else { return }
+        let file = item.file.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
         let menu = NSMenu()
-        let reveal = NSMenuItem(title: "Show in Finder", action: #selector(revealFile), keyEquivalent: "")
-        reveal.target = self
-        reveal.representedObject = file
-        menu.addItem(reveal)
-        menu.popUp(positioning: nil, at: CGPoint(x: more.frame.minX, y: more.frame.maxY), in: toolbar)
-    }
-
-    @objc private func revealFile(_ sender: NSMenuItem) {
-        if let file = sender.representedObject as? URL { NSWorkspace.shared.activateFileViewerSelecting([file]) }
+        menu.autoenablesItems = false
+        func add(_ title: String, enabled: Bool = true, _ run: @escaping () -> Void) {
+            let row = PreviewMenuItem(title: title, run: run)
+            row.isEnabled = enabled
+            menu.addItem(row)
+        }
+        add(LibraryPreviewCopy.sendViaMessages, enabled: file != nil) {
+            if let file { NSSharingService(named: .composeMessage)?.perform(withItems: [file]) }
+        }
+        add(LibraryPreviewCopy.airDrop, enabled: file != nil) {
+            if let file { NSSharingService(named: .sendViaAirDrop)?.perform(withItems: [file]) }
+        }
+        menu.addItem(.separator())
+        if case .capture(let record, _) = item.content {
+            let dispatch = dispatch, key = item.key
+            add(LibraryPreviewCopy.openSourceURL) { dispatch(.library(.flyout(.openSource(key)))) }
+            add(LibraryPreviewCopy.copySourceURL) {
+                let board = NSPasteboard.general
+                board.clearContents()
+                board.writeObjects([record.url as NSURL])
+                board.setString(record.url.absoluteString, forType: .string)
+            }
+        } else {
+            add(LibraryPreviewCopy.showInFinder, enabled: file != nil) {
+                if let file { NSWorkspace.shared.activateFileViewerSelecting([file]) }
+            }
+        }
+        // Arc opens it with its top left corner where the … was clicked (its first row under the pointer).
+        menu.popUp(positioning: nil, at: CGPoint(x: more.frame.midX, y: more.frame.midY), in: toolbar)
     }
 }
 
+/// A row of the … menu that runs a closure.
+@MainActor
+private final class PreviewMenuItem: NSMenuItem {
+    private let run: () -> Void
+    init(title: String, run: @escaping () -> Void) {
+        self.run = run
+        super.init(title: title, action: #selector(fire), keyEquivalent: "")
+        target = self
+    }
+    @available(*, unavailable)
+    required init(coder: NSCoder) { fatalError("not used") }
+    @objc private func fire() { run() }
+}
+
 enum LibraryPreviewCopy {
+    /// The … menu's rows (Swift strings in HomeBadging, bin:0x1026b746c to 0x1026b7bbc).
+    static let sendViaMessages = "Send via iMessage"
+    static let airDrop = "AirDrop"
+    static let showInFinder = "Show in Finder"
+    static let openSourceURL = "Open Source URL"
+    static let copySourceURL = "Copy Source URL"
     /// "2 minutes ago" beside the name, as the flyout's rows read it.
     static func relative(_ date: Instant, now: Instant) -> String {
         let formatter = RelativeDateTimeFormatter()

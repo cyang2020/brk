@@ -582,6 +582,8 @@ public enum LibraryFlyoutCommand: Hashable, Sendable, Codable {
     case trash(LibraryItemKey)
     /// A row's click: Arc's preview card over the window (`ItemPreviewPresenter`); nil closes it.
     case preview(LibraryItemKey?)
+    /// The preview's … > Open Source URL on a capture: the page it was taken from, in a new tab; the preview closes.
+    case openSource(LibraryItemKey)
 }
 
 /// Window commands. The dispatching window is the one the command came from; a new window takes its space.

@@ -305,6 +305,9 @@ struct WindowSession: Sendable, Equatable {
     var capturePreview: String? = nil
     /// The Library item the window previews over its page (the flyout's click, Arc's `ItemPreviewPresenter`).
     var itemPreview: LibraryItemKey? = nil
+    /// Downloads that started in this window in the last few seconds: its view throws each one's icon into the
+    /// Library button once (Arc's `DownloadToLibrary`).
+    var downloadFlights: [DownloadFlight] = []
     var captureMessage: String? = nil
     var find: FindSession?
     var lastFind: [BrowsingContext: FindQuery] = [:]
