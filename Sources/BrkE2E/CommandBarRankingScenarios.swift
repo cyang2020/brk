@@ -19,6 +19,8 @@ enum CommandBarRankingScenarios {
     private typealias C = CommandBarEvidenceScenarios
 
     nonisolated(unsafe) private static weak var app: AppUnderTest?
+    /// Every query's rows, in the run's ranking-rows.txt.
+    nonisolated(unsafe) private static var record = ""
 
     /// Real key codes at the window server (a US layout), Shift where the character needs it.
     private static let codes: [Character: (CGKeyCode, Bool)] = {
@@ -72,7 +74,8 @@ enum CommandBarRankingScenarios {
         }
         app.sleep(0.6)
         rows = try C.rowTexts(app)
-        S.log(app, "ranking-rows.txt", "\(query): \(rows)\n")
+        record += "\(query): \(rows)\n"
+        S.log(app, "ranking-rows.txt", record)
         return rows
     }
 
@@ -85,6 +88,7 @@ enum CommandBarRankingScenarios {
     @Sendable static func ranking(_ app: AppUnderTest) throws {
         guard NativePickerInput.available else { throw Skipped(description: "reading the rows needs Accessibility for the runner") }
         self.app = app
+        record = ""
         // The fixture: an open tab, a page visited and closed, a page typed twice in ⌘L, a page reached twice by links.
         _ = try E.loadReady(app, "ranking-almanac.html")
         let digest = try E.loadReady(app, "ranking-digest.html")
@@ -160,7 +164,8 @@ enum CommandBarRankingScenarios {
         }
         r = try rows(app, "zoom", until: "Zoom Out")
         let after = (index(r, "Zoom Out"), index(r, "zoom"))
-        S.log(app, "ranking-rows.txt", "zoom before: \(before) after one run of Zoom Out: \(after)\n")
+        record += "zoom rows (Zoom Out, the search) before: \(before) after one run of Zoom Out: \(after)\n"
+        S.log(app, "ranking-rows.txt", record)
         if let command = after.0, let search = after.1 { note(command < search, "after one run Zoom Out should rank above the search: \(r)") }
         else { failures.append("zoom: \(r)") }
         try close(app)
