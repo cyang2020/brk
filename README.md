@@ -216,6 +216,7 @@ These are the 24 Arc features that Brk has not verified, with the reasons record
 <summary><b>Build from source</b></summary>
 
 Needs macOS on Apple silicon and Xcode with Swift 6. The first build downloads CEF (132 MB).
+Ready-built apps for Apple silicon and Intel, from every merge into main, are on the [Releases page](https://github.com/cyang2020/brk/releases); see [docs/release.md](docs/release.md).
 
 ```sh
 scripts/build.sh                 # release build, unit tests, CEF bundle and signature: dist/Brk.app

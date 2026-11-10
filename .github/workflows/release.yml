@@ -1,0 +1,319 @@
+# Builds Brk for Apple silicon and Intel on every push to main and publishes both (docs/release.md).
+# - push to main: the rolling pre-release "Latest build" (tag `latest`, moved to the commit) gets the new zips;
+# - tag v*: a normal release named after the tag;
+# - any other branch or a manual run off main: a draft release named ci-test-<run id>, which creates no tag.
+# Two jobs. `build` (macOS, read-only token) runs `swift test` once, builds the arm64 app and the x86_64 app
+# cross-compiled (ARCH=x86_64 scripts/build.sh), signs and notarizes them when the signing secrets are set, and hands
+# the zips and notes on as an artifact. `publish` (Linux, the only job that may write) puts them on the release and
+# never sees a signing secret. Security rules: docs/release.md, "Security".
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    # Changes that cannot change the app build nothing (tag pushes ignore this list).
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'Tests/**'
+      - '.gitignore'
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the run still going; tag runs always finish.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Test, build and sign (arm64 + x86_64)
+    # Apple silicon by default. When GitHub has no arm64 capacity, set the repository variable BRK_MACOS_RUNNER to
+    # macos-26-intel: the job then builds x86_64 natively (with the tests) and cross-compiles arm64.
+    runs-on: ${{ vars.BRK_MACOS_RUNNER || 'macos-26' }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    outputs:
+      kind: ${{ steps.version.outputs.kind }}
+      version: ${{ steps.version.outputs.version }}
+      label: ${{ steps.version.outputs.label }}
+      signed: ${{ steps.mode.outputs.signing }}
+    steps:
+      # Only whether each secret is set reaches this step, never a value.
+      - name: Signing mode
+        id: mode
+        env:
+          HAS_MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
+          HAS_MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD != '' }}
+          HAS_APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 != '' }}
+          HAS_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID != '' }}
+          HAS_APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID != '' }}
+        run: |
+          present=0; missing=()
+          for name in MACOS_CERT_P12_BASE64 MACOS_CERT_PASSWORD APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER_ID; do
+            flag="HAS_$name"
+            if [ "${!flag}" = "true" ]; then present=$((present + 1)); else missing+=("$name"); fi
+          done
+          if [ "$present" -eq 5 ]; then
+            echo "signing=true" >> "$GITHUB_OUTPUT"
+            echo "Developer ID signing and notarization: on"
+          elif [ "$present" -eq 0 ]; then
+            echo "signing=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No signing secrets set: the apps are signed ad hoc"
+          else
+            echo "signing=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Signing secrets are incomplete, so the apps are signed ad hoc; missing: ${missing[*]}"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the release notes and the in-app release notes read the history; tags give the version
+          persist-credentials: false
+
+      - name: Version
+        id: version
+        run: |
+          sha7="${GITHUB_SHA::7}"
+          base="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+          base="${base#v}"; base="${base:-0.1.0}"
+          latest="$(git rev-parse -q --verify 'refs/tags/latest^{commit}' || true)"
+          case "$GITHUB_REF" in
+            refs/tags/v*)
+              kind=release; version="${GITHUB_REF_NAME#v}"; label="$version"
+              previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$GITHUB_SHA^" 2>/dev/null || true)" ;;
+            refs/heads/main)
+              kind=latest; version="$base"; label="$base-$GITHUB_RUN_NUMBER.$sha7"; previous="$latest" ;;
+            *)
+              kind=test; version="$base"; label="$base-$GITHUB_RUN_NUMBER.$sha7"; previous="$latest" ;;
+          esac
+          {
+            echo "kind=$kind"; echo "version=$version"; echo "label=$label"; echo "previous=$previous"
+            # An Intel runner (BRK_MACOS_RUNNER) keeps its own SwiftPM cache.
+            echo "toolchain=$(xcodebuild -version | tr -s ' \n' '-' | sed 's/-$//')$([ "$(uname -m)" = x86_64 ] && echo -intel-host)"
+          } >> "$GITHUB_OUTPUT"
+          echo "$kind build $label (CFBundleShortVersionString $version, CFBundleVersion $GITHUB_RUN_NUMBER), previous build ${previous:-none}"
+
+      # SwiftPM decides what to rebuild by file size and modification time. A fresh checkout gives every file a new
+      # time, which would make a cached .build useless, so each tracked file gets a time derived from its content
+      # (its git blob hash): unchanged files look unchanged to the cached build, changed ones do not.
+      - name: Stable file times
+        run: |
+          python3 -I - <<'EOF'
+          import os, subprocess
+          listing = subprocess.run(["git", "ls-files", "-s", "-z"], capture_output=True, check=True).stdout
+          for entry in filter(None, listing.split(b"\0")):
+              meta, path = entry.split(b"\t", 1)
+              mode, blob, _ = meta.split()
+              if mode in (b"120000", b"160000"):
+                  continue
+              t = 1_000_000_000 + int(blob[:8], 16) % 500_000_000
+              os.utime(path, (t, t))
+          EOF
+
+      - name: Restore the SwiftPM build
+        id: spm-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build
+          key: swiftpm-${{ steps.version.outputs.toolchain }}-${{ github.sha }}
+          restore-keys: swiftpm-${{ steps.version.outputs.toolchain }}-
+
+      - name: Cache the CEF downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cef/dist
+          key: cef-${{ hashFiles('Vendor/CefSwift/CEF_VERSION.json') }}-arm64-x86_64
+
+      - name: Cache the llama.cpp runtime
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/brk-llama
+          key: llama-${{ hashFiles('scripts/add-llama-runtime.sh') }}
+
+      - name: Unit tests and the app for the runner's architecture
+        id: host
+        env:
+          BRK_VERSION: ${{ steps.version.outputs.version }}
+          BRK_BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          host="$(uname -m)"
+          scripts/build.sh
+          mkdir -p "out/$host" && mv dist/Brk.app "out/$host/"
+          if [ "$host" = arm64 ]; then echo "other=x86_64" >> "$GITHUB_OUTPUT"; else echo "other=arm64" >> "$GITHUB_OUTPUT"; fi
+
+      - name: The other architecture's app (cross-compiled)
+        env:
+          ARCH: ${{ steps.host.outputs.other }}
+          BRK_VERSION: ${{ steps.version.outputs.version }}
+          BRK_BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          scripts/build.sh
+          mkdir -p "out/$ARCH" && mv dist/Brk.app "out/$ARCH/"
+
+      - name: Save the SwiftPM build
+        if: steps.spm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build
+          key: swiftpm-${{ steps.version.outputs.toolchain }}-${{ github.sha }}
+
+      # The certificate goes into a temporary keychain; decoded secrets live only under $RUNNER_TEMP (mode 600) and
+      # the cleanup step below deletes them whatever happens.
+      - name: Signing keychain
+        id: keychain
+        if: steps.mode.outputs.signing == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          umask 077
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          echo "::add-mask::$keychain_password"
+          printf '%s' "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          # Apple's Developer ID G2 intermediate, so the identity's chain is complete (pinned by its SHA-256).
+          curl -fsSL --retry 2 -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          echo "f16cd3c54c7f83cea4bf1a3e6a0819c8aaa8e4a1528fd144715f350643d2df3a  $RUNNER_TEMP/DeveloperIDG2CA.cer" | shasum -a 256 -c -
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain" > /dev/null
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MACOS_CERT_PASSWORD" -f pkcs12 -T /usr/bin/codesign > /dev/null
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          # The identity's name is public (every signed app carries it); it is printed so the log shows who signed.
+          identity="$(security find-identity -v -p codesigning "$keychain" | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"')"
+          if [ -z "$identity" ]; then
+            security find-identity -p codesigning "$keychain" | grep -c 'Developer ID' || true
+            echo "::error::No valid \"Developer ID Application\" identity in MACOS_CERT_P12_BASE64"
+            exit 1
+          fi
+          echo "Signing as $identity"
+          { echo "keychain=$keychain"; echo "identity=$identity"; } >> "$GITHUB_OUTPUT"
+
+      - name: Developer ID signatures
+        if: steps.mode.outputs.signing == 'true'
+        env:
+          SIGN_IDENTITY: ${{ steps.keychain.outputs.identity }}
+          SIGN_KEYCHAIN: ${{ steps.keychain.outputs.keychain }}
+        run: |
+          for arch in arm64 x86_64; do scripts/sign-developer-id.sh "out/$arch/Brk.app"; done
+
+      - name: Notarization
+        if: steps.mode.outputs.signing == 'true'
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          umask 077
+          export NOTARY_KEY="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$NOTARY_KEY"
+          scripts/notarize.sh out/arm64/Brk.app > "$RUNNER_TEMP/notarize-arm64.log" 2>&1 & arm=$!
+          scripts/notarize.sh out/x86_64/Brk.app > "$RUNNER_TEMP/notarize-x86_64.log" 2>&1 & intel=$!
+          status=0
+          wait "$arm" || status=1
+          wait "$intel" || status=1
+          rm -f "$NOTARY_KEY"
+          cat "$RUNNER_TEMP/notarize-arm64.log" "$RUNNER_TEMP/notarize-x86_64.log"
+          exit "$status"
+
+      - name: Remove the signing keychain and keys
+        if: always() && steps.mode.outputs.signing == 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Zips and release notes
+        env:
+          LABEL: ${{ steps.version.outputs.label }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+          SIGNED: ${{ steps.mode.outputs.signing }}
+        run: |
+          for arch in arm64 x86_64; do
+            ditto -c -k --keepParent "out/$arch/Brk.app" "out/Brk-$LABEL-$arch.zip"
+          done
+          scripts/release-notes.sh "$LABEL" "$PREVIOUS" "$SIGNED" > out/notes.md
+          {
+            echo; echo "### SHA-256"; echo; echo '```'
+            (cd out && shasum -a 256 Brk-*.zip)
+            echo '```'
+            echo; echo "Built by [run ${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+          } >> out/notes.md
+          ls -l out/*.zip
+          cat out/notes.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-${{ github.run_id }}
+          path: |
+            out/Brk-*.zip
+            out/notes.md
+          compression-level: 0 # the zips are compressed already
+          retention-days: 3
+          if-no-files-found: error
+
+  publish:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      KIND: ${{ needs.build.outputs.kind }}
+      VERSION: ${{ needs.build.outputs.version }}
+      LABEL: ${{ needs.build.outputs.label }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-${{ github.run_id }}
+          path: out
+
+      - name: Publish
+        run: |
+          assets=(out/Brk-*.zip)
+          ls -l "${assets[@]}"
+          move_latest_tag() {
+            if gh api "repos/$GH_REPO/git/ref/tags/latest" > /dev/null 2>&1; then
+              gh api -X PATCH "repos/$GH_REPO/git/refs/tags/latest" -f sha="$GITHUB_SHA" -F force=true > /dev/null
+            else
+              gh api -X POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/latest -f sha="$GITHUB_SHA" > /dev/null
+            fi
+          }
+          case "$KIND" in
+            latest)
+              if gh release view latest > /dev/null 2>&1; then
+                old="$(gh release view latest --json assets -q '.assets[].name')"
+                gh release upload latest "${assets[@]}" --clobber
+                move_latest_tag
+                gh release edit latest --title "Latest build" --notes-file out/notes.md --prerelease
+                for name in $old; do
+                  [ -e "out/$name" ] || gh release delete-asset latest "$name" --yes
+                done
+              else
+                move_latest_tag
+                gh release create latest "${assets[@]}" --title "Latest build" --notes-file out/notes.md --prerelease --verify-tag
+              fi ;;
+            release)
+              if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+                gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+                gh release edit "$GITHUB_REF_NAME" --notes-file out/notes.md
+              else
+                gh release create "$GITHUB_REF_NAME" "${assets[@]}" --title "Brk $VERSION" --notes-file out/notes.md --verify-tag
+              fi ;;
+            test)
+              gh release create "ci-test-$GITHUB_RUN_ID" "${assets[@]}" --draft --target "$GITHUB_SHA" \
+                --title "CI test $LABEL" --notes-file out/notes.md ;;
+            *) echo "::error::unknown build kind '$KIND'"; exit 1 ;;
+          esac
+          gh release list --limit 3
