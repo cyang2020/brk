@@ -13,7 +13,7 @@ enum LibraryFlyoutScenarios {
     static let all = [
         Scenario("LibraryFlyout-Hover", "resting the real pointer on the Library button opens the newest four downloads above it as Arc does; a real click on a finished one previews it", cefOnly: "real downloads and window-server pointer", hover),
         Scenario("LibraryFlyout-Running", "a running download shows its disc on the button and a ring, progress and × in its row; the real × cancels it", cefOnly: "real downloads and window-server pointer", running),
-        Scenario("LibraryFlyout-Flight", "a real click on a download link throws the download icon from the pointer into the Library button; with the sidebar hidden it lands in Arc's bin at the corner", cefOnly: "real downloads and window-server pointer", flight),
+        Scenario("LibraryFlyout-Flight", "a real click on a download link throws the download icon from the click into the Library button; with the sidebar hidden it lands in Arc's bin at the corner", cefOnly: "real downloads and window-server pointer", flight),
     ]
 
     /// Arc's pale blue fixture Space (capture-brk-scenes.py's SKY), so the pictures sit beside Arc's.
@@ -272,7 +272,7 @@ enum LibraryFlyoutScenarios {
         app.sleep(max(0, 2.6 - (ProcessInfo.processInfo.systemUptime - started)))
         let after = try picture(app, "LFF-after")
         try expect(icon(after, base: base, in: watched) == nil, "the icon is still on the page 2.6 s after it started")
-        app.passed("a real click on a download link throws the icon from the pointer up and across the page into the Library button, then it is gone")
+        app.passed("a real click on a download link throws the icon from the click up and across the page into the Library button, then it is gone")
 
         // Sidebar hidden: Arc's bin slides in at the bottom left corner and the icon lands on its corner.
         try app.dispatch(.sidebar(.toggle))

@@ -5,7 +5,7 @@ import Foundation
 // Owner: F5. A download's flight into the Library button (Arc: `DownloadsUI.DownloadToLibrary`;
 // docs/arc-anatomy/library-flyout.md, "The download flight").
 //
-// When a download starts in a standard window, Arc throws a download icon from the pointer into the bottom left corner
+// When a download starts in a standard window, Arc throws a download icon from the click into the bottom left corner
 // of the window: into the Library button while the sidebar shows, into a bin that slides in at the corner while it is
 // hidden. The icon follows a thrown object's arc under gravity, grows to the top of the arc and shrinks on the way
 // down; in the bin it bounces on a spring. Every download flies (Arc keeps no play count); several fly at once.

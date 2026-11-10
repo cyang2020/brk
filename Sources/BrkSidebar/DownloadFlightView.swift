@@ -4,7 +4,7 @@ import BrkDomain
 import BrkUIKit
 
 // Owner: W3. Arc's `DownloadToLibrary` overlay (docs/arc-anatomy/library-flyout.md, "The download flight"): a
-// click-through layer over the whole window in which each new download's icon is thrown from the pointer into the
+// click-through layer over the whole window in which each new download's icon is thrown from the click into the
 // Library button, or, while the sidebar is hidden, into a bin that slides in at the window's bottom left corner.
 // Arc draws it in a borderless child window the size of the browser window; a top-most view that takes no clicks
 // covers the same area here.
