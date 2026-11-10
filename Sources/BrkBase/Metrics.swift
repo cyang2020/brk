@@ -893,9 +893,13 @@ public struct LittleDownloadsMetrics: MetricGroup {
     public let ringWidth = Metric(2.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a9014: ringWidth = 2"))
     /// The file's icon shows through a circle this much inside the ring's outer edge.
     public let imageInset = Metric(2.0, .guess("Arc's pictures: the icon's circle is 28 points across inside the 32 point ring, with and without the ring"))
+    /// The file's icon is drawn this much larger than its circle, which crops it.
+    public let imageScale = Metric(1.22, .guess("Arc's pictures: a document icon's page spans 22.5 points in the 28 point circle; an icon drawn to the circle's size spans 18.4"))
     public let titleSize = Metric(14.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a913c: the title's font withSize 14"))
     public let subtitleSize = Metric(12.0, .guess("Arc's pictures: the subtitle's x-height and width match SF 12 regular; its font comes from a font manager call that was not decoded"))
-    public let closeSymbol = Metric(14.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a9404: the × button's symbol image at point size 14"))
+    /// The × button's box, and the size of the xmark symbol drawn in it.
+    public let closeButton = Metric(14.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a9404: the × button is Arc's own 14 point icon; its centre sits 233 points into the pill on Arc's pictures"))
+    public let closeGlyph = Metric(11.0, .guess("Arc's own × spans 8.6 points with 1.4 point strokes on its pictures; SF Symbol xmark at 11 pt semibold draws the same"))
     public let cornerRadius = Metric(8.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a96a4: the pill's ShadowView cornerRadius 8"))
     /// Shadow: black at this opacity, blur radius, offset down.
     public let shadow = Metric([0.25, 3.0, 1.0], .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a9630: ShadowConfiguration(color: .black, opacity: 0.25, offset: (0, 1), radius: 3)"))

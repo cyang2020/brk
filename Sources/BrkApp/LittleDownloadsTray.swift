@@ -107,7 +107,7 @@ final class LittleDownloadPill: NSView {
         close.isBordered = false
         close.imagePosition = .imageOnly
         close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove")?
-            .withSymbolConfiguration(.init(pointSize: m.closeSymbol.value, weight: .regular))
+            .withSymbolConfiguration(.init(pointSize: m.closeGlyph.value, weight: .semibold))
         close.target = self
         close.action = #selector(closeClicked)
         close.isHidden = true
@@ -163,9 +163,8 @@ final class LittleDownloadPill: NSView {
         CATransaction.commit()
         let inset = m.contentInset.value, gap = m.contentSpacing.value, side = m.icon.value
         icon.frame = CGRect(x: inset, y: (bounds.height - side) / 2, width: side, height: side)
-        let closeSize = close.intrinsicContentSize
-        close.frame = CGRect(x: bounds.width - inset - closeSize.width, y: (bounds.height - closeSize.height) / 2,
-                             width: closeSize.width, height: closeSize.height)
+        let box = m.closeButton.value
+        close.frame = CGRect(x: bounds.width - inset - box, y: (bounds.height - box) / 2, width: box, height: box)
         // Arc's row is a stack view whose hidden × leaves the room: the text ends `gap` before the content's end, or
         // before the × and its gap while the × shows.
         let textX = inset + side + gap
@@ -173,8 +172,9 @@ final class LittleDownloadPill: NSView {
         let titleHeight = title.intrinsicContentSize.height, subtitleHeight = subtitle.intrinsicContentSize.height
         let block = titleHeight + m.lineSpacing.value + subtitleHeight
         let top = (bounds.height - block) / 2
-        title.frame = CGRect(x: textX, y: top, width: max(0, textEnd - textX), height: titleHeight)
-        subtitle.frame = CGRect(x: textX, y: top + titleHeight + m.lineSpacing.value, width: max(0, textEnd - textX), height: subtitleHeight)
+        // Arc's stack view places the labels by their alignment rectangles, which leave out the cell's 2 point inset.
+        title.frame = title.frame(forAlignmentRect: CGRect(x: textX, y: top, width: max(0, textEnd - textX), height: titleHeight))
+        subtitle.frame = subtitle.frame(forAlignmentRect: CGRect(x: textX, y: top + titleHeight + m.lineSpacing.value, width: max(0, textEnd - textX), height: subtitleHeight))
     }
 
     // MARK: Pointer
@@ -223,6 +223,8 @@ final class LittleDownloadPill: NSView {
 /// The pill's icon (Arc: ARCUI `IconWithProgressIndicatorView`): the file's icon in a circle, and while the download
 /// runs a ring around it filling clockwise from the top.
 final class LittleDownloadIcon: NSView {
+    /// The circle the icon shows through, and the icon, drawn larger than the circle (Arc crops it the same way).
+    private let clip = CALayer()
     private let image = CALayer()
     private let track = CAShapeLayer()
     private let ring = CAShapeLayer()
@@ -231,14 +233,15 @@ final class LittleDownloadIcon: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        image.masksToBounds = true
-        image.contentsGravity = .resizeAspectFill
+        clip.masksToBounds = true
+        clip.addSublayer(image)
+        image.contentsGravity = .resizeAspect
         for shape in [track, ring] {
             shape.fillColor = nil
             shape.lineCap = .butt
             layer?.addSublayer(shape)
         }
-        layer?.addSublayer(image)
+        layer?.addSublayer(clip)
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -252,6 +255,7 @@ final class LittleDownloadIcon: NSView {
             shownFor = key
             let picture: NSImage = if let file { NSWorkspace.shared.icon(forFile: file) }
                 else { NSWorkspace.shared.icon(for: UTType(filenameExtension: (name as NSString).pathExtension) ?? .data) }
+            picture.size = NSSize(width: 64, height: 64)   // a sharp representation for the enlarged drawing
             image.contents = picture.layerContents(forContentsScale: window?.backingScaleFactor ?? 2)
             image.contentsScale = window?.backingScaleFactor ?? 2
         }
@@ -270,8 +274,10 @@ final class LittleDownloadIcon: NSView {
         let m = Metrics.littleDownloads, width = m.ringWidth.value
         CATransaction.begin(); CATransaction.setDisableActions(true)
         let inner = bounds.insetBy(dx: m.imageInset.value, dy: m.imageInset.value)
-        image.frame = inner
-        image.cornerRadius = inner.width / 2
+        clip.frame = inner
+        clip.cornerRadius = inner.width / 2
+        let side = inner.width * m.imageScale.value
+        image.frame = CGRect(x: (inner.width - side) / 2, y: (inner.height - side) / 2, width: side, height: side)
         // The ring's outer edge is the view's edge; it starts at the top and runs clockwise (the layer is flipped).
         let circle = bounds.insetBy(dx: width / 2, dy: width / 2)
         let path = CGMutablePath()
