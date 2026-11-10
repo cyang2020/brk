@@ -211,6 +211,14 @@ final class LibraryFlyoutView: NSView {
         dockTimer?.invalidate(); dockTimer = nil
     }
 
+    /// Off while the Library is open or Create a Space replaces the dock: the list closes and the button offers none.
+    func setEnabled(_ on: Bool) {
+        let on = on && snapshot != nil
+        guard on != enabled else { return }
+        enabled = on
+        if !on { dismiss() }
+    }
+
     /// Closes the list now (a click on the Library button, the Library opening).
     func dismiss() {
         cancelTimers()

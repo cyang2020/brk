@@ -126,7 +126,6 @@ public final class SidebarView: NSView {
         var miniPlayerHover: MiniPlayerHover?
         var aiToggle: AIToggleSnapshot?
         var libraryFlyout: LibraryFlyoutSnapshot?
-        var libraryOpen: Bool
     }
 
     public init(dispatch: @escaping Dispatch) {
@@ -248,7 +247,11 @@ public final class SidebarView: NSView {
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
                           newTabCurrent: newTabCurrent, creatingSpace: snapshot.dialog == .newSpace, favoritesDrag: favoritesDrag,
                           miniPlayers: snapshot.miniPlayers, miniPlayerHover: miniPlayers.hover, aiToggle: snapshot.aiToggle,
-                          libraryFlyout: snapshot.libraryFlyout, libraryOpen: libraryOpen(snapshot))
+                          libraryFlyout: snapshot.libraryFlyout)
+        // The Library opening (a swipe holds it mid-move) or Create a Space switches the flyout off without rendering the
+        // column again: a full render in the middle of a page move would put the pages back where they rest.
+        let flyoutOn = !libraryOpen(snapshot) && snapshot.dialog != .newSpace
+        libraryFlyout.setEnabled(flyoutOn)
         guard slice != last else { return }
         let previous = last
         // While a drag changes the grid, and as it ends, the tiles and everything under them slide.
@@ -302,7 +305,7 @@ public final class SidebarView: NSView {
         dock.render(dockItems, frames: f, palette: palette, creating: slice.creatingSpace, plusMenu: slice.plusMenu)
         libraryFlyout.badge.place(around: f.libraryButton.offsetBy(dx: -f.dock.minX, dy: -f.dock.minY))
         libraryFlyout.render(slice.creatingSpace ? nil : snapshot.libraryFlyout, button: local(f.libraryButton), sidebarWidth: f.frame.width, palette: palette,
-                             now: snapshot.now, enabled: !slice.libraryOpen && !slice.creatingSpace, in: self)
+                             now: snapshot.now, enabled: flyoutOn, in: self)
         // Arc's Create a Space flow takes the column's place between the title row and the dock (P24 a).
         if slice.creatingSpace { for view in [urlPill, favorites, tablist, spaceHeader] as [NSView] { view.isHidden = true } }
         else { tablist.isHidden = false }
