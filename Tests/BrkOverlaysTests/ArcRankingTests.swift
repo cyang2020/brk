@@ -178,4 +178,18 @@ final class ArcRankingTests: XCTestCase {
         XCTAssertEqual(current?.kind, .history, "the tab on screen is drawn as a visited page")
         XCTAssertEqual(current?.subtitle, "127.0.0.1:62846/tab-a.html")
     }
+
+    /// Typing every word of a tab's title does not lift the tab over the typed search: the real Arc on 2026-11-11, with a
+    /// fixture tab "Quillfen Marrowby" open behind the current one, listed the search and then the tab for
+    /// "quillfen marrowby", and the tab first for "quillfen" and for "marrowby". The search stays first for an AI page
+    /// kept as a tab too, which is why AIAgentLivePages steps down to "Price Watch (fixture)" before Return.
+    func testEveryWordOfATabTitleLeavesTheSearchFirst() {
+        let fixture = candidate("quillfen", "Quillfen Marrowby", "http://127.0.0.1:54640/qm.html")
+        let page = SwitchCandidate(tab: ItemID("page"), title: "Price Watch (fixture)", url: AIPageTab.url(AIPageID("price-watch")), favicon: nil,
+                                   spaceTitle: nil, inCurrentSpace: true, isFocused: false)
+        for (query, expected) in [("quillfen marrowby", ["search", "Quillfen Marrowby"]), ("quillfen", ["Quillfen Marrowby", "search"]),
+                                  ("marrowby", ["Quillfen Marrowby", "search"]), ("Price Watch", ["search", "Price Watch (fixture)"])] {
+            XCTAssertEqual(Array(order(query, bar(query, tabs: [fixture, page])).prefix(2)), expected, query)
+        }
+    }
 }

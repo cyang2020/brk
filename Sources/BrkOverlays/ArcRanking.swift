@@ -399,7 +399,10 @@ public enum ArcRanking {
     ///   for a row that is not a tab the address does not start with it (an address with a path); baseDomain: the
     ///   address starts with the query, and for a row that is not a tab it is not the whole address. A tab gets
     ///   exactURL and baseDomain, never exactBaseDomain.
-    /// - exactHotWord: the lowercased query is one of the hot words.
+    /// - exactHotWord: the lowercased query is one of the hot words. In Arc only commands have hot words here (0x101d67dc4
+    ///   asks the archetype, and 0x101d53854 returns words for `typeTravel` alone); Brk gives a tab its title's words,
+    ///   fitted to the real Arc, which lists a tab first for one whole word of its title ("zarquon", "quillfen") but not
+    ///   for all of them ("quillfen marrowby" lists the search first, the tab second; 2026-11-11).
     /// - autocompleteDefault (rows that open a page or run a command) and autocompleteSearchOnly (searches): the row's text
     ///   is or starts with the input (the binary's test), the input as completed inline (`input`: "time" completed to
     ///   "time.com"). So with a completed site the site gets it and the text as typed does not; without one the text as

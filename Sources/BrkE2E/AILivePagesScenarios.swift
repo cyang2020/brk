@@ -541,8 +541,9 @@ enum AILivePagesScenarios {
                 if case .commandBar(let bar)? = try app.view().overlay { bar.tabs.contains { $0.url == AIPageTab.url(page) } } else { false }
             }
             try key([], .escape)
-            try rowMenuOnHidden(app, today)
-            return "hidden on \(AIPageWeekdays.name(today)), found by the bar, shown again"
+            let (reached, rows) = try rowMenuOnHidden(app, today)
+            log.write("  bar rows: " + rows.map { $0.first ?? "" }.joined(separator: " · "))
+            return "hidden on \(AIPageWeekdays.name(today)), found by the bar (its row \(reached + 1), Return there), shown again"
         }
 
         if ProcessInfo.processInfo.environment["BRK_E2E_LIVE_FIXTURE_FROM"] == "bar" { log.write("(probe)") }
@@ -603,16 +604,29 @@ enum AILivePagesScenarios {
     }
 
     /// The row is out of Today, so its menu is reached through the command bar: show it, then tick the day again.
-    private static func rowMenuOnHidden(_ app: AppUnderTest, _ day: Int) throws {
+    /// Typing a tab's title word for word leaves the typed search on the first row and the tab right under it, as in
+    /// Arc 1.170 (a fixture tab "Quillfen Marrowby": "quillfen marrowby" lists the search, then the tab; "quillfen" alone
+    /// lists the tab first). So a person steps down to the page's row and presses Return there.
+    private static func rowMenuOnHidden(_ app: AppUnderTest, _ day: Int) throws -> (Int, [[String]]) {
         try key(.command, .t)
         try app.waitUntil("the command bar") { if case .commandBar? = try app.view().overlay { true } else { false } }
         try type("Price Watch")
-        app.sleep(0.8)
+        // Where the page's row sits once the rows hold still (the engine's answers arrive after the bar's own rows).
+        var rows: [[String]] = [], last: [[String]] = []
+        try app.waitUntil("the page's row in the bar, still", timeout: 8) {
+            rows = try CommandBarEvidenceScenarios.rowTexts(app)
+            defer { last = rows }
+            usleep(400_000)
+            return rows == last && rows.contains { $0.contains("Price Watch (fixture)") }
+        }
+        let index = try XCTUnwrapValue(rows.firstIndex { $0.contains("Price Watch (fixture)") })
+        for _ in 0..<index { try key([], .downArrow) }
         try key([], .returnKey)
         try app.waitUntil("the page shown", timeout: 8) { try app.view().aiPages.first?.content?.id == page }
         let row = try XCTUnwrapValue(try pageRow(app, page))
         try rowMenu(app, row.id, ["Show in Today", "Every Day"])
         try app.waitUntil("every day again", timeout: 6) { live(app, page)["weekdays"] == nil }
+        return (index, rows)
     }
 
     // MARK: AIRealPagesLive-<agent> (the user's examples on a real agent)

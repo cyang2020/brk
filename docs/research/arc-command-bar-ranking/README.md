@@ -206,7 +206,7 @@ Because z-scores are usually between −2 and +2, a boost's score of 3 or 15 at 
 |---|---|---|
 | exactBaseDomain | 100 / 15 | the query equals the candidate's base domain (helpers `0x101d67684` and `0x101d679c4` compare the lower-cased query, never one starting `arc://`, with the URL); the exact split between this and exactURL is a guess |
 | exactURL | 40 / 3 | the query equals the candidate's URL (same helpers; guess on details) |
-| exactHotWord | 100 / 15 | the query equals one of the candidate's hot words (`0x101d67dc4` compares the lower-cased query with each word): known |
+| exactHotWord | 100 / 15 | the query equals one of the candidate's hot words (`0x101d67dc4` compares the lower-cased query with each word): known. The words come from the candidate's archetype (`0x101d53854`), and only `typeTravel` (commands) has any, so in Arc a tab never gets this boost (read 2026-11-11) |
 | baseDomain | 40 / 3 | the query matches the base domain without being exact (guess) |
 | autocompleteDefault | 15 / 3 | the candidate is Chromium's default match (guess, from the name and section 5) |
 | autocompleteSearchOnly | 15 / 2 | the default match is the typed search (guess) |
@@ -331,7 +331,7 @@ Pictures: the real Arc's command bar for these queries. They are Arc's own scree
 
 (Arc's screen: `~/brk-arc-reference/research-command-bar/q2-open-tab-word.png`)
 
-**`fixture`.** With a whole word of the same title, the tab leads. This fits the `exactHotWord` boost (100 / 15).
+**`fixture`.** With a whole word of the same title, the tab leads. This looked like the `exactHotWord` boost (100 / 15), but the binary gives that boost to commands only, so why the tab leads was not read. Brk gets the same result by giving a tab its title's words. A later probe (2026-11-11, a fixture tab "Quillfen Marrowby" open behind the current tab) narrows it down: `quillfen` and `marrowby` put the tab first, and `quillfen marrowby` put the typed search first and the tab second. With a tab "Price Watch (fixture)", `price watch` listed the search, the tab, then six Google suggestions that start with "price watch": a visited tab stays above them, because its page is also a visited-page candidate and the two show as one row.
 
 (Arc's screen: `~/brk-arc-reference/research-command-bar/q1-site-prefix-githu.png`)
 
@@ -343,7 +343,7 @@ Pictures: the real Arc's command bar for these queries. They are Arc's own scree
 
 **How this fits section 3 (a reading, not measured scores).**
 - The typed search is first whenever no strong boost fires. That fits `autocompleteDefault` (15 / 3) on Chromium's default match.
-- Exact words, domains and commands beat it: `exactHotWord` and `exactBaseDomain` (100 / 15), or `typeTravelPrefixForLongQuery` (40 / 3).
+- Exact words, domains and commands beat it: `exactHotWord` (commands) and `exactBaseDomain` (100 / 15), or `typeTravelPrefixForLongQuery` (40 / 3). A tab beats it for one whole word of its title, not for the whole title (see `fixture` above).
 - Matching history outranks engine suggestions without any boost. Its archetype value is 100 against 95, and it has recency and visit counts against the suggestions' missing values.
 
 ## 6. Brk compared with Arc
