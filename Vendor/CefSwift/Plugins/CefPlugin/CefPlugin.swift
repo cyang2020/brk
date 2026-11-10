@@ -54,8 +54,13 @@ struct CefPlugin: CommandPlugin {
       bundle --product <Name> [--configuration debug|release] [--flavor minimal|standard]
              [--platform macosarm64|macosx64] [--output <dir>] [--bundle-id <id>]
              [--name <DisplayName>] [--manifest <path>] [--sign <identity|->]
+             [--executable <path> --helper-executable <path>]
           Build <Name> and cef-helper, then assemble a runnable <Name>.app
           (framework + five helper apps + Info.plists + codesign).
+          --executable/--helper-executable: bundle these already-built binaries
+          instead of building; the plugin builds only for the host CPU, so a
+          build for the other one (swift build --triple x86_64-apple-macosx14.0)
+          passes its products here together with the matching --platform.
           --sign: codesign identity; '-' forces ad-hoc. Default: auto-detect
           (first "Apple Development", else "Developer ID Application", else
           ad-hoc). Precedence: --sign > cefapp.json "signingIdentity" > auto.
@@ -106,10 +111,10 @@ struct CefPlugin: CommandPlugin {
         let bundleIDOption = extractor.extractOption(named: "bundle-id").last
         let nameOption = extractor.extractOption(named: "name").last
         let signOption = extractor.extractOption(named: "sign").last
-        // Hidden flags for testing the assembler without buildable products,
-        // and for forcing the CLI build fallback.
-        let testExe = extractor.extractOption(named: "_test-exe").last
-        let testHelperExe = extractor.extractOption(named: "_test-helper-exe").last
+        // Already-built products (a build for the other CPU), and a hidden flag
+        // for forcing the CLI build fallback.
+        let prebuiltExe = extractor.extractOption(named: "executable").last
+        let prebuiltHelperExe = extractor.extractOption(named: "helper-executable").last
         let forceCLIBuild = extractor.extractFlag(named: "_force-cli-build") > 0
         try rejectLeftovers(extractor)
 
@@ -136,11 +141,16 @@ struct CefPlugin: CommandPlugin {
         // 2. Build the product and the cef-helper.
         let mainExecutable: URL
         let helperExecutable: URL
-        if let testExe {
-            // Internal dry-run path: bundle a caller-supplied executable.
-            mainExecutable = URL(fileURLWithPath: testExe)
-            helperExecutable = URL(fileURLWithPath: testHelperExe ?? testExe)
-            print("[cef] (test mode) bundling \(mainExecutable.path)")
+        if prebuiltExe != nil || prebuiltHelperExe != nil {
+            guard let prebuiltExe, let prebuiltHelperExe else {
+                throw CefPluginError("--executable and --helper-executable go together: pass the product and cef-helper built for the same CPU.")
+            }
+            mainExecutable = URL(fileURLWithPath: prebuiltExe, relativeTo: context.package.directoryURL).absoluteURL
+            helperExecutable = URL(fileURLWithPath: prebuiltHelperExe, relativeTo: context.package.directoryURL).absoluteURL
+            for binary in [mainExecutable, helperExecutable] where !FileManager.default.fileExists(atPath: binary.path) {
+                throw CefPluginError("No executable at \(binary.path). Build it first, e.g. swift build --triple x86_64-apple-macosx14.0 --product \(binary.lastPathComponent).")
+            }
+            print("[cef] Bundling prebuilt \(mainExecutable.path) and \(helperExecutable.path) (\(platform))")
         } else {
             mainExecutable = try buildProduct(
                 named: productName, configuration: configuration, context: context,

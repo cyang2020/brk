@@ -227,7 +227,7 @@ public actor SemanticIndex {
             put(UInt8(IndexEntry.Kind.allCases.firstIndex(of: kinds[index]) ?? 0))
             put(fingerprints[index])
             put(descriptions[index])
-            for value in vectors[index] { put(Float16(value).bitPattern) }
+            for value in vectors[index] { put(HalfFloat.bits(value)) }
         }
         return data
     }
@@ -254,7 +254,7 @@ public actor SemanticIndex {
             vector.reserveCapacity(dimensions)
             for _ in 0..<dimensions {
                 guard let bits = get(UInt16.self) else { return nil }
-                vector.append(Float(Float16(bitPattern: bits)))
+                vector.append(HalfFloat.value(bits))
             }
             keys.append(String(decoding: key, as: UTF8.self))
             kinds.append(IndexEntry.Kind.allCases[Int(kind)])
@@ -263,5 +263,47 @@ public actor SemanticIndex {
             vectors.append(vector)
         }
         return (keys, kinds, prints, described, vectors)
+    }
+}
+
+/// IEEE 754 binary16 conversion for the index file, written out because Swift's `Float16` exists only on Apple silicon
+/// and the Intel build reads and writes the same files. Rounds to nearest, ties to even, as `Float16(_:)` does; the
+/// tests compare both directions with `Float16` on arm64.
+enum HalfFloat {
+    static func bits(_ value: Float) -> UInt16 {
+        let f = value.bitPattern
+        let sign = UInt16(truncatingIfNeeded: (f >> 16) & 0x8000)
+        let exponent = Int((f >> 23) & 0xFF)
+        let mantissa = f & 0x7F_FFFF
+        if exponent == 0xFF { return sign | 0x7C00 | (mantissa == 0 ? 0 : 0x200 | UInt16(truncatingIfNeeded: mantissa >> 13)) }
+        let e = exponent - 127 + 15
+        if e >= 0x1F { return sign | 0x7C00 }
+        if e <= 0 {
+            // Below the smallest normal half: a subnormal, value = m * 2^-24, or zero.
+            let shift = 14 - e
+            guard shift <= 24 else { return sign }
+            return sign | UInt16(truncatingIfNeeded: roundedShift(mantissa | 0x80_0000, by: UInt32(shift)))
+        }
+        // A carry out of the mantissa moves into the exponent, up to infinity at 0x7C00.
+        return sign | UInt16(truncatingIfNeeded: (UInt32(e) << 10) + roundedShift(mantissa, by: 13))
+    }
+
+    static func value(_ bits: UInt16) -> Float {
+        let sign = UInt32(bits & 0x8000) << 16
+        let exponent = UInt32((bits >> 10) & 0x1F)
+        let mantissa = UInt32(bits & 0x3FF)
+        if exponent == 0x1F { return Float(bitPattern: sign | 0x7F80_0000 | (mantissa << 13)) }
+        if exponent == 0 {
+            let magnitude = Float(mantissa) * 0x1p-24
+            return sign == 0 ? magnitude : -magnitude
+        }
+        return Float(bitPattern: sign | ((exponent + 112) << 23) | (mantissa << 13))
+    }
+
+    private static func roundedShift(_ x: UInt32, by shift: UInt32) -> UInt32 {
+        let kept = x >> shift
+        let dropped = x & ((1 << shift) - 1)
+        let half = UInt32(1) << (shift - 1)
+        return dropped > half || (dropped == half && kept & 1 == 1) ? kept + 1 : kept
     }
 }

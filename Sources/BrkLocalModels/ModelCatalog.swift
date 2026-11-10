@@ -112,6 +112,9 @@ public enum LlamaRuntime {
     public static let tag = "b12202"
     public static let archive = URL(string: "https://github.com/ggml-org/llama.cpp/releases/download/b12202/llama-b12202-bin-macos-arm64.tar.gz")!
     public static let sha256 = "e70cd5918fb1db75652cee66bd6ab9c933cc0c5acf632f15df672c00829ebcaf"
+    /// The Intel build's copy (scripts/add-llama-runtime.sh picks it by the app's architecture); upstream builds it without Metal.
+    public static let archiveX64 = URL(string: "https://github.com/ggml-org/llama.cpp/releases/download/b12202/llama-b12202-bin-macos-x64.tar.gz")!
+    public static let sha256X64 = "02ce0277e0e393f52debf96668fb61a67e3348b31b20875f2162663afda15f2a"
     public static let license = "MIT"
 
     /// Where the helper is: `BRK_LLAMA_SERVER` (tests), else the app bundle's copy, else Homebrew's (development builds).

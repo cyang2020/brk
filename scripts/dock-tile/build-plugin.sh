@@ -16,8 +16,11 @@ rm -rf "$PLUGIN"
 mkdir -p "$PLUGIN/Contents/MacOS"
 mkdir -p "$PLUGIN/Contents/Resources"
 cp -R Sources/BrkSettings/Resources/AppIcons "$PLUGIN/Contents/Resources/"
-swiftc -O -swift-version 5 -module-name BrkDockTile -emit-library -o "$PLUGIN/Contents/MacOS/BrkDockTile" \
-  scripts/dock-tile/BrkDockTilePlugIn.swift Sources/BrkSettings/AppIconArt.swift
+# For the app's architecture (an Intel build is cross-compiled on Apple silicon) and its minimum macOS.
+ARCH="$(lipo -archs "$APP/Contents/MacOS/$("$PB" -c "Print :CFBundleExecutable" "$PLIST")")"
+MIN_OS="$("$PB" -c "Print :LSMinimumSystemVersion" "$PLIST")"
+swiftc -O -swift-version 5 -target "$ARCH-apple-macosx$MIN_OS" -module-name BrkDockTile -emit-library \
+  -o "$PLUGIN/Contents/MacOS/BrkDockTile" scripts/dock-tile/BrkDockTilePlugIn.swift Sources/BrkSettings/AppIconArt.swift
 cat > "$PLUGIN/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -82,6 +82,28 @@ final class IndexAndClusterTests: XCTestCase {
         XCTAssertNil(SemanticIndex.decode(data.prefix(data.count - 1), dimensions: 4))
     }
 
+    #if arch(arm64)
+    /// The Intel build has no Float16, so the index file uses HalfFloat everywhere; it must match Float16 bit for bit.
+    func testHalfFloatMatchesFloat16() {
+        for bits in UInt16.min...UInt16.max {
+            let expected = Float(Float16(bitPattern: bits)), found = HalfFloat.value(bits)
+            XCTAssert(expected.isNaN ? found.isNaN : expected.bitPattern == found.bitPattern, "half \(bits)")
+            guard !expected.isNaN, bits & 0x7FFF < 0x7C00 else { continue }
+            // Each half's neighbourhood: the value, the ties with the next half up, and one float step either side.
+            let next = Float(Float16(bitPattern: bits &+ 1))
+            let tie = next.isFinite ? (expected / 2 + next / 2) : expected.nextUp
+            for value in [expected, tie, tie.nextUp, tie.nextDown, expected.nextUp, expected.nextDown] {
+                XCTAssertEqual(HalfFloat.bits(value), Float16(value).bitPattern, "float \(value.bitPattern)")
+            }
+        }
+        for raw in stride(from: UInt32(0), to: UInt32.max - 4099, by: 4099) {
+            let value = Float(bitPattern: raw)
+            guard !value.isNaN else { continue }
+            XCTAssertEqual(HalfFloat.bits(value), Float16(value).bitPattern, "float \(raw)")
+        }
+    }
+    #endif
+
     func testClustersMergeCloseVectorsOnly() {
         let vectors = [[1, 0, 0], [0.95, 0.1, 0], [0, 1, 0], [0.05, 0.98, 0], [0, 0, 1]].map { VectorMath.normalized($0.map(Float.init)) }
         XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: 0.7), [[0, 1], [2, 3], [4]])
