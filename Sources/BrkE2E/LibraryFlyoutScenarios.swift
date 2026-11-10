@@ -252,13 +252,20 @@ enum LibraryFlyoutScenarios {
         }
         app.note("icon seen at " + seen.map { String(format: "%.2fs (%.0f, %.0f)", $0.t, $0.at.x, $0.at.y) }.joined(separator: ", "))
         try expect(seen.count >= 2, "the icon was seen in \(seen.count) of \(index) pictures of the page")
-        // Where the plan has the icon from 0.5 s before a picture's time to just after it (the flight starts before the
-        // snapshot that reports it, and the picture is taken after the time is read).
+        // Each sighting lies on the arc planned from the click, in order along it, and one of them before the last
+        // quarter of the throw (where arcs from anywhere converge on the button).
+        var along: [Int] = []
+        var found: [String] = []
         for sight in seen {
-            let from = max(0, Int((sight.t - 0.5) * 60)), to = min(plan.frames.count - 1, Int((sight.t + 0.05) * 60))
-            let off = from <= to ? plan.frames[from...to].map { hypot($0.position.x - sight.at.x, height - $0.position.y - sight.at.y) }.min() ?? .infinity : .infinity
-            try expect(off < 30, String(format: "the icon at (%.0f, %.0f) %.2f s in is %.0f points off Arc's path from the click", sight.at.x, sight.at.y, sight.t, off))
+            let nearest = plan.frames.indices.map { i in (i, hypot(plan.frames[i].position.x - sight.at.x, height - plan.frames[i].position.y - sight.at.y)) }
+                .min { $0.1 < $1.1 } ?? (0, .infinity)
+            along.append(nearest.0)
+            found.append(String(format: "(%.0f, %.0f) %.0f pt from frame %d", sight.at.x, sight.at.y, nearest.1, nearest.0))
+            try expect(nearest.1 < 30, "the icon left Arc's arc from the click: " + found.joined(separator: ", "))
         }
+        try expect(along == along.sorted(), "the sightings run backwards along the arc: " + found.joined(separator: ", "))
+        try expect((along.first ?? .max) < Int(plan.duration * 60 * 0.75), "the icon was seen only at the end of its throw: " + found.joined(separator: ", "))
+        app.note("on Arc's arc: " + found.joined(separator: ", "))
         try expect(seen.last.map { $0.at.x < link.x - 150 } ?? false, "the icon did not cross the page towards the Library button: \(seen.last!)")
         app.sleep(max(0, 2.6 - (ProcessInfo.processInfo.systemUptime - started)))
         let after = try picture(app, "LFF-after")
