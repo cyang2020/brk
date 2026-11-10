@@ -5,7 +5,7 @@ import CefKit
 
 /// Native controls and CEF references for one page's Cast panel. A page in an owned profile uses its own request
 /// context's router. The Default profile's pages use the engine's receiver-service context (`CEFEngine.castService`):
-/// the pinned CEF global context's router traps inside `cef_shutdown` (verify/completion/batch2-browser-ops/
+/// the pinned CEF global context's router traps inside `cef_shutdown` (3ef85fca08:verify/completion/batch2-browser-ops/
 /// CAST-LIFETIME.md), while an owned context drains like any custom profile. A presentation route's source is a
 /// Cast or DIAL address, not the page, so the context that discovers receivers does not change what is cast.
 @MainActor final class PageCast: NSObject {

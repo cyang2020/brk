@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// Arc's mini players, as tried on Arc 1.170 (verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-*).
+/// Arc's mini players, as tried on Arc 1.170 (650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-*).
 final class MiniPlayerTests: XCTestCase {
     private struct Fixture {
         let driver: Driver
@@ -138,11 +138,9 @@ final class MiniPlayerTests: XCTestCase {
         f.driver.page(f.playing, .audioChanged(true))
         XCTAssertEqual(f.row?.speaker, .audible)
         f.driver.user(.tab(.focus(f.other)))
-        XCTAssertEqual(f.players[0].speakerSymbol, "speaker.wave.3.fill")
         f.driver.user(.tabTools(.mute(.item(f.playing))))
         XCTAssertEqual(f.row?.speaker, .muted, "Q18-media-g")
         XCTAssertEqual(f.players[0].muted, true)
-        XCTAssertEqual(f.players[0].speakerSymbol, "speaker.slash.fill")
         XCTAssertTrue(f.driver.user(.page(.mediaSession(.item(f.playing), .pause))).effects.isEmpty, "Q18-media-m: the dimmed button does nothing")
         f.driver.user(.tabTools(.mute(.item(f.playing))))
         XCTAssertEqual(f.row?.speaker, .audible)
@@ -157,7 +155,7 @@ final class MiniPlayerTests: XCTestCase {
         XCTAssertNil(f.row?.speaker, "Q18-media-i: paused, the row is plain again")
     }
 
-    func testVolumeGoesToEveryPlayerAndPicksTheSpeakerLevel() throws {
+    func testVolumeGoesToEveryPlayerAndIsHeldInsideZeroToOne() throws {
         let f = try fixture()
         let (a, b) = (Self.player("a"), Self.player("b"))
         f.report([a, b])
@@ -165,14 +163,8 @@ final class MiniPlayerTests: XCTestCase {
         let effects = f.driver.user(.page(.mediaVolume(.item(f.playing), 0.5))).effects
         XCTAssertEqual(effects, [a, b].map { .page(f.page, .media(MediaControl(document: f.document, player: $0.id, operation: .setVolume, volume: 0.5))) })
         XCTAssertEqual(f.players[0].volume, 0.5)
-        XCTAssertEqual(f.players[0].speakerSymbol, "speaker.wave.2.fill")
-        f.driver.user(.page(.mediaVolume(.item(f.playing), 0.2)))
-        XCTAssertEqual(f.players[0].speakerSymbol, "speaker.wave.1.fill")
-        f.driver.user(.page(.mediaVolume(.item(f.playing), 0)))
-        XCTAssertEqual(f.players[0].speakerSymbol, "speaker.fill")
         f.driver.user(.page(.mediaVolume(.item(f.playing), 5)))
         XCTAssertEqual(f.players[0].volume, 1, "held inside 0 to 1")
-        XCTAssertEqual(f.players[0].speakerSymbol, "speaker.wave.3.fill")
     }
 
     func testTwoCardsKeepTheOrderTheyCameIn() throws {

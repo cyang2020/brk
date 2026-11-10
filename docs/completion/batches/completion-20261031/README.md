@@ -1,6 +1,6 @@
 # Completion batch: every partial and missing row
 
-On 2026-10-31 the user asked for all remaining partial and missing feature rows to be completed in parallel without stopping, using the pstack skills that fit. The reconciled ledger (`verify/completion/ledger-reconciliation-20261031/REPORT.md`) lists 43 partial and 19 missing rows. This batch assigns 60 of them to twelve implementation slices in two waves and keeps two cross-feature rows (A043 appearance consumers, A081 Library) with the parent. A148 (Arc pixel reference) stays blocked on the user's Arc login and is not part of this batch.
+On 2026-10-31 the user asked for all remaining partial and missing feature rows to be completed in parallel without stopping, using the pstack skills that fit. The reconciled ledger (`ee4e2ec04e:verify/completion/ledger-reconciliation-20261031/REPORT.md`) lists 43 partial and 19 missing rows. This batch assigns 60 of them to twelve implementation slices in two waves and keeps two cross-feature rows (A043 appearance consumers, A081 Library) with the parent. A148 (Arc pixel reference) stays blocked on the user's Arc login and is not part of this batch.
 
 The base commit is recorded in `manifest.json`. The parent commits these instructions before dispatch; each T3-provided worktree starts at that commit or its direct descendant. Record the actual starting SHA before edits. Wave 2 slices start from `main` after the wave 1 branches are integrated, so their base commit is later.
 
@@ -12,7 +12,7 @@ Implementation runs on Codex (`gpt-6.1-sol`, reasoning effort xhigh), as the use
 
 The product is native Swift 6, AppKit/SwiftUI and the pinned Chrome-runtime CEF 154.0.34.0. `AppStore` is the sole runtime state owner. Inputs pass to the pure reducer; projection produces window snapshots and page demand. AppStore executes typed effects, renders native views and reconciles the engine. Browser events return with browser, document and context identity. Keep this flow; do not introduce a second mutable application store.
 
-`PageID` identifies a window and item pair. `BrowserToken` distinguishes native browser incarnations and `DocumentToken` fences main-document operations. Saved logical tree metadata and window-specific live addresses are different. Explicit blank or empty selection must not silently create demand. Hidden or retired pages must not take focus or act on another window. Accepted public downloads own their native resources and may outlive tab closure; private-session epochs and synchronous context revocation precede the final drain. `StateCodec` v3 saves validated public document state through atomic `StateFile` writes; scratch and private state stay transient; sync is a separate whitelisted protocol. The one shortcut and action table drives the menu, the command bar and key routing; preserve page-first handling, user remaps and the documented Downloads priority. Website policy, site data, extensions, Find, output and transfer adapters each have one owner file in `Sources/BrkCEF`; their contracts are in `docs/completion/core-design/` and the parent receipts under `verify/completion/*-parent/REPORT.md`.
+`PageID` identifies a window and item pair. `BrowserToken` distinguishes native browser incarnations and `DocumentToken` fences main-document operations. Saved logical tree metadata and window-specific live addresses are different. Explicit blank or empty selection must not silently create demand. Hidden or retired pages must not take focus or act on another window. Accepted public downloads own their native resources and may outlive tab closure; private-session epochs and synchronous context revocation precede the final drain. `StateCodec` v3 saves validated public document state through atomic `StateFile` writes; scratch and private state stay transient; sync is a separate whitelisted protocol. The one shortcut and action table drives the menu, the command bar and key routing; preserve page-first handling, user remaps and the documented Downloads priority. Website policy, site data, extensions, Find, output and transfer adapters each have one owner file in `Sources/BrkCEF`; their contracts are in `docs/completion/core-design/` and the parent receipts under `1b71cb97bd:verify/completion/*-parent/REPORT.md`.
 
 Read `docs/completion/handoff-20261031.md`, `docs/completion/core-design/README.md`, `docs/design/swift/module-map.md`, the parent receipts for the subsystems you touch, and your slice brief. Grounding reports describe an older baseline; current source and the parent receipts supersede them.
 
@@ -22,7 +22,7 @@ Use the selected architecture. Do not repeat the overall application design aren
 
 Each implementer owns its isolated branch. Prefer dedicated new files for rules, adapters, panels and scenarios. Shared integration files (`Actions`, `Command`, `Effect`, `Model`, `Snapshot`, `Project`, `Codec`, `AppStore`, `WebEngine`, CEF callbacks, package and build composition) may receive necessary additive changes; list every such change in your report's `INTEGRATION.md`. Keep `StateCodec` changes backward-readable with defaulted optional fields; the parent owns any format-version bump. Do not create parallel callback sinks, page owners or competing keyboard maps. The paths named as owned by another slice in the briefs belong to that slice; add only additive hooks there and list them.
 
-Do not mutate `main`, another worker's checkout or branch, running worker output, `docs/completion/features.json`, `docs/completion/plan.md`, this batch's manifest or `.audit/arc-clone.tsv`. The 15 inherited dirty files under `verify/swift` stay untouched.
+Do not mutate `main`, another worker's checkout or branch, running worker output, `docs/completion/features.json`, `docs/completion/plan.md`, this batch's manifest or `.audit/arc-clone.tsv`. The 15 inherited dirty files under `bf1ea87186:verify/swift` stay untouched.
 
 ## What counts as complete
 
@@ -51,7 +51,7 @@ python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock --lock /tmp
 Native runs record source and binary identity and take the native lock:
 
 ```sh
-python3 verify/completion/browser-basic-parent/run-native.py <unique-name> --only <scenarios> --run-timeout 600
+python3 scripts/run-native.py <unique-name> --only <scenarios> --run-timeout 600
 ```
 
 Run only your own scenarios plus the existing ones your change touches. Do not run the full native suite: the parent runs one unified full build and the full regression on the integration branch after each delivery and sends failures back to their owners. Focused `swift test --filter` runs need no lock.
@@ -62,4 +62,4 @@ Deliver as soon as your own scenarios pass natively and the delivery build is gr
 
 ## Deliverable
 
-Evidence goes under `verify/completion/batch2-<slice>/`: `REPORT.md` (PASS, ISSUES or BLOCKED first; starting and final commits; what works; exact remaining gates per row; commands; identities; retained failures), `proposal.json` with exactly the assigned IDs in the shape of `verify/completion/batch-tabs/proposal.json`, `INTEGRATION.md` listing shared-file edits, and `decisions.tsv` written with `~/.claude/skills/show-me-your-work/scripts/log.sh`. The final reply states PASS, ISSUES or BLOCKED, the starting and final commit, changed files, actual commands and results, limitations and clean-worktree status. No PR or publishing.
+Evidence goes under `1b71cb97bd:verify/completion/batch2-<slice>/`: `REPORT.md` (PASS, ISSUES or BLOCKED first; starting and final commits; what works; exact remaining gates per row; commands; identities; retained failures), `proposal.json` with exactly the assigned IDs in the shape of `06656768e1:verify/completion/batch-tabs/proposal.json`, `INTEGRATION.md` listing shared-file edits, and `decisions.tsv` written with `~/.claude/skills/show-me-your-work/scripts/log.sh`. The final reply states PASS, ISSUES or BLOCKED, the starting and final commit, changed files, actual commands and results, limitations and clean-worktree status. No PR or publishing.

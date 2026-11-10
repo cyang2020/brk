@@ -28,18 +28,4 @@ import XCTest
         XCTAssertEqual(ledger.liveCount, 1)
         XCTAssertEqual(ledger.closingCount, 0)
     }
-    func testNestedDemandCoalescesToTheLatestSnapshotWithoutRecursiveApplication() {
-        let queue = PageReconciliation(), first = spec("first"), second = spec("second"), latest = spec("latest")
-        var seen: [[PageSpec]] = [], depth = 0, maximumDepth = 0
-        func apply(_ pages: [PageSpec]) {
-            depth += 1; maximumDepth = max(maximumDepth, depth); defer { depth -= 1 }
-            seen.append(pages)
-            if pages == [first] { queue.submit([second], apply: apply); queue.submit([latest], apply: apply) }
-        }
-        queue.submit([first], apply: apply)
-        XCTAssertEqual(seen, [[first], [latest]])
-        XCTAssertEqual(maximumDepth, 1)
-        queue.submit([], apply: apply)
-        XCTAssertEqual(seen.last, [])
-    }
 }

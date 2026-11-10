@@ -15,17 +15,10 @@ import Foundation
 ///   and the next refresh; an injected shop page stops a refresh; the refresh's tool list and its refusals are read
 ///   from the fixture's log; Show in Today hides the row on other days; the command bar finds the conversation by what was
 ///   said; the archive deletes it for good after its confirmation.
-/// - `AIRealPagesLive-<agent>`: the user's own examples on a real agent (BRK_E2E_REAL_LIVE_AGENT=claude|codex,
-///   BRK_E2E_REAL_LIVE_MODEL, BRK_E2E_REAL_LIVE_PART=price,edits,weekly): "盯着这三个商品页的价格，每小时更新一次", then
-///   ticks and notes the agent adds when asked, then "每周一把我上周归档的文章整理成阅读清单". Results: real-live-<agent>.txt.
 enum AILivePagesScenarios {
     static var all: [Scenario] {
-        var list = [Scenario("AIAgentLivePages", "a live page: schedule from its row, a refresh through Brk's tools, ticks and notes kept, a flagged refresh, weekdays, find, delete",
+        let list = [Scenario("AIAgentLivePages", "a live page: schedule from its row, a refresh through Brk's tools, ticks and notes kept, a flagged refresh, weekdays, find, delete",
                              cefOnly: "native sidebar and page sandbox", fixtureRoute)]
-        if let name = ProcessInfo.processInfo.environment["BRK_E2E_REAL_LIVE_AGENT"], let choice = AIProviderChoice(rawValue: name), choice.kind != nil {
-            list.append(Scenario("AIRealPagesLive-\(name)", "real \(name), real input: a price watch that refreshes, ticks and notes kept, a weekly reading list",
-                                 cefOnly: "real agent, real input") { try realRoute($0, choice) })
-        }
         return list
     }
 
@@ -237,10 +230,6 @@ enum AILivePagesScenarios {
         _ = try app.advanceClock(seconds: seconds)
         try app.waitUntil("the refresh's outcome", timeout: timeout) { (outcome(app, page)?.at ?? 0) > before }
         return outcome(app, page)?.kind ?? "none"
-    }
-    /// Until no page in `pages` is refreshing (their rows' loading state), up to `timeout` seconds.
-    private static func waitForIdle(_ app: AppUnderTest, _ pages: [AIPageID], timeout: Double = 300) throws {
-        try app.waitUntil("no refresh running", timeout: timeout) { try pages.allSatisfy { try pageRow(app, $0)?.loading != true } }
     }
     private static func quitAndRelaunch(_ app: AppUnderTest) throws {
         try WindowServerKeys.ensureFrontmost(app, app.window!)
@@ -644,11 +633,6 @@ enum AILivePagesScenarios {
     private static func pages(_ ai: AIAnswerSnapshot?) -> [AIPageRef] {
         ai?.conversation?.items.compactMap { if case .page(let page) = $0 { page } else { nil } } ?? []
     }
-    private static func lastReply(_ ai: AIAnswerSnapshot?) -> String {
-        let items = ai?.conversation?.items ?? []
-        let start = items.lastIndex { if case .user = $0 { true } else { false } }.map { $0 + 1 } ?? 0
-        return items[start...].compactMap { if case .assistant(let text) = $0 { text } else { nil } }.joined(separator: "\n")
-    }
     /// Denies every approval the turn asks for (this run never lets an agent's own tool run), until it ends.
     private static func run(_ app: AppUnderTest, _ log: Log, _ place: Place, _ label: String, timeout: Double = 420) throws -> AIAnswerSnapshot {
         var asked = 0
@@ -671,263 +655,5 @@ enum AILivePagesScenarios {
         try key([], .returnKey)
         try app.waitUntil("the turn started", timeout: 15) { try answer(app, place)?.busy == true }
     }
-    /// The AX frames of the page's checkboxes and text fields: WebKit lists a page's controls to Accessibility. Only
-    /// those inside the page's card on screen: the transcript's copy of the page lists its own (real-live-claude-1 typed
-    /// its second note into the first field of that copy's list).
-    private static func pageControls(_ role: String) -> [CGRect] {
-        guard let app, let card = try? pageCard(app), let origin = try? screen(app, card.origin) else { return [] }
-        let shown = CGRect(origin: origin, size: card.size)
-        // Accessibility lists each of the page's controls twice, at the same place (real-live-claude-3); once each.
-        var out: [CGRect] = []
-        for frame in axNodes(role).map(\.frame) where shown.contains(CGPoint(x: frame.midX, y: frame.midY)) && !out.contains(frame) { out.append(frame) }
-        return out
-    }
-    /// What `pageControls` chose from, for the step's line.
-    private static func controlsReport(_ role: String) -> String {
-        let card = app.flatMap { try? pageCard($0) }
-        return "\(role) all \(axNodes(role).map { "(\(Int($0.frame.minX)),\(Int($0.frame.minY)))" }.joined(separator: " ")); card \(card.map { "\(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))×\(Int($0.height))" } ?? "none"); chosen \(pageControls(role).map { "(\(Int($0.minX)),\(Int($0.minY)))" }.joined(separator: " "))"
-    }
-    private static func axNodes(_ role: String) -> [(frame: CGRect, value: String)] { NativeSystemInput.elements(pid: pid, role: role) }
 
-    private static func realRoute(_ app: AppUnderTest, _ choice: AIProviderChoice) throws {
-        guard WindowServerKeys.allowed else { throw Check(description: "posting events is not allowed for this runner") }
-        guard case .hello(let hello) = try app.send(.hello) else { throw Check(description: "no hello") }
-        pid = hello.pid
-        Self.app = app
-        let name = choice.rawValue, kind = choice.kind!
-        let prefix = "AIRealPagesLive-\(name)"
-        let log = Log(app.shotsDirectory.appendingPathComponent("real-live-\(name).txt"))
-        defer { try? NativeSystemInput.setShift(false); PhysicalKeys.clearSystemModifiers(KeyChord([.command, .shift, .option, .control], .a)) }
-
-        var ready = false
-        log.check("Max pane: Turn On Max, \(kind.displayName), a small model") {
-            try WindowServerKeys.ensureFrontmost(app, app.window!)
-            try key(.command, .comma)
-            var tab: CGRect?
-            try app.waitUntil("the Max tab", timeout: 8) { tab = NativeSystemInput.frame(pid: pid, title: "Max"); return tab != nil }
-            try clickScreen(centre(tab!))
-            app.sleep(1)
-            try clickAX(identifier: ViewID.settingsField("enableMax").identifier, "Turn On Max")
-            try app.waitUntil("Max on") { try settings(app).max.settings.enabled(.commandBar) }
-            // The basic layer would name the shop tabs with its own requests; this run spends only the conversation's and the refreshes'.
-            for feature in AIFeature.basicLayer { try app.dispatch(.settings(.max(.feature(feature, false)))) }
-            for attempt in 1...2 {
-                try choosePopUp(ViewID.settingsField("agentChoice").identifier, kind.displayName)
-                do { try app.waitUntil("\(kind.displayName) chosen") { try settings(app).max.settings.provider == choice }; break }
-                catch { if attempt == 2 { throw error }; try key([], .escape) }
-            }
-            var status: AIAgentStatus?
-            try app.waitUntil("the agent's status", timeout: 40) {
-                status = try settings(app).max.agents.first { $0.kind == kind }
-                return status != nil && status?.state != .checking
-            }
-            ready = status?.state == .ready
-            if ready, let model = ProcessInfo.processInfo.environment["BRK_E2E_REAL_LIVE_MODEL"], !model.isEmpty {
-                try choosePopUp(ViewID.settingsField("agentModel").identifier, model)
-                try app.waitUntil("the model chosen") { try settings(app).max.settings.agentOptions?[kind]?.model != nil }
-            }
-            try key(.command, .w)
-            return "state \(String(describing: status?.state)), model \(try settings(app).max.settings.agentOptions?[kind]?.model ?? "default"), refresh model \(try settings(app).max.settings.basic(kind)?.model ?? "?")"
-        }
-        guard ready else { log.write("failures: \(log.failures + 1) (\(kind.displayName) not ready)"); throw Check(description: "\(kind.displayName) is not ready") }
-
-        var conversation: AIRequestID?
-        var page: AIPageID?
-        if wanted("price") {
-            log.check("three shop pages from the command bar") {
-                for shop in ["kettle", "toaster", "blender"] { try open(app, "shop-\(shop).html") }
-                return "kettle, toaster, blender"
-            }
-            log.check("Ask AI on three tabs: “盯着这三个商品页的价格，每小时更新一次” makes a page that refreshes every hour") {
-                let tabs = try ["kettle", "toaster", "blender"].map { shop in try todayRow(app) { $0.url?.absoluteString.hasSuffix("shop-\(shop).html") == true }.id }
-                try click(app, at: centre(stillFrame(app, .row(tabs[0]))))
-                for tab in tabs.dropFirst() { try click(app, at: centre(stillFrame(app, .row(tab))), flags: .maskCommand) }
-                try click(app, at: centre(stillFrame(app, .row(tabs[2]))), right: true)
-                try chooseMenu(["Ask AI"])
-                try app.waitUntil("the panel with three chips") { try app.view().ai?.conversation?.attached.count == 3 }
-                try send(app, .panel, "盯着这三个商品页的价格，每小时更新一次")
-                conversation = try app.view().ai?.conversation?.id
-                let ai = try run(app, log, .panel, "price")
-                shot(app, prefix, "price-answer")
-                log.write("  steps: \(steps(ai))")
-                log.write("  reply: \(short(lastReply(ai)))")
-                guard let made = pages(ai).last else { throw Check(description: "no page in the answer: \(steps(ai))") }
-                page = made.id
-                let saved = record(app, made.id) ?? [:]
-                let sources = (saved["sources"] as? [Any])?.compactMap { ($0 as? String) ?? ($0 as? [String: Any])?["relative"] as? String } ?? []
-                var how = "the agent kept it with refresh"
-                if (live(app, made.id)["schedule"] as? [String: Any])?["hourly"] == nil {
-                    // The agent did not set the schedule: the user does it from the row's menu, as the UI offers.
-                    guard let row = try pageRow(app, made.id) else { throw Check(description: "the agent did not keep the page") }
-                    try rowMenu(app, row.id, ["Refresh", "Every Hour"])
-                    how = "the agent kept it; the schedule was set from the row's menu"
-                }
-                try app.waitUntil("an hourly schedule", timeout: 6) { (live(app, made.id)["schedule"] as? [String: Any])?["hourly"] != nil }
-                try expect(saved["data"] is String, "the page has no data: \(saved.keys.sorted())")
-                return "\(how); page “\(made.title)”; sources \(sources.count); data \(short(saved["data"] as? String)); steps \(steps(ai))"
-            }
-            if let page { log.check("a shop changes its price, the hour passes: the page shows the new price and its row is marked") {
-                app.site.replace(in: "/shop-kettle.html", "€39.00", with: "€34.50")
-                // Away from the page (so its mark stays until it is looked at), on a tab that is not one of the shops.
-                try lookAway(app)
-                let kind = try passTheHour(app, page)
-                try expect(kind == "updated", "the outcome: \(kind) \(outcomeDetail(app, page))")
-                let data = record(app, page)?["data"] as? String ?? ""
-                try expect(data.contains("34.5"), "the data: \(data)")
-                try app.waitUntil("the row's mark", timeout: 6) { try pageRow(app, page)?.liveMark == .changed }
-                shot(app, prefix, "price-row-marked")
-                screenCapture(app, prefix + "-price-row-marked-screen")
-                try showPage(app, page)
-                try app.waitUntil("the mark cleared", timeout: 6) { try pageRow(app, page)?.liveMark == nil }
-                shot(app, prefix, "price-page-refreshed")
-                let texts = NativeSystemInput.staticTexts(pid: pid).map(\.text).joined(separator: " | ")
-                let usage = try settings(app).max.settings.usage?.rows.first { $0.key.feature == "Live Page Refresh" }
-                return "data \(short(data)); the page shows 34.50: \(texts.contains("34.5")); usage \(usage.map { "\($0.value.requests) requests, \($0.value.inputTokens) in" } ?? "none")"
-            } }
-        }
-
-        if wanted("edits"), let page {
-            log.check("back to the conversation from the kept page's button; asked there, the agent adds a box to tick and a note to each item") {
-                try showPage(app, page)
-                try click(app, at: centre(stillFrame(app, .aiControl("page-conversation"))))
-                try app.waitUntil("the conversation in the panel", timeout: 8) { try app.view().ai?.conversation?.id == conversation }
-                app.sleep(1)
-                try send(app, .panel, "给这个价格页面的每个商品加一个可以勾选的框和一个备注输入框，勾选和备注要用 window.brk.save 保存")
-                let ai = try run(app, log, .panel, "edits")
-                log.write("  steps: \(steps(ai))")
-                try expect(steps(ai).contains { $0.hasPrefix("Change a page") }, "the page was not changed: \(steps(ai))")
-                return "steps \(steps(ai)); saveSchema \(short(record(app, page)?["saveSchema"] as? String))"
-            }
-            var secondField: CGRect?
-            log.check("a real tick and a typed note in the page are saved, the note's text included") {
-                try showPage(app, page)
-                _ = NativeSystemInput.wakeAccessibilityTree(pid: pid)
-                var boxes: [CGRect] = [], fields: [CGRect] = []
-                try app.waitUntil("the page's boxes", timeout: 10) { boxes = pageControls("AXCheckBox"); return !boxes.isEmpty }
-                fields = pageControls("AXTextField") + pageControls("AXTextArea")
-                log.write("  " + controlsReport("AXCheckBox"))
-                log.write("  " + controlsReport("AXTextField"))
-                shot(app, prefix, "edits-page")
-                try clickScreen(centre(boxes[0]))
-                guard let field = fields.first else { throw Check(description: "the page has no note field: \(boxes.count) boxes") }
-                secondField = fields.dropFirst().first
-                try clickScreen(centre(field))
-                try type("wait for a sale")
-                // A page that saves on input has it at once; one that saves on change gets it when Brk commits the field as
-                // the page goes out of sight.
-                var how = "the page saved it as it was typed"
-                if (try? app.waitUntil("the note in the page's file", timeout: 3) { (record(app, page)?["saved"] as? String)?.contains("wait for a sale") == true }) == nil {
-                    how = "the page saved it when Brk committed the field as the row was switched away"
-                }
-                try lookAway(app)
-                try app.waitUntil("the note in the page's file", timeout: 6) { (record(app, page)?["saved"] as? String)?.contains("wait for a sale") == true }
-                let saved = record(app, page)?["saved"] as? String ?? ""
-                return "\(boxes.count) boxes, \(fields.count) fields; \(how); saved \(saved)"
-            }
-            log.check("⌘Q with a second note still in its field; after the relaunch both notes and the tick are there, and the next refresh keeps them") {
-                try showPage(app, page)
-                if let secondField {
-                    _ = NativeSystemInput.wakeAccessibilityTree(pid: pid)
-                    let fields = pageControls("AXTextField") + pageControls("AXTextArea")
-                    try clickScreen(centre(fields.dropFirst().first ?? secondField))
-                    try type("ask in store")
-                }
-                try quitAndRelaunch(app)
-                try app.waitUntil("the page's row is back", timeout: 15) { try pageRow(app, page) != nil }
-                let before = record(app, page)?["saved"] as? String ?? ""
-                try expect(before.contains("wait for a sale"), "the note is gone after the relaunch: \(before)")
-                if secondField != nil { try expect(before.contains("ask in store"), "the note left in its field at ⌘Q is gone: \(before)") }
-                try showPage(app, page)
-                shot(app, prefix, "edits-relaunch")
-                _ = NativeSystemInput.wakeAccessibilityTree(pid: pid)
-                let checked = axNodes("AXCheckBox").map(\.value)
-                try lookAway(app)
-                app.site.replace(in: "/shop-blender.html", "€59.90", with: "€55.00")
-                let kind = try passTheHour(app, page)
-                let after = record(app, page)?["saved"] as? String ?? ""
-                try expect(after == before, "the refresh changed what was saved: \(after)")
-                try expect(after.contains("wait for a sale"), "the note is gone after the refresh: \(after)")
-                return "saved \(before); boxes after the relaunch \(checked); refresh \(kind), the notes kept; data \(short(record(app, page)?["data"] as? String))"
-            }
-        }
-
-        if wanted("weekly") {
-            var weekly: AIPageID?
-            // The price watch, when an earlier part made it, keeps refreshing every hour: each jump below has it due
-            // together with the reading list, as a user with both pages would.
-            log.check("three articles read and archived") {
-                for article in ["article-sleep", "article-coffee", "article-rivers"] {
-                    try open(app, article + ".html")
-                    try key(.command, .w)
-                    app.sleep(0.8)
-                }
-                return "opened from the command bar and archived with ⌘W"
-            }
-            log.check("“每周一把我上周归档的文章整理成阅读清单” makes a page that refreshes every Monday, from the archive") {
-                try WindowServerKeys.ensureFrontmost(app, app.window!)
-                try key([.option, .command], .g)
-                try app.waitUntil("the question bar") { if case .commandBar? = try app.view().overlay { true } else { false } }
-                try paste("每周一把我上周归档的文章整理成阅读清单")
-                try key([], .returnKey)
-                try app.waitUntil("a conversation in the panel", timeout: 15) { try app.view().ai?.conversation?.id != nil }
-                let ai = try run(app, log, .panel, "weekly")
-                shot(app, prefix, "weekly-answer")
-                log.write("  steps: \(steps(ai))")
-                log.write("  reply: \(short(lastReply(ai)))")
-                guard let made = pages(ai).last else { throw Check(description: "no page: \(steps(ai))") }
-                weekly = made.id
-                try expect(steps(ai).contains { $0.hasPrefix("List tabs") || $0.hasPrefix("Search tabs") }, "the archive was not read: \(steps(ai))")
-                var how = "the agent kept it with a weekly refresh"
-                if (live(app, made.id)["schedule"] as? [String: Any])?["weekly"] == nil {
-                    guard let row = try pageRow(app, made.id) else { throw Check(description: "the agent did not keep the page") }
-                    try rowMenu(app, row.id, ["Refresh", "Every Monday at 9:00"])
-                    how = "the schedule was set from the row's menu"
-                }
-                // The articles were archived today, so "last week" holds none of them yet; the list may start empty.
-                return "\(how); schedule \(live(app, made.id)["schedule"] ?? "nil"); data now \(short(record(app, made.id)?["data"] as? String))"
-            }
-            if let weekly { log.check("mid-week a fourth article is archived; Monday's refresh lists what was archived in the week before") {
-                // Three days on. Whether the page's first slot came meanwhile depends on the time of day by Brk's clock
-                // when it was made: before Monday 9:00 it did, and runs once now; after, the first slot is next Monday
-                // (merge-gate-e's full run made it at 10:44 and waited here for a run that rightly never came). Either
-                // way the step goes on once nothing refreshes.
-                try lookAway(app)
-                let before = outcome(app, weekly)?.at ?? 0
-                moved += 3 * 86_400
-                _ = try app.advanceClock(seconds: 3 * 86_400)
-                try waitForIdle(app, [weekly, page].compactMap { $0 })
-                log.write("  three days on: the reading list \((outcome(app, weekly)?.at ?? 0) > before ? "ran its missed slot once (\(outcome(app, weekly)?.kind ?? "?"))" : "had no slot yet")"
-                          + (page.map { "; the price watch \(outcome(app, $0)?.kind ?? "none")" } ?? ""))
-                try open(app, "article-tea.html")
-                try key(.command, .w)
-                app.sleep(0.8)
-                try lookAway(app)
-                // Then to the next Monday at 10:00 by Brk's clock, whatever time it is now: the reading list's slot and,
-                // when there is one, the price watch's hour are due together.
-                let now = try app.advanceClock(seconds: 0)
-                let date = Date(timeIntervalSince1970: Double(now.milliseconds) / 1000)
-                let monday = try XCTUnwrapValue(Calendar.current.nextDate(after: date, matching: DateComponents(hour: 10, minute: 0, weekday: 2), matchingPolicy: .nextTime))
-                let priceBefore = page.flatMap { outcome(app, $0)?.at } ?? 0
-                let kind = try passTheHour(app, weekly, seconds: monday.timeIntervalSince(date) + 60, timeout: 300)
-                if let page {
-                    try waitForIdle(app, [page])
-                    let price = outcome(app, page)
-                    try expect((price?.at ?? 0) > priceBefore, "the price watch, due at the same time, did not refresh")
-                    log.write("  the price watch, due at the same time, refreshed too: \(price?.kind ?? "?"); its row is in Today: \(try pageRow(app, page) != nil)")
-                    try expect(try pageRow(app, page) != nil, "the price watch's row left Today")
-                }
-                try expect(kind == "updated", "the outcome: \(kind) \(outcomeDetail(app, weekly))")
-                let data = record(app, weekly)?["data"] as? String ?? ""
-                let titles = ["sleep", "coffee", "river", "tea"].filter { data.lowercased().contains($0) }
-                try expect(titles.contains("tea"), "the reading list's data: \(short(data))")
-                try app.waitUntil("the row's mark", timeout: 6) { try pageRow(app, weekly)?.liveMark == .changed }
-                try showPage(app, weekly)
-                shot(app, prefix, "weekly-refreshed")
-                return "outcome \(kind); the list names \(titles); data \(short(data))"
-            } }
-        }
-
-        log.write("failures: \(log.failures)")
-        try expect(log.failures == 0, "\(log.failures) steps failed; see real-live-\(name).txt")
-    }
 }

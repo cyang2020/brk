@@ -116,7 +116,7 @@ Sidebar: `sidebar`, `floating-sidebar`, `theme-background`, `url-pill`, `section
 
 ### Screenshots and report
 
-`captureLayers()` plus the harness's `compositeScreenshot` (each layer in a rounded clip of its radius, drawn bottom to top on a canvas in the chrome page) produce `verify/shots/<n>-<name>.png`. `e2e/markdown-reporter.ts` writes `verify/REPORT.md` with PASS, FAIL or SKIPPED per scenario and the counts in the header. `npm run e2e:docker` (`e2e/docker-run.sh`) builds and runs the suite on Linux/Xvfb in the Playwright image and copies `verify/` back.
+`captureLayers()` plus the harness's `compositeScreenshot` (each layer in a rounded clip of its radius, drawn bottom to top on a canvas in the chrome page) produce `verify/shots/<n>-<name>.png`. `e2e/markdown-reporter.ts` writes `verify/REPORT.md` with PASS, FAIL or SKIPPED per scenario and the counts in the header. `npm run e2e:docker` (`e2e/docker-run.sh`) builds and runs the suite on Linux/Xvfb in the Playwright image and copies `933155f61c:verify/` back.
 
 ### Scenario to hooks
 

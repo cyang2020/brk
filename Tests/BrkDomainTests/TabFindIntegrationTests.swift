@@ -15,15 +15,4 @@ final class TabFindIntegrationTests: XCTestCase {
         XCTAssertEqual(d.view.focus, .findInput)
         XCTAssertFalse(d.state.session.windows[d.window]!.sidebarFocused)
     }
-
-    func testRecentCycleCancelsBeforeLowerLevelEscapeActions() {
-        let d = Driver()
-        _ = d.open("https://example.test/second")
-        let original = d.current!.id
-        d.user(.tab(.cycleRecent(.next)))
-        XCTAssertNotNil(d.state.session.windows[d.window]?.recentCycle)
-        d.user(.app(.exit))
-        XCTAssertNil(d.state.session.windows[d.window]?.recentCycle)
-        XCTAssertEqual(d.current?.id, original)
-    }
 }

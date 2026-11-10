@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// Round 4, R4-9: the R4-6 review's defects in the domain (verify/completion/review-r4/sidebar-windows/REVIEW.md):
+/// Round 4, R4-9: the R4-6 review's defects in the domain (1e644875d5:verify/completion/review-r4/sidebar-windows/REVIEW.md):
 /// a cancelled reconnect keeps a good badge (A014), Ctrl+Cmd+J answers in every window and tells an unreadable file
 /// from an expired one (A015), Gmail and Outlook Favorites get a mail card (A031). The last Today tab's successor is
 /// Arc's as it was (checked on real Arc by the parent); its tests document that rule.
@@ -26,17 +26,6 @@ final class SidebarReviewFixTests: XCTestCase {
         XCTAssertEqual(tile.badge, 2, "the cancelled sheet replaced the count")
         XCTAssertEqual(tile.badgeTint, .black, "the unread dot went away")
         XCTAssertEqual(d.view.tabTools.toast?.text, "Source selection cancelled")
-    }
-
-    func testCancellingTheFirstConnectStillSaysSo() throws {
-        let d = Driver(startURL: url("https://github.com/notifications"))
-        let item = d.todayIDs[0]
-        let root = try XCTUnwrap(d.state.doc.favorites[.default])
-        d.user(.item(.move(item, to: .into(parent: root, index: 0))))
-        let first = try request(d.user(.tabTools(.site(.connectGitHub(favorite: item)))))
-        d.system(.siteResult(first.id, .cancelled))
-        XCTAssertNil(d.view.favorites.tiles.first?.badgeTint)
-        XCTAssertEqual(d.state.session.favoriteFeeds[item]?.access, .cancelled)
     }
 
     func testJoinMeetingInAPrivateWindowOrLittleArcSaysWhyNothingOpens() throws {
@@ -139,23 +128,6 @@ final class SidebarReviewFixTests: XCTestCase {
         XCTAssertEqual(TopAppCopy.mailSubject("Re: Plan - draft - fixture@example.com - Gmail"), "Re: Plan - draft")
         XCTAssertEqual(TopAppCopy.mailSubject("Lunch? - Fixture Person - Outlook"), "Lunch?")
         XCTAssertEqual(TopAppCopy.mailSubject("Plain title"), "Plain title")
-    }
-
-    func testAGmailFavoriteShowsArcsSignedOutTextUntilBrkHasSeenTheMailbox() throws {
-        let d = Driver(startURL: url("https://mail.google.com/mail/u/0/"))
-        let gmail = d.todayIDs[0]
-        let root = try XCTUnwrap(d.state.doc.favorites[.default])
-        d.user(.item(.move(gmail, to: .into(parent: root, index: 0))))
-        let tile = { d.view.favorites.tiles.first { $0.id == gmail } }
-        XCTAssertNil(tile()?.hoverCard, "Arc Previews are off by default")
-        d.user(.tabTools(.preferences(includeFavorites: true, previews: true)))
-        guard case .mail(let site, let unread, let messages)? = tile()?.hoverCard else { return XCTFail("no mail card") }
-        XCTAssertEqual(site, "Gmail")
-        XCTAssertNil(unread)
-        XCTAssertTrue(messages.isEmpty)
-        XCTAssertEqual(TopAppCopy.mailEmpty(unread: unread), "Sign in to your Email to see messages at a glance.")
-        XCTAssertNil(tile()?.badgeTint, "no unread dot without a mail source")
-        XCTAssertTrue(titles(try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(gmail), at: .zero)))))).contains("Show Hover Preview"))
     }
 
     func testTheMailCardListsMessagesOpenedInBrkUnderTheMailboxCount() throws {

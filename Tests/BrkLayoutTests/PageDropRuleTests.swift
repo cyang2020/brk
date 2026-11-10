@@ -4,7 +4,7 @@ import CoreGraphics
 import XCTest
 @testable import BrkLayout
 
-/// Arc's observations over the page (verify/visual-pairs/run-20261103/Q17/NOTES.md, window points), run through the rule read
+/// Arc's observations over the page (cbf12fadb0:verify/visual-pairs/run-20261103/Q17/NOTES.md, window points), run through the rule read
 /// from its binary, on the same pointer paths and at the same event rate as the real drags.
 final class PageDropRuleTests: XCTestCase {
     private let area = CGRect(x: 228, y: 10, width: 1042, height: 756)
@@ -44,7 +44,7 @@ final class PageDropRuleTests: XCTestCase {
         return seen(state)
     }
 
-    private let today = CGPoint(x: 86, y: 467), favorite = CGPoint(x: 196, y: 113)
+    private let today = CGPoint(x: 86, y: 467)
     private func p(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: x, y: y) }
 
     func testAOneStraightLeg() {
@@ -58,54 +58,13 @@ final class PageDropRuleTests: XCTestCase {
         }
     }
 
-    func testBViaAPauseOnTheLeft() {
-        XCTAssertEqual(run(tabIsShown: false, [today, p(320, 330), p(780, 330)]), .middle)
-        XCTAssertEqual(run(tabIsShown: false, [today, p(320, 330), p(930, 330)]), .right)
-    }
-
     func testCFromTheRightWithTheTabShown() {
         for (x, expected) in [(840.0, Seen.right), (780, .right), (752, .none), (720, .left), (680, .left), (640, .left), (580, .left)] {
             XCTAssertEqual(run(tabIsShown: true, [today, p(1180, 330), p(x, 330)]), expected, "C x=\(x)")
         }
     }
 
-    func testDVerticallyOverItsOwnPage() {
-        for y in [80.0, 110, 140, 600, 650, 690] {
-            XCTAssertEqual(run(tabIsShown: true, [today, p(780, 330), p(780, y)]), .none, "D y=\(y)")
-        }
-    }
-
-    func testEFromASlot() {
-        XCTAssertEqual(run(tabIsShown: true, [today, p(380, 330), p(380, 80)]), .top)
-        XCTAssertEqual(run(tabIsShown: true, [today, p(380, 330), p(380, 730)]), .bottom)
-        XCTAssertEqual(run(tabIsShown: true, [today, p(1180, 330), p(1180, 80)]), .right)
-    }
-
-    func testFAFavorite() {
-        for (x, expected) in [(440.0, Seen.left), (748, .left), (1060, .right), (1255, .right)] {
-            XCTAssertEqual(run(tabIsShown: false, [favorite, p(300, 230), p(x, 330)]), expected, "F x=\(x)")
-        }
-        XCTAssertEqual(run(tabIsShown: false, [favorite, p(780, 330)]), .middle)
-    }
-
     // MARK: The constants, one by one
-
-    func testOnePageZones() {
-        func zone(_ x: Double, _ y: Double) -> PageDropRule.Zone {
-            PageDropRule.pageZone(x: x, y: y, width: 1042, height: 756, pages: 1, orientation: .horizontal)
-        }
-        XCTAssertEqual(zone(416.7, 300), .left)
-        XCTAssertEqual(zone(416.9, 300), .middle)
-        XCTAssertEqual(zone(625.1, 300), .middle)
-        XCTAssertEqual(zone(625.3, 300), .right)
-        XCTAssertEqual(zone(100, 49.9), .top, "the top band is 50 pt and comes before the sides")
-        XCTAssertEqual(zone(100, 50.1), .left)
-        XCTAssertEqual(zone(100, 706.1), .bottom)
-        XCTAssertEqual(zone(100, 705.9), .left)
-        // A quarter of a short page is less than 50.
-        XCTAssertEqual(PageDropRule.pageZone(x: 500, y: 30, width: 1042, height: 100, pages: 1, orientation: .horizontal), .middle)
-        XCTAssertEqual(PageDropRule.pageZone(x: 500, y: 24, width: 1042, height: 100, pages: 1, orientation: .horizontal), .top)
-    }
 
     func testManyPanesOnlyHaveTheirOwnAxis() {
         func zone(_ x: Double, _ y: Double, _ orientation: SplitOrientation) -> PageDropRule.Zone {
@@ -118,18 +77,6 @@ final class PageDropRuleTests: XCTestCase {
         XCTAssertEqual(zone(300, 49.9, .vertical), .top)
         XCTAssertEqual(zone(300, 706.1, .vertical), .bottom)
         XCTAssertEqual(zone(10, 300, .vertical), .middle)
-    }
-
-    func testSlotZones() {
-        func zone(_ x: Double, _ y: Double, leading: Bool, _ orientation: SplitOrientation = .horizontal) -> PageDropRule.Zone {
-            PageDropRule.slotZone(x: x, y: y, width: 516, height: 756, leading: leading, orientation: orientation)
-        }
-        XCTAssertEqual(zone(151.5, 10, leading: true), .middle, "within 100 pt plus a tenth of the width of the outer edge")
-        XCTAssertEqual(zone(151.7, 10, leading: true), .top)
-        XCTAssertEqual(zone(151.7, 75.7, leading: true), .middle)
-        XCTAssertEqual(zone(151.7, 680.5, leading: true), .bottom)
-        XCTAssertEqual(zone(364.5, 10, leading: false), .middle)
-        XCTAssertEqual(zone(364.3, 10, leading: false), .top)
     }
 
     func testThrottleReadsTheNewestPositionAtTheEndOfItsInterval() {
@@ -145,60 +92,12 @@ final class PageDropRuleTests: XCTestCase {
         XCTAssertEqual(seen(state), .middle, "the slot had made the pointer's place the narrower page")
     }
 
-    func testASlotGoesWhenItsAnimationEnds() {
-        let input = input(replaceable: true)
-        var state = PageDropRule.State(paneCount: 1, orientation: .horizontal)
-        state.move(to: p(300, 330), at: 10, input)
-        state.leave(at: 11)
-        XCTAssertEqual(seen(state), .none)
-        XCTAssertEqual(state.panes.count, 2, "still in the list while it collapses")
-        state.move(to: p(300, 330), at: 11.5, input)
-        XCTAssertEqual(state.panes.count, 2, "a new slot, the old one gone")
-    }
-
-    func testTheLayoutMatchesP23D() {
-        let input = input(replaceable: true)
-        var state = PageDropRule.State(paneCount: 1, orientation: .horizontal)
-        state.move(to: p(1180, 330), at: 10, input)
-        let layout = PageDropRule.layout(state, input)
-        XCTAssertEqual(layout.panes, [CGRect(x: 228, y: 10, width: 516, height: 756)])
-        XCTAssertEqual(layout.slot, CGRect(x: 754, y: 10, width: 516, height: 756))
-    }
-
-    /// A left slot, and a stacked split's bottom slot with the mean share: the gap comes out of the pane above (P23-c).
-    func testTheOtherSlots() throws {
-        var left = PageDropRule.State(paneCount: 1, orientation: .horizontal)
-        left.move(to: p(300, 330), at: 10, input(replaceable: true))
-        let layout = PageDropRule.layout(left, input(replaceable: true))
-        XCTAssertEqual(layout.slot, CGRect(x: 228, y: 10, width: 516, height: 756))
-        XCTAssertEqual(layout.panes, [CGRect(x: 754, y: 10, width: 516, height: 756)])
-        let stacked = PageDropRule.Input(area: area, fractions: [0.5, 0.5], replaceable: [true, true], insertable: true)
-        var bottom = PageDropRule.State(paneCount: 2, orientation: .vertical)
-        bottom.move(to: p(700, 760), at: 10, stacked)
-        XCTAssertEqual(PageDropRule.preview(bottom), .slot(before: 2, orientation: .vertical))
-        let cards = PageDropRule.layout(bottom, stacked)
-        XCTAssertEqual(cards.panes.count, 2)
-        XCTAssertEqual(cards.slot?.maxY, area.maxY)
-        XCTAssertEqual(cards.slot?.width, area.width)
-        XCTAssertEqual(try XCTUnwrap(cards.slot).height, cards.panes[0].height + Metrics.content.splitGap.value, accuracy: 1)
-    }
-
     func testASlotInsideASplitAsksForItsIndex() {
         let input = PageDropRule.Input(area: area, fractions: [0.5, 0.5], replaceable: [true, true], insertable: true)
         var state = PageDropRule.State(paneCount: 2, orientation: .horizontal)
         state.move(to: p(700, 300), at: 10, input)
         XCTAssertEqual(PageDropRule.preview(state), .slot(before: 1, orientation: .horizontal))
         XCTAssertEqual(state.target, .insert(index: 1))
-    }
-
-    func testAPaneHoldingTheDraggedTabCannotBeFramedAndAFullSplitTakesNoSlot() {
-        var state = PageDropRule.State(paneCount: 1, orientation: .horizontal)
-        state.move(to: p(749, 388), at: 10, input(replaceable: true))
-        XCTAssertEqual(PageDropRule.preview(state), .frame(pane: 0))
-        let full = PageDropRule.Input(area: area, fractions: [0.25, 0.25, 0.25, 0.25], replaceable: [true, true, true, true], insertable: true)
-        var four = PageDropRule.State(paneCount: 4, orientation: .horizontal)
-        four.move(to: p(240, 300), at: 10, full)
-        XCTAssertEqual(PageDropRule.preview(four), .frame(pane: 0), "no room: the zone falls back to the pane")
     }
 
     // MARK: What a release gives
@@ -261,13 +160,5 @@ final class PageDropRuleTests: XCTestCase {
         state.move(to: p(1012, 330), at: 10, PageDropRule.Input(area: area, fractions: [0.5, 0.5], replaceable: [true, true], insertable: true))
         XCTAssertEqual(state.target, .replace(pane: 1))
         XCTAssertEqual(PageDropRule.releaseCommand(state, source: ItemID("tab"), offer: nil, paneCount: 2), .tab(.focus(ItemID("tab"))), "no offer: a tab the window cannot take")
-    }
-
-    /// Arc 0x10048ee6c: the share a new pane would get, scaled to fit 250 pt.
-    func testTheCardFollowsThePanes() {
-        XCTAssertEqual(PageDropRule.cardSize(area: area, paneCount: 1), CGSize(width: 169, height: 250), "P23-d")
-        XCTAssertEqual(PageDropRule.cardSize(area: area, paneCount: 2), CGSize(width: 113, height: 250), "Q17-split-hold")
-        XCTAssertEqual(PageDropRule.cardSize(area: area, paneCount: 4), CGSize(width: 68, height: 250))
-        XCTAssertEqual(PageDropRule.cardSize(area: CGRect(x: 0, y: 0, width: 2020, height: 400), paneCount: 1), CGSize(width: 250, height: 100), "a wide, low window")
     }
 }

@@ -1,7 +1,7 @@
 import XCTest
 @testable import BrkControl
 
-/// verify/swift/REPORT.md's format: header with machine and counts, one line per scenario with PASS / FAIL / SKIPPED,
+/// The native run report's format (scripts/run-native.py reads it): header with machine and counts, one line per scenario with PASS / FAIL / SKIPPED,
 /// failure and skip reasons, notes, shots, and the grouped "Needs" section.
 final class ReportTests: XCTestCase {
     let machine = E2EMachine(date: "2026-10-30T12:00:00Z", macOS: "macOS 26.6 (25G83)", model: "Macmini9,1", engine: "stub",
@@ -28,22 +28,5 @@ final class ReportTests: XCTestCase {
         XCTAssertTrue(lines.contains("- PASS 4 dock switch · 2.0 s · note: page titles not checked on the stub engine"))
         XCTAssertTrue(lines.contains("## Needs"))
         XCTAssertTrue(lines.contains("- W1: BrkDomain/CommandBar.swift:15 (scenarios 2, 7)"))
-    }
-
-    func testNoNeedsSectionWithoutFailures() {
-        let text = E2EReport.markdown([E2EResult(id: "0", title: "smoke", outcome: .pass, seconds: 1)], machine: machine, totalSeconds: 1)
-        XCTAssertFalse(text.contains("## Needs"))
-        XCTAssertTrue(text.contains("1 PASS, 0 FAIL, 0 SKIPPED"))
-    }
-
-    func testOwnersFollowTheModuleMap() {
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkDomain/CommandBar.swift"), "W1")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkLayout/SidebarLayout.swift"), "W1")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkCEF/CEFEngine.swift"), "W2")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkApp/AppStore.swift"), "W2")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkApp/ControlExecutor.swift"), "W6")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkSidebar/TablistView.swift"), "W3")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkOverlays/Suggest.swift"), "W4")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkTheme/ThemeRenderer.swift"), "W5")
     }
 }

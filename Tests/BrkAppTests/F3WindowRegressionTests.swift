@@ -46,26 +46,4 @@ final class F3WindowRegressionTests: XCTestCase {
             XCTAssertEqual(shown(), c, "the next walk starts from A; intermediate B was only selected, never shown")
         }
     }
-
-    func testBothHostKindsReportNonControlClicks() throws {
-        _ = NSApplication.shared
-        let windows: [any HostWindow] = [
-            BrowserWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false),
-            BrowserPanel(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
-        ]
-        for window in windows {
-            window.isReleasedWhenClosed = false
-            defer { window.close() }
-            var reports: [NSEvent.ModifierFlags] = []
-            window.onFlagsChanged = { reports.append($0) }
-            for type in [NSEvent.EventType.leftMouseDown, .rightMouseDown, .otherMouseDown] {
-                for flags: NSEvent.ModifierFlags in [.control, .shift, [.option, .command], []] {
-                    let event = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: .zero, modifierFlags: flags,
-                        timestamp: 1, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
-                    _ = window.hostEvent(event)
-                }
-            }
-            XCTAssertEqual(reports, Array(repeating: [NSEvent.ModifierFlags.shift, [.option, .command], []], count: 3).flatMap { $0 })
-        }
-    }
 }

@@ -5,11 +5,23 @@ from collections import Counter
 import json
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 STATES = {"unreviewed", "missing", "partial", "implemented", "verified", "blocked", "excluded", "deferred"}
 CHECKS = {"unit", "native", "visual", "manual", "static"}
+
+
+def evidence_exists(artifact):
+    """A file in the tree, or `<commit>:<path>`: evidence recorded at that commit and removed from the tree later
+    (test records are not kept in the tree, docs/testing-policy.md); `git show <commit>:<path>` prints it."""
+    recorded = re.fullmatch(r"([0-9a-f]{7,40}):(.+)", artifact)
+    if recorded:
+        found = subprocess.run(["git", "cat-file", "-e", artifact], cwd=ROOT, capture_output=True)
+        return found.returncode == 0
+    path = (ROOT / artifact).resolve()
+    return bool(artifact) and path.is_relative_to(ROOT) and path.is_file()
 
 
 def validate(inventory, require_complete):
@@ -37,9 +49,8 @@ def validate(inventory, require_complete):
             kinds.add(kind)
             if kind not in CHECKS or check.get("result") != "pass" or not check.get("command"):
                 problems.append(f"{identity}: invalid or non-passing verification")
-            artifact = (ROOT / check.get("artifact", "")).resolve()
-            if not artifact.is_relative_to(ROOT) or not artifact.is_file():
-                problems.append(f"{identity}: evidence must be a file in this repository")
+            if not evidence_exists(check.get("artifact", "")):
+                problems.append(f"{identity}: evidence must be a file in this repository or <commit>:<path> in its history")
         if not set(row.get("required_checks", [])) <= kinds:
             problems.append(f"{identity}: a required verification kind is missing")
     if require_complete:

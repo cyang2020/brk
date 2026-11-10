@@ -14,7 +14,7 @@ Updated on 2026-10-31 after parent integration of the privacy, native-focus, His
 The native run used this command after the successful build:
 
 ```sh
-BRK_LOCK_WAIT=900 python3 verify/completion/splits-parent/run.py suite
+BRK_LOCK_WAIT=900 python3 10869446ec:verify/completion/splits-parent/run.py suite
 ```
 
 ## Implemented behavior

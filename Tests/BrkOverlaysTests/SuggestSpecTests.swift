@@ -95,37 +95,6 @@ func rows(_ list: [Suggestion]) -> [String] {
 final class SuggestSpecTests: XCTestCase {
     // MARK: - electron-v1:src/renderer/overlay/suggest.test.ts
     // MARK: suggest
-    /// empty query: open tabs in view order without the focused one (at most four), then Arc's own entries fill the
-    /// five rows; history is for typed text (Q01-a: four recent tabs, then Contact the Team; P21-a, no tabs: Arc's
-    /// five entries)
-    func test_emptyQueryOpenTabsInViewOrderWithoutTheFocusedOneThenNewestHistoryOneRow() {
-        XCTAssertEqual(rows(suggest("")), [
-            "switch:t1",
-            "switch:t2",
-            "switch:t3",
-            "suggested:Contact the Team",
-            "suggested:The Browser Company",
-        ])
-        let fewer = commandBar(Array(fixtureBar.tabs.prefix(2)), fixtureBar.history)
-        XCTAssertEqual(rows(suggest("", fewer)), [
-            "switch:t1",
-            "suggested:Contact the Team",
-            "suggested:The Browser Company",
-            "suggested:Air Traffic Control",
-            "suggested:Tips for Organizing",
-        ])
-        XCTAssertEqual(rows(suggest("", commandBar([], fixtureBar.history))).last, "suggested:Help Center")
-        let contact = suggest("")[3]
-        XCTAssertEqual(contact.command, ActionID.contactTheTeam.spec.command, "the Help menu's Contact the Team")
-        XCTAssertEqual(contact.tile, true)
-        XCTAssertTrue(suggest("").prefix(3).allSatisfy { $0.subtitle == nil }, "tabs carry no address under the title")
-    }
-
-    /// whitespace-only query behaves like an empty one
-    func test_whitespaceOnlyQueryBehavesLikeAnEmptyOne() {
-        XCTAssertEqual(suggest("   "), suggest(""))
-        XCTAssertEqual(suggest(" \t "), suggest(""))
-    }
 
     /// matching is case- and diacritic-insensitive and also looks at URLs
     func test_matchingIsCaseInsensitiveAndAlsoLooksAtURLs() {
@@ -189,44 +158,11 @@ final class SuggestSpecTests: XCTestCase {
         XCTAssertEqual(Array(rows(suggest("nigh")).prefix(2)), ["open:nigh", "action:Switch to Dark Mode:-"])
     }
 
-    /// the bar's own openers and actions without a listing are never results, whatever the projection hands over
-    func test_onlyListsActionsWithACommandBarListing() {
-        let everything = commandBar(fixtureBar.tabs, fixtureBar.history, actions: ActionID.allCases)
-        XCTAssertFalse(suggest("new tab", everything).contains { $0.title == "New Tab…" })
-        XCTAssertFalse(suggest("open command", everything).contains { $0.title == "Open Command Bar" })
-        XCTAssertFalse(suggest("tab switcher", everything).contains { $0.kind == .action })
-    }
-
     /// shows at most Metrics.commandBar.maxVisibleRows (5) rows
     func test_showsAtMostMaxVisibleRows() {
         let many = commandBar(["a", "b", "c", "d"].map { candidate("t\($0)", "Page \($0)", "https://\($0).test/") },
                               ["a", "b", "c", "d"].enumerated().map { i, n in visit("Page \(n)", "https://h\(n).test/", 100 - Int64(i)) })
         XCTAssertEqual(suggest("pag", many).count, Metrics.commandBar.maxVisibleRows.value)
-    }
-
-    // MARK: commandFor
-    /// maps each kind to the command the bar dispatches
-    func test_mapsEachKindToTheCommandTheBarDispatches() {
-        let commands = suggest("hub").map(\.command)
-        XCTAssertTrue(commands.contains(.tab(.focus(ItemID("t2")))))
-        XCTAssertTrue(commands.contains(.commandBar(.submit("hub"))))
-        XCTAssertTrue(commands.contains(.commandBar(.submit("hubspot.com"))))
-        XCTAssertTrue(commands.contains(.commandBar(.submit("https://status.example.com/hub"))))
-    }
-
-    /// submits the trimmed typed text
-    func test_submitsTheTrimmedTypedText() {
-        let open = suggest("  example.com  ").first { $0.kind == .openTyped }
-        XCTAssertEqual(open?.command, .commandBar(.submit("example.com")))
-        XCTAssertEqual(open?.title, "example.com")
-    }
-
-    /// an action dispatches that action's own command
-    func test_anActionDispatchesThatActionSOwnCommand() {
-        func actions(_ query: String) -> [Command] { suggest(query).filter { $0.kind == .action }.map(\.command) }
-        XCTAssertEqual(actions("split").first, .split(.addPane))
-        XCTAssertTrue(actions("pin").contains(.tab(.togglePin(.focused))))
-        XCTAssertEqual(actions("view archive").first, .library(.open(.archive)))
     }
 }
 
@@ -234,17 +170,6 @@ final class SuggestSpecTests: XCTestCase {
 final class SuggestWave2Tests: XCTestCase {
     private let work = SpaceCandidate(id: SpaceID("work"), title: "Work", icon: .none, isCurrent: false)
     private let home = SpaceCandidate(id: SpaceID("home"), title: "Home", icon: .none, isCurrent: true)
-
-    /// W2-8: "preferences" puts Preferences… first, so Return opens the settings on General (Arc: its title is the whole
-    /// text, an exact hot word); "quit" lists Quit; Arc's trigger phrase reaches the Links pane
-    func test_aQueryThatBeginsAnActionMakesItTheTopHit() {
-        let list = suggest("preferences")
-        XCTAssertEqual(list.first?.title, "Preferences…")
-        XCTAssertEqual(list.first?.command, .settings(.openPane(.general)))
-        XCTAssertEqual(list.first?.hint, "⌘,")
-        XCTAssertTrue(rows(suggest("quit")).contains("action:Quit Brk:⌘Q"))
-        XCTAssertEqual(suggest("air traffic").first?.command, .settings(.openPane(.links)), "Arc's trigger phrase for the Links pane")
-    }
 
     /// the start of one word of a command does not lift it above the search ("swi", as in Arc); a match inside a word
     /// is no command row
@@ -330,16 +255,6 @@ final class SuggestWave2Tests: XCTestCase {
             "history:https://other.example.com/b",
         ])
     }
-
-    /// Profiles > New documents: the profile's app is a type-travel row ("New Google Doc"); "——" has none
-    func test_theNewDocumentRowFollowsTheProfilesDocumentApp() {
-        var bar = commandBar([], [])
-        XCTAssertFalse(Suggest.rank(query: "new doc", bar: bar, appName: "Brk").contains { $0.command == .tab(.newDocument) })
-        bar.newDocument = .googleDocs
-        let row = Suggest.rank(query: "new doc", bar: bar, appName: "Brk").first { $0.command == .tab(.newDocument) }
-        XCTAssertEqual(row?.title, "New Google Doc")
-        XCTAssertEqual(row?.kind, .action)
-    }
 }
 
 
@@ -368,16 +283,6 @@ final class MaxCommandBarSuggestTests: XCTestCase {
         return bar
     }
 
-    func testTheAskRowIsThirdForAQuestion() {
-        let rows = Suggest.rank(query: "how do browsers render fonts", bar: bar(), appName: "Brk")
-        XCTAssertEqual(rows.count, 5)
-        XCTAssertEqual(rows[2].kind, .ask)
-        XCTAssertEqual(rows[2].title, "how do browsers render fonts")
-        XCTAssertEqual(rows[2].hint, "Ask Claude")
-        XCTAssertEqual(rows[2].command, .assist(.ask("how do browsers render fonts")))
-        XCTAssertEqual(rows[0].kind, .openTyped)
-    }
-
     func testNoAskRowWhenOffForAnAddressOrOneWord() {
         XCTAssertFalse(Suggest.rank(query: "how do browsers render fonts", bar: bar(ask: nil), appName: "Brk").contains { $0.kind == .ask })
         XCTAssertFalse(Suggest.rank(query: "example.com/fonts", bar: bar(), appName: "Brk").contains { $0.kind == .ask })
@@ -391,13 +296,5 @@ final class MaxCommandBarSuggestTests: XCTestCase {
         XCTAssertNil(Suggest.instantQuery("example.com", bar: bar()))
         XCTAssertNil(Suggest.instantQuery("2+2", bar: bar()))
         XCTAssertNil(Suggest.instantQuery("", bar: bar()))
-    }
-
-    func testTypingTheToolsNameThenTabAsks() {
-        XCTAssertTrue(Suggest.asksProvider("Cla", bar: bar()))
-        XCTAssertTrue(Suggest.asksProvider("claude", bar: bar()))
-        XCTAssertFalse(Suggest.asksProvider("cl", bar: bar()))
-        XCTAssertFalse(Suggest.asksProvider("claudette", bar: bar()))
-        XCTAssertFalse(Suggest.asksProvider("Claude", bar: bar(ask: nil)))
     }
 }

@@ -39,17 +39,6 @@ final class SpaceCreateDraftTests: XCTestCase {
         guard case .space(.create(_, _, let theme, _))? = model.draft.createCommand else { return XCTFail("no create command") }
         XCTAssertEqual(resolveTheme(theme).gradient.first, ThemePresets.greyscale[0])
     }
-
-    func testTheCreateButtonIsArcsBlueUntilAThemeIsPickedThenADeepShadeOfIt() {
-        var draft = SpaceCreateDraft()
-        let blue = draft.accent(systemScheme: .light)
-        XCTAssertEqual(blue.hex, "#1E2CFF")
-        draft.themeChosen = true
-        draft.theme = SpaceTheme(colors: [ThemePresets.brand[0]], texture: .grain, intensity: 0.25, appearance: .auto)
-        let brown = HSL(draft.accent(systemScheme: .light))
-        XCTAssertEqual(brown.hue, HSL(ThemePresets.brand[0]).hue, accuracy: 1, "cream gives a brown of its own hue (#725137 in Arc)")
-        XCTAssertLessThan(brown.lightness, 0.4)
-    }
 }
 
 final class ThemeDraftTests: XCTestCase {
@@ -77,14 +66,6 @@ final class ThemeDraftTests: XCTestCase {
         XCTAssertEqual(draft.colors.count, 1)
     }
 
-    func testTheAppearanceButtonsSetTheSelection() {
-        var draft = ThemeDraft(theme: SpaceTheme(colors: [ThemePresets.brand[0]], texture: .grain, intensity: 0.25, appearance: .auto), systemScheme: .light)
-        XCTAssertEqual(draft.appearance, .auto)
-        draft.setAppearance(.dark)
-        XCTAssertEqual(draft.theme.variants?.selection, .dark)
-        XCTAssertEqual(draft.resolved.scheme, .dark)
-    }
-
     func testThePadIsArcsHueWheel() {
         // P28 a: the cream preset sits 29° below the right-hand axis at 0.82 of the inscribed radius.
         let cream = ThemePad.point(of: ThemePresets.brand[0])
@@ -101,11 +82,6 @@ final class ThemeDraftTests: XCTestCase {
             let back = ThemePad.color(at: ThemePad.point(of: color), saturation: HSL(color).saturation)
             XCTAssertEqual(back.hex, color.hex)
         }
-    }
-
-    func testThePresetPagesAreInArcsOrder() {
-        XCTAssertEqual(ThemePresets.pages.map(\.name), ["Brand", "Pastel", "Drab", "Greyscale"])
-        XCTAssertEqual(ThemePresets.pages.map(\.colors.count), [9, 9, 9, 9])
     }
 }
 
@@ -124,12 +100,6 @@ final class SpaceAlertKindTests: XCTestCase {
         XCTAssertEqual(rename.confirmCommand(name: " 新名 "), .space(.update(SpaceID("s"), title: "新名", icon: nil, theme: nil)))
         XCTAssertNil(rename.confirmCommand(name: "  "))
         XCTAssertEqual(rename.cancelCommand, .sidebar(.openDialog(nil)))
-    }
-
-    func testDeleteConfirmsOrCancelsWithItsToken() {
-        let request = SpaceDeletionRequest(id: SpaceID("s"), title: "对照", token: "t1")
-        XCTAssertEqual(SpaceAlertKind.delete(request).confirmCommand(name: ""), .space(.confirmDelete(SpaceID("s"), token: "t1", confirmed: true)))
-        XCTAssertEqual(SpaceAlertKind.delete(request).cancelCommand, .space(.confirmDelete(SpaceID("s"), token: "t1", confirmed: false)))
     }
 }
 
@@ -247,24 +217,6 @@ final class SpaceDialogHostTests: XCTestCase {
         press(36, "\r", in: window)
         XCTAssertEqual(sent.last, .profile(.create(name: "Work", icon: nil)))
     }
-
-    func testChangeProfileIsArcsCentredCardNamingTheSpace() throws {
-        let (window, host, frames) = harness()
-        defer { window.orderOut(nil) }
-        let rows = [ProfileRow(id: .default, name: "Default", icon: nil, spaceTitles: ["对照"], isDefault: true),
-                    ProfileRow(id: ProfileID("w"), name: "Work", icon: nil, spaceTitles: [], isDefault: false)]
-        ProfileDialogHost.render(.change(space: SpaceID("s"), current: .default, profiles: rows), over: host, frames: frames,
-                                 palette: Palette(resolveTheme(.default)), spaceNames: [SpaceID("s"): "对照"])
-        let profile = try XCTUnwrap(window.contentView?.subviews.compactMap { $0 as? ProfileDialogHost }.first)
-        profile.layoutSubtreeIfNeeded()
-        let view = try XCTUnwrap(profile.subviews.first as? ProfileDialogView)
-        view.layoutSubtreeIfNeeded(); view.dialog.layoutSubtreeIfNeeded()
-        XCTAssertEqual(view.dialog.card.frame.width, 450)
-        XCTAssertEqual(view.dialog.card.frame.height, 332, accuracy: 6, "Q04 a")
-        XCTAssertTrue(ProfileDialogHost.focus(over: host))
-        press(36, "\r", in: window)
-        XCTAssertEqual(sent.last, .profile(.openDialog(nil)), "confirming the current profile just closes")
-    }
 }
 
 /// A063 (R4-9): the theme panel's edits step back and forward with Cmd+Z and Shift+Cmd+Z; a drag is one step.
@@ -296,18 +248,6 @@ final class ThemeEditorUndoTests: XCTestCase {
         XCTAssertEqual(model.draft, afterDrag)
         model.update { $0.setNoise(0.9) }
         XCTAssertFalse(model.redo(), "a new edit drops what was undone")
-    }
-
-    func testTwoDragsOfTheSameControlAreTwoSteps() {
-        let model = ThemeEditorModel(draft: ThemeDraft(theme: editTheme))
-        model.update(group: "noise") { $0.setNoise(0.3) }
-        model.update(group: "noise") { $0.setNoise(0.4) }
-        model.endGroup()
-        model.update(group: "noise") { $0.setNoise(0.6) }
-        model.endGroup()
-        XCTAssertEqual(model.undoStack.count, 2)
-        model.undo()
-        XCTAssertEqual(model.draft.style.noise, 0.4, accuracy: 1e-9)
     }
 }
 

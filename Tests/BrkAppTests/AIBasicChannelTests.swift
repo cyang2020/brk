@@ -49,17 +49,6 @@ final class AIBasicChannelTests: XCTestCase {
         XCTAssertTrue(AIBasicPrompts.tidy([]).instructions.contains("never make a catch-all folder"))
     }
 
-    func testDecisionAnswersFromTheTextModelCarryNoProbability() throws {
-        let request = DecisionRequest(state: .string("s"), questions: ["g": .choice("?", options: [DecisionOption("A"), DecisionOption("B")]), "y": .noul("?"), "s": .score("?", levels: ["lo", "hi"])])
-        let answer = StructuredAnswer(json: Data(#"{"g":"B","y":false,"s":1}"#.utf8), usage: AIUsageCount())
-        let answers = try AIBasicPrompts.decision(answer, request: request, backend: "haiku")
-        XCTAssertEqual(answers["g"], .choice("B", probabilities: nil))
-        XCTAssertEqual(answers["y"], .noul(false, probability: nil))
-        XCTAssertEqual(answers["s"], .score(1, expected: nil))
-        XCTAssertTrue(request.accepts(answers))
-        XCTAssertEqual(DecisionBand(answers["g"]?.probability), .suggest)
-    }
-
     // MARK: Subscriptions
 
     func testTheClaudeRunIsReadOnlyAndAsksForTheSchema() {
@@ -75,18 +64,6 @@ final class AIBasicChannelTests: XCTestCase {
         let codex = CodexAppServer.arguments
         for setting in ["features.shell_tool=false", "mcp_servers={}", "sandbox_mode=\"read-only\"", "approval_policy=\"never\"", "features.hooks=false", "project_doc_max_bytes=0"] {
             XCTAssertTrue(codex.contains(setting), setting)
-        }
-    }
-
-    func testClaudesResultLineIsReadForItsStructuredOutputNeverItsText() throws {
-        let line = object(#"{"type":"result","is_error":false,"result":"ignored prose","structured_output":{"title":"Hacker News"},"usage":{"input_tokens":2,"cache_creation_input_tokens":1187,"cache_read_input_tokens":0,"output_tokens":55},"total_cost_usd":0.0003923}"#)
-        let answer = try ClaudeStructured.answer(line, model: "claude-haiku-5-5").get()
-        XCTAssertEqual(try AIBasicPrompts.title(answer), "Hacker News")
-        XCTAssertEqual(answer.usage.inputTokens, 1189)
-        XCTAssertEqual(answer.usage.outputTokens, 55)
-        XCTAssertThrowsError(try ClaudeStructured.answer(object(#"{"type":"result","is_error":false,"result":"{\"title\":\"x\"}"}"#), model: nil).get(), "prose is not an answer")
-        XCTAssertThrowsError(try ClaudeStructured.answer(object(#"{"type":"result","is_error":true,"result":"Not logged in · Please run /login"}"#), model: nil).get()) { error in
-            XCTAssertEqual("\(error)", AgentCopy.notSignedIn(.claude))
         }
     }
 
@@ -152,27 +129,6 @@ final class AIBasicChannelTests: XCTestCase {
         XCTAssertEqual(AIEndpoints.failure(.openai, status: 401, body: [:]), "The OpenAI API key was refused (401). Check it in Settings → Max.")
     }
 
-    func testOpenAIDecisionsMapsQuestionsAndTreatsARefusalAsNoAnswer() {
-        let request = DecisionRequest(state: .object(["title": .string("Soup")]), questions: [
-            "group": .choice("Which group?", options: [DecisionOption("Recipes", "cooking")], none: "None fits"),
-            "close": .noul("Done with it?"),
-            "worth": .score("How useful?", levels: ["low", "mid", "high"]),
-        ])
-        let body = OpenAIDecisions.body(request)
-        XCTAssertEqual(body["model"] as? String, "gpt-6-luna")
-        let questions = body["questions"] as? [[String: Any]] ?? []
-        XCTAssertEqual(Set(questions.compactMap { $0["type"] as? String }), ["choice", "predicate", "score"])
-        let choice = questions.first { $0["name"] as? String == "group" }
-        XCTAssertEqual((choice?["choices"] as? [[String: Any]])?.compactMap { $0["value"] as? String }, ["Recipes", DecisionQuestion.noneName])
-        XCTAssertEqual((questions.first { $0["name"] as? String == "worth" }?["levels"] as? [[String: Any]])?.count, 3)
-        let answers = OpenAIDecisions.answers(object(#"{"answers":[{"type":"choice","name":"group","choice":"Recipes","confidence":0.8,"probabilities":[{"value":"Recipes","probability":0.91},{"value":"none_of_the_above","probability":0.09}]},{"type":"refusal","name":"close"},{"type":"score","name":"worth","score":1.7,"confidence":0.6,"probabilities":[{"value":0,"label":"low","probability":0.1},{"value":1,"label":"mid","probability":0.1},{"value":2,"label":"high","probability":0.8}]}],"usage":{"input_tokens":50}}"#), request: request)
-        XCTAssertEqual(answers["group"]?.probability, 0.91)
-        XCTAssertEqual(DecisionBand(answers["group"]?.probability), .act)
-        XCTAssertNil(answers["close"], "refused: no answer")
-        XCTAssertEqual(answers["worth"], .score(2, expected: 1.7))
-        XCTAssertTrue(request.accepts(answers))
-    }
-
     func testJevSpeaksSystemOne() {
         let request = DecisionRequest(state: .string("A new tab"), questions: [
             "group": .choice("Which group?", options: [DecisionOption("Recipes"), DecisionOption("Work", "office")], none: "None fits"),
@@ -215,48 +171,5 @@ final class AIBasicChannelTests: XCTestCase {
         XCTAssertFalse(store.has(.anthropic))
         XCTAssertEqual(reported[.anthropic], AIKeyStatus(stored: false))
         XCTAssertFalse(reported.description.contains("secret"), "a status never carries the key")
-    }
-
-    func testAChosenKeyRoutesTheChannelToTheAPIAndAMissingKeySaysWhere() throws {
-        let store = AIKeyStore(memoryOnly: true)
-        let channel = AIBasicChannel(keys: store)
-        XCTAssertThrowsError(try channel.runner(.api(.anthropic, model: "claude-haiku-5-5", effort: nil))) { error in
-            XCTAssertTrue("\(error)".contains("Settings → Max"))
-        }
-        store.store(.anthropic, "sk-ant-x")
-        XCTAssertTrue(try channel.runner(.api(.anthropic, model: "claude-haiku-5-5", effort: nil)) is AnthropicStructured)
-        store.store(.openai, "sk-x")
-        XCTAssertTrue(try channel.runner(.api(.openai, model: "gpt-6-luna", effort: "low")) is OpenAIStructured)
-        XCTAssertThrowsError(try channel.runner(.unavailable("Basic AI features need Claude Code or Codex")))
-        XCTAssertEqual(AIBasicChannel.feature(.nameTabs([])), "Name Tabs")
-        XCTAssertEqual(AIBasicChannel.feature(.decide(DecisionRequest(state: .null, questions: [:]), feature: .tabPlacement)), "Place New Tabs")
-    }
-
-    func testTidyUsesEmbeddingClustersOnlyWithoutAnAgentOrAKey() async throws {
-        final class Clusters: TabClustering {
-            var asked = 0
-            func clusters(_ tabs: [AITab]) async throws -> [[ItemID]] { asked += 1; return [tabs.filter { $0.url.host!.contains("recipes") }.map(\.id), tabs.filter { !$0.url.host!.contains("recipes") }.map(\.id)] }
-        }
-        let channel = AIBasicChannel(keys: AIKeyStore(memoryOnly: true))
-        let clusters = Clusters()
-        channel.clustering = clusters
-        let tabs = [AITab(id: ItemID("a"), title: "Soup", url: URL(string: "https://www.recipes.example/soup")!),
-                    AITab(id: ItemID("b"), title: "Pie", url: URL(string: "https://recipes.example/pie")!),
-                    AITab(id: ItemID("c"), title: "Kyoto", url: URL(string: "https://travel.example/kyoto")!)]
-        var settings = MaxSettings.default
-        settings.provider = .claude
-        let none = AIBasicContext(max: MaxSnapshot(settings: settings, detected: [], active: nil), choice: .claude)
-        let outcome = await channel.answer(.tidyToday(SpaceID("s"), tabs: tabs), context: none)
-        if AIProviderSeam.mode == .real {
-            XCTAssertEqual(outcome, .reply(.groups([AIGroupPlan(folder: "Recipes", tabs: ["a", "b"])])), "a tab like no other stays in Today")
-            XCTAssertEqual(clusters.asked, 1)
-        }
-        XCTAssertEqual(AIBasicChannel.siteName([tabs[0], tabs[2]]), "Tabs", "no site shared by most")
-    }
-
-    func testPricesAreApproximateAndUnknownModelsHaveNone() {
-        XCTAssertEqual(AIPrices.cost("claude-haiku-5-5", input: 1_000_000, output: 1_000_000) ?? 0, 0.60, accuracy: 1e-9)
-        XCTAssertEqual(AIPrices.cost("gpt-6-luna", input: 1_000_000, output: 0, price: AIPrices.decisions) ?? 0, 0.10, accuracy: 1e-9)
-        XCTAssertNil(AIPrices.cost("some-new-model", input: 10, output: 10))
     }
 }

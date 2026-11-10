@@ -16,7 +16,7 @@ struct RunnerArguments {
         let description: String
     }
 
-    static let usage = "usage: brk-e2e --app <Brk.app | executable> --site <Tests/E2ESite> --out <verify/swift> [--only 0,4,R6] [--engine stub|cef]"
+    static let usage = "usage: brk-e2e --app <Brk.app | executable> --site <Tests/E2ESite> --out <folder> [--only 0,4,R6] [--engine stub|cef]"
 
     init(_ argv: [String], environment: [String: String] = ProcessInfo.processInfo.environment) throws {
         var values: [String: String] = [:]

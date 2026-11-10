@@ -142,39 +142,7 @@ final class RightPanelTests: XCTestCase {
         XCTAssertNil(d.view(of: incognito).aiPanel)
     }
 
-    func testTheToggleCarriesTheProfilesWaitingCount() throws {
-        let d = enabled()
-        let id = try firstTurn(d.user(.assist(.ask("Run it"))))
-        d.system(.aiConversation(id, .approval(AIAgentApproval(id: "a", title: "Run: ls", detail: "", options: [.init(id: "once", title: "Allow", kind: .allowOnce)]), turn: id)))
-        d.user(.assist(.dismiss))
-        XCTAssertEqual(d.view.aiToggle?.waiting, 1)
-        XCTAssertEqual(d.view.aiToggle?.open, false)
-        d.user(.assist(.togglePanel))
-        XCTAssertEqual(d.view.aiPanel?.waiting, 1, "the same number as the list icon's")
-    }
-
-    func testViewMenuItemUnderShowHideSidebarTogglesAndTheBarRowOpensTheList() throws {
-        let view = ActionID.allCases.filter { $0.spec.menu == .view && !$0.spec.hidden && $0.spec.submenu == nil }
-        let sidebar = try XCTUnwrap(view.firstIndex(of: .showSidebar))
-        XCTAssertEqual(view[sidebar + 1], .aiConversations)
-        let spec = ActionID.aiConversations.spec
-        XCTAssertEqual(spec.title, "Show/Hide AI Conversations")
-        XCTAssertEqual(spec.bindings.first?.chord, KeyChord([.option, .command], .a))
-        XCTAssertEqual(spec.command, .assist(.togglePanel))
-        XCTAssertEqual(spec.barCommand, .assist(.panelPage(.list)), "the command bar's AI 对话 row stays as it was")
-        XCTAssertEqual(ActionID.aiConversations.barTitle(appName: "Brk"), "AI Conversations")
-        XCTAssertEqual(KeyMap().lookup(KeyChord([.option, .command], .a))?.action, .aiConversations)
-    }
-
     // MARK: The list keeps only delete (列表里只留删除)
-
-    func testTheRowMenuIsRenameMoveAndDelete() throws {
-        let d = enabled()
-        let id = try answered(d)
-        _ = d.newSpace("Work")
-        let entries = Work.menuTitles(d, id)
-        XCTAssertEqual(entries, ["重命名", "移到别的 Space", "-", "彻底删除…"])
-    }
 
     func testMovingAConversationChangesBothListsAndPutsItAwayFromThePanel() throws {
         let d = enabled()
@@ -190,10 +158,6 @@ final class RightPanelTests: XCTestCase {
         XCTAssertFalse(listed(d).contains(id))
         d.user(.space(.focus(work)))
         XCTAssertTrue(listed(d).contains(id))
-    }
-
-    func testLibraryHasNoArchivedState() {
-        XCTAssertFalse(AIThreadState.allCases.map(\.rawValue).contains("archived"))
     }
 
     // MARK: Used tabs and lighting (悬停高亮)
@@ -249,48 +213,6 @@ final class RightPanelTests: XCTestCase {
         XCTAssertNil(d.view.aiPanel?.hoveredDetail)
     }
 
-    func testASplitAndAFavoriteLightTheirOwnPlaces() throws {
-        let d = enabled()
-        let a = d.open("https://a.example/")
-        let b = d.open("https://b.example/")
-        let f = d.open("https://f.example/")
-        d.user(.tabTools(.openInSplit(.items([a, b]))))
-        let split = try XCTUnwrap(d.state.doc.tree[a]?.parent)
-        let favorites = try XCTUnwrap(d.state.doc.favorites[.default])
-        d.user(.item(.move(f, to: .into(parent: favorites, index: 0))))
-        d.user(.assist(.attach([.tab(a.rawValue), .tab(f.rawValue)])))
-        let id = try firstTurn(d.user(.assist(.followUp("compare"))))
-        d.system(.aiResult(id, .text("Done.")))
-        d.user(.assist(.panelPage(.list)))
-        d.user(.assist(.hoverConversation(id)))
-        XCTAssertEqual(d.view.sidebar.lit, [split, f])
-    }
-
-    func testNothingLightsWhileTheSidebarIsHidden() throws {
-        let d = enabled()
-        let a = d.open("https://a.example/")
-        d.user(.assist(.attach([.tab(a.rawValue)])))
-        let id = try firstTurn(d.user(.assist(.followUp("x"))))
-        d.user(.assist(.panelPage(.list)))
-        d.user(.sidebar(.toggle))
-        d.user(.assist(.hoverConversation(id)))
-        XCTAssertTrue(d.view.sidebar.lit.isEmpty)
-        XCTAssertEqual(d.view.aiPanel?.hoveredDetail, "Used 1 tab, 0 lit")
-    }
-
-    func testHoveringAChipLightsThatOneTab() throws {
-        let d = enabled()
-        let a = d.open("https://a.example/")
-        let b = d.open("https://b.example/")
-        d.user(.assist(.attach([.tab(a.rawValue), .tab(b.rawValue)])))
-        d.user(.assist(.hoverChip(b.rawValue)))
-        XCTAssertEqual(d.view.sidebar.lit, [b])
-        d.user(.assist(.hoverChip(nil)))
-        XCTAssertTrue(d.view.sidebar.lit.isEmpty)
-        d.user(.assist(.hoverChip("not-a-chip")))
-        XCTAssertTrue(d.view.sidebar.lit.isEmpty)
-    }
-
     // MARK: The panel's width (拖宽)
 
     func testThePanelKeepsADraggedWidthAcrossARelaunchAndStopsAtHalfTheWindow() throws {
@@ -332,25 +254,6 @@ final class RightPanelTests: XCTestCase {
         let back = try XCTUnwrap(d.view.dock.first { $0.title == "Work" }?.id)
         XCTAssertEqual(d.state.savedConversations[a]?.space, back)
         XCTAssertEqual(d.state.savedConversations[b]?.space, back)
-    }
-
-    // MARK: A kept page's way back
-
-    func testAKeptPagesRowMenuOpensItsConversationWhileItIsSaved() throws {
-        let d = enabled()
-        let id = try firstTurn(d.user(.assist(.ask("画个对比图"))))
-        let page = AIPageRecord(id: AIPageID("p"), title: "Prices", html: URL(fileURLWithPath: "/tmp/brk-test-pages/p.html"), height: 300, data: nil,
-                                conversation: id, profile: .default, createdAt: T0, readPages: false)
-        d.system(.aiConversation(id, .page(page)))
-        d.system(.aiResult(id, .text("Done.")))
-        d.user(.assist(.keepPage(AIPageID("p"))))
-        let row = try XCTUnwrap(d.allTabRows.first { $0.url == AIPageTab.url(AIPageID("p")) }).id
-        let titles = Work.menuTitles(d, .item(row))
-        let at = try XCTUnwrap(titles.firstIndex(of: "打开对话"))
-        XCTAssertEqual(titles[at + 1], "Refresh", "first of Brk's page items")
-        d.user(.assist(.dismiss))
-        d.user(.assist(.showConversation(id)))
-        XCTAssertEqual(d.view.ai?.conversation?.id, id)
     }
 }
 

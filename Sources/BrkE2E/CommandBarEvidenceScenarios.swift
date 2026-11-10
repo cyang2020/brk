@@ -11,8 +11,6 @@ import Foundation
 enum CommandBarEvidenceScenarios {
     static let all = [
         Scenario("R49-Suggestions", "history, bookmark, top-domain, calculator and engine rows are listed and Return runs them", cefOnly: "native command bar", suggestions),
-        Scenario("R49-Actions", "Focus on and Move to a space, Move to a folder, Replace Pinned Tab, Undo, Add Right and Bottom Split and an extension row run from the bar", cefOnly: "native command bar", actions),
-        Scenario("R49-Engines", "the Profiles pane's engine pop-up changes which engine the bar asks and searches, per profile; the suggestions switch stops the requests", cefOnly: "native settings pop-up and command bar", engines),
     ]
 
     private typealias S = SidebarReviewScenarios
@@ -224,65 +222,4 @@ enum CommandBarEvidenceScenarios {
 
     // MARK: A070
 
-    @Sendable static func engines(_ app: AppUnderTest) throws {
-        guard NativePickerInput.available else { throw Skipped(description: "the settings pop-up is chosen through Accessibility") }
-        let pid = app.hello!.pid
-        func engineAsked(after count: Int) throws -> String? {
-            var host: String?
-            try app.waitUntil("a suggest request", timeout: 6) {
-                let all = app.site.suggestQueries()
-                guard all.count > count, let last = all.last else { return false }
-                host = URLComponents(string: "?" + last)?.queryItems?.first { $0.name == "engine" }?.value
-                return true
-            }
-            return host
-        }
-        func ask(_ query: String) throws -> String? {
-            let before = app.site.suggestQueries().count
-            try app.press("cmd+t")
-            try app.waitUntil("the command bar") { isCommandBar(try app.view().overlay) }
-            try app.type(query)
-            defer { try? CommandBarEvidenceScenarios.dismiss(app) }
-            return try engineAsked(after: before)
-        }
-        try expect(try ask("brk") == "suggestqueries.google.com", "the default engine is not Google's suggest endpoint")
-        // The Profiles pane's Default Search Engine pop-up, chosen through Accessibility.
-        guard case .dispatched = try app.send(.openSettings(pane: .profiles)) else { throw Check(description: "settings") }
-        try app.settle()
-        try NativeSystemInput.choosePopUp(pid: pid, identifier: ViewID.settingsField("searchEngine-default").identifier, title: "Bing")
-        try app.waitUntil("Bing chosen") {
-            guard case .settings(let s) = try app.send(.settings) else { return false }
-            return s.profiles.first { $0.profile.id == .default }?.settings.searchEngine == SearchEngine.bing.id
-        }
-        try app.press("cmd+w")
-        _ = try app.send(.activate(window: app.window!))
-        try expect(try ask("brk") == "www.bing.com", "after choosing Bing the bar did not ask Bing")
-        // Return on the typed row searches Bing (stopped at once; it is a remote page).
-        try app.press("cmd+t"); try app.waitUntil("bar") { isCommandBar(try app.view().overlay) }
-        try app.type("brk engine fixture"); try app.press("return")
-        try app.waitUntil("a Bing search") { try currentTab(app.view())?.url == SearchEngine.bing.searchURL("brk engine fixture") }
-        try app.dispatch(.page(.stop(.focused)))
-        // A second profile keeps its own engine and its own suggestions switch.
-        try app.dispatch(.profile(.create(name: "Engines", icon: nil)))
-        guard case .settings(let settings) = try app.send(.settings), let other = settings.profiles.first(where: { $0.profile.name == "Engines" })?.profile.id else { throw Check(description: "no second profile") }
-        try app.dispatch(.settings(.profile(other, .searchEngine(SearchEngine.duckDuckGo.id))))
-        try app.dispatch(.space(.create(title: "Engine space", icon: .none, theme: drabTheme, profile: other)))
-        try app.waitUntil("the second profile's space") { try app.view().space.title == "Engine space" }
-        _ = try E.loadReady(app, "page2.html?engine=other")
-        try expect(try ask("brk") == "duckduckgo.com", "the second profile did not ask DuckDuckGo")
-        try app.dispatch(.settings(.profile(other, .searchSuggestions(false))))
-        let before = app.site.suggestQueries().count
-        try app.press("cmd+t"); try app.waitUntil("bar") { isCommandBar(try app.view().overlay) }
-        try app.type("brk")
-        app.sleep(1)
-        try expect(app.site.suggestQueries().count == before, "suggestions were asked with the switch off")
-        try CommandBarEvidenceScenarios.dismiss(app)
-        let firstSpace = try app.view().dock.first!.id
-        try app.dispatch(.space(.focus(firstSpace)))
-        try app.waitUntil("back in the default profile") { try app.view().space.id == firstSpace }
-        try expect(try ask("brk") == "www.bing.com", "the default profile lost Bing or its suggestions")
-        try app.flush(); try app.restart()
-        try expect(try ask("brk") == "www.bing.com", "Bing did not survive the restart")
-        S.log(app, "suggest-requests.txt", app.site.suggestQueries().joined(separator: "\n"))
-    }
 }

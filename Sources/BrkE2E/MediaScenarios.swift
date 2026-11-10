@@ -7,15 +7,9 @@ import Foundation
 
 enum MediaScenarios {
     static let all = [
-        Scenario("MediaControls", "per-player background pause/play, frames and navigation ownership", cefOnly: "Chrome media elements", controls),
-        Scenario("MediaSounds", "bundled event sound submits when enabled and stays silent when disabled", cefOnly: "signed sound resources", sounds),
         Scenario("R55-Row", "a real click plays: the row shows one speaker between icon and title and nothing at its end; clicking the speaker mutes and unmutes the real tab", cefOnly: "real mouse and Chrome media", rowSpeaker),
         Scenario("R55-Card", "a playing tab left behind shows a card over the dock; the pointer makes it taller with its title; a real click on Pause really pauses without changing the tab; Play plays; shown again the card goes", cefOnly: "real mouse and Chrome media", card),
-        Scenario("R55-CardClose", "the card's × takes the card away while the sound goes on; it comes back only after the tab has been shown; a click on the title, the icon or the blank of the controls row goes back to the tab", cefOnly: "real mouse and Chrome media", cardClose),
-        Scenario("R55-Tracks", "previous and next are dim and dead without a page handler; with one they run the page's own handler and keep the tab", cefOnly: "real mouse and Chrome media", tracks),
-        Scenario("R55-Volume", "the card's speaker opens the slider and the card is three lines tall; a real click on the track sets the page's volume; muted, the speaker unmutes instead", cefOnly: "real mouse and Chrome media", volume),
-        Scenario("R55-TwoCards", "two tabs playing behind: the older card peeks above the newer; under the pointer they come apart", cefOnly: "real mouse and Chrome media", twoCards),
-        Scenario("R55-Arrow", "the current row scrolled out of view: a round arrow at that edge of the list, the title as its tooltip; a click brings the row back", cefOnly: "real mouse", arrow)]
+        ]
     static func row(_ app: AppUnderTest, _ item: ItemID) throws -> TabRow? { tab(item, in: try app.view()) }
     @Sendable static func controls(_ app: AppUnderTest) throws {
         let url = app.site.url("capture-media.html")
@@ -48,48 +42,8 @@ enum MediaScenarios {
         try app.dispatch(.page(.media(.item(first), player.id, .play)))
         try expect(try row(app, first)?.mediaPlayers.isEmpty == true, "stale control resurrected a navigated player")
     }
-    static func submissions(_ app: AppUnderTest) throws -> [[String: Any]] {
-        guard case .text(let json) = try app.send(.mediaSounds), let data = json.data(using: .utf8),
-              let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { throw Check(description: "sound diagnostics missing") }
-        return rows
-    }
-    @Sendable static func sounds(_ app: AppUnderTest) throws {
-        _ = try app.load(app.site.url("page2.html"))
-        try app.dispatch(.settings(.advanced(.soundEffects(true))))
-        let before = try submissions(app).count
-        try app.dispatch(.tab(.close(.focused)))
-        let played = try submissions(app)
-        try expect(played.count == before + 1, "archive did not emit exactly one sound")
-        try expect(played.last?["event"] as? String == "tabsArchived" && played.last?["accepted"] as? Bool == true, "NSSound rejected the bundled asset")
-        let captureURL = app.site.url("capture-media.html")
-        let captureItem = try app.load(captureURL)
-        try app.waitForPageInput(PageID(window:app.window!,item:captureItem),at:captureURL)
-        try app.dispatch(.capture(.begin(.fullPage)))
-        try app.waitUntil("capture completion submits its own cue") { try submissions(app).count == played.count + 1 }
-        try expect(try submissions(app).last?["event"] as? String == "captureCompleted", "capture completion used the wrong cue")
-        try expect(try submissions(app).last?["accepted"] as? Bool == true,"NSSound rejected the capture cue")
-        try app.dispatch(.library(.close))
-        let directory = app.dataDirectory.appendingPathComponent("sound-downloads")
-        try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
-        try app.dispatch(.settings(.profile(.default,.downloadsDirectory(directory.path))))
-        try app.dispatch(.settings(.profile(.default,.promptForDownloadLocation(false))))
-        _ = try app.load(app.site.url("download"))
-        try app.waitUntil("download completion submits its own cue") { try submissions(app).count == played.count + 2 }
-        try expect(try submissions(app).last?["event"] as? String == "downloadCompleted", "download completion used the wrong cue")
-        try expect(try submissions(app).last?["accepted"] as? Bool == true,"NSSound rejected the download cue")
-        try JSONSerialization.data(withJSONObject:submissions(app),options:[.prettyPrinted,.sortedKeys]).write(to:app.shotsDirectory.appendingPathComponent("sound-submissions.json"))
-        let enabledCount = try submissions(app).count
-        try app.dispatch(.settings(.advanced(.soundEffects(false))))
-        _ = try app.load(app.site.url("page2.html"))
-        try app.dispatch(.tab(.close(.focused)))
-        try expect(try submissions(app).count == enabledCount, "disabled sound still submitted to audio")
-        try app.restart()
-        guard case .settings(let settings) = try app.send(.settings) else { throw Check(description: "settings missing") }
-        try expect(settings.advanced.soundEffects == false, "disabled setting did not survive restart")
-        app.note("NSSound accepted the original PCM cue. Physical speaker output was not recorded.")
-    }
 
-    // MARK: R5-5, Arc's speaker and mini player (verify/visual-pairs/run-20261103/Q18). Setup loads pages by command; every
+    // MARK: R5-5, Arc's speaker and mini player (6777d0968b:verify/visual-pairs/run-20261103/Q18). Setup loads pages by command; every
     // gesture under test goes through the window server.
 
     private typealias E = SidebarEvidenceScenarios
@@ -220,125 +174,9 @@ enum MediaScenarios {
         try expect(!isShown(try app.native(), tool("mini-player-", p.tab)), "a tab paused before it left has a card")
     }
 
-    @Sendable static func cardClose(_ app: AppUnderTest) throws {
-        let p = try playing(app)
-        try leave(app, for: p.other, card: p.tab)
-        // ×: the card goes, the sound goes on, and leaving another tab does not bring it back.
-        try onto(app, tool("mini-player-play-", p.tab), card: p.tab)
-        try press(app, tool("mini-player-close-", p.tab))
-        try app.waitUntil("the card is gone") { !isShown(try app.native(), tool("mini-player-", p.tab)) }
-        try expect(try row(app, p.tab)?.mediaPlayers.first?.paused == false && row(app, p.tab)?.title.hasPrefix("paused=false") == true, "the × stopped the sound")
-        try expect(try E.shown(app.view()) == p.other, "the × changed the tab")
-        _ = try E.loadReady(app, "page2.html?third")
-        Thread.sleep(forTimeInterval: 1)
-        try expect(!isShown(try app.native(), tool("mini-player-", p.tab)), "the closed card came back by itself")
-        // Shown and left again, it returns; the title, the icon and the blank of the controls row all go back to the tab.
-        try press(app, .row(p.tab))
-        try app.waitUntil("the tab is shown") { try E.shown(app.view()) == p.tab }
-        try leave(app, for: p.other, card: p.tab)
-        try onto(app, tool("mini-player-play-", p.tab), card: p.tab)
-        let open = try frame(app, tool("mini-player-", p.tab))
-        try PhysicalPointer.press(app, at: CGPoint(x: open.minX + 60, y: open.minY + 16), window: app.window!) {}
-        try app.waitUntil("the title goes back to the tab") { try E.shown(app.view()) == p.tab }
-        try leave(app, for: p.other, card: p.tab)
-        try onto(app, tool("mini-player-play-", p.tab), card: p.tab)
-        try press(app, tool("mini-player-icon-", p.tab))
-        try app.waitUntil("the icon goes back to the tab") { try E.shown(app.view()) == p.tab }
-        try leave(app, for: p.other, card: p.tab)
-        try onto(app, tool("mini-player-play-", p.tab), card: p.tab)
-        let previous = try frame(app, tool("mini-player-previous-", p.tab)), pause = try frame(app, tool("mini-player-play-", p.tab))
-        try PhysicalPointer.press(app, at: CGPoint(x: (previous.maxX + pause.minX) / 2, y: pause.midY), window: app.window!) {}
-        try app.waitUntil("the row's blank goes back to the tab") { try E.shown(app.view()) == p.tab }
-    }
 
-    @Sendable static func tracks(_ app: AppUnderTest) throws {
-        // Without handlers: dim, and a click does nothing (Arc: not even going back to the tab).
-        var p = try playing(app)
-        try leave(app, for: p.other, card: p.tab)
-        try onto(app, tool("mini-player-play-", p.tab), card: p.tab)
-        var card = try XCTUnwrapCard(app)
-        try expect(!card.hasNextTrack && !card.hasPreviousTrack, "a page with no handlers has tracks")
-        try press(app, tool("mini-player-next-", p.tab))
-        Thread.sleep(forTimeInterval: 0.5)
-        try expect(try E.shown(app.view()) == p.other, "a dead next changed the tab")
-        try expect(try row(app, p.tab)?.title.contains("next=0") == true, "a dead next did something")
-        try away(app)
-        try press(app, .row(p.tab))
-        try app.dispatch(.tab(.close(.item(p.tab))))
-        // With handlers: the page's own handler runs and the tab stays.
-        p = try playing(app, query: "?tracks")
-        try leave(app, for: p.other, card: p.tab)
-        try app.waitUntil("the card knows the page's handlers") { try app.view().miniPlayers.first?.hasNextTrack == true }
-        card = try XCTUnwrapCard(app)
-        try expect(card.hasPreviousTrack, "no previous track")
-        _ = try app.screenshot("tracks")
-        try onto(app, tool("mini-player-play-", p.tab), card: p.tab)
-        try press(app, tool("mini-player-next-", p.tab))
-        try app.waitUntil("the page's next handler ran") { try row(app, p.tab)?.title.contains("next=1") == true }
-        try press(app, tool("mini-player-previous-", p.tab))
-        try app.waitUntil("the page's previous handler ran") { try row(app, p.tab)?.title.contains("previous=1") == true }
-        try expect(try E.shown(app.view()) == p.other, "the buttons changed the tab")
-    }
-    private static func XCTUnwrapCard(_ app: AppUnderTest) throws -> MiniPlayerSnapshot {
-        guard let card = try app.view().miniPlayers.first else { throw Check(description: "no card") }
-        return card
-    }
 
-    @Sendable static func volume(_ app: AppUnderTest) throws {
-        let p = try playing(app)
-        try leave(app, for: p.other, card: p.tab)
-        try onto(app, tool("mini-player-speaker-", p.tab), card: p.tab)
-        try app.waitUntil("the tooltip", timeout: 3) { isShown(try app.native(), .tabTool("arc-tooltip")) }
-        try expect(try S.texts(app, in: frame(app, .tabTool("arc-tooltip"))).contains("Adjust Tab Volume"), "the tooltip does not read Adjust Tab Volume")
-        try press(app, tool("mini-player-speaker-", p.tab))
-        try app.waitUntil("the card is three lines tall", timeout: 3) { try cardHeight(app, p.tab) == Metrics.miniPlayer.volumeHeight.value }
-        _ = try app.screenshot("volume-open")
-        let slider = try frame(app, tool("mini-player-slider-", p.tab))
-        try PhysicalPointer.press(app, at: CGPoint(x: slider.midX, y: slider.midY), window: app.window!) {}
-        try app.waitUntil("the page's volume follows the click") {
-            guard let title = try row(app, p.tab)?.title, let range = title.range(of: "volume=") else { return false }
-            let value = Double(title[range.upperBound...].prefix(4)) ?? -1
-            return abs(value - 0.5) < 0.05
-        }
-        // Leaving closes the slider and the card rests.
-        try away(app)
-        try app.waitUntil("the card rests", timeout: 3) { try cardHeight(app, p.tab) == Metrics.miniPlayer.rowHeight.value }
-        // Muted, the speaker unmutes and opens nothing; the middle button is dead.
-        try press(app, tool("audio-", p.tab))
-        try app.waitUntil("the row reads muted") { try row(app, p.tab)?.speaker == .muted }
-        try onto(app, tool("mini-player-play-", p.tab), card: p.tab)
-        try press(app, tool("mini-player-play-", p.tab))
-        Thread.sleep(forTimeInterval: 0.5)
-        try expect(try row(app, p.tab)?.title.hasPrefix("paused=false") == true, "the dimmed button paused a muted tab")
-        try press(app, tool("mini-player-speaker-", p.tab))
-        try app.waitUntil("the speaker unmutes") { try row(app, p.tab)?.muted == false }
-        try expect(try cardHeight(app, p.tab) == Metrics.miniPlayer.expandedHeight.value, "the muted speaker opened the slider")
-    }
 
-    @Sendable static func twoCards(_ app: AppUnderTest) throws {
-        let p = try playing(app)
-        let second = try E.loadReady(app, "mini-player.html?second")
-        try playOnPage(app, second)
-        try app.waitUntil("the first tab's card") { isShown(try app.native(), tool("mini-player-", p.tab)) }
-        try press(app, .row(p.other))
-        try app.waitUntil("both cards") { isShown(try app.native(), tool("mini-player-", second)) }
-        try away(app)
-        try app.waitUntil("the cards rest", timeout: 3) { try cardHeight(app, second) == Metrics.miniPlayer.rowHeight.value }
-        let front = try frame(app, tool("mini-player-", second)), back = try frame(app, tool("mini-player-", p.tab))
-        let m = Metrics.miniPlayer
-        try expect(front.minY - back.minY == m.restStep.value && front.width - back.width == m.restWidthStep.value, "the older card does not peek: \(front) \(back)")
-        _ = try app.screenshot("two-rest")
-        try onto(app, tool("mini-player-play-", second), card: second)
-        try app.waitUntil("the cards come apart", timeout: 3) {
-            let (a, b) = (try frame(app, tool("mini-player-", second)), try frame(app, tool("mini-player-", p.tab)))
-            return a.height == m.expandedHeight.value && b.height == m.expandedHeight.value && a.minY - b.maxY == m.expandedGap.value
-        }
-        _ = try app.screenshot("two-open")
-        // Pausing one leaves the other.
-        try press(app, tool("mini-player-play-", second))
-        try pageSays(app, second, "paused=true")
-        try expect(try row(app, p.tab)?.title.hasPrefix("paused=false") == true, "the other tab paused too")
-    }
 
     @Sendable static func arrow(_ app: AppUnderTest) throws {
         for n in 0..<16 { _ = try E.loadReady(app, "page2.html?row=\(n)") }

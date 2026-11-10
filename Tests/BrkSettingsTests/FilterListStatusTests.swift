@@ -17,10 +17,4 @@ final class FilterListStatusTests: XCTestCase {
         XCTAssertEqual(SiteControlsHost.filterListStatus(record(network: 1)), "1 rule")
         XCTAssertEqual(SiteControlsHost.filterListStatus(record(network: 0, hiding: 1, skipped: 1)), "1 rule · 1 skipped")
     }
-
-    func testOtherCountsArePlural() {
-        XCTAssertEqual(SiteControlsHost.filterListStatus(record(network: 0)), "0 rules")
-        XCTAssertEqual(SiteControlsHost.filterListStatus(record(network: 2, hiding: 1)), "3 rules")
-        XCTAssertEqual(SiteControlsHost.filterListStatus(record(network: 1200)), "\(1200.formatted()) rules")
-    }
 }

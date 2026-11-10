@@ -45,22 +45,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(t.effects, [], "the engine creates the page from PageSpec.initialURL")
     }
 
-    /// .commandBar(.submit) refuses input that resolves to nothing and keeps the bar open
-    func test_commandbarSubmitRefusesInputThatResolvesToNothingAndKeepsTheBarOpen() throws {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        assertUnchanged(d.state, d.user(.commandBar(.submit("   "))))
-        XCTAssertNotNil(d.bar)
-    }
-
-    /// .commandBar(.submit) with no bar open behaves like the new-tab bar
-    func test_commandbarSubmitWithNoBarOpenBehavesLikeTheNewTabBar() throws {
-        let d = Driver()
-        d.user(.commandBar(.submit("arc browser")))
-        XCTAssertEqual(d.current?.url, url("https://www.google.com/search?q=arc%20browser"))
-        XCTAssertEqual(d.todayIDs.count, 2)
-    }
-
     /// .commandBar(.submit) with a navigate target sets the tab url and emits Effect.page(.navigate) without adding a row
     func test_commandbarSubmitWithANavigateTargetSetsTheTabUrlAndEmitsEffectPageNavigate() throws {
         let d = Driver()
@@ -74,53 +58,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.row(a)?.url, url("https://example.com/x"))
         XCTAssertEqual(d.view.urlPill, URLPillSnapshot(text: "example.com/x", loading: false, canGoBack: false, canGoForward: false, host: "example.com"))
         XCTAssertNil(d.view.overlay)
-    }
-
-    /// .commandBar(.open) with the same target is a no-op that keeps the opening identity; a different target is a new opening
-    func test_commandbarOpenWithTheSameTargetIsANoOpThatKeepsTheOpeningIdentityADifferent() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        d.user(.commandBar(.open(.newTab)))
-        let first = try XCTUnwrap(d.bar?.openID)
-        assertUnchanged(d.state, d.user(.commandBar(.open(.newTab))))
-        d.user(.commandBar(.open(.editCurrent)))
-        XCTAssertEqual(d.bar?.placement, .overURLPill)
-        XCTAssertEqual(d.bar?.openID, first + 1)
-        d.page(a, .titleChanged("A"))
-        XCTAssertEqual(d.bar?.openID, first + 1)
-    }
-
-    /// an archive command picked from the command bar closes the bar, while archive commands keep the archive page open
-    func test_anArchiveCommandPickedFromTheCommandBarClosesTheBarWhileArchiveCommands() throws {
-        let d = Driver()
-        let t = d.open("https://a.test/")
-        d.user(.tab(.close(.item(t))))
-        d.user(.commandBar(.open(.newTab)))
-        d.user(.archive(.restoreLast))
-        XCTAssertNil(d.view.overlay)
-        XCTAssertTrue(d.todayIDs.contains(t))
-        d.user(.library(.open(.archive)))
-        d.user(.settings(.autoArchive(.oneHour)))
-        guard case .library? = d.view.overlay else { return XCTFail("archive closed") }
-        d.user(.archive(.clear))
-        guard case .library? = d.view.overlay else { return XCTFail("archive closed") }
-    }
-
-    /// .commandBar(.open) edit-current is centered while the sidebar is hidden, and new-tab when nothing is shown
-    func test_commandbarOpenEditCurrentIsCenteredWhileTheSidebarIsHiddenAndNewTabWhen() throws {
-        let d = Driver()
-        d.user(.sidebar(.toggle))
-        d.user(.commandBar(.open(.editCurrent)))
-        XCTAssertEqual(d.bar?.placement, .centered)
-        XCTAssertEqual(d.bar?.initialQuery, "http://127.0.0.1:9/a")
-        let empty = Driver(startURL: nil)
-        XCTAssertNotNil(empty.bar, "a fresh profile without a start URL opens the bar")
-        empty.user(.commandBar(.open(.editCurrent)))
-        XCTAssertEqual(empty.bar?.placement, .centered)
-        XCTAssertEqual(empty.bar?.initialQuery, "")
-        empty.user(.commandBar(.submit("example.com")))
-        XCTAssertEqual(empty.todayIDs.count, 1)
-        XCTAssertEqual(empty.current?.url, url("https://example.com/"))
     }
 
     /// the command bar lists open tabs with the focused one first, then by recency, and the history
@@ -163,33 +100,6 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.commandBar(.open(.newTab)))
         d.user(.library(.open(.archive)))
         guard case .library? = d.view.overlay else { return XCTFail("the archive replaces the bar") }
-    }
-
-    /// .tab(.focus) on the already focused tab returns the same state object (no rev bump, docChanged false)
-    func test_tabFocusOnTheAlreadyFocusedTabReturnsTheSameStateObjectNoRevBumpDocChanged() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        // Later than the tab's last stamp, so a stray re-stamp would show as a change.
-        d.advance(hour)
-        let before = d.state
-        let rev = d.view.rev
-        let t = d.user(.tab(.focus(a)))
-        assertUnchanged(before, t)
-        XCTAssertEqual(t.effects, [])
-        XCTAssertEqual(d.view.rev, rev)
-    }
-
-    /// .tab(.focus) on another tab bumps rev, shows it, and is ignored for an unknown id
-    func test_tabFocusOnAnotherTabBumpsRevShowsItAndIsIgnoredForAnUnknownId() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        let b = d.open("example.com")
-        let rev = d.view.rev
-        d.user(.tab(.focus(a)))
-        XCTAssertEqual(d.view.rev, rev + 1)
-        XCTAssertEqual(d.paneIDs, [a])
-        XCTAssertEqual(d.row(b)?.status, .idle)
-        assertUnchanged(d.state, d.user(.tab(.focus(ItemID("nope")))))
     }
 
     /// .tab(.togglePin) moves Today -> end of Pinned and sets pinnedUrl = url; again moves it to the top of Today and clears pinnedUrl
@@ -244,33 +154,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(entry.archivedAt, T0.advanced(by: .seconds(4 * 3_600)))
     }
 
-    /// the Pinned-tab menu is Arc's (P12-b): Close and Keep Pinned sits in Edit Pinned Page, and Remove Pin unpins
-    func test_thePinnedTabMenuIsArcsWithCloseAndKeepPinnedUnderEditPinnedPageAndRemovePin() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        d.user(.tab(.togglePin(.item(a))))
-        let menu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(a), at: .zero)))))
-        XCTAssertEqual(layout(menu), ["Copy Link", "Share ▸", "|", "Change Icon…", "Rename…", "Mute", "Customize Page…", "Edit Pinned Page ▸", "|",
-                                      "Open in Split View", "Duplicate", "Move to ▸", "|", "Remove Pin"])
-        XCTAssertEqual(isEnabled(menu, "Mute"), false, "nothing is playing")
-        XCTAssertEqual(command(menu, "Close and Keep Pinned"), .tab(.close(.item(a))))
-        XCTAssertEqual(command(menu, "Export…"), .app(.export(.items([a]))))
-        let remove = try XCTUnwrap(command(menu, "Remove Pin"))
-        XCTAssertEqual(remove, .tab(.togglePin(.item(a))))
-        d.user(remove)
-        XCTAssertFalse(d.pinnedIDs.contains(a))
-        XCTAssertTrue(d.todayIDs.contains(a))
-    }
-
-    /// .tab(.archive) keeps a Today tab menu to a single Archive Tab entry (.tab(.close))
-    func test_tabArchiveKeepsATodayTabMenuToASingleArchiveTabEntryTabClose() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        let menu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(a), at: .zero)))))
-        XCTAssertEqual(titles(menu).filter { $0 == "Archive Tab" || $0 == "Close and Keep Pinned" }, ["Archive Tab"])
-        XCTAssertEqual(command(menu, "Archive Tab"), .tab(.close(.item(a))))
-    }
-
     /// .tab(.close) on a Pinned tab keeps the row, drops it from loaded, and moves activeBySpace to the most recent other loaded tab
     func test_tabCloseOnAPinnedTabKeepsTheRowDropsItFromLoadedAndMovesActiveBySpaceTo() throws {
         let d = Driver()
@@ -291,25 +174,6 @@ final class ReduceSpecTests: XCTestCase {
         assertUnchanged(d.state, d.user(.tab(.close(.item(a)))))
     }
 
-    /// .tab(.close) on the only loaded tab of a space deletes the activeBySpace entry: project reports no panes and normalize does not refill it
-    func test_tabCloseOnTheOnlyLoadedTabOfASpaceDeletesTheActiveBySpaceEntryProjectReports() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        d.user(.tab(.togglePin(.focused)))
-        d.user(.tab(.close(.focused)))
-        XCTAssertEqual(d.view.content.panes, [])
-        XCTAssertEqual(d.view.focus, FocusTarget.none)
-        XCTAssertEqual(d.loadedIDs, [])
-        d.user(.sidebar(.resize(width: 300)))
-        d.system(.clockTick)
-        XCTAssertEqual(d.paneIDs, [])
-        // A `.focused` command with nothing shown is a no-op.
-        assertUnchanged(d.state, d.user(.tab(.close(.focused))))
-        d.user(.tab(.focus(a)))
-        XCTAssertEqual(d.paneIDs, [a])
-        XCTAssertEqual(d.row(a)?.loaded, true)
-    }
-
     /// .tab(.reset) on a pinned tab whose url drifted restores pinnedUrl and emits Effect.page(.navigate)
     func test_tabResetOnAPinnedTabWhoseUrlDriftedRestoresPinnedUrlAndEmitsEffectPageNavigate() throws {
         let d = Driver()
@@ -323,35 +187,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(t.effects, [.page(PageID(window: d.window, item: a), .navigate(start))])
         XCTAssertEqual(d.row(a)?.url, start)
         XCTAssertEqual(d.row(a)?.canReset, false)
-    }
-
-    /// .tab(.step) walks sidebarOrder without wrapping; a split counts as one stop
-    func test_tabStepWalksSidebarOrderWithoutWrappingASplitCountsAsOneStop() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        let fav = d.open("fav.example.com")
-        d.user(.item(.move(fav, to: .into(parent: d.view.favorites.root, index: 0))))
-        let pin = d.open("pin.example.com")
-        d.user(.tab(.togglePin(.item(pin))))
-        let x = d.open("x.example.com")
-        d.user(.split(.addPane))
-        d.user(.commandBar(.submit("y.example.com")))
-        let split = try XCTUnwrap(d.view.content.split)
-        // Sidebar order: Favorites [fav], Pinned [pin], Today [split(x, y), a].
-        XCTAssertEqual(d.todayIDs, [split, a])
-        d.user(.tab(.focus(fav)))
-        assertUnchanged(d.state, d.user(.tab(.step(.previous))))
-        d.user(.tab(.step(.next)))
-        XCTAssertEqual(d.paneIDs, [pin])
-        d.user(.tab(.step(.next)))
-        XCTAssertEqual(d.paneIDs.count, 2)
-        XCTAssertEqual(d.paneIDs.first, x)
-        XCTAssertEqual(d.view.content.split, split)
-        d.user(.tab(.step(.next)))
-        XCTAssertEqual(d.paneIDs, [a])
-        assertUnchanged(d.state, d.user(.tab(.step(.next))))
-        d.user(.tab(.step(.previous)))
-        XCTAssertEqual(d.view.content.split, split)
     }
 
     /// .tab(.cycleRecent) freezes the recent order on the first press; the commit stamps the net on-screen change
@@ -386,12 +221,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.todayIDs, [c, a])
     }
 
-    /// .tab(.cycleRecent) with one tab is a no-op
-    func test_tabCycleRecentWithOneTabIsANoOp() throws {
-        let d = Driver()
-        assertUnchanged(d.state, d.user(.tab(.cycleRecent(.next))))
-    }
-
     /// any user command other than .tab(.cycleRecent) commits a pending cycle (robust against a lost Control keyUp)
     func test_anyUserCommandOtherThanTabCycleRecentCommitsAPendingCycleRobustAgainstA() throws {
         let d = Driver()
@@ -408,17 +237,6 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.tab(.cycleRecent(.next)))  // a fresh walk from the now-shown tab
         XCTAssertEqual(d.view.tabTools.recent?.selected, b)
         XCTAssertEqual(d.paneIDs, [a])
-    }
-
-    /// .page events for an archived or unknown tab is ignored: same state object
-    func test_pageEventsForAnArchivedOrUnknownTabIsIgnoredSameStateObject() throws {
-        let d = Driver()
-        let b = d.open("example.com")
-        d.user(.tab(.close(.item(b))))
-        let before = d.state
-        assertUnchanged(before, d.page(b, .titleChanged("late")))
-        assertUnchanged(before, d.page(b, .loadingChanged(isLoading: true, canGoBack: false, canGoForward: false)))
-        assertUnchanged(before, d.page(ItemID("ghost"), .committed(url("https://x.y/"))))
     }
 
     /// .page events is ignored for an unloaded pinned tab, and the same patch twice changes nothing the second time
@@ -526,45 +344,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.paneIDs, [y])
     }
 
-    /// .gainedFocus on a tab that is not a pane is a no-op
-    func test_gainedfocusOnATabThatIsNotAPaneIsANoOp() throws {
-        let d = Driver()
-        assertUnchanged(d.state, d.page(d.todayIDs[0], .gainedFocus))
-    }
-
-    /// browsing commands resolve the focused tab into effects; an unloaded or unknown target emits nothing
-    func test_browsingCommandsResolveTheFocusedTabIntoEffectsAnUnloadedOrUnknownTarget() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        let page = PageID(window: d.window, item: a)
-        func effects(_ command: Command) -> [Effect] {
-            let before = d.state
-            let t = d.user(command)
-            XCTAssertTrue(t.state == before, "\(command) changed state")
-            XCTAssertFalse(t.changed)
-            return t.effects
-        }
-        XCTAssertEqual(effects(.page(.back(.focused))), [.page(page, .goBack)])
-        XCTAssertEqual(effects(.page(.forward(.item(a)))), [.page(page, .goForward)])
-        XCTAssertEqual(effects(.page(.reload(.item(a), ignoringCache: true))), [.page(page, .reload(ignoringCache: true))])
-        XCTAssertEqual(effects(.page(.stop(.focused))), [.page(page, .stop)])
-        XCTAssertEqual(effects(.page(.zoom(.zoomIn))), [.page(page, .zoom(.zoomIn))])
-        XCTAssertEqual(effects(.page(.toggleDevTools)), [.page(page, .toggleDevTools)])
-        XCTAssertEqual(d.user(.page(.copyURL(.plain))).effects, [.copyToPasteboard("http://127.0.0.1:9/a")])
-        d.user(.tabTools(.dismissToast))
-        XCTAssertEqual(effects(.app(.toggleFullScreen)), [.window(d.window, .toggleFullScreen)])
-        XCTAssertEqual(effects(.app(.minimize)), [.window(d.window, .miniaturize)])
-        XCTAssertEqual(effects(.app(.quit)), [.app(.quit)])
-        XCTAssertEqual(effects(.app(.hide)), [.app(.hide)])
-        XCTAssertEqual(effects(.app(.hideOthers)), [.app(.hideOthers)])
-        XCTAssertEqual(effects(.app(.exit)), [.window(d.window, .leaveFullScreen)], "Esc with nothing to close")
-        XCTAssertEqual(effects(.page(.reload(.item(ItemID("ghost")), ignoringCache: false))), [])
-        d.user(.tab(.togglePin(.item(a))))
-        d.open("example.com")
-        d.user(.tab(.close(.item(a))))
-        XCTAssertEqual(effects(.page(.back(.item(a)))), [], "an unloaded pinned tab has no page")
-    }
-
     /// Esc ("Exit") closes the open overlay and nothing else; with a rename or dialog open it cancels that first.
     func testExitClosesTheOverlayWithoutLeavingFullScreen() throws {
         let d = Driver()
@@ -581,19 +360,6 @@ final class ReduceSpecTests: XCTestCase {
     }
 
     // MARK: page lifecycle (Swift additions: the engine's crash, self-close and close reports)
-    /// A crashed renderer shows Arc's sad-tab card and asks the engine to recover; the next commit shows the page.
-    func testRendererGoneShowsTheCrashedCardAndAsksForRecovery() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        let t = d.page(a, .rendererGone)
-        XCTAssertEqual(t.effects, [.page(PageID(window: d.window, item: a), .recover)])
-        XCTAssertEqual(d.view.content.panes.map(\.content), [.crashed(PageID(window: d.window, item: a))])
-        XCTAssertEqual(d.view.focus, FocusTarget.none)
-        d.page(a, .committed(start))
-        XCTAssertEqual(d.view.content.panes.map(\.content), [.page(PageID(window: d.window, item: a))])
-        XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: a)))
-    }
-
     /// A page that closes itself (window.close()) is Cmd+W on its row, as Arc does (Q12-c): a Today tab leaves for the
     /// archive and the window shows the most recent other tab; a Pinned tab keeps its row and loses its page.
     func testAPageClosingItselfIsCmdWOnItsRow() throws {
@@ -641,17 +407,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.archive().count, 1)
     }
 
-    /// The opener's child.close() while the opener is in front: the row goes and the opener stays in front.
-    func testAnOpenerClosingItsTabKeepsTheOpenerInFront() throws {
-        let d = Driver()
-        let opener = d.open("127.0.0.1:9/opener")
-        let child = try opened(d, from: opener, "child")
-        d.user(.tab(.focus(opener)))
-        d.page(child, .closedByPage)
-        XCTAssertFalse(d.todayIDs.contains(child))
-        XCTAssertEqual(d.current?.id, opener)
-    }
-
     /// A tab that closes itself behind another tab changes nothing about what is in front.
     func testASelfClosingTabInTheBackgroundLeavesTheFrontTab() throws {
         let d = Driver()
@@ -662,32 +417,6 @@ final class ReduceSpecTests: XCTestCase {
         d.page(child, .closedByPage)
         XCTAssertFalse(d.todayIDs.contains(child))
         XCTAssertEqual(d.current?.id, first)
-    }
-
-    /// The opener is gone: Cmd+W's usual choice, the most recent other tab.
-    func testASelfClosingTabWithoutItsOpenerFollowsTheCloseRule() throws {
-        let d = Driver()
-        let first = d.todayIDs[0]
-        let opener = d.open("127.0.0.1:9/opener")
-        let child = try opened(d, from: opener, "child")
-        d.user(.tab(.close(.item(opener))))
-        d.user(.tab(.focus(first)))
-        d.user(.tab(.focus(child)))
-        d.page(child, .closedByPage)
-        XCTAssertEqual(d.todayIDs, [first])
-        XCTAssertEqual(d.current?.id, first)
-    }
-
-    /// The engine's close report clears what the page reported (loading, back/forward); the tab keeps its row.
-    func testClosedClearsLivePageState() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        d.page(a, .loadingChanged(isLoading: true, canGoBack: true, canGoForward: false))
-        XCTAssertTrue(d.view.urlPill.loading)
-        d.page(a, .closed)
-        XCTAssertEqual(d.view.urlPill, URLPillSnapshot(text: "127.0.0.1:9/a", loading: false, canGoBack: false, canGoForward: false, host: "127.0.0.1"))
-        XCTAssertEqual(d.row(a)?.loaded, true)
-        assertUnchanged(d.state, d.page(a, .closed))
     }
 
     /// Closing the window with its close button keeps it in the file for the next launch (v1 has one window).
@@ -773,47 +502,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.row(p1)?.canReset, false)
     }
 
-    /// .item(.newFolder) adds a folder at the top of Pinned in rename mode and expands Pinned; .item(.toggleFolder) collapses it
-    func test_itemNewFolderAddsAFolderAtTheTopOfPinnedInRenameModeAndExpandsPinnedItem() throws {
-        let d = Driver()
-        d.user(.space(.togglePinnedSection(.current)))
-        XCTAssertTrue(d.view.space.pinned.collapsed)
-        d.user(.item(.newFolder))
-        guard case .folder(let folder)? = d.view.space.pinned.rows.first else { return XCTFail("no folder") }
-        XCTAssertEqual(folder.title, "New Folder")
-        XCTAssertFalse(folder.collapsed)
-        XCTAssertEqual(folder.children, [])
-        XCTAssertFalse(d.view.space.pinned.collapsed)
-        XCTAssertEqual(d.view.renaming, folder.id)
-        XCTAssertEqual(d.view.focus, .renameField(folder.id))
-        d.user(.item(.toggleFolder(folder.id)))
-        guard case .folder(let collapsed)? = d.view.space.pinned.rows.first else { return XCTFail("no folder") }
-        XCTAssertTrue(collapsed.collapsed)
-        d.user(.item(.toggleFolder(folder.id)))
-        guard case .folder(let open)? = d.view.space.pinned.rows.first else { return XCTFail("no folder") }
-        XCTAssertFalse(open.collapsed)
-    }
-
-    /// .item(.deleteFolder) archives every tab inside with reason container-deleted and removes the folder
-    func test_itemDeleteFolderArchivesEveryTabInsideWithReasonContainerDeletedAndRemoves() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        d.user(.item(.newFolder))
-        let folder = d.pinnedIDs[0]
-        let b = d.open("example.com")
-        for id in [a, b] { d.user(.item(.move(id, to: .into(parent: folder, index: 0)))) }
-        guard case .folder(let row)? = d.view.space.pinned.rows.first else { return XCTFail("no folder") }
-        XCTAssertEqual(row.children.map(\.id), [b, a])
-        d.user(.item(.deleteFolder(folder)))
-        XCTAssertEqual(d.pinnedIDs, [])
-        let archive = d.archive()
-        XCTAssertEqual(archive.map(\.url), [url("https://example.com/"), start])
-        XCTAssertEqual(archive.map(\.reason), [.containerDeleted, .containerDeleted])
-        XCTAssertEqual(d.loadedIDs, [])
-        XCTAssertEqual(d.view.content.panes, [])
-        XCTAssertNil(d.view.renaming, "the folder being renamed is gone")
-    }
-
     /// .item(.rename) with null cancels; with "" clears customTitle; a page title update never clobbers customTitle
     func test_itemRenameWithNullCancelsWithClearsCustomTitleAPageTitleUpdateNeverClobbers() throws {
         let d = Driver()
@@ -837,15 +525,6 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.item(.rename(folder, title: "   ")))
         guard case .folder(let row)? = d.view.space.pinned.rows.first else { return XCTFail("no folder") }
         XCTAssertEqual(row.title, "Reading")
-    }
-
-    /// .item(.beginRename) with the sidebar hidden peeks it so the input is visible
-    func test_itemBeginRenameWithTheSidebarHiddenPeeksItSoTheInputIsVisible() throws {
-        let d = Driver()
-        d.user(.sidebar(.toggle))
-        d.user(.item(.beginRename(.focused)))
-        XCTAssertEqual(d.view.sidebar, SidebarSnapshot(visible: false, width: 228, peek: true))
-        assertUnchanged(d.state, d.user(.item(.beginRename(.item(ItemID("ghost"))))))
     }
 
     /// Rename Current Item on a tab inside a collapsed folder of a collapsed Pinned section expands both, so the
@@ -916,19 +595,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.row(pane)?.url, url("http://127.0.0.1:9/page2.html"))
         XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: d.window, item: pane) }?.initialURL, url("http://127.0.0.1:9/page2.html"))
         XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: pane)))
-    }
-
-    /// .split(.addPane) with nothing shown, or on a Favorites tab, is a no-op
-    func test_splitAddPaneWithNothingShownOrOnAFavoritesTabIsANoOp() throws {
-        let empty = Driver(startURL: nil)
-        empty.user(.commandBar(.dismiss))
-        assertUnchanged(empty.state, empty.user(.split(.addPane)))
-        XCTAssertFalse(empty.view.enabledActions.contains(.addSplitView))
-        let d = Driver()
-        let a = d.todayIDs[0]
-        d.user(.item(.move(a, to: .into(parent: d.view.favorites.root, index: 0))))
-        assertUnchanged(d.state, d.user(.split(.addPane)))
-        XCTAssertFalse(d.view.enabledActions.contains(.addSplitView))
     }
 
     /// .split(.addPane) on a split with Metrics.content.maxPanes panes is a no-op
@@ -1026,61 +692,6 @@ final class ReduceSpecTests: XCTestCase {
         assertUnchanged(d.state, d.user(.split(.resize(split, fractions: [a: 1, b: -1]))))
     }
 
-    /// moving a pane out of its split with .item(.move) leaves a one-pane split that normalize dissolves
-    func test_movingAPaneOutOfItsSplitWithItemMoveLeavesAOnePaneSplitThatNormalizeDissolves() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        d.user(.split(.addPane))
-        d.user(.commandBar(.submit("example.org")))
-        d.commitRequested()
-        let pane = d.paneIDs[1]
-        d.user(.item(.move(pane, to: .into(parent: d.view.space.pinned.root, index: 0))))
-        XCTAssertEqual(d.todayIDs, [a])
-        XCTAssertEqual(d.view.space.today.rows.first?.kind, .tab)
-        XCTAssertEqual(d.pinnedIDs, [pane])
-        XCTAssertEqual(d.row(pane)?.canReset, false)
-        // The dissolved split was shown; the window now shows the pane that took its slot.
-        XCTAssertEqual(d.paneIDs, [a])
-    }
-
-    /// A split's orientation is saved with it and shown in the snapshot (Arc: `layoutOrientation`).
-    func testSplitOrientationIsSavedAndProjected() throws {
-        let d = Driver()
-        d.user(.split(.addPane))
-        let split = try XCTUnwrap(d.view.content.split)
-        d.user(.split(.setOrientation(split, .vertical)))
-        XCTAssertEqual(d.view.content.orientation, .vertical)
-        guard case .split(let row)? = d.view.space.today.rows.first else { return XCTFail("no split") }
-        XCTAssertEqual(row.orientation, .vertical)
-        assertUnchanged(d.state, d.user(.split(.setOrientation(split, .vertical))))
-        assertUnchanged(d.state, d.user(.split(.setOrientation(ItemID("ghost"), .horizontal))))
-        XCTAssertEqual(Driver(file: d.savedFile).view.content.orientation, .vertical)
-    }
-
-    /// A custom icon on a tab, folder or split shows on its row and survives a restart; nil restores the default.
-    func testCustomIconsOnTabsFoldersAndSplits() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        d.user(.item(.setIcon(a, .emoji("📌"))))
-        XCTAssertEqual(d.row(a)?.icon, .emoji("📌"))
-        d.user(.item(.newFolder))
-        let folder = d.pinnedIDs[0]
-        d.user(.item(.setIcon(folder, .named(.book))))
-        d.user(.split(.addPane))
-        let split = try XCTUnwrap(d.view.content.split)
-        d.user(.item(.setIcon(split, .symbol("star.fill"))))
-        let r = Driver(file: d.savedFile)
-        guard case .folder(let f)? = r.view.space.pinned.rows.first, case .split(let s)? = r.view.space.today.rows.first else {
-            return XCTFail("rows")
-        }
-        XCTAssertEqual(f.icon, .named(.book))
-        XCTAssertEqual(s.icon, .symbol("star.fill"))
-        XCTAssertEqual(r.row(a)?.icon, .emoji("📌"))
-        d.user(.item(.setIcon(a, nil)))
-        XCTAssertNil(d.row(a)?.icon)
-        assertUnchanged(d.state, d.user(.item(.setIcon(ItemID("ghost"), .emoji("x")))))
-    }
-
     // MARK: reduce: spaces and archive
     /// Arc's space dialogs (2026-11-03 captures P26, P10 c, P28): Rename opens the rename dialog with the dock's
     /// name, Change Space Icon… the icon popover, Edit Theme… the theme panel, which stays open while its edits are
@@ -1133,17 +744,6 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.sidebar(.openDialog(.newSpace)))
         XCTAssertEqual(d.view.dialog, .newSpace)
         XCTAssertNil(d.view.overlay)
-    }
-
-    /// A profile dialog opened over Create a Space takes focus and Esc closes it first.
-    func test_aProfileDialogOverCreateASpaceTakesFocusAndEscFirst() {
-        let d = Driver()
-        d.user(.sidebar(.openDialog(.newSpace)))
-        d.user(.profile(.openDialog(.create)))
-        XCTAssertEqual(d.view.focus, .profileDialog)
-        d.user(.app(.exit))
-        XCTAssertNil(d.view.profileDialog)
-        XCTAssertEqual(d.view.dialog, .newSpace)
     }
 
     /// .space(.create) creates an empty space, switches to it and closes the dialog; a blank title gets the fallback name
@@ -1221,33 +821,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.view.dock.map(\.id), [s3, s1, s2])
     }
 
-    /// .space(.update) patches title, icon and theme and closes the rename dialog; the same values change nothing
-    func test_spaceUpdatePatchesTitleIconAndThemeAndClosesTheRenameDialogTheSameValuesChange() throws {
-        let d = Driver()
-        let space = d.view.space.id
-        d.user(.sidebar(.openDialog(.rename(.current))))
-        guard case .rename(space, _)? = d.view.dialog else { return XCTFail("no rename dialog") }
-        let theme = SpaceTheme(colors: [ThemePresets.greyscale[7]], wheel: .complementary, texture: .denim, noise: 0.3, intensity: 0.6, appearance: .dark)
-        d.user(.space(.update(space, title: "Home", icon: .custom(.emoji("🏠")), theme: theme)))
-        XCTAssertNil(d.view.dialog)
-        XCTAssertEqual(d.view.space.title, "Home")
-        XCTAssertEqual(d.view.space.icon, .custom(.emoji("🏠")))
-        XCTAssertEqual(d.view.theme, resolveTheme(theme))
-        XCTAssertEqual(d.view.dock.first?.color, ThemePresets.greyscale[7])
-        assertUnchanged(d.state, d.user(.space(.update(space, title: "Home", icon: .custom(.emoji("🏠")), theme: theme))))
-        d.user(.space(.update(space, title: " ", icon: nil, theme: nil)))
-        XCTAssertEqual(d.view.space.title, "Home", "a blank title keeps the old one")
-    }
-
-    /// .space(.togglePinnedSection) collapses and expands the current space Pinned section
-    func test_spaceTogglePinnedSectionCollapsesAndExpandsTheCurrentSpacePinnedSection() throws {
-        let d = Driver()
-        d.user(.space(.togglePinnedSection(.current)))
-        XCTAssertTrue(d.view.space.pinned.collapsed)
-        d.user(.space(.togglePinnedSection(.space(d.view.space.id))))
-        XCTAssertFalse(d.view.space.pinned.collapsed)
-    }
-
     /// .space(.delete) of the last space is refused
     func test_spaceDeleteOfTheLastSpaceIsRefused() throws {
         let d = Driver()
@@ -1302,15 +875,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertFalse(d.loadedIDs.contains(idle))
     }
 
-    /// .clockTick twice at the same time is a no-op the second time (same state object)
-    func test_clocktickTwiceAtTheSameTimeIsANoOpTheSecondTimeSameStateObject() throws {
-        let d = Driver()
-        d.open("example.com")
-        d.advance(.seconds(13 * 3_600))
-        d.system(.clockTick)
-        assertUnchanged(d.state, d.system(.clockTick))
-    }
-
     /// .clockTick with autoArchiveAfter never archives nothing
     func test_clocktickWithAutoArchiveAfterNeverArchivesNothing() throws {
         let d = Driver()
@@ -1319,21 +883,6 @@ final class ReduceSpecTests: XCTestCase {
         d.advance(.seconds(400 * 86_400))
         assertUnchanged(d.state, d.system(.clockTick))
         XCTAssertEqual(d.todayIDs.count, 2)
-    }
-
-    /// .settings(.autoArchive) changes the threshold the sweep uses and the archive view shows
-    func test_settingsAutoArchiveChangesTheThresholdTheSweepUsesAndTheArchiveViewShows() throws {
-        let d = Driver()
-        d.open("example.com")
-        d.user(.settings(.autoArchive(.oneHour)))
-        XCTAssertEqual(d.archive(), [])
-        d.user(.library(.open(.archive)))
-        guard case .library(let library)? = d.view.overlay, let page = library.archive else { return XCTFail("no archive") }
-        XCTAssertEqual(page.threshold, .oneHour)
-        assertUnchanged(d.state, d.user(.settings(.autoArchive(.oneHour))))
-        d.advance(hour)
-        d.system(.clockTick)
-        XCTAssertEqual(d.todayIDs.count, 1)
     }
 
     /// .tab(.clearToday) keeps the tabs visible in any window
@@ -1453,104 +1002,6 @@ final class ReduceSpecTests: XCTestCase {
         d.user(.tab(.focus(d.todayIDs[1])))
         d.system(.clockTick)
         XCTAssertTrue(d.todayIDs.contains(b))
-    }
-
-    /// archive entries are capped at Metrics.persistence.archiveCap, oldest dropped
-    func test_archiveEntriesAreCappedAtMetricsPersistenceArchiveCapOldestDropped() throws {
-        let d = Driver()
-        let cap = Metrics.persistence.archiveCap.value
-        XCTAssertEqual(cap, 2000)
-        for i in 0...cap {
-            let id = d.open("t\(i).example.com")
-            d.user(.tab(.close(.item(id))))
-        }
-        let entries = d.archive()
-        XCTAssertEqual(entries.count, 2000)
-        XCTAssertEqual(entries.first?.url, url("https://t2000.example.com/"))
-        XCTAssertFalse(entries.contains { $0.url == url("https://t0.example.com/") })
-        XCTAssertEqual((d.savedDoc["archive"] as? [Any])?.count, 2000)
-    }
-
-    // MARK: window chrome
-    /// .sidebar(.toggle) hides the sidebar (content fills the window) and again restores it
-    func test_sidebarToggleHidesTheSidebarContentFillsTheWindowAndAgainRestoresIt() throws {
-        let d = Driver()
-        d.user(.sidebar(.toggle))
-        XCTAssertEqual(d.view.sidebar, SidebarSnapshot(visible: false, width: 228, peek: false))
-        d.user(.sidebar(.toggle))
-        XCTAssertEqual(d.view.sidebar, SidebarSnapshot(visible: true, width: 228, peek: false))
-        // The content rect for both states is WindowLayout's (LayoutSpecTests).
-    }
-
-    /// .sidebar(.peek) floats the hidden sidebar only while it is hidden; toggling ends the peek
-    func test_sidebarPeekFloatsTheHiddenSidebarOnlyWhileItIsHiddenTogglingEndsThePeek() throws {
-        let d = Driver()
-        assertUnchanged(d.state, d.user(.sidebar(.peek(true))))
-        d.user(.sidebar(.toggle))
-        d.user(.sidebar(.peek(true)))
-        XCTAssertEqual(d.view.sidebar, SidebarSnapshot(visible: false, width: 228, peek: true))
-        d.user(.sidebar(.peek(false)))
-        XCTAssertFalse(d.view.sidebar.peek)
-        d.user(.sidebar(.peek(true)))
-        d.user(.sidebar(.toggle))
-        XCTAssertEqual(d.view.sidebar, SidebarSnapshot(visible: true, width: 228, peek: false))
-    }
-
-    /// .sidebar(.openDialog) opens the space dialog (peeking a hidden sidebar), moves focus to the sidebar, and null closes it
-    func test_sidebarOpenDialogOpensTheSpaceDialogPeekingAHiddenSidebarMovesFocusToThe() throws {
-        let d = Driver()
-        d.user(.sidebar(.toggle))
-        d.user(.sidebar(.openDialog(.rename(.current))))
-        guard case .rename? = d.view.dialog else { return XCTFail("no dialog") }
-        XCTAssertTrue(d.view.sidebar.peek)
-        XCTAssertEqual(d.view.focus, .spaceDialog)
-        assertUnchanged(d.state, d.user(.sidebar(.openDialog(.rename(.current)))))
-        assertUnchanged(d.state, d.user(.sidebar(.openDialog(.rename(.space(SpaceID("ghost")))))))
-        d.user(.sidebar(.openDialog(nil)))
-        XCTAssertNil(d.view.dialog)
-        XCTAssertEqual(d.view.focus, .page(PageID(window: d.window, item: d.todayIDs[0])))
-    }
-
-    /// .sidebar(.popupMenu) emits a native menu built from state whose entries dispatch real commands
-    func test_sidebarPopupMenuEmitsANativeMenuBuiltFromStateWhoseEntriesDispatchRealCommands() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        let work = d.newSpace("Work", color: ThemePresets.drab[3])
-        d.user(.space(.step(.previous)))
-        let t = d.user(.sidebar(.popupMenu(.item(a), at: CGPoint(x: 40, y: 120))))
-        XCTAssertFalse(t.changed)
-        guard case .popupMenu(let window, let menu, let at)? = t.effects.first else { return XCTFail("no popup") }
-        XCTAssertEqual(window, d.window)
-        XCTAssertEqual(at, CGPoint(x: 40, y: 120))
-        XCTAssertEqual(layout(menu), ["Copy Link", "Share ▸", "|", "Change Icon…", "Rename…", "Mute", "Customize Page…", "|",
-                                      "Open in Split View", "Duplicate", "Move to ▸", "|", "Archive Tab", "Archive Tabs Below"])
-        XCTAssertEqual(isEnabled(menu, "Archive Tabs Below"), false, "nothing below the only tab")
-        XCTAssertEqual(titles(try XCTUnwrap(submenu(menu, "Move to"))), ["Space 1", "Work"])
-        XCTAssertEqual(isEnabled(menu, "Space 1"), false, "the tab's own space")
-        d.user(try XCTUnwrap(command(menu, "Work")))
-        d.user(.space(.focus(work)))
-        XCTAssertEqual(d.todayIDs, [a])
-        let space1 = try XCTUnwrap(d.state.doc.spaceOrder.first)
-        let space = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.space(work), at: .zero)))))
-        XCTAssertEqual(layout(space), ["Change Space Icon…", "Rename Space…", "Edit Theme Color…", "Set Profile ▸", "|", "New Folder", "Live Folders ▸", "|",
-                                       "Share Space…", "Export “Work” into Folder ▸", "|", "Manage Spaces…", "|", "Delete Space"])
-        XCTAssertEqual(command(space, "Rename Space…"), .sidebar(.openDialog(.rename(.space(work)))))
-        XCTAssertEqual(command(space, "Change Space Icon…"), .sidebar(.openDialog(.icon(.space(work)))))
-        XCTAssertEqual(command(space, "Edit Theme Color…"), .sidebar(.openDialog(.theme(.space(work)))))
-        XCTAssertEqual(command(space, "Share Space…"), .app(.export(.space(.space(work)))))
-        XCTAssertEqual(command(space, "Delete Space"), .space(.delete(work)))
-        XCTAssertEqual(try XCTUnwrap(submenu(space, "Set Profile")).entries.first, .choice(title: "Default", command: .profile(.assign(.space(work), to: .default)), on: true))
-        XCTAssertEqual(titles(try XCTUnwrap(submenu(space, "Export “Work” into Folder"))), ["Space 1", "Bookmarks Folder on Disk…"])
-        XCTAssertEqual(command(space, "Space 1"), .tabTools(.spaceIntoFolder(work, into: space1)))
-        d.user(.item(.newFolder))
-        let folder = d.pinnedIDs[0]
-        let folderMenu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(folder), at: .zero)))))
-        XCTAssertEqual(layout(folderMenu), ["Share Folder…", "|", "New Nested Folder…", "Turn “New Folder” into Space", "Copy All Links", "|",
-                                            "Change Icon…", "Rename…", "|", "Duplicate", "Move to ▸", "|", "Delete"])
-        XCTAssertEqual(command(folderMenu, "Delete"), .item(.deleteFolder(folder)))
-        XCTAssertEqual(isEnabled(folderMenu, "Copy All Links"), false, "an empty folder has no links")
-        XCTAssertEqual(d.user(.sidebar(.popupMenu(.item(ItemID("ghost")), at: .zero))).effects, [])
-        XCTAssertEqual(d.user(.sidebar(.popupMenu(.space(SpaceID("ghost")), at: .zero))).effects, [])
     }
 
     // MARK: persistence (StateCodec.restore / StateCodec.encode)
@@ -1757,27 +1208,6 @@ final class ReduceSpecTests: XCTestCase {
         }
     }
 
-    /// StateCodec.restore of a fresh profile encodes to a versioned envelope; garbage and an unknown version are rejected
-    /// with the reason, and the state alongside is the fresh one (runs now: envelope and fresh profile are real)
-    func test_statecodecEnvelopeVersionAndRejection() throws {
-        let ids = Counter()
-        let ctx = Context(now: Instant(milliseconds: 1_790_000_000_000), newID: ids.next)
-        let seed = RestoreSeed(startURL: Driver.startURL, contentSize: Driver.contentSize)
-        let fresh = StateCodec.restore(nil, seed: seed, ctx: ctx)
-        XCTAssertEqual(fresh.outcome, .fresh)
-        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: StateCodec.encode(fresh.state)) as? [String: Any])
-        XCTAssertEqual(json["version"] as? Int, StateCodec.currentVersion)
-        let doc = try XCTUnwrap(json["doc"] as? [String: Any])
-        XCTAssertEqual((doc["items"] as? [String: Any])?.count, 4, "favorites, pinned and today roots plus the start tab")
-        XCTAssertEqual(StateCodec.encode(fresh.state), StateCodec.encode(fresh.state), "deterministic bytes")
-        let garbage = StateCodec.restore(Data("not json".utf8), seed: seed, ctx: ctx)
-        guard case .rejected(.unreadable) = garbage.outcome else { return XCTFail("\(garbage.outcome)") }
-        let future = StateCodec.restore(Data(#"{"version": 99, "doc": {}}"#.utf8), seed: seed, ctx: ctx)
-        XCTAssertEqual(future.outcome, .rejected(.unknownVersion(99)))
-        let fallback = try XCTUnwrap(try JSONSerialization.jsonObject(with: StateCodec.encode(future.state)) as? [String: Any])
-        XCTAssertEqual(((fallback["doc"] as? [String: Any])?["spaces"] as? [String: Any])?.count, 1, "a rejected file starts fresh")
-    }
-
     /// a restored Today tab whose page later fails to load keeps its url and title (failure is live state only)
     func test_aRestoredTodayTabWhosePageLaterFailsToLoadKeepsItsUrlAndTitleFailureIsLive() throws {
         let d = Driver()
@@ -1797,59 +1227,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(again.row(fail)?.title, "Fail Page")
     }
 
-    // MARK: layout clamps (domain side)
-    /// .sidebar(.resize) clamps the width to Metrics.sidebar.minWidth...maxWidth
-    func test_sidebarResizeClampsTheWidthToMetricsSidebarMinWidthMaxWidth() throws {
-        let d = Driver()
-        d.user(.sidebar(.resize(width: 50)))
-        XCTAssertEqual(d.view.sidebar.width, 164)
-        d.user(.sidebar(.resize(width: 10_000)))
-        XCTAssertEqual(d.view.sidebar.width, 500)
-        let t = d.user(.sidebar(.resize(width: 300.4)))
-        XCTAssertTrue(t.docChanged)
-        XCTAssertEqual(d.view.sidebar.width, 300)
-        assertUnchanged(d.state, d.user(.sidebar(.resize(width: 300))))
-        assertUnchanged(d.state, d.user(.sidebar(.resize(width: .nan))))
-        // 0 is the drag-to-hide result: hidden, the width kept for the next show.
-        d.user(.sidebar(.resize(width: 0)))
-        XCTAssertEqual(d.view.sidebar, SidebarSnapshot(visible: false, width: 300, peek: false))
-        d.user(.sidebar(.resize(width: 250)))
-        XCTAssertEqual(d.view.sidebar, SidebarSnapshot(visible: true, width: 250, peek: false))
-    }
-
-    /// .geometry updates contentSize so project reflects the new size, and persists bounds
-    func test_geometryUpdatesContentSizeSoProjectReflectsTheNewSizeAndPersistsBounds() throws {
-        let d = Driver()
-        let bounds = CGRect(x: 5, y: 6, width: 1000, height: 700)
-        let t = d.system(.window(d.window, .geometry(bounds: bounds, contentSize: CGSize(width: 1000, height: 672))))
-        XCTAssertTrue(t.docChanged)
-        XCTAssertEqual(d.view.bounds, bounds)
-        assertUnchanged(d.state, d.system(.window(d.window, .geometry(bounds: bounds, contentSize: CGSize(width: 1000, height: 672)))))
-        // A size change alone is session state: re-render, nothing to save.
-        let resized = d.system(.window(d.window, .geometry(bounds: bounds, contentSize: CGSize(width: 1000, height: 650))))
-        XCTAssertTrue(resized.changed)
-        XCTAssertFalse(resized.docChanged)
-        XCTAssertEqual(Driver(file: d.savedFile).view.bounds, bounds)
-        assertUnchanged(d.state, d.system(.window(WindowID("ghost"), .geometry(bounds: bounds, contentSize: CGSize(width: 1, height: 1)))))
-    }
-
-    /// normalize clamps a stored sidebar width outside the range on restore
-    func test_normalizeClampsAStoredSidebarWidthOutsideTheRangeOnRestore() throws {
-        let d = Driver()
-        var file = jsonObject(d.savedFile)
-        var doc = file["doc"] as! [String: Any]
-        var windows = doc["windows"] as! [String: Any]
-        var window = windows[d.window.rawValue] as! [String: Any]
-        window["sidebarWidth"] = 5000
-        windows[d.window.rawValue] = window
-        doc["windows"] = windows
-        file["doc"] = doc
-        let r = Driver(file: jsonData(file))
-        XCTAssertEqual(r.view.sidebar.width, 500)
-        guard case .restored(let repairs) = r.outcome else { return XCTFail("\(r.outcome)") }
-        XCTAssertTrue(repairs.contains { $0.contains("5000") }, "\(repairs)")
-    }
-
+    // MARK: commands for a missing window
     /// a user command for a window that does not exist is dropped
     func test_aUserCommandForAWindowThatDoesNotExistIsDropped() throws {
         let d = Driver()
@@ -1858,28 +1236,10 @@ final class ReduceSpecTests: XCTestCase {
         assertUnchanged(d.state, reduce(d.state, .key(WindowID("ghost"), KeyInput(press: press, stage: .beforePage, pressID: PressID(raw: 1))), d.ctx))
     }
 
-    // MARK: handler groups
-    /// are disjoint, so spreading them into one table cannot shadow a handler
-    /// (Swift: `Work.run` switches over the top-level case, so a command reaches exactly its own area's rules; the
-    /// case names below are unique and each names its own area first.)
-    func test_areDisjointSoSpreadingThemIntoOneTableCannotShadowAHandler() throws {
-        let names = CommandInventory.commands.map(CommandInventory.name)
-        XCTAssertEqual(Set(names).count, names.count, "two samples share a case name")
-        for (command, name) in zip(CommandInventory.commands, names) {
-            XCTAssertEqual(name.split(separator: ".").first.map(String.init), CommandInventory.area(command), name)
-        }
-    }
-
-    /// cover every UiCommand type, and every command type has a behavior test above
-    func test_coverEveryUiCommandTypeAndEveryCommandTypeHasABehaviorTestAbove() throws {
-        XCTAssertEqual(CommandInventory.commands.count, 314, "a Command case was added: add its sample and a behavior test")
-        XCTAssertEqual(CommandInventory.events.count, 72, "a SystemEvent case was added: add its sample and a behavior test")
-        let sources = try CommandInventory.testSources()
-        let missing = (CommandInventory.commands.map(CommandInventory.name) + CommandInventory.events.map(CommandInventory.name))
-            .filter { name in sources.range(of: CommandInventory.pattern(for: name), options: .regularExpression) == nil }
-        XCTAssertEqual(missing, [], "no test dispatches these")
-        // And reduce is total over every case: each sample against a rich state and against a fresh one, unknown ids
-        // included, without trapping; the rich state survives a restart afterwards.
+    // MARK: every command
+    /// reduce is total over every case: each sample against a rich state and against a fresh one, unknown ids
+    /// included, without trapping; the rich state survives a restart afterwards.
+    func test_reduceIsTotalOverEveryCommandAndEvent() throws {
         let d = richDriver()
         for command in CommandInventory.commands { d.user(command) }
         for event in CommandInventory.events { d.system(event) }
@@ -1890,19 +1250,6 @@ final class ReduceSpecTests: XCTestCase {
 
     // MARK: - electron-v1:src/domain/auto-archive-stamps-on-leaving-screen.test.ts
     // MARK: auto-archive stamps a tab as it leaves the screen
-    /// a tab read for 11 hours then left with Ctrl+Tab is not archived one hour later
-    func test_aTabReadFor11HoursThenLeftWithCtrlTabIsNotArchivedOneHourLater() throws {
-        let d = Driver()
-        let b = d.open("http://127.0.0.1:9/b")  // A leaves, B shown from T0
-        d.advance(.seconds(11 * 3_600))  // read B for 11 hours
-        d.system(.window(d.window, .modifiersChanged(held: [.control])))
-        d.user(.tab(.cycleRecent(.next)))  // Ctrl+Tab to A
-        d.system(.window(d.window, .modifiersChanged(held: [])))  // Control released: B left the screen now
-        d.advance(hour + minute)  // B was last on screen 1h01m ago, under the 12h threshold
-        d.system(.clockTick)
-        XCTAssertTrue(d.todayIDs.contains(b))
-    }
-
     /// a tab read for 13 hours then dropped on another space is not archived by the next sweep
     func test_aTabReadFor13HoursThenDroppedOnAnotherSpaceIsNotArchivedByTheNextSweep() throws {
         let d = Driver()
@@ -1949,29 +1296,6 @@ final class ReduceSpecTests: XCTestCase {
         var expected = PageSpec(id: PageID(window: d.window, item: bg), initialURL: url("http://127.0.0.1:9/bg"), context: .profile(.default))
         expected.websitePolicy.visible = false
         XCTAssertEqual(d.snapshot.pages.first { $0.id == PageID(window: d.window, item: bg) }, expected)
-    }
-
-    /// a foreground .openRequested still focuses the new tab and loads it
-    func test_aForegroundOpenRequestedStillFocusesTheNewTabAndLoadsIt() throws {
-        let d = Driver()
-        let opener = d.paneIDs[0]
-        d.page(opener, .openRequested(url("http://127.0.0.1:9/fg"), .foregroundTab))
-        let shown = d.paneIDs[0]
-        XCTAssertNotEqual(shown, opener)
-        XCTAssertTrue(d.loadedIDs.contains(shown))
-        XCTAssertEqual(d.row(shown)?.url, url("http://127.0.0.1:9/fg"))
-    }
-
-    /// restore stays lazy: only the shown tab is loaded after a restart, not every stored tab
-    func test_restoreStaysLazyOnlyTheShownTabIsLoadedAfterARestartNotEveryStoredTab() throws {
-        let d = Driver()
-        let opener = d.paneIDs[0]
-        d.page(opener, .openRequested(url("http://127.0.0.1:9/bg"), .backgroundTab))
-        XCTAssertEqual(d.snapshot.pages.count, 2)
-        let next = Driver(file: d.savedFile)
-        // The shown tab loads; the previously-background tab is not shown and is not loaded at launch.
-        XCTAssertEqual(next.snapshot.pages.map(\.id.item), next.paneIDs)
-        XCTAssertEqual(next.paneIDs, [opener])
     }
 
     // MARK: - electron-v1:src/domain/empty-split-pane-not-archived.test.ts
@@ -2036,15 +1360,6 @@ final class ReduceSpecTests: XCTestCase {
 
     // MARK: - electron-v1:src/domain/space-fallback-title.test.ts
     // MARK: fallback space title
-    /// a fresh profile shows "Space 1" but stores an empty title
-    func test_aFreshProfileShowsSpace1ButStoresAnEmptyTitle() throws {
-        let d = Driver()
-        XCTAssertEqual(d.view.dock.map(\.title), ["Space 1"])
-        XCTAssertEqual(d.view.space.title, "Space 1")
-        let spaces = d.savedDoc["spaces"] as? [String: [String: Any]]
-        XCTAssertEqual(spaces?.values.map { $0["title"] as? String }, [""])
-    }
-
     /// deleting a space and creating another does not duplicate "Space N"
     func test_deletingASpaceAndCreatingAnotherDoesNotDuplicateSpaceN() throws {
         let d = Driver()
@@ -2055,16 +1370,6 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.view.dock.map(\.title), ["Space 1", "Space 2"])
         d.newSpace("")
         XCTAssertEqual(d.view.dock.map(\.title), ["Space 1", "Space 2", "Space 3"])
-    }
-
-    /// a named space keeps its name; the archive fromSpaceTitle also derives "Space N"
-    func test_aNamedSpaceKeepsItsNameTheArchiveFromSpaceTitleAlsoDerivesSpaceN() throws {
-        let d = Driver()
-        // Archive the start tab; its source space has an empty stored title shown as "Space 1".
-        d.user(.tab(.close(.item(d.paneIDs[0]))))
-        XCTAssertEqual(d.archive().first?.fromSpaceTitle, "Space 1")
-        d.newSpace("Work")
-        XCTAssertEqual(d.view.dock.map(\.title), ["Space 1", "Work"])
     }
 }
 

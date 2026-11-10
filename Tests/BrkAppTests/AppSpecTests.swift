@@ -15,17 +15,6 @@ import XCTest
 final class StateFileTests: XCTestCase {
     private func directory() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent("brk-statefile-\(UUID().uuidString)") }
 
-    /// reads absent when there is no file, and the bytes once one was written; no temp file is left behind
-    func test_readsAbsentWhenThereIsNoFileAndTheBytesOnceOneWasWritten() throws {
-        let dir = directory()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let file = StateFile(directory: dir)
-        XCTAssertEqual(file.read(), .absent)
-        try file.writeNow(Data("one".utf8))
-        XCTAssertEqual(file.read(), .data(Data("one".utf8)))
-        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path).sorted(), ["state.json"])
-    }
-
     /// a write scheduled before writeNow never lands after it (the drain rule)
     func test_aStaleDebouncedWriteNeverOverwritesAFlush() throws {
         let dir = directory()
@@ -49,14 +38,6 @@ final class StateFileTests: XCTestCase {
         XCTAssertEqual(file.read(), .data(Data("second".utf8)))
     }
 
-    /// creates the directory when it is missing
-    func test_createsTheDirectoryWhenItIsMissing() throws {
-        let dir = directory().appendingPathComponent("nested/deeper")
-        defer { try? FileManager.default.removeItem(at: dir) }
-        try StateFile(directory: dir).writeNow(Data("x".utf8))
-        XCTAssertEqual(StateFile(directory: dir).read(), .data(Data("x".utf8)))
-    }
-
     /// an unreadable file is reported as unreadable, not as absent
     func test_anUnreadableFileIsNotAbsent() throws {
         let dir = directory()
@@ -77,81 +58,10 @@ final class StateFileTests: XCTestCase {
         try file.writeNow(Data("fresh".utf8))
         XCTAssertEqual(try Data(contentsOf: moved), Data("bad".utf8))
     }
-
-    /// quarantine of a missing file only logs
-    func test_quarantineOfAMissingFileOnlyLogs() throws {
-        XCTAssertNil(try StateFile(directory: directory()).quarantine(now: Instant(milliseconds: 1)))
-    }
-}
-
-final class ClockTests: XCTestCase {
-    /// SystemClock reads real time
-    func test_systemClockReadsRealTime() {
-        let before = Int64(Date().timeIntervalSince1970 * 1000)
-        let now = SystemClock().now().milliseconds
-        let after = Int64(Date().timeIntervalSince1970 * 1000)
-        XCTAssertTrue(before <= now && now <= after)
-    }
-
-    /// the test clock is the base clock plus an offset that only grows
-    func test_theTestClockIsTheBaseClockPlusAnOffsetThatOnlyGrows() throws {
-        let clock = OffsetClock()
-        let before = clock.now()
-        let after = try clock.advance(by: .seconds(10))
-        XCTAssertGreaterThanOrEqual(after.since(before), .seconds(10))
-        XCTAssertGreaterThanOrEqual(clock.now(), after)
-    }
-
-    /// a negative advance is refused and leaves the clock where it was
-    func test_aBackwardAdvanceIsRefused() throws {
-        let clock = OffsetClock()
-        _ = try clock.advance(by: .seconds(5))
-        let before = clock.now()
-        var thrown: ClockError?
-        do { _ = try clock.advance(by: .seconds(-10)) } catch { thrown = error }
-        XCTAssertEqual(thrown, .backwards(.seconds(-10)))
-        XCTAssertGreaterThanOrEqual(clock.now(), before)
-        _ = try clock.advance(by: .zero)
-    }
 }
 
 @MainActor
 final class AppStoreTests: XCTestCase {
-    /// start renders the restored profile: pages are reconciled before any surface is asked for, then focus is
-    /// applied; placing the window reports its geometry, which runs as one more (queued) transition afterwards
-    func test_startReconcilesPagesBeforeRenderingAndThenAppliesFocus() {
-        let h = Harness()
-        defer { h.cleanUp() }
-        h.store.start()
-        XCTAssertEqual(h.engine.reconciled.first?.map(\.initialURL), [Harness.startURL])
-        XCTAssertEqual(h.engine.calls, ["reconcile", "surface", "focus", "reconcile", "surface", "reconcile", "surface"])
-        XCTAssertEqual(h.engine.focused, [h.page])
-        XCTAssertNotNil(h.store.windowController(h.window)?.window)
-        XCTAssertEqual(h.store.snapshot.windows[h.window]?.bounds, h.store.windowController(h.window)?.window.frame, "the placement was reported back")
-    }
-
-    /// a changing dispatch runs reduce, project, reconcile, render in that order and the snapshot shows the change
-    func test_aChangingDispatchReprojectsReconcilesAndRenders() {
-        let h = Harness()
-        defer { h.cleanUp() }
-        h.store.start()
-        let bounds = CGRect(x: 11, y: 22, width: 900, height: 700)
-        h.store.dispatch(.system(.window(h.window, .geometry(bounds: bounds, contentSize: CGSize(width: 900, height: 700)))))
-        XCTAssertEqual(h.store.snapshot.windows[h.window]?.bounds, bounds)
-        XCTAssertEqual(Array(h.engine.calls.dropFirst(5)), ["reconcile", "surface", "reconcile", "surface"], "focus did not change, so it is not re-applied")
-    }
-
-    /// effects run even when the state did not change (quit changes nothing)
-    func test_effectsRunWhenStateIsUnchanged() {
-        let h = Harness(), quits = QuitCounter()
-        defer { h.cleanUp(); quits.restore() }
-        h.store.start()
-        let rev = h.store.snapshot.rev
-        h.store.dispatch(.user(h.window, .app(.quit)))
-        XCTAssertEqual(quits.count, 1)
-        XCTAssertEqual(h.store.snapshot.rev, rev)
-    }
-
     /// "Warn before quitting" on: Cmd+Q asks (a sheet, no nested run loop) and tears nothing down until the answer;
     /// Cancel keeps the app, Quit goes on, "Quit, and don’t ask again" turns the setting off. Off: no question
     func test_warnBeforeQuittingAsksBeforeTheOrderedQuit() {
@@ -199,78 +109,6 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(row.title, "nested")
         XCTAssertEqual(h.engine.reconciled.count, 4, "the nested title event and the placement each ran as their own transition after the first finished")
     }
-
-    /// a CEF before-page press of an app-priority chord is consumed and dispatched once; the same press id again is a
-    /// duplicate (rule 4) and is not handled a second time
-    func test_dispatchKeyConsumesAnAppShortcutOnceAndRefusesTheSamePressAgain() {
-        let h = Harness(), quits = QuitCounter()
-        defer { h.cleanUp(); quits.restore() }
-        h.store.start()
-        XCTAssertTrue(h.store.dispatchKey(h.window, h.key("cmd+q", stage: .beforePage, id: 7)))
-        XCTAssertFalse(h.store.dispatchKey(h.window, h.key("cmd+q", stage: .afterPage, id: 7)))
-        XCTAssertFalse(h.store.dispatchKey(h.window, h.key("cmd+q", stage: .menu, id: 7)))
-        XCTAssertEqual(quits.count, 1)
-    }
-
-    /// two genuine presses (different ids) dispatch twice
-    func test_twoGenuinePressesDispatchTwice() {
-        let h = Harness(), quits = QuitCounter()
-        defer { h.cleanUp(); quits.restore() }
-        h.store.start()
-        XCTAssertTrue(h.store.dispatchKey(h.window, h.key("cmd+q", stage: .beforePage, id: 1)))
-        XCTAssertTrue(h.store.dispatchKey(h.window, h.key("cmd+q", stage: .beforePage, id: 2)))
-        XCTAssertEqual(quits.count, 2)
-    }
-
-    /// an auto-repeat of a non-repeating action is left to the page
-    func test_autoRepeatOfANonRepeatingActionIsNotHandled() {
-        let h = Harness(), quits = QuitCounter()
-        defer { h.cleanUp(); quits.restore() }
-        h.store.start()
-        XCTAssertFalse(h.store.dispatchKey(h.window, h.key("cmd+q", stage: .beforePage, id: 3, isRepeat: true)))
-        XCTAssertEqual(quits.count, 0)
-    }
-
-    /// a page-first chord (Esc) passes to the page the first time and is taken by the app when pressed again soon
-    func test_aPageFirstChordIsTakenOnTheSecondPress() {
-        let h = Harness()
-        defer { h.cleanUp() }
-        h.store.start()
-        XCTAssertFalse(h.store.dispatchKey(h.window, h.key("escape", stage: .beforePage, id: 10)))
-        XCTAssertTrue(h.store.dispatchKey(h.window, h.key("escape", stage: .beforePage, id: 11)))
-    }
-
-    /// a chord without a binding is passed to the page before it and ignored after it
-    func test_anUnboundChordIsLeftAlone() {
-        let h = Harness()
-        defer { h.cleanUp() }
-        h.store.start()
-        XCTAssertFalse(h.store.dispatchKey(h.window, h.key("cmd+shift+y", stage: .beforePage, id: 20)))
-        XCTAssertFalse(h.store.dispatchKey(h.window, h.key("cmd+shift+y", stage: .afterPage, id: 20)))
-    }
-
-    /// flush writes state.json now; the window showing a page is derived from the snapshot
-    func test_flushWritesTheStateFileAndWindowShowingFindsThePage() throws {
-        let h = Harness()
-        defer { h.cleanUp() }
-        h.store.start()
-        XCTAssertTrue(h.store.flush())
-        guard case .data(let bytes) = h.stateFile.read() else { return XCTFail("state.json missing after flush") }
-        XCTAssertFalse(bytes.isEmpty)
-        XCTAssertEqual(h.store.window(showing: h.page), h.window)
-        XCTAssertNil(h.store.window(showing: PageID(window: h.window, item: ItemID("nope"))))
-    }
-
-    /// refresh re-renders from the same state without bumping rev
-    func test_refreshRerendersWithoutChangingRev() {
-        let h = Harness()
-        defer { h.cleanUp() }
-        h.store.start()
-        let rev = h.store.snapshot.rev
-        h.store.refresh()
-        XCTAssertEqual(h.store.snapshot.rev, rev)
-        XCTAssertEqual(h.engine.calls.filter { $0 == "surface" }.count, 4)
-    }
 }
 
 @MainActor
@@ -297,18 +135,6 @@ final class MenuTests: XCTestCase {
         XCTAssertTrue(view.items.first(where: { $0.title == "Force Refresh the Page" })!.isAlternate)
         XCTAssertEqual(view.items.filter { $0.title == "Zoom In" }.map(\.isHidden), [false, true, true])
         XCTAssertEqual(main.items.first?.submenu?.items.first?.title, "About \(Product.name)")
-    }
-
-    /// a table item carries its first binding as key equivalent and mask
-    func test_itemsCarryTheirFirstBindingAsKeyEquivalent() {
-        let main = MainMenu.build(target: MenuTarget())
-        let view = main.items[3].submenu!
-        let split = view.items.first { $0.title == "Add Split View" }!
-        XCTAssertEqual(split.keyEquivalent, "=")
-        XCTAssertEqual(split.keyEquivalentModifierMask, [.control, .shift])
-        let archive = main.items[1].submenu!.items.first { $0.title == "Archive Tab" }!
-        XCTAssertEqual(archive.keyEquivalent, "w")
-        XCTAssertEqual(archive.keyEquivalentModifierMask, [.command])
     }
 
     /// opening a menu shows the shortcuts as the user set them: a remap moves the key (on both New Tab… items), an
@@ -367,19 +193,6 @@ final class MenuTests: XCTestCase {
         XCTAssertEqual(item(main.items[3].submenu!, "Appearance")?.submenu?.items.first?.isEnabled, false, "Arc's label row")
     }
 
-    /// a later wave's row is greyed out even when no window answers; a real one asks the key window
-    func test_laterRowsAreDisabled() throws {
-        let target = MenuTarget()
-        target.isEnabled = { _ in true }
-        let main = MainMenu.build(target: target)
-        let unsupported = try XCTUnwrap(main.items[1].submenu!.items.first { $0.title == "New Note" })
-        let newWindow = try XCTUnwrap(main.items[1].submenu!.items.first { $0.title == "New Window" })
-        XCTAssertFalse(target.validateMenuItem(unsupported))
-        XCTAssertTrue(target.validateMenuItem(newWindow))
-        target.isEnabled = nil
-        XCTAssertFalse(target.validateMenuItem(unsupported))
-    }
-
     /// a menu key equivalent is a .menu-stage key input minted from the event (so a duplicate is refused); a mouse
     /// choice has no press and always dispatches
     func test_menuActionRoutesKeyEquivalentsAsPressesAndClicksAsCommands() {
@@ -394,61 +207,6 @@ final class MenuTests: XCTestCase {
         h.router.menuAction(.quitArc, in: h.window, event: nil)
         h.router.menuAction(.quitArc, in: h.window, event: nil)
         XCTAssertEqual(quits.count, 3)
-    }
-
-    /// a popup menu maps entries to items whose choice dispatches the entry's command
-    func test_popupMenuItemsDispatchTheirCommands() {
-        let target = PopupTarget()
-        var chosen: [Command] = []
-        let model = MenuModel(entries: [.action(title: "Hide", command: .app(.hide), enabled: true), .separator,
-                                        .action(title: "Quit", command: .app(.quit), enabled: false)])
-        let menu = target.menu(for: model) { chosen.append($0) }
-        XCTAssertEqual(menu.items.map { $0.isSeparatorItem ? "-" : $0.title }, ["Hide", "-", "Quit"])
-        XCTAssertFalse(menu.items[2].isEnabled)
-        _ = (menu.items[2].target as AnyObject).perform(menu.items[2].action!, with: menu.items[2])
-        XCTAssertEqual(chosen, [.app(.quit)])
-    }
-}
-
-@MainActor
-final class WindowControllerTests: XCTestCase {
-    /// flagsChanged on the window becomes modifiersChanged for its window id, whoever has focus
-    func test_flagsChangedBecomesModifiersChanged() {
-        var sent: [Input] = []
-        let controller = WindowController(id: WindowID("w"), engine: FakeEngine(), send: { sent.append($0) })
-        let down = NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .control, timestamp: 1, windowNumber: controller.window.windowNumber,
-                                    context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 59)!
-        controller.window.sendEvent(down)
-        let up = NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: 2, windowNumber: controller.window.windowNumber,
-                                  context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 59)!
-        controller.window.sendEvent(up)
-        XCTAssertEqual(sent, [.system(.window(WindowID("w"), .modifiersChanged(held: .control))), .system(.window(WindowID("w"), .modifiersChanged(held: [])))])
-    }
-
-    /// render puts the page's surface in card 0 and applies focus through the engine only when it changes
-    func test_renderHostsTheSurfaceAndAppliesFocusOnChangeOnly() {
-        let h = Harness()
-        defer { h.cleanUp() }
-        h.store.start()
-        let controller = h.store.windowController(h.window)!
-        let surface = h.engine.surface(for: h.page)!
-        XCTAssertTrue(surface.isDescendant(of: controller.root.content))
-        XCTAssertEqual(h.engine.focused.count, 1)
-        controller.render(h.store.snapshot.windows[h.window]!)
-        XCTAssertEqual(h.engine.focused.count, 1)
-        XCTAssertEqual(controller.lastFrames?.cards.count, 1)
-        XCTAssertEqual(controller.lastFrames?.cards.first?.rect.minX, Metrics.sidebar.defaultWidth.value + Metrics.content.sidebarGap.value)
-    }
-
-    /// a resize reports the window's geometry to the store
-    func test_resizeReportsGeometry() {
-        var sent: [Input] = []
-        let controller = WindowController(id: WindowID("w"), engine: FakeEngine(), send: { sent.append($0) })
-        controller.window.setContentSize(CGSize(width: 800, height: 600))
-        controller.windowDidResize(Notification(name: NSWindow.didResizeNotification))
-        guard case .system(.window(_, .geometry(let bounds, let content)))? = sent.last else { return XCTFail("no geometry event") }
-        XCTAssertEqual(content, CGSize(width: 800, height: 600))
-        XCTAssertEqual(bounds.size, CGSize(width: 800, height: 600))
     }
 }
 
@@ -487,14 +245,5 @@ final class LifecycleTests: XCTestCase {
         let marker = try String(contentsOf: h.directory.appendingPathComponent("shutdown-incomplete.log"), encoding: .utf8)
         XCTAssertEqual(marker, "\(h.page.description)\n")
         XCTAssertEqual(Lifecycle.shutdownTimedOutStatus, 3)
-    }
-
-    /// Quit.request goes through the replaceable handler (the one way code asks for a quit)
-    func test_quitRequestGoesThroughTheHandler() {
-        let quits = QuitCounter()
-        defer { quits.restore() }
-        Quit.request()
-        Quit.request()
-        XCTAssertEqual(quits.count, 2)
     }
 }

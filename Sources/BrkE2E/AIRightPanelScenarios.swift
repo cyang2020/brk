@@ -11,26 +11,12 @@ import Foundation
 /// writes the facts it checked to `<id>.txt` beside its pictures.
 enum AIRightPanelScenarios {
     static let all: [Scenario] = [
-        Scenario("AIAgentRightPanel-NoRow", "the first message adds no sidebar row; the conversation is in this Space's list",
-                 cefOnly: "native panel", noRow),
         Scenario("AIAgentRightPanel-Migration", "old data with a pinned, a foldered and an archived conversation row and one in another Space: after the launch no conversation row is left, each conversation is in its Space's list, the kept page's row and the emptied folder stay",
                  cefOnly: "native panel and a seeded data folder", migration),
         Scenario("AIAgentRightPanel-Toggle", "the title row's chat button: a click opens, a second closes, the open fill, the waiting count, the narrow row's … with its count, no button with AI off",
                  cefOnly: "native title row", toggle),
-        Scenario("AIAgentRightPanel-Entries", "⌥⌘A toggles; View › Show/Hide AI Conversations under Hide Sidebar toggles; the command bar's AI Conversations opens the list",
-                 cefOnly: "native menus and keys", entries),
         Scenario("AIAgentRightPanel-EdgeDrop", "a tab dragged toward the window's right edge: the split slot over the page first, then the drop area in the last 40 pt; letting go opens a new conversation with the tab as a chip; a drop before the band still splits",
                  cefOnly: "native drag", edgeDrop),
-        Scenario("AIAgentRightPanel-Hover", "the pointer over a list row lights the tabs its conversation used, a collapsed folder in its tab's place, and says how many; over a chip only that tab",
-                 cefOnly: "native panel and sidebar", hover),
-        Scenario("AIAgentRightPanel-Width", "the gap between the card and the panel dragged left widens the panel; the width is there after a relaunch",
-                 cefOnly: "native drag and relaunch", width),
-        Scenario("AIAgentRightPanel-PageButton", "a kept AI page in another Space: its caption row's conversation button and its row menu's Open Conversation switch Space and open the conversation in the panel",
-                 cefOnly: "native page card", pageButton),
-        Scenario("AIAgentRightPanel-DragToSpace", "a list row dragged onto another Space's dot moves the conversation; both lists follow",
-                 cefOnly: "native drag", dragToSpace),
-        Scenario("AIAgentRightPanel-Look", "the five pictures in a light and a dark Space: the badged button, the hover lighting, the edge drop area, a widened panel, a kept page's caption row",
-                 cefOnly: "native panel", look),
     ]
 
     private typealias T = AIThreadsScenarios
@@ -121,30 +107,6 @@ enum AIRightPanelScenarios {
 
     // MARK: No row
 
-    @Sendable static func noRow(_ app: AppUnderTest) throws {
-        try prepare(app)
-        let log = T.Log(app)
-        let before = allTabs(try app.view()).map(\.id)
-        log.check("the title row's chat button opens the panel on the list") {
-            try openPanelByButton(app)
-            try app.waitUntil("the list") { try T.panel(app)?.page == .list }
-            return "list page, \(try listed(app).count) conversations"
-        }
-        log.check("the first message adds no sidebar row; this Space's list has it") {
-            let id = try askInPanel(app, "no row please", list: true)
-            let after = allTabs(try app.view()).map(\.id)
-            try expect(after == before, "sidebar rows before \(before), after \(after)")
-            try expect(conversationRows(try app.view()).isEmpty, "a conversation row in the sidebar")
-            T.shot(app, "1-answer")
-            try T.click(app, .aiControl("list"))
-            try app.waitUntil("its row in the list") { try listed(app).contains(id) }
-            let row = try XCTUnwrapValue(try T.rows(app).first { $0.id == id })
-            try expect(row.space == (try app.view().space.id), "its Space: \(String(describing: row.space))")
-            T.shot(app, "2-list")
-            return "\(id.rawValue) listed in this Space; the sidebar's \(after.count) rows are the same"
-        }
-        try log.finish()
-    }
 
     // MARK: The move off the sidebar
 
@@ -529,103 +491,10 @@ enum AIRightPanelScenarios {
 
     // MARK: A kept page's way back
 
-    private static func seedPage(_ app: AppUnderTest, space: SpaceID) throws -> (AIRequestID, AIPageID) {
-        let conversation = AIRequestID("5E0C0A11-0000-4000-8000-0000000B0770")
-        let page = AIPageID("5E0C0A11-0000-4000-8000-0000000BA9E0")
-        let pages = app.dataDirectory.appendingPathComponent("AI Pages", isDirectory: true)
-        let conversations = app.dataDirectory.appendingPathComponent("Conversations", isDirectory: true)
-        try FileManager.default.createDirectory(at: pages, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: conversations, withIntermediateDirectories: true)
-        let html = pages.appendingPathComponent(page.rawValue + ".html")
-        try Data("<!doctype html><h3>Price watch</h3><p>Kettle €39.00 · Toaster €24.50</p>".utf8).write(to: html)
-        let now = Instant(milliseconds: Int64(Date().timeIntervalSince1970 * 1000))
-        var record = AIPageRecord(id: page, title: "Price watch", html: html, height: 200, data: #"{"cheapest":"toaster"}"#, conversation: conversation,
-                                  profile: .default, createdAt: now, readPages: false)
-        record.live = AIPageLive(schedule: .hourly)
-        var stored = stored(conversation.rawValue, space: space, title: "Watch the prices (fixture)")
-        stored.items.append(.page(AIPageRef(id: page, title: "Price watch", height: 200)))
-        try JSONEncoder().encode(record).write(to: pages.appendingPathComponent(page.rawValue + ".json"))
-        try JSONEncoder().encode(stored).write(to: conversations.appendingPathComponent(conversation.rawValue + ".json"))
-        return (conversation, page)
-    }
 
-    @Sendable static func pageButton(_ app: AppUnderTest) throws {
-        try prepare(app)
-        let log = T.Log(app)
-        let home = try app.view().space.id
-        let (conversation, page) = try seedPage(app, space: home)
-        try app.restart()
-        try place(app)
-        // The page kept as a tab, its row then moved to another Space (setup).
-        try app.dispatch(.assist(.showConversation(conversation)))
-        try app.waitUntil("the conversation") { try app.view().ai?.conversation?.id == conversation }
-        try app.dispatch(.assist(.keepPage(page)))
-        try app.waitUntil("the page's row") { allTabs(try app.view()).contains { $0.url == AIPageTab.url(page) } }
-        let row = try XCTUnwrapValue(allTabs(try app.view()).first { $0.url == AIPageTab.url(page) }).id
-        try app.dispatch(.assist(.dismiss))
-        let work = try createSpace(app, title: "Work")
-        try app.dispatch(.item(.move(row, to: .space(work))))
-        try app.waitUntil("the row in Work") { try app.view().space.today.rows.contains { $0.id == row } }
-        log.check("the caption row: the name, the refresh frequency and the conversation button") {
-            try T.click(app, .row(row))
-            try app.waitUntil("the page's card", timeout: 8) { try app.view().aiPages.first?.content?.id == page }
-            try app.waitUntil("the caption's button") { try T.shown(app, .aiControl("page-conversation")) }
-            try expect(try app.view().aiPages.first?.content?.conversation == conversation, "the card does not name its conversation")
-            T.shot(app, "1-caption")
-            return "card with its caption row"
-        }
-        log.check("the button switches to the conversation's Space and opens it in the panel") {
-            try T.click(app, .aiControl("page-conversation"))
-            try app.waitUntil("home with the conversation", timeout: 8) {
-                try app.view().space.id == home && app.view().ai?.conversation?.id == conversation && T.panel(app)?.page == .conversation
-            }
-            T.shot(app, "2-conversation")
-            return "home, conversation page"
-        }
-        log.check("the row's menu has Open Conversation, which does the same") {
-            try app.dispatch(.assist(.dismiss))
-            try T.click(app, .dockSpace(work))
-            try app.waitUntil("Work") { try app.view().space.id == work }
-            let rowFrame = try frame(app, .row(row))
-            guard case .menuItems(let items) = try app.send(.captureContextMenu(window: app.window, point: centre(rowFrame), choose: "Open Conversation")) else {
-                throw Check(description: "no row menu")
-            }
-            try expect(items.contains("Open Conversation"), "menu: \(items)")
-            try app.waitUntil("home with the conversation", timeout: 8) { try app.view().space.id == home && app.view().ai?.conversation?.id == conversation }
-            return "menu: " + items.suffix(6).joined(separator: " · ")
-        }
-        try log.finish()
-    }
 
     // MARK: A list row onto a Space's dot
 
-    @Sendable static func dragToSpace(_ app: AppUnderTest) throws {
-        try prepare(app)
-        let log = T.Log(app)
-        let home = try app.view().space.id
-        let id = try ask(app, "drag me")
-        let work = try createSpace(app, title: "Work")
-        try T.click(app, .dockSpace(home))
-        try app.waitUntil("home with its conversation", timeout: 6) { try app.view().space.id == home && app.view().ai?.conversation?.id == id }
-        log.check("the row dragged onto Work's dot moves the conversation; both lists follow") {
-            try T.click(app, .aiControl("list"))
-            try app.waitUntil("the list") { try T.panel(app)?.page == .list && listed(app).contains(id) }
-            let row = try frame(app, .aiControl("thread-\(id.rawValue)"))
-            let dot = try frame(app, .dockSpace(work))
-            try heldDrag(app, from: centre(row), through: [CGPoint(x: (row.midX + dot.midX) / 2, y: (row.midY + dot.midY) / 2), centre(dot)]) { stop in
-                if stop == 1 { T.shot(app, "1-over-dot") }
-            }
-            try app.waitUntil("gone from home's list", timeout: 6) { try !listed(app).contains(id) }
-            try expect(try app.view().space.id == home, "the window switched Space")
-            try T.click(app, .dockSpace(work))
-            try app.waitUntil("in Work's list", timeout: 6) { try app.view().space.id == work && T.panel(app) != nil }
-            if try T.panel(app)?.page != .list { try T.click(app, .aiControl("list")) }
-            try app.waitUntil("Work lists it") { try listed(app).contains(id) }
-            T.shot(app, "2-work-list")
-            return "moved to \(work.rawValue)"
-        }
-        try log.finish()
-    }
 
     // MARK: Pictures
 

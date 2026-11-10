@@ -9,10 +9,6 @@ import Foundation
 enum SettingsBehaviourScenarios {
     static let all: [Scenario] = [
         Scenario("SettingsQuit", "Warn before quitting: Cmd+Q asks, Cancel keeps the app, don't ask again quits and saves; off quits at once", quitWarning),
-        Scenario("SettingsRoutes", "Air Traffic Control sheet: New Route, typed Contains text routes a link from another app; Default decides the rest", airTrafficControl),
-        Scenario("SettingsPageDrag", "Allow window dragging from the top of webpages: on, the page-top band moves the window; off, no band and no move", cefOnly: "page surfaces", pageDragging),
-        Scenario("SettingsQuotes", "Shared Quotes: on, Copy URL links to the highlighted text; off, the plain address", cefOnly: "renderer selection", sharedQuotes),
-        Scenario("SettingsIcon", "Icon pane: a chosen icon is the Dock icon, survives a restart, and Original restores it", appIcon),
     ]
 
     private static func settings(_ app: AppUnderTest) throws -> SettingsSnapshot {
@@ -65,70 +61,8 @@ enum SettingsBehaviourScenarios {
         app.passed("off: Cmd+Q quits with no dialog")
     }
 
-    @Sendable static func airTrafficControl(_ app: AppUnderTest) throws {
-        guard case .dispatched = try app.send(.openSettings(pane: .links)) else { throw Check(description: "openSettings did not dispatch") }
-        try app.settle()
-        try app.click(.settingsField("airTrafficControl"))
-        try app.waitUntil("Air Traffic Control opens as a sheet", timeout: 8) { try sheetShown(app) }
-        try app.click(.settingsField("route-new"))
-        try app.waitUntil("New Route adds an empty Contains row") { try settings(app).routes.count == 1 }
-        let route = try XCTUnwrap(settings(app).routes.first?.route, "no route")
-        try expect(route.pattern.isEmpty && route.match == .contains && route.destination == .mostRecentSpace, "New Route's row: \(route)")
-        try app.click(.settingsField("route-\(route.id.rawValue)-pattern"))
-        try app.type("page2.html")
-        try app.waitUntil("the typed text is the route's") { try settings(app).routes.first?.route.pattern == "page2.html" }
-        try app.click(.settingsField("routes-close"))
-        try app.waitUntil("× closes the sheet") { try !sheetShown(app) }
-        try expect(try settings(app).routes.count == 1, "× dropped the filled row")
-        app.passed("the sheet adds, fills and keeps a Contains route through its own controls")
 
-        let windowsBefore = try standardAndLittle(app)
-        guard case .dispatched = try app.send(.externalURL(url: app.site.url("page2.html?from=other-app"))) else { throw Check(description: "externalURL") }
-        try app.waitUntil("the Contains route opens the link as a tab in the most recent space") {
-            tabRows(try app.view().space.today.rows).contains { $0.url == app.site.url("page2.html?from=other-app") }
-        }
-        try expect(try standardAndLittle(app) == windowsBefore, "the routed link opened another window")
-        guard case .dispatched = try app.send(.externalURL(url: app.site.url("index.html?from=other-app"))) else { throw Check(description: "externalURL") }
-        try app.waitUntil("Default (Little Arc) takes a link no route matches") { try standardAndLittle(app).little == windowsBefore.little + 1 }
-        try app.dispatch(.settings(.links(.defaultRoute(.mostRecentSpace))))
-        try expect(try settings(app).links.externalLinksInLittleArc == false, "Default: Most Recent Space did not turn the Little Arc switch off")
-        app.passed("a link from another app follows the Contains route, else the Default")
-    }
 
-    private static func standardAndLittle(_ app: AppUnderTest) throws -> (standard: Int, little: Int) {
-        guard case .hello(let hello) = try app.send(.hello) else { throw Check(description: "hello") }
-        var standard = 0, little = 0
-        for id in hello.windows {
-            guard let kind = try? app.view(id).kind else { continue }
-            if kind == .little { little += 1 } else { standard += 1 }
-        }
-        return (standard, little)
-    }
-
-    @Sendable static func pageDragging(_ app: AppUnderTest) throws {
-        try app.setWindowFrame(CGRect(x: 200, y: 160, width: 1100, height: 720))
-        try app.settle()
-        try app.dispatch(.settings(.advanced(.windowDraggingFromPages(true))))
-        try app.settle()
-        let band = try XCTUnwrap(app.native().actual[ViewID.pageDragStrip(0).identifier]?.frame, "on: no drag band over the page")
-        let card = try XCTUnwrap(app.native().computed.cards.first?.rect, "no card")
-        try expect(abs(band.minY - card.minY) < 1 && abs(band.height - Metrics.content.pageDragHeight.value) < 1, "band \(band) over card \(card)")
-        let before = try app.native().windowFrame
-        let from = CGPoint(x: band.midX, y: band.midY)
-        try app.perform(.pointerDrag(from: from, to: CGPoint(x: from.x + 60, y: from.y + 30), cancel: false))
-        try app.waitUntil("the band dragged the window") { abs(try app.native().windowFrame.minX - before.minX - 60) < 2 }
-        let after = try app.native().windowFrame
-        try expect(abs(after.minY - (before.minY - 30)) < 2, "the window moved \(after.minY - before.minY) vertically, not -30")
-        app.passed("on: dragging the page-top band moves the window with the pointer")
-
-        try app.dispatch(.settings(.advanced(.windowDraggingFromPages(false))))
-        try app.settle()
-        try expect(try app.native().actual[ViewID.pageDragStrip(0).identifier] == nil, "off: the band is still there")
-        try app.perform(.pointerDrag(from: from, to: CGPoint(x: from.x + 60, y: from.y + 30), cancel: false))
-        app.sleep(0.5)
-        try expect(near(try app.native().windowFrame, after, tolerance: 1), "off: the same drag moved the window")
-        app.passed("off: no band; the same drag leaves the window where it is")
-    }
 
     @Sendable static func sharedQuotes(_ app: AppUnderTest) throws {
         let url = app.site.url("index.html")

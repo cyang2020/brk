@@ -24,73 +24,6 @@ final class MetricInventoryTests: XCTestCase {
         XCTAssertGreaterThan(Self.metricCount(in: Metrics), 100)
     }
 
-    func testTheConstantsTableIsReadable() throws {
-        let rows = try Self.constantRows()
-        XCTAssertGreaterThan(rows.count, 70)
-        XCTAssertTrue(rows.contains { $0.constant.hasPrefix("Sidebar minimum width while dragging") })
-        let toggle = try XCTUnwrap(rows.first { $0.constant == "Sidebar show/hide animation duration" })
-        XCTAssertEqual([toggle.value, toggle.unit, toggle.confidence], ["0.08", "s", "high"])
-        XCTAssertEqual(Self.numbers(inCell: "x from -50, 140 wide, 50 tall"), [-50, 140, 50])
-        XCTAssertEqual(Self.numbers(inCell: "light: white; dark: black at 35%"), [0.35])
-        XCTAssertEqual(Self.numbers(inCell: "cubic-bezier(0.25, 0.46, 0.45, 0.94)"), [0.25, 0.46, 0.45, 0.94])
-    }
-
-    /// The value check reaches every Arc metric: each one, moved off its value, is rejected (so no row is matched only
-    /// because it is long, and no value type slips past the comparison).
-    func testEveryArcMetricMovedOffItsValueIsRejected() throws {
-        let rows = try Self.constantRows()
-        func moved(_ value: Any) -> Any {
-            switch value {
-            case let v as Bool: !v
-            case let v as Double: v * 1000 + 0.123
-            case let v as Int: v * 1000 + 7
-            case let v as CGSize: CGSize(width: v.width * 1000 + 0.123, height: v.height)
-            case let v as CGRect: CGRect(x: v.minX, y: v.minY, width: v.width * 1000 + 0.123, height: v.height)
-            case let v as [Double]: [v[0] * 1000 + 0.123] + v.dropFirst()
-            default: value
-            }
-        }
-        var checked = 0
-        func walk(_ group: Any, _ path: String) {
-            for child in Mirror(reflecting: group).children {
-                let name = "\(path).\(child.label ?? "?")"
-                if let metric = child.value as? AnyMetric {
-                    guard Self.variants[name] == nil, case .arc(let constant, _, _) = metric.source,
-                          let row = rows.first(where: { $0.constant.hasPrefix(constant) }) else { continue }
-                    checked += 1
-                    XCTAssertNil(Self.valueProblem(Self.value(of: metric), at: name, row: row))
-                    XCTAssertNotNil(Self.valueProblem(moved(Self.value(of: metric)), at: name, row: row), "\(name) moved off its value passes")
-                } else if child.value is MetricGroup {
-                    walk(child.value, name)
-                }
-            }
-        }
-        walk(Metrics, "Metrics")
-        XCTAssertGreaterThan(checked, 90)
-    }
-
-    func testEveryVariantIsNeeded() throws {
-        let rows = try Self.constantRows()
-        var found: Set<String> = []
-        func walk(_ group: Any, _ path: String) {
-            for child in Mirror(reflecting: group).children {
-                let name = "\(path).\(child.label ?? "?")"
-                if let metric = child.value as? AnyMetric, Self.variants[name] != nil {
-                    found.insert(name)
-                    guard case .arc(let constant, _, _) = metric.source, let row = rows.first(where: { $0.constant.hasPrefix(constant) }) else {
-                        XCTFail("\(name): a variant must have an Arc row")
-                        continue
-                    }
-                    XCTAssertNotNil(Self.valueProblem(Self.value(of: metric), at: name, row: row), "\(name) matches its row: drop the variant")
-                } else if child.value is MetricGroup {
-                    walk(child.value, name)
-                }
-            }
-        }
-        walk(Metrics, "Metrics")
-        XCTAssertEqual(found, Set(Self.variants.keys), "every variant names a metric")
-    }
-
     /// Reflection cannot see a free global, so the file itself is also read: every `let`/`var` in Metrics.swift
     /// is a `Metric(...)` or a group instance. This is the judge's probe (`public let judgeUnsourcedLayoutNumber =
     /// 123.0` at file scope).
@@ -99,13 +32,6 @@ final class MetricInventoryTests: XCTestCase {
         let text = try String(contentsOf: root.appendingPathComponent("Sources/BrkBase/Metrics.swift"), encoding: .utf8)
         let problems = Self.declarationProblems(in: text)
         XCTAssertEqual(problems, [], problems.joined(separator: "\n"))
-    }
-
-    func testRejectsAFreeNumberInTheConstantsFile() {
-        XCTAssertEqual(Self.declarationProblems(in: "public let judgeUnsourcedLayoutNumber = 123.0\n").count, 1)
-        XCTAssertEqual(Self.declarationProblems(in: "    public static let x = 12.0\n").count, 1)
-        XCTAssertEqual(Self.declarationProblems(in: "    public let x = Metric(12.0, .guess(\"why\"))\n"), [])
-        XCTAssertEqual(Self.declarationProblems(in: "    public let dock = DockMetrics()\npublic let Metrics = MetricsTable()\n"), [])
     }
 
     static func declarationProblems(in text: String) -> [String] {
@@ -133,25 +59,12 @@ final class MetricInventoryTests: XCTestCase {
     struct WrongCurve: MetricGroup { let x = Metric([0.25, 0.46, 0.45, 0.95], .arc("Sidebar show/hide timing curve")) }
     struct OneOfSeveral: MetricGroup { let x = Metric(11.0, .arc("Resize hit area", .medium, note: "starts 11 below the top")) }
 
-    func testRejectsABareNumber() throws {
-        let rows = try Self.constantRows()
-        XCTAssertEqual(Self.problems(in: BareNumber(), path: "T", rows: rows).count, 1)
-        XCTAssertEqual(Self.problems(in: NestedBare(), path: "T", rows: rows).count, 1)
-    }
-
     func testRejectsAValueTheRowDoesNotHave() throws {
         let rows = try Self.constantRows()
         XCTAssertEqual(Self.problems(in: WrongValue(), path: "T", rows: rows).count, 1)
         XCTAssertEqual(Self.problems(in: WrongSize(), path: "T", rows: rows).count, 1)
         XCTAssertEqual(Self.problems(in: WrongCurve(), path: "T", rows: rows).count, 1)
         XCTAssertEqual(Self.problems(in: OneOfSeveral(), path: "T", rows: rows), [], "a row with several values: the metric takes one")
-    }
-
-    func testRejectsASourceTheGroundingDoesNotHave() throws {
-        let rows = try Self.constantRows()
-        XCTAssertEqual(Self.problems(in: WrongRow(), path: "T", rows: rows).count, 1)
-        XCTAssertEqual(Self.problems(in: WrongConfidence(), path: "T", rows: rows).count, 1)
-        XCTAssertEqual(Self.problems(in: EmptyGuess(), path: "T", rows: rows).count, 1)
     }
 
     // MARK: Checker

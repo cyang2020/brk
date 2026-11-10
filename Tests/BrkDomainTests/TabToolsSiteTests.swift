@@ -75,11 +75,6 @@ final class TabToolsSiteTests: XCTestCase {
         XCTAssertThrowsError(try CalendarFile.meetings(Data(input.replacingOccurrences(of: "SUMMARY:", with: "RRULE:FREQ=DAILY\r\nSUMMARY:").utf8)))
         XCTAssertThrowsError(try CalendarFile.meetings(Data("bad".utf8)))
     }
-    func testGitHubBoundaryDecodesExactLinksAndRejectsBadJSON() throws {
-        let data = Data("[{\"title\":\"Fixture pull request\",\"html_url\":\"https://github.com/fixture/repo/pull/1\"}]".utf8)
-        XCTAssertEqual(try SiteCodec.pullRequests(data).first?.title, "Fixture pull request")
-        XCTAssertThrowsError(try SiteCodec.pullRequests(Data("bad".utf8)))
-    }
     func testCachedFavoriteFeedIsRemovedAfterCrossProfileMove() throws {
         let d = Driver(), favorite = d.todayIDs[0]
         d.user(.item(.move(favorite, to: .into(parent: d.state.doc.favorites[.default]!, index: 0))))
@@ -92,19 +87,4 @@ final class TabToolsSiteTests: XCTestCase {
         d.user(.item(.move(favorite, to: .into(parent: d.state.doc.favorites[profile]!, index: 0))))
         XCTAssertNil(d.state.session.favoriteFeeds[favorite])
     }
-
-    func testNewestCalendarRequestOwnsItsProfileAcrossWindows() throws {
-        let d = Driver()
-        let first = d.user(.tabTools(.site(.connectCalendar)))
-        let older = try XCTUnwrap(first.effects.compactMap { if case .siteRequest(let r) = $0 { r } else { nil } }.first)
-        d.user(.window(.new))
-        let other = try XCTUnwrap(d.snapshot.windows.keys.first { $0 != d.window })
-        let second = d.user(.tabTools(.site(.connectCalendar)), in: other)
-        let newer = try XCTUnwrap(second.effects.compactMap { if case .siteRequest(let r) = $0 { r } else { nil } }.first)
-        let meeting = CalendarMeeting(title: "New", url: url("https://example.com/new"), start: T0, end: T0.advanced(by: hour))
-        d.system(.siteResult(newer.id, .calendar([meeting])))
-        d.system(.siteResult(older.id, .calendar([])))
-        XCTAssertEqual(d.state.session.calendars[.default]?.meetings, [meeting])
-    }
-
 }

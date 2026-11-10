@@ -293,7 +293,7 @@ public enum ContentLayout {
     /// Panes side by side: sizes proportional to `fractions` after removing (n-1) x splitGap, each rounded to whole
     /// points except the last, which takes what is left, so the cards exactly fill the area. Dividers are the gaps.
     /// Stacked (`.vertical`) as Arc stacks them: a pane starts where its share of the whole height begins and the gap
-    /// comes out of the pane above (verify/visual-pairs/run-20261103 P23-c and P23-vsplitmenu, two equal panes in a
+    /// comes out of the pane above (2a96a9d7f0:verify/visual-pairs/run-20261103 P23-c and P23-vsplitmenu, two equal panes in a
     /// 756 pt area: the top card spans 10...378, the bottom 388...766).
     public static func cards(in area: CGRect, fractions: [Double], orientation: SplitOrientation = .horizontal) -> (cards: [CGRect], dividers: [CGRect]) {
         guard !fractions.isEmpty else { return ([], []) }

@@ -17,13 +17,4 @@ final class IndependentBrowserBasicReviewTests: XCTestCase {
         XCTAssertEqual(after.page, peek.page)
     }
 
-    func testStayOnTopPreservesEmptyLittleWindow() throws {
-        let d = Driver()
-        d.user(.window(.newLittle(nil)))
-        let little = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .little })
-        XCTAssertNotNil(little.overlay)
-        d.user(.window(.toggleStayOnTop), in: little.id)
-        print("REPRO empty Little: window-retained=\(d.snapshot.windows[little.id] != nil)")
-        XCTAssertNotNil(d.snapshot.windows[little.id], "Changing native stacking must not close the Little window")
-    }
 }

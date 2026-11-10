@@ -66,6 +66,16 @@ public class WindowController: NSObject, NSWindowDelegate {
                   self.lastSnapshot?.content.presentedPanes.contains(where: { $0.content == .page(page) }) == true else { return }
             self.send(.user(self.id, .tab(.focus(page.item))))
         }
+        window.onPointerNavigation = { [weak self] direction, point, page in
+            guard let self, let snapshot = self.lastSnapshot else { return }
+            let region: PointerNavigation.Region
+            if let page, snapshot.content.presentedPanes.contains(where: { $0.content == .page(page) }) { region = .page(page) }
+            else if self.root.isSidebar(atWindowPoint: point) { region = .sidebar }
+            else { region = .other }
+            guard let command = PointerNavigation.command(direction, over: region, overlayOpen: snapshot.overlay != nil,
+                                                          stepsSpaces: self.kind == .standard) else { return }
+            self.send(.user(self.id, command))
+        }
         // Typing asks the page nothing unless a highlight is showing (it may just have been replaced).
         window.onPageSelectionMayChange = { [weak self, engine] page, typing in
             if typing, self?.lastSnapshot?.urlPill.shareQuote != true { return }
@@ -337,6 +347,9 @@ public protocol HostWindow: NSWindow {
     /// A mouse-up or key-up with a page focused: its highlight may have changed (the URL pill's Share Quote). `typing`:
     /// a key-up without Shift or Command, which changes a highlight only by replacing or leaving one.
     var onPageSelectionMayChange: ((PageID, _ typing: Bool) -> Void)? { get set }
+    /// Back or forward from the mouse: a side button outside a page, or a navigation swipe anywhere (`PointerNavigation`).
+    /// `page` is the shown page under the pointer, if any.
+    var onPointerNavigation: ((PointerNavigation.Direction, _ point: NSPoint, _ page: PageID?) -> Void)? { get set }
     /// Arc's title row lights, or hidden (nil) while the sidebar is hidden.
     func placeTrafficLights(origin: CGPoint?)
 }
@@ -359,6 +372,7 @@ extension HostWindow {
         if event.type == .keyDown, onKeyBeforePage?(event) == true { return true }
         if [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel].contains(event.type) { onActivity?() }
         if event.type == .scrollWheel, onScrollWheel?(event) == true { return true }
+        if let taken = pointerNavigation(event) { return taken }
         switch event.type {
         case .leftMouseUp, .keyUp:
             if let surface = Self.surface(containing: firstResponder), surface.window === self {
@@ -369,9 +383,7 @@ extension HostWindow {
             // Control stays the keyboard's report alone: a click while Control is held mid Ctrl+Tab walk would otherwise
             // read as a repeated report, which the reducer takes for a missed release and commits the walk.
             if !event.modifierFlags.contains(.control) { onFlagsChanged?(event.modifierFlags) }
-            if event.type == .leftMouseDown,
-               let hit = contentView?.superview?.hitTest(event.locationInWindow) ?? contentView?.hitTest(event.locationInWindow),
-               let surface = Self.surface(containing: hit), surface.window === self, !surface.isHiddenOrHasHiddenAncestor {
+            if event.type == .leftMouseDown, let surface = pageSurface(at: event.locationInWindow) {
                 onPagePointerDown?(surface.page)
             }
         default: break
@@ -380,6 +392,36 @@ extension HostWindow {
             keyLog.notice("window.sendEvent keyDown code=\(event.keyCode, privacy: .public) eventWindow=\(event.windowNumber, privacy: .public) firstResponder=\(Self.describe(self.firstResponder), privacy: .public)")
         }
         return event.type == .keyDown && (Self.surface(containing: firstResponder)?.routesKeysThroughWindow ?? true) && routeKeyEquivalent(event)
+    }
+
+    /// Side buttons 4 and 5 and the navigation swipe (mouse drivers' Back and Forward, the three-finger trackpad swipe).
+    /// Over a shown page the side buttons stay Chromium's: Blink takes them and navigates that page itself. Elsewhere,
+    /// and the swipe everywhere (Chrome handles it in its own browser window, which an embedded page lacks), the
+    /// controller runs `PointerNavigation`'s command. A side button's press and release are both taken, so no view under
+    /// the pointer sees half a click; the command runs on the release, as Blink does on a page. Nil: not one of these.
+    private func pointerNavigation(_ event: NSEvent) -> Bool? {
+        let direction: PointerNavigation.Direction
+        switch event.type {
+        case .swipe:
+            guard let swiped = PointerNavigation.direction(swipeDeltaX: event.deltaX) else { return nil }
+            direction = swiped
+        case .otherMouseDown, .otherMouseUp:
+            guard let pressed = PointerNavigation.direction(button: event.buttonNumber), pageSurface(at: event.locationInWindow) == nil else { return nil }
+            guard event.type == .otherMouseUp else { return true }
+            direction = pressed
+        default:
+            return nil
+        }
+        keyLog.notice("window.pointerNavigation \(direction == .back ? "back" : "forward", privacy: .public) type=\(event.type.rawValue, privacy: .public)")
+        onPointerNavigation?(direction, event.locationInWindow, pageSurface(at: event.locationInWindow)?.page)
+        return true
+    }
+
+    /// The shown page surface under a point of this window, if any.
+    func pageSurface(at point: NSPoint) -> PageSurfaceView? {
+        guard let hit = contentView?.superview?.hitTest(point) ?? contentView?.hitTest(point),
+              let surface = Self.surface(containing: hit), surface.window === self, !surface.isHiddenOrHasHiddenAncestor else { return nil }
+        return surface
     }
 
     /// `performKeyEquivalent`'s tail: the views' answer, logged, then the table's turn. With a page focused
@@ -420,7 +462,7 @@ extension HostWindow {
     /// The buttons are not moved against AppKit: it lays its titlebar out again whenever it likes (the moment the
     /// pointer goes over the buttons, for one) and puts them back at its own spots, a fixed inset from the titlebar's
     /// left edge and centred in its height. So the titlebar itself is moved and sized until those spots are Arc's: the
-    /// user's report (verify/visual-pairs/run-20261103/Q16) was the colored buttons coming up 4 pt left of and 8 pt
+    /// user's report (26b91660a8:verify/visual-pairs/run-20261103/Q16) was the colored buttons coming up 4 pt left of and 8 pt
     /// above the grey circles, with the circles' own spots taking no click. AppKit sets the titlebar's frame back each
     /// time the pointer goes onto or off the buttons; `RestingTrafficLights` puts it right in the same display pass.
     func placeArcTrafficLights(origin: CGPoint?) {
@@ -465,7 +507,7 @@ extension HostWindow {
     }
 }
 
-/// Arc's traffic lights at rest (verify/visual-pairs/run-20261103: every capture with the pointer elsewhere, P01-a in
+/// Arc's traffic lights at rest (2a96a9d7f0:verify/visual-pairs/run-20261103: every capture with the pointer elsewhere, P01-a in
 /// the key window and P01-d with another app frontmost): three flat circles of black at 8.5% over the sidebar
 /// (#DCD5D3 on #F0EAE6), the colored buttons with their glyphs only while the pointer is over them (P01-c). Sits
 /// under the standard buttons, which stay clickable and turn transparent at rest.
@@ -594,6 +636,7 @@ public final class BrowserWindow: NSWindow, HostWindow {
     public var onEscapeBeforePage: ((NSEvent) -> Bool)?
     public var onPagePointerDown: ((PageID) -> Void)?
     public var onPageSelectionMayChange: ((PageID, _ typing: Bool) -> Void)?
+    public var onPointerNavigation: ((PointerNavigation.Direction, _ point: NSPoint, _ page: PageID?) -> Void)?
     /// Arc's ⇧⌘-drag capture: whether this ⇧⌘ mouse-down is over the focused page, and, once it moves, starting
     /// the capture (true when the overlay is up to take the held mouse-down).
     var canStartCaptureDrag: ((NSEvent) -> Bool)?

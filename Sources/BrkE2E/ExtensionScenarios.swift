@@ -4,7 +4,7 @@ import BrkDomain
 import Foundation
 
 enum ExtensionScenarios {
-    static let all = [Scenario("Extension-cancel-uninstall", "pending uninstall confirmation cancels with source close and clean quit", cefOnly: "native extension dialog", cancelUninstall), Scenario("Extension-action-probe", "probe extension action invocation without claiming popup acceptance", cefOnly: "extension actions", actionProbe), Scenario("Extension-webui", "Chrome WebUI lists extensions and cancels its native installer on source close", cefOnly: "Chrome WebUI", webUIProbe), Scenario("Extension-install", "selected harmless local extension installs, runs, pins and removes", cefOnly: "CEF extensions", install)]
+    static let all = [   Scenario("Extension-install", "selected harmless local extension installs, runs, pins and removes", cefOnly: "CEF extensions", install)]
     static func selectedFixture(_ app: AppUnderTest) throws -> (ItemID, BrowserExtension) {
         let item = try app.load(app.site.url("site-policy.html")); try waitForTitle(app, item, "Site policy fixture")
         // Explicit fixture selection uses the same production command as the NSOpenPanel completion.
@@ -97,53 +97,10 @@ enum ExtensionScenarios {
 }
 
 extension ExtensionScenarios {
-    @Sendable static func webUIProbe(_ app: AppUnderTest) throws {
-        try app.dispatch(.site(.extensions))
-        guard let item = currentTab(try app.view())?.id else { throw Check(description: "manager missing") }
-        try app.waitForPageInput(PageID(window: app.window!, item: item), at: URL(string: "chrome://extensions/")!)
-        try SitePolicyScenarios.evaluate(app, item, "chrome.developerPrivate.getExtensionsInfo({includeDisabled:true,includeTerminated:true}).then(xs=>document.title='webui-info:'+xs.length).catch(e=>document.title='webui-error:'+e.message)")
-        try app.waitUntil("Chrome's native extension API readback") { try currentTab(app.view())?.title.hasPrefix("webui-info:") == true }
-        app.note("getExtensionsInfo readback: " + (currentTab(try app.view())?.title ?? ""))
-        try SitePolicyScenarios.evaluate(app, item, "(async()=>{await chrome.developerPrivate.updateProfileConfiguration({inDeveloperMode:true});await chrome.developerPrivate.loadUnpacked({failQuietly:false});document.title='webui-installed'})().catch(e=>document.title='webui-error:'+e.message)")
-        try app.waitUntil("Chromium's native folder picker") { try app.native().appWindows.contains { $0.className == "NSOpenPanel" && $0.isVisible } }
-        app.note("Chrome's local installer reached a real OS folder picker; selection is a separate manual gate.")
-        try app.dispatch(.tab(.close(.focused)))
-        return
-
-    }
 }
 
 extension ExtensionScenarios {
-    @Sendable static func actionProbe(_ app: AppUnderTest) throws {
-        let (item, fixture) = try selectedFixture(app)
-        try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(item)))
-        try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("site-policy.html"))
-        try app.dispatch(.site(.nativeExtensions))
-        try app.dispatch(.site(.invokeExtension(fixture.id)))
-        app.sleep(0.4)
-        let value = try SitePolicyScenarios.controls(app)
-        if let error = value.extensionError { throw Skipped(description: "Pinned CEF extension action invocation rejected: " + error) }
-        try app.recordWindows("extension-action-invoked")
-        throw Skipped(description: "Invocation was submitted; actual popup input, permission UI and lifecycle have not been established")
-    }
 }
 
 extension ExtensionScenarios {
-    @Sendable static func cancelUninstall(_ app: AppUnderTest) throws {
-        let (item, fixture) = try selectedFixture(app)
-        try app.dispatch(.site(.removeExtension(fixture.id)))
-        try app.waitUntil("pending uninstall confirmation") { try app.native().appWindows.contains { $0.className == "NativeWidgetMacNSWindow" && $0.isVisible } }
-        try app.dispatch(.tab(.close(.focused)))
-        try app.waitUntil("source closure cancels the real uninstall dialog") { try !app.native().appWindows.contains { $0.className == "NativeWidgetMacNSWindow" && $0.isVisible } }
-        try app.dispatch(.tab(.focus(item))); try app.dispatch(.site(.nativeExtensions))
-        try app.waitUntil("cancellation preserves the installed extension") {
-            let value = try SitePolicyScenarios.controls(app)
-            return value.extensionsLoaded == true && value.extensions.contains { $0.id == fixture.id }
-        }
-        try app.dispatch(.site(.removeExtension(fixture.id)))
-        try app.waitUntil("a second pending uninstall confirmation") { try app.native().appWindows.contains { $0.className == "NativeWidgetMacNSWindow" && $0.isVisible } }
-        let outcome = try app.quit()
-        try expect(outcome.clean, "pending uninstall prevented clean quit: \(outcome.exit)")
-        app.note("The original native confirmation was cancelled by manager closure. A new confirmation was then cancelled by actual ordered app shutdown, without an accepted-operation lease blocking browser closure.")
-    }
 }

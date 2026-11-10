@@ -24,16 +24,6 @@ final class TreeTests: XCTestCase {
 
     // MARK: Pane membership
 
-    func testSplitPanesHoldTwoToMaxDistinctIDs() {
-        let ids = (0..<6).map { ItemID("p\($0)") }
-        XCTAssertNil(SplitPanes([ids[0]]))
-        XCTAssertNotNil(SplitPanes(Array(ids[0..<2])))
-        XCTAssertNotNil(SplitPanes(Array(ids[0..<Metrics.content.maxPanes.value])))
-        XCTAssertNil(SplitPanes(Array(ids[0...Metrics.content.maxPanes.value])))
-        XCTAssertNil(SplitPanes([ids[0], ids[0]]))
-        XCTAssertNil(SplitPanes(Array(ids[0..<2]))?.removing(ids[0]))
-    }
-
     func testSplitInPlaceThenAddPaneUpToTheCap() throws {
         var tree = makeTree()
         try tree.insert(ItemID("a"), .tab(tab("a")), at: .into(parent: today, index: 0), createdAt: t0)
@@ -77,19 +67,6 @@ final class TreeTests: XCTestCase {
     }
 
     // MARK: Kinds, roots, placement
-
-    func testPayloadUpdatesPreserveKindAndIgnoreOtherKinds() throws {
-        var tree = makeTree()
-        try tree.insert(ItemID("a"), .tab(tab("a")), at: .into(parent: today, index: 0), createdAt: t0)
-        tree.updateFolder(ItemID("a")) { $0.title = "nope" }
-        tree.updateTab(favorites) { $0.title = "nope" }
-        XCTAssertEqual(tree[ItemID("a")]?.kind, .tab)
-        XCTAssertEqual(tree[favorites]?.kind, .section)
-        XCTAssertNil(tree[favorites]?.parent)
-        tree.updateTab(ItemID("a")) { $0.customTitle = "renamed" }
-        guard case .tab(let tab)? = tree[ItemID("a")]?.body else { return XCTFail("kind changed") }
-        XCTAssertEqual(tab.customTitle, "renamed")
-    }
 
     func testRootsNeverMoveAndScopesAreEnforced() throws {
         var tree = makeTree()

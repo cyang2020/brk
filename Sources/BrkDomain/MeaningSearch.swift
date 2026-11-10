@@ -73,7 +73,7 @@ public struct HistoryMeaning: Equatable, Sendable, Codable {
 }
 
 public enum MeaningSearch {
-    /// Similarity a match needs. Measured on slice B's 121 labelled tabs (verify/ai-native/b2-local-wiring/results/
+    /// Similarity a match needs. Measured on slice B's 121 labelled tabs (cf04c1ef94:verify/ai-native/b2-local-wiring/results/
     /// search-scores.json): the right tab scored 0.70 to 0.88 (median 0.81) for the 35 labelled queries, the best tab
     /// for a query nothing answers 0.63 to 0.76 ("asdf" 0.755). At 0.76, 33 of the 35 right tabs pass and none of the
     /// unrelated queries does.

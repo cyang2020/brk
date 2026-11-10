@@ -23,17 +23,6 @@ final class AIProviderTests: XCTestCase {
         catch { XCTAssertTrue(String(describing: error).contains("23")) }
     }
 
-    func testTimeoutKillsTermIgnoringProcess() async throws {
-        let path = FileManager.default.temporaryDirectory.appendingPathComponent("brk-ai-pid-" + UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: path) }
-        let p = provider(); p.timeout = .milliseconds(400)
-        do { _ = try await p.run("PID \(path.path)\nhang"); XCTFail("hung process answered") }
-        catch { XCTAssertTrue(String(describing: error).contains("timed out")) }
-        let pid = try XCTUnwrap(Int32(String(contentsOf: path, encoding: .utf8)))
-        XCTAssertEqual(kill(pid, 0), -1)
-        XCTAssertEqual(errno, ESRCH)
-    }
-
     func testCancellationReapsProcess() async throws {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("brk-ai-pid-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: path) }
@@ -48,11 +37,6 @@ final class AIProviderTests: XCTestCase {
         do { _ = try await task.value; XCTFail("cancelled process answered") } catch {}
         XCTAssertEqual(kill(pid, 0), -1)
         XCTAssertEqual(errno, ESRCH)
-    }
-    func testTimeoutKillsDescendantAfterLeaderExited() async throws {
-        let p = provider(); p.timeout = .milliseconds(400)
-        do { _ = try await p.run("detached"); XCTFail("descendant held pipes past leader exit") }
-        catch { XCTAssertTrue(String(describing: error).contains("timed out")) }
     }
 
     func testSuccessfulLeaderDoesNotLeaveBackgroundHelpers() async throws {

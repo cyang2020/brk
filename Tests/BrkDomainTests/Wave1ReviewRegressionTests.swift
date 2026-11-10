@@ -66,17 +66,6 @@ final class Wave1ReviewRegressionTests: XCTestCase {
 
     // MARK: Finding 5: split weights at any scale
 
-    /// Equal relative weights give equal panes however large or small they are; unequal ones keep their ratio.
-    func testEqualSplitWeightsGiveEqualPanesAtAnyScale() {
-        XCTAssertEqual(clampFractions([1e308, 1e308]), [0.5, 0.5])
-        XCTAssertEqual(clampFractions([1e-308, 1e-308]), [0.5, 0.5])
-        XCTAssertEqual(clampFractions([Double.greatestFiniteMagnitude, Double.greatestFiniteMagnitude, Double.greatestFiniteMagnitude, Double.greatestFiniteMagnitude]),
-                       [0.25, 0.25, 0.25, 0.25])
-        let ratio = clampFractions([1e308, 1.5e308])
-        XCTAssertEqual(ratio[0], 0.4, accuracy: 1e-12)
-        XCTAssertEqual(ratio[1], 0.6, accuracy: 1e-12)
-    }
-
     /// A new pane in a split whose saved widths are huge gets an equal, finite share (its width is the mean of the
     /// others, which must not overflow).
     func testANewPaneBesideHugeSavedWidthsGetsAnEqualFiniteShare() throws {

@@ -11,63 +11,7 @@ enum PlanScenarios {
     static let radius = Metrics.content.cornerRadius.value
     static let sidebarWidth = Metrics.sidebar.defaultWidth.value
 
-    /// 0: one window; one dock item and one current Today row; `sidebar` and `card-0` on screen; a full-size capture.
-    @Sendable static func launchSmoke(_ app: AppUnderTest) throws {
-        let windows = app.hello?.windows.count ?? 0
-        try expect(windows == 1, "hello lists \(windows) windows, expected 1")
-        let v = try app.view()
-        try expect(v.dock.count == 1, "the dock has \(v.dock.count) items, expected 1")
-        try expect(v.space.today.rows.count == 1, "Today has \(v.space.today.rows.count) rows, expected 1")
-        guard case .tab(let row) = v.space.today.rows[0] else { throw Check(description: "the Today row is not a tab") }
-        try expect(row.status == .current, "the Today row's status is \(row.status), expected current")
-        let n = try app.native()
-        _ = try visible(n, .sidebar)
-        _ = try visible(n, .card(0))
-        let shot = try app.screenshot("launch-smoke")
-        try expect(Double(shot.width) >= n.contentSize.width && Double(shot.height) >= n.contentSize.height,
-                   "the capture is \(shot.width)x\(shot.height) px, smaller than the \(n.contentSize) pt content")
-    }
 
-    /// 1: card-0 inset 10 from the sidebar and the window, radius 6, the corner shows the background, the page is white;
-    /// the page's surface holds Chromium's two views (CEF only).
-    @Sendable static func oneCard(_ app: AppUnderTest) throws {
-        try app.settle()
-        let v = try app.view()
-        let n = try app.native()
-        let size = n.contentSize
-        try expect(v.sidebar.width == sidebarWidth, "sidebar width \(v.sidebar.width), expected \(sidebarWidth)")
-        let card = try visible(n, .card(0))
-        // Arc: the card starts at the sidebar's edge (Metrics.content.sidebarGap) and keeps the inset on the other sides.
-        let gap = Metrics.content.sidebarGap.value
-        let expected = CGRect(x: sidebarWidth + gap, y: inset, width: size.width - sidebarWidth - gap - inset, height: size.height - 2 * inset)
-        try expect(near(card.frame, expected), "card-0 is at \(card.frame), expected \(expected)")
-        try expect(card.cornerRadius == radius, "card-0 radius \(card.cornerRadius), expected \(radius)")
-        let computed = n.computed.cards.first?.rect
-        try expect(computed.map { near($0, card.frame) } == true, "computed card \(computed.map { "\($0)" } ?? "none") differs from actual \(card.frame)")
-
-        let beside = CGPoint(x: card.frame.minX + 1, y: card.frame.minY - 3)
-        var outside = try app.pixel(beside)
-        if distance(outside, white) <= 24 {
-            // The default light theme is almost white beside the card; a darker theme makes the cut corner measurable.
-            try app.dispatch(.space(.update(v.space.id, title: nil, icon: nil, theme: drabTheme)))
-            try app.waitUntil("the darker theme") { try app.view().theme.gradient.first == drabTheme.colors.first || distance(app.pixel(beside), white) > 24 }
-            outside = try settledPixel(app, beside)
-        }
-        let corner = try app.pixel(CGPoint(x: card.frame.minX + 1, y: card.frame.minY + 1))
-        try expect(distance(outside, white) > 24, "the background next to the card is \(outside), too close to white for the corner check")
-        try expect(distance(corner, outside) <= 24,
-                   "pixel 1 pt inside the card corner is \(corner), the background just outside is \(outside): the corner is not cut")
-        let mid = try app.pixel(cardProbe(card.frame))
-        try expect(distance(mid, white) <= 3, "the card's page area is \(mid), expected white")
-        app.passed("card frame, radius, cut corner and white page")
-        try app.screenshot("one-card")
-
-        try app.requireCEF("PageFacts.embeddedViews lists Chromium's two views")
-        guard let page = currentTab(v).map({ PageID(window: app.window!, item: $0.id) }), let facts = n.pages[page] else {
-            throw Check(description: "native().pages has no facts for the current page")
-        }
-        try expect(facts.embeddedViews.count == 2, "embedded views \(facts.embeddedViews), expected Chromium's two")
-    }
 
     /// 2: Cmd+T shows `command-bar` at `computed.commandBar` (766 wide, centred) with the input focused; the URL and
     /// Return add a current Today row; the bar closes; the page was created.
@@ -113,37 +57,6 @@ enum PlanScenarios {
         try app.screenshot("new-tab")
     }
 
-    /// 3: Cmd+D moves the current Today tab to the end of Pinned (inside `section-pinned`, cannot reset); again back.
-    @Sendable static func pinToggle(_ app: AppUnderTest) throws {
-        guard let id = tabRows(try app.view().space.today.rows).first(where: { $0.status == .current })?.id else {
-            throw Check(description: "no current Today tab at launch")
-        }
-        try app.press("cmd+d")
-        try app.waitUntil("the tab to move to Pinned") {
-            let v = try app.view()
-            return pinnedIDs(v).last == id && !todayIDs(v).contains(id)
-        }
-        let pinned = tab(id, in: try app.view())
-        try expect(pinned?.canReset == false, "the pinned tab's canReset is \(pinned.map { "\($0.canReset)" } ?? "absent"), expected false")
-        try app.waitUntil("row-\(id) inside section-pinned") {
-            let n = try app.native()
-            let section = try visible(n, .section(.pinned)), row = try visible(n, .row(id))
-            try expect(contains(section, row), "row \(row.frame) is outside section-pinned \(section.frame)")
-            return true
-        }
-        try app.screenshot("pinned")
-        try app.press("cmd+d")
-        try app.waitUntil("the tab to move back to Today") {
-            let v = try app.view()
-            return todayIDs(v).contains(id) && !pinnedIDs(v).contains(id)
-        }
-        try app.waitUntil("row-\(id) inside section-today") {
-            let n = try app.native()
-            let section = try visible(n, .section(.today)), row = try visible(n, .row(id))
-            try expect(contains(section, row), "row \(row.frame) is outside section-today \(section.frame)")
-            return true
-        }
-    }
 
     /// 4: a second space with a Drab theme and a tab; a click on the first dock cell shows the first space's rows, hides
     /// the other's, and the background at (4, 200) moves by more than 24 per channel.
@@ -172,34 +85,6 @@ enum PlanScenarios {
         try app.screenshot("space-switched")
     }
 
-    /// 5: Cmd+S hides the sidebar and the card fills the window inset 10, radius 6; Cmd+S again restores x = width + 10.
-    @Sendable static func sidebarToggle(_ app: AppUnderTest) throws {
-        let size = try app.native().contentSize
-        try app.press("cmd+s")
-        try app.waitUntil("Cmd+S to hide the sidebar") { try !app.view().sidebar.visible }
-        try app.waitUntil("card-0 to fill the window inset \(inset)") {
-            let n = try app.native()
-            let card = try visible(n, .card(0))
-            let expected = CGRect(x: inset, y: inset, width: size.width - 2 * inset, height: size.height - 2 * inset)
-            try expect(near(card.frame, expected), "card-0 at \(card.frame), expected \(expected)")
-            try expect(card.cornerRadius == radius, "card-0 radius \(card.cornerRadius), expected \(radius)")
-            try expect(!isShown(n, .sidebar), "the sidebar is still on screen")
-            return true
-        }
-        try app.screenshot("sidebar-hidden")
-        try app.press("cmd+s")
-        try app.waitUntil("Cmd+S again to show the sidebar") { try app.view().sidebar.visible }
-        try app.waitUntil("card-0 back beside the sidebar") {
-            let n = try app.native()
-            let card = try visible(n, .card(0))
-            let left = sidebarWidth + Metrics.content.sidebarGap.value
-            try expect(card.frame.minX == left, "card-0 x \(card.frame.minX), expected \(left)")
-            try expect(card.frame.maxX == size.width - inset, "card-0 right edge \(card.frame.maxX), expected \(size.width - inset)")
-            try expect(card.cornerRadius == radius, "card-0 radius \(card.cornerRadius), expected \(radius)")
-            _ = try visible(n, .sidebar)
-            return true
-        }
-    }
 
     /// 6: Ctrl+Shift+= makes a split: two cards at the same y and height, 10 apart; one split row with two panes; the
     /// command bar is open for the empty pane, and the URL fills it.

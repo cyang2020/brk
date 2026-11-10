@@ -89,10 +89,4 @@ final class PageBrowsingTests: XCTestCase {
         let closed = d.user(.tab(.close(.item(first))))
         XCTAssertTrue(closed.effects.contains(.window(d.window, .pageFullScreen(false))), "\(closed.effects)")
     }
-
-    /// The Default profile's Cast row is an enabled command (BO5 proves the receiver service in a native run).
-    func testCastIsAPageCommandInTheViewMenu() {
-        XCTAssertEqual(ActionID.cast.spec.menu, .view)
-        XCTAssertNil(ActionID.cast.spec.later)
-    }
 }

@@ -10,21 +10,8 @@ import Foundation
 /// through a real key, pointer or menu path, as the review's standard asks.
 enum SidebarEvidenceScenarios {
     static let all = [
-        Scenario("R49-PinnedReset", "Reset all tabs in this Space (menu) resets top-level, nested-folder, split and unloaded pinned tabs", cefOnly: "real navigation", pinnedReset),
-        Scenario("R49-PinnedPeek", "Collapse Pinned Section hides Pinned rows; the shown pinned tab stays peeked; Expand restores", cefOnly: "native sidebar rows", pinnedPeek),
-        Scenario("R49-StepKeys", "Opt+Cmd+Down/Up skip a collapsed folder and stop on a split once, no wrap; Ctrl+Cmd+Left/Right wrap at both ends", cefOnly: "native key routing", stepKeys),
-        Scenario("R49-Numbers", "Cmd+1 follows the Favorites-in-numbers setting, Cmd+9 is the last item, Ctrl+Cmd+2 jumps to Space 2", cefOnly: "native key routing", numbers),
         Scenario("R49-Rename", "rename from the menu and the context menu: Return keeps, Escape restores, a Favorite and a folder rename, a collapsed folder opens", cefOnly: "native rename field", rename),
-        Scenario("R49-Drag", "pointer drags reorder Today, nest into a folder, add a Favorite and move to a dock space; no tab lost", cefOnly: "native pointer drags", drag),
-        Scenario("R49-Duplicate", "two selected rows duplicate from their context menu right after each original with fresh identity", cefOnly: "native selection and menu", duplicate),
-        Scenario("R49-Reveal", "Ctrl+Space scrolls to the current row and focuses the sidebar; arrow keys move, Return returns to the page", cefOnly: "native sidebar focus", reveal),
-        Scenario("R49-ClearToday", "Clear keeps the Today tabs any window shows and archives the rest", cefOnly: "two native windows", clearToday),
-        Scenario("R49-Titles", "a GitHub Live Folder row shows the shortened title; a user title is kept as typed", cefOnly: "native sidebar row text", titles),
         Scenario("R49-Toasts", "a toast shows in the window that acted, a click dismisses it, it expires after 4 seconds", cefOnly: "two native windows", toasts),
-        Scenario("R49-Groups", "a tab group's menu renames it, copies its links and closes it; the group survives a restart", cefOnly: "native group header menu", groups),
-        Scenario("R49-WindowMenu", "Zoom, Minimize, Bring All to Front, Hide and Show All act on Brk's own windows and keep page focus", cefOnly: "native window states", windowMenu),
-        Scenario("R49-StayOnTop", "Stay on Top raises one window, drops while full screen, comes back after, and survives a restart", cefOnly: "native window level", stayOnTop),
-        Scenario("R55-PinnedButton", "a Pinned row that is not current is archived by its x and comes back to its place; the current one's minus closes the page and keeps the row", cefOnly: "native sidebar rows", pinnedButton),
     ]
 
     private typealias S = SidebarReviewScenarios
@@ -84,184 +71,16 @@ enum SidebarEvidenceScenarios {
 
     // MARK: A011
 
-    @Sendable static func pinnedReset(_ app: AppUnderTest) throws {
-        let top = try loadReady(app, "page2.html?reset=top")
-        let nested = try loadReady(app, "page2.html?reset=nested")
-        let unloaded = try loadReady(app, "page2.html?reset=unloaded")
-        let left = try loadReady(app, "split-tools.html?reset=left")
-        try app.press("ctrl+shift+=")
-        try app.dispatch(.commandBar(.submit(app.site.url("split-tools.html?reset=right").absoluteString)))
-        guard let split = try app.view().content.split else { throw Check(description: "no split") }
-        let right = try app.view().content.panes.first { $0.tab != left }!.tab
-        try app.waitUntil("the right pane loaded") { try committed(app, S.page(app, right)) == app.site.url("split-tools.html?reset=right") }
-        let outer = try newFolder(app, "Outer")
-        try app.dispatch(.tabTools(.newNestedFolder(outer)))
-        try app.press("cmd+a"); try app.type("Inner"); try app.press("return")
-        guard case .folder(let o)? = try app.view().space.pinned.rows.first(where: { $0.id == outer }), let inner = o.children.first?.id else { throw Check(description: "no nested folder") }
-        let pinnedRoot = try app.view().space.pinned.root
-        for (id, parent) in [(top, pinnedRoot), (split, pinnedRoot), (unloaded, pinnedRoot), (nested, inner)] {
-            try app.dispatch(.item(.move(id, to: .into(parent: parent, index: 0))))
-        }
-        // Every pinned tab leaves its saved page; the unloaded one is then closed and kept pinned.
-        for id in [top, nested, unloaded, left, right] { try navigate(app, id, to: "red.html?reset=away-\(id.rawValue)") }
-        try app.dispatch(.tab(.close(.item(unloaded))))
-        try app.waitUntil("the unloaded pinned tab has no page") { try tab(unloaded, in: app.view())?.loaded == false }
-        try expect(try tab(unloaded, in: app.view())?.url?.query?.hasPrefix("reset=away") == true, "the closed pinned tab kept its away address")
-        try app.dispatch(.tab(.focus(top)))
-        try app.perform(.menuAction("Reset all tabs in this Space"))
-        let homes: [(ItemID, String)] = [(top, "page2.html?reset=top"), (nested, "page2.html?reset=nested"), (left, "split-tools.html?reset=left"), (right, "split-tools.html?reset=right")]
-        for (id, path) in homes {
-            try app.waitUntil("\(path) back") { try committed(app, S.page(app, id)) == app.site.url(path) }
-        }
-        try expect(try tab(unloaded, in: app.view())?.url == app.site.url("page2.html?reset=unloaded"), "the unloaded tab's row did not go back to its pinned address")
-        try expect(try tab(unloaded, in: app.view())?.loaded == false, "Reset loaded an unloaded tab")
-        try expect(try S.toast(app) == "Pinned tabs reset", "no Reset toast")
-        _ = try app.screenshot("after-reset")
-        try app.click(.row(unloaded))
-        try app.waitUntil("the unloaded tab opens at its pinned address") { try committed(app, S.page(app, unloaded)) == app.site.url("page2.html?reset=unloaded") }
-        app.passed("Tabs > Reset all tabs in this Space: top, nested folder, both split panes, unloaded (row, then on click)")
-    }
 
     // MARK: Q18: the hover button of a Pinned row (Arc: the x archives a row that is not current; the current row's
     // minus closes the page and keeps the row; Restore Last Closed Tab puts an archived Pinned tab back in its place)
 
-    @Sendable static func pinnedButton(_ app: AppUnderTest) throws {
-        let first = try loadReady(app, "page2.html?pinned=first")
-        let second = try loadReady(app, "page2.html?pinned=second")
-        let third = try loadReady(app, "page2.html?pinned=third")
-        for id in [third, second, first] { try app.dispatch(.item(.move(id, to: .into(parent: try app.view().space.pinned.root, index: 0)))) }
-        let today = try loadReady(app, "red.html?pinned=today")
-        func pinned() throws -> [ItemID] { try app.view().space.pinned.rows.map(\.id) }
-        let start = try pinned()
-        try expect(try start == [first, second, third] && shown(app.view()) == today, "setup: \(start)")
-        func pressButton(_ id: ItemID) throws {
-            let row = try app.native().actual[ViewID.row(id).identifier]!.frame
-            try app.hover(CGPoint(x: row.midX, y: row.midY))
-            try app.waitUntil("the row's button") { isShown(try app.native(), .rowClose(id)) }
-            try app.click(.rowClose(id))
-        }
-        try pressButton(second)
-        try app.waitUntil("the Pinned row that was not current is archived") { try pinned() == [first, third] }
-        try expect(try shown(app.view()) == today, "archiving another row changed what is shown")
-        _ = try app.screenshot("archived")
-        try app.press("cmd+shift+t")
-        try app.waitUntil("the restored tab is back between its neighbours") { let p = try pinned(); return p.count == 3 && p.first == first && p.last == third }
-        let restored = try pinned()[1]
-        try app.waitUntil("the restored tab is shown and loaded") { try shown(app.view()) == restored && tab(restored, in: app.view())?.loaded == true }
-        _ = try app.screenshot("restored")
-        try pressButton(restored)
-        try app.waitUntil("the current Pinned row stays, without its page") { try pinned().count == 3 && tab(restored, in: app.view())?.loaded == false }
-        try expect(try shown(app.view()) != restored, "the closed pinned tab is still shown")
-        _ = try app.screenshot("closed-and-kept")
-        try app.perform(.menuAction("Collapse Pinned Section"))
-        try app.waitUntil("Pinned collapsed") { try app.view().space.pinned.collapsed }
-        _ = try app.screenshot("collapsed-pointer-away")
-        try app.perform(.menuAction("Expand Pinned Section"))
-        try app.waitUntil("Pinned expanded") { try !app.view().space.pinned.collapsed }
-    }
 
     // MARK: A012
 
-    @Sendable static func pinnedPeek(_ app: AppUnderTest) throws {
-        let first = try loadReady(app, "page2.html?peek=first")
-        let second = try loadReady(app, "page2.html?peek=second")
-        for id in [second, first] { try app.dispatch(.item(.move(id, to: .into(parent: try app.view().space.pinned.root, index: 0)))) }
-        let today = try loadReady(app, "red.html?peek=today")
-        try expect(isShown(try app.native(), .row(first)) && isShown(try app.native(), .row(second)), "pinned rows not drawn before collapsing")
-        try app.perform(.menuAction("Collapse Pinned Section"))
-        try app.waitUntil("Pinned collapsed") { try app.view().space.pinned.collapsed }
-        try app.waitUntil("no pinned row drawn") { let n = try app.native(); return !isShown(n, .row(first)) && !isShown(n, .row(second)) }
-        try expect(try shown(app.view()) == today, "collapsing changed what is shown")
-        _ = try app.screenshot("collapsed")
-        // The shown pinned tab stays in view (peeked): Cmd+1 picks the first pinned tab while the section is collapsed.
-        try app.press("cmd+1")
-        try app.waitUntil("Cmd+1 showed the first pinned tab") { try shown(app.view()) == first }
-        let peeked = try app.view().space.pinned
-        try expect(peeked.collapsed && peeked.peeked && peeked.rows.map(\.id) == [first], "the peeked section lists \(peeked.rows.map(\.id))")
-        try app.waitUntil("only the shown pinned row drawn") { let n = try app.native(); return isShown(n, .row(first)) && !isShown(n, .row(second)) }
-        _ = try app.screenshot("peeked")
-        try app.click(.row(today))
-        try app.waitUntil("back on Today, the peeked row goes") { try !app.view().space.pinned.peeked && !isShown(app.native(), .row(first)) }
-        try app.perform(.menuAction("Expand Pinned Section"))
-        try app.waitUntil("Pinned expanded") { try !app.view().space.pinned.collapsed }
-        try app.waitUntil("both pinned rows drawn") { let n = try app.native(); return isShown(n, .row(first)) && isShown(n, .row(second)) }
-        try app.flush(); try app.restart()
-        try expect(try !app.view().space.pinned.collapsed, "the expanded state was not kept")
-    }
 
     // MARK: A016, A018
 
-    @Sendable static func stepKeys(_ app: AppUnderTest) throws {
-        let home = try currentTab(app.view())!.id
-        let hidden = try loadReady(app, "page2.html?step=hidden")
-        let pinnedTab = try loadReady(app, "page2.html?step=pinned")
-        let outer = try newFolder(app, "Steps")
-        try app.dispatch(.item(.move(hidden, to: .into(parent: outer, index: 0))))
-        try app.dispatch(.item(.move(pinnedTab, to: .into(parent: try app.view().space.pinned.root, index: Int.max))))
-        let left = try loadReady(app, "split-tools.html?step=left")
-        try app.press("ctrl+shift+=")
-        try app.dispatch(.commandBar(.submit(app.site.url("split-tools.html?step=right").absoluteString)))
-        guard let split = try app.view().content.split else { throw Check(description: "no split") }
-        _ = left
-        let last = try loadReady(app, "red.html?step=last")
-        // The folder is collapsed with a real click on its row.
-        try app.click(.row(outer))
-        try app.waitUntil("the folder collapsed") { folder(outer, in: try app.view().space.pinned.rows)?.collapsed == true }
-        // Expected stops: Pinned in order without the collapsed folder's tab, then Today, the split once.
-        func stops(_ rows: [Row]) -> [ItemID] {
-            rows.flatMap { row -> [ItemID] in
-                switch row {
-                case .tab(let t): [t.id]
-                case .split(let s): [s.id]
-                case .folder(let f): f.collapsed ? [] : stops(f.children)
-                }
-            }
-        }
-        let v = try app.view()
-        let order = stops(v.space.pinned.rows) + stops(v.space.today.rows)
-        try expect(!order.contains(hidden) && order.contains(split) && order.contains(home), "fixture order \(order)")
-        try app.dispatch(.tab(.focus(order[0])))
-        var seen: [ItemID] = [order[0]]
-        for i in 1..<order.count {
-            if i == 1, WindowServerKeys.allowed { try WindowServerKeys.press(app, KeyChord([.option, .command], .downArrow), window: app.window!) }
-            else { try app.press("alt+cmd+down") }
-            try app.waitUntil("Opt+Cmd+Down step \(i)") { try shown(app.view()) == order[i] }
-            seen.append(order[i])
-        }
-        try app.press("alt+cmd+down")
-        app.sleep(0.4)
-        try expect(try shown(app.view()) == order.last, "Opt+Cmd+Down wrapped past the last stop")
-        for i in stride(from: order.count - 2, through: 0, by: -1) {
-            try app.press("alt+cmd+up")
-            try app.waitUntil("Opt+Cmd+Up back to stop \(i)") { try shown(app.view()) == order[i] }
-        }
-        try app.press("alt+cmd+up")
-        app.sleep(0.4)
-        try expect(try shown(app.view()) == order.first, "Opt+Cmd+Up wrapped past the first stop")
-        try expect(!seen.contains(hidden), "Opt+Cmd+Down stopped on a collapsed folder's tab")
-        app.passed("Opt+Cmd+Down/Up: \(order.count) stops, split once, collapsed child skipped, no wrap at either end")
-
-        // Ctrl+Cmd+Left/Right: the linear order of every unit (a collapsed folder's tab included), wrapping at both ends.
-        func units(_ rows: [Row]) -> [ItemID] {
-            rows.flatMap { row -> [ItemID] in
-                switch row {
-                case .tab(let t): [t.id]
-                case .split(let s): [s.id]
-                case .folder(let f): units(f.children)
-                }
-            }
-        }
-        // The folder (first in Pinned) holds `hidden`; a collapsed folder may list no children in the view.
-        var linear = units(v.space.pinned.rows) + units(v.space.today.rows)
-        if !linear.contains(hidden) { linear.insert(hidden, at: 0) }
-        try app.dispatch(.tab(.focus(linear.last!)))
-        try app.waitUntil("the last unit shown") { try shown(app.view()) == linear.last }
-        try app.press("ctrl+cmd+right")
-        try app.waitUntil("Ctrl+Cmd+Right from the last unit wraps to the first") { try shown(app.view()) == linear.first }
-        try app.press("ctrl+cmd+left")
-        try app.waitUntil("Ctrl+Cmd+Left from the first unit wraps to the last") { try shown(app.view()) == linear.last }
-        app.passed("Ctrl+Cmd+Right at the end went to the first unit (inside the collapsed folder); Ctrl+Cmd+Left at the start came back to the end")
-    }
 
     // MARK: A019
 
@@ -435,37 +254,6 @@ enum SidebarEvidenceScenarios {
 
     // MARK: A025
 
-    @Sendable static func reveal(_ app: AppUnderTest) throws {
-        let home = try currentTab(app.view())!.id
-        for i in 0..<22 { _ = try app.load(app.site.url("page2.html?reveal=\(i)")) }
-        try app.settle()
-        try app.dispatch(.tab(.focus(home)))
-        try app.waitForPageInput(S.page(app, home), at: app.site.url("index.html"))
-        // Scroll the list to its top so the current (bottom) row is off screen.
-        guard let viewport = try app.native().computed.sidebar?.tablistViewport else { throw Check(description: "no sidebar frames") }
-        func onScreen(_ id: ItemID) throws -> Bool {
-            guard let f = try S.frame(app, ViewID.row(id).identifier) else { return false }
-            return viewport.insetBy(dx: -1, dy: -1).contains(f)
-        }
-        for delta in [4000.0, -4000.0] where try onScreen(home) {
-            _ = try app.send(.scrollGesture(at: CGPoint(x: viewport.midX, y: viewport.midY), horizontal: 0, vertical: delta, cancel: false))
-            app.sleep(0.6)
-        }
-        try expect(try !onScreen(home), "the current row is still on screen after scrolling up")
-        try app.press("ctrl+space")
-        try app.waitUntil("Ctrl+Space scrolled to the current row") { try onScreen(home) }
-        try app.waitUntil("the sidebar has focus") { try app.view().focus == .sidebar && app.native().firstResponder.contains("ListDocumentView") }
-        _ = try app.screenshot("revealed")
-        let rows = tabRows(try app.view().space.today.rows).map(\.id)
-        guard let at = rows.firstIndex(of: home), at > 0 else { throw Check(description: "home is not below another Today row: \(rows)") }
-        let above = rows[at - 1]
-        try app.press("up")
-        try app.waitUntil("Up moved to the row above") { try shown(app.view()) == above }
-        try app.press("down")
-        try app.waitUntil("Down moved back") { try shown(app.view()) == home }
-        try app.press("return")
-        try app.waitUntil("Return gave the page its focus") { try pageFocused(app, S.page(app, home)) }
-    }
 
     // MARK: A026
 

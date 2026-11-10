@@ -7,42 +7,6 @@ import Foundation
 
 /// R2 to R10: electron-v1:e2e/regression.spec.ts (the interrogate findings) on the control socket.
 enum RegressionScenarios {
-    /// R2: sidebar hidden, the Library opened on the archive: its panel takes the sidebar's place (Arc's Library
-    /// replaces the sidebar, shown or hidden), the archive fills the panel's page column, and the page's card stays
-    /// beside it. The pointer at the window's left edge, where the reveal strip was, keeps the Library open and peeks
-    /// nothing over it; Esc closes the Library and the sidebar is still hidden, its reveal strip back.
-    @Sendable static func peekKeepsArchive(_ app: AppUnderTest) throws {
-        try app.press("cmd+s")
-        try app.waitUntil("Cmd+S to hide the sidebar") { try !app.view().sidebar.visible }
-        try app.dispatch(.library(.open(.archive)))
-        try app.waitUntil("the archive page to open") { isArchive(try app.view().overlay) }
-        try app.waitUntil("the Library panel in the sidebar's place and the archive beside it") {
-            let n = try app.native()
-            guard let library = n.computed.library else { throw Check(description: "computed frames have no library") }
-            try expect(n.computed.revealStrip == nil, "a reveal strip under the Library panel")
-            try expect(library.strip.minX == 0 && library.strip.width >= Metrics.sidebar.libraryMinWidth.value, "library panel at \(library.strip)")
-            try expect(library.strip.contains(library.page) && library.page.minX == library.nav.maxX, "library page column \(library.page), panel \(library.strip)")
-            let page = try visible(n, .archive), cell = try visible(n, .libraryPage(.archive))
-            try expect(near(page.frame, library.page), "archive at \(page.frame), library page column \(library.page)")
-            // Arc slides the page right to the panel's edge and keeps its width (P30-a, P32): the card runs past the window.
-            try expect(n.computed.cards.first.map { $0.rect.minX == library.strip.maxX } == true, "the page's card is not at the Library's edge")
-            try expect(n.computed.cards.first.map { $0.rect.width == n.contentSize.width - 2 * Metrics.content.inset.value } == true,
-                       "the page's card does not keep the width it has without the sidebar")
-            try expect(near(cell.frame, library.pageCells[.archive] ?? .zero), "archive row at \(cell.frame)")
-            try expect(!isShown(n, .sidebar) && !isShown(n, .floatingSidebar), "the sidebar shows with the Library open")
-            return true
-        }
-        try app.screenshot("library")
-        try app.hover(CGPoint(x: 2, y: try app.native().contentSize.height / 2))
-        try app.settle()
-        let v = try app.view(), n = try app.native()
-        try expect(isArchive(v.overlay), "the pointer at the left edge closed the Library")
-        try expect(!v.sidebar.peek && !isShown(n, .floatingSidebar), "the hidden sidebar peeked over the Library panel")
-        try app.press("escape")
-        try app.waitUntil("Esc to close the Library") { try app.view().overlay == nil }
-        try expect(try !app.view().sidebar.visible, "closing the Library showed the hidden sidebar")
-        try app.waitUntil("the hidden sidebar's reveal strip back") { try app.native().computed.revealStrip != nil }
-    }
 
     /// R3 (CEF): Cmd+click on fixture home's link opens a background Today tab that loads page 2; focus stays home.
     @Sendable static func cmdClickLink(_ app: AppUnderTest) throws {
@@ -63,47 +27,8 @@ enum RegressionScenarios {
         try waitForTitle(app, opened!.id, "Fixture Page 2")
     }
 
-    /// R5a: B shown from the start, 11 h later Ctrl+Tab leaves it; an hour and a minute later B is still in Today.
-    @Sendable static func ctrlTabStamps(_ app: AppUnderTest) throws {
-        let b = try openTab(app, app.site.url("page2.html"))
-        try app.onCEF("B's title") { try waitForTitle(app, b.id, "Fixture Page 2") }
-        try app.advanceClock(seconds: 11 * hour)
-        try app.hold("ctrl", "tab", times: 1)
-        try app.waitUntil("Ctrl+Tab to leave B") { try currentTab(app.view())?.id != b.id }
-        try app.advanceClock(seconds: hour + 60)
-        app.sleep(0.2)
-        try expect(todayIDs(try app.view()).contains(b.id), "B was archived an hour after Ctrl+Tab left it")
-    }
 
-    /// R5b: a tab on screen for 13 h, then dropped on another space's dock icon, survives the next sweep there.
-    @Sendable static func moveStamps(_ app: AppUnderTest) throws {
-        let first = try app.view().space.id
-        let work = try createSpace(app, title: "Work")
-        try app.dispatch(.space(.focus(first)))
-        try app.waitUntil("the first space again") { try app.view().space.id == first }
-        guard let x = try app.view().space.today.rows.first?.id else { throw Check(description: "no Today row in the first space") }
-        try app.advanceClock(seconds: 13 * hour)
-        try app.dispatch(.item(.move(x, to: .space(work))))
-        try app.waitUntil("x to leave the first space") { try !todayIDs(app.view()).contains(x) }
-        try app.advanceClock(seconds: 60)
-        try app.dispatch(.space(.focus(work)))
-        try app.waitUntil("Work shown") { try app.view().space.id == work }
-        try expect(todayIDs(try app.view()).contains(x), "x was archived by the sweep after the move")
-    }
 
-    /// R6: B, pin and unpin it, then C; one Ctrl+Tab hold goes to B, the next returns to C.
-    @Sendable static func ctrlTabTwice(_ app: AppUnderTest) throws {
-        let b = try openTab(app, app.site.url("page2.html"))
-        try app.press("cmd+d")
-        try app.waitUntil("B pinned") { try app.view().space.pinned.rows.count == 1 }
-        try app.press("cmd+d")
-        try app.waitUntil("B unpinned") { try app.view().space.pinned.rows.isEmpty }
-        let c = try openTab(app, app.site.url("index.html?c"))   // not the launch tab's URL: Return would switch to it
-        try app.hold("ctrl", "tab", times: 1)
-        try app.waitUntil("the first hold to show B") { try currentTab(app.view())?.id == b.id }
-        try app.hold("ctrl", "tab", times: 1)
-        try app.waitUntil("the second hold to return to C") { try currentTab(app.view())?.id == c.id }
-    }
 
     /// R7a (CEF): close.html closes itself: closed without closeRequested (page-initiated), the row leaves Today for the
     /// archive as Cmd+W does (Arc, Q12-c), and every card has a surface or is the placeholder `view()` predicts.

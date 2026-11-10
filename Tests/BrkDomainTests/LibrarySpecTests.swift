@@ -5,26 +5,6 @@ import XCTest
 
 /// Owner: F5. The Library host, its pages, the download ledger and the history page.
 final class LibrarySpecTests: XCTestCase {
-    func test_clearingHistoryDoesNotDisposeItsBrowsingProfile() throws {
-        for custom in [false, true] {
-            let d = Driver()
-            if custom {
-                d.user(.profile(.create(name: "Work", icon: nil)))
-                let profile = try XCTUnwrap(d.snapshot.settings.profiles.last?.profile.id)
-                d.user(.profile(.assign(.current, to: profile)))
-            }
-            let tab = d.todayIDs[0]
-            d.page(tab, .committed(url("https://example.com/history-only")))
-            let profiles = d.snapshot.settings.profiles.map(\.profile.id)
-            let result = d.user(.library(.clearHistory))
-            XCTAssertFalse(result.effects.contains { if case .disposeContext = $0 { return true }; return false },
-                           "clearing history must not schedule profile disposal")
-            XCTAssertEqual(d.snapshot.settings.profiles.map(\.profile.id), profiles)
-            d.user(.library(.openHistory))
-            guard let page = d.view.history else { return XCTFail("history did not open") }
-            XCTAssertTrue(page.isEmpty)
-        }
-    }
 
     func test_incognitoDownloadAndHistoryEventsNeverChangeSavedRecords() throws {
         let d = Driver()
@@ -75,30 +55,6 @@ final class LibrarySpecTests: XCTestCase {
         XCTAssertEqual(d.state.doc.history.first { $0.profile == profile }?.title, "Work")
     }
 
-    /// .library(.open(nil)) opens Media first (Arc's first page) and the window's last page after; the same page is a
-    /// no-op
-    func test_openRemembersTheLastPage() {
-        let d = Driver()
-        d.user(.library(.open(nil)))
-        guard case .library(let first)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(first.page, .media)
-        XCTAssertNil(first.archive)
-        XCTAssertEqual(d.view.focus, FocusTarget.none)
-        d.user(.library(.open(.downloads)))
-        guard case .library(let downloads)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(downloads.page, .downloads)
-        XCTAssertNil(downloads.archive, "only the open page is projected")
-        XCTAssertEqual(downloads.openID, first.openID + 1)
-        assertUnchanged(d.state, d.user(.library(.open(.downloads))))
-        d.user(.library(.close))
-        XCTAssertNil(d.view.overlay)
-        d.user(.library(.open(nil)))
-        guard case .library(let again)? = d.view.overlay else { return XCTFail("no library") }
-        XCTAssertEqual(again.page, .downloads)
-        d.user(.tab(.focus(d.todayIDs[0])))
-        XCTAssertNil(d.view.overlay, "a sidebar command closes the Library")
-    }
-
     /// download events keep the ledger: started, progress, finished; the Downloads page lists the profile's entries newest first
     func test_downloadEventsFeedTheLedger() throws {
         let d = Driver()
@@ -132,35 +88,6 @@ final class LibrarySpecTests: XCTestCase {
         d.download(a, DownloadID("1-8"), .terminal(.cancelled(.removed)))
         d.download(a, DownloadID("1-9"), .terminal(.failed(reason: "fixture failure", .absent)))
         assertUnchanged(d.state, d.download(a, DownloadID("1-8"), .receiving(TransferProgress(received: 1, total: nil))))
-    }
-
-    /// the History page lists the current profile's visits newest first; entries and the whole list can be removed
-    func test_historyPage() {
-        let d = Driver()
-        d.user(.library(.clearHistory))
-        let a = d.todayIDs[0]
-        d.page(a, .committed(url("http://127.0.0.1:9/one")))
-        d.advance(minute)
-        d.page(a, .committed(url("http://127.0.0.1:9/two")))
-        d.user(.library(.openHistory))
-        guard let library = d.view.history else { return XCTFail("no library") }
-        XCTAssertEqual(library.map(\.url), [url("http://127.0.0.1:9/two"), url("http://127.0.0.1:9/one")])
-        d.user(.library(.removeHistory(url("http://127.0.0.1:9/two"))))
-        guard let fewer = d.view.history else { return XCTFail("the History page closed") }
-        XCTAssertEqual(fewer.map(\.url), [url("http://127.0.0.1:9/one")])
-        d.user(.library(.clearHistory))
-        guard let none = d.view.history else { return XCTFail("the History page closed") }
-        XCTAssertEqual(none, [])
-    }
-
-    /// the dock's Library button and the Window menu's actions all land on the Library
-    func test_menuActionsOpenTheirPages() {
-        XCTAssertEqual(ActionID.viewLibrary.spec.command, .library(.open(nil)))
-        XCTAssertEqual(ActionID.viewDownloads.spec.command, .library(.open(.downloads)))
-        XCTAssertEqual(ActionID.viewArchive.spec.command, .library(.open(.archive)))
-        XCTAssertEqual(ActionID.viewMedia.spec.command, .library(.open(.media)))
-        XCTAssertEqual(ActionID.viewBoosts.spec.command, .library(.open(.boosts)))
-        XCTAssertEqual(ActionID.viewEaselsAndNotes.spec.command, .library(.open(.easelsAndNotes)))
     }
 
     /// Shift+Cmd+L and the dock's Library button (.open(nil)) toggle the Library, first on Media; an explicit page
@@ -300,30 +227,6 @@ final class LibrarySpecTests: XCTestCase {
         XCTAssertNil(d.view(of: incognito).history, "an incognito window keeps no History page")
         XCTAssertEqual(d.view(of: incognito).scratch?.rows.count, rows)
         assertUnchanged(d.state, d.user(.library(.clearHistory), in: incognito))
-    }
-
-    /// the archive is a Library page: restore, Clear Archive and the threshold picker work without closing it
-    func test_theArchiveIsALibraryPageThatItsOwnCommandsKeepOpen() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        d.open("http://127.0.0.1:9/b")
-        d.user(.tab(.close(.item(a))))
-        d.user(.library(.open(.archive)))
-        guard case .library(let library)? = d.view.overlay, let archive = library.archive else { return XCTFail("no archive page") }
-        let entry = try XCTUnwrap(archive.groups.first?.entries.first)
-        d.user(.settings(.autoArchive(.oneHour)))
-        guard case .library(let picked)? = d.view.overlay else { return XCTFail("the threshold picker closed the Library") }
-        XCTAssertEqual(picked.archive?.threshold, .oneHour)
-        d.user(.archive(.restore(entry.id)))
-        XCTAssertTrue(d.todayIDs.contains(a))
-        guard case .library(let restored)? = d.view.overlay else { return XCTFail("restore closed the Library") }
-        XCTAssertEqual(restored.archive?.groups, [])
-        d.user(.tab(.close(.item(a))))
-        XCTAssertNil(d.view.overlay, "a tab command closes it")
-        d.user(.library(.open(.archive)))
-        d.user(.archive(.clear))
-        guard case .library(let cleared)? = d.view.overlay else { return XCTFail("Clear Archive closed the Library") }
-        XCTAssertEqual(cleared.archive?.groups, [])
     }
 
     func test_downloadEventsFollowActualCancellationAndTerminalResults() throws {

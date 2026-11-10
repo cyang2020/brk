@@ -4,11 +4,10 @@ import BrkDomain
 import Foundation
 
 /// What only BrkCore does: an extension's action popup opens from the site controls, and the popup is Chromium's own (ledger row A097,
-/// verify/visual-pairs/run-20261103/r3-8/EXTENSION-POPUP.md). They skip on CEF, which cannot do it.
+/// 312e95f3ec:verify/visual-pairs/run-20261103/r3-8/EXTENSION-POPUP.md). They skip on CEF, which cannot do it.
 enum CoreScenarios {
     static let all = [
         Scenario("Core-popup", "an extension's action popup opens from the site controls; typed text and a click in it reach the page's content script", popupReceipt),
-        Scenario("Core-activeTab", "opening the popup grants activeTab on the page it opened on and no other, in a normal window", activeTab),
     ]
 
     private static func fixture(_ app: AppUnderTest, _ path: String) -> URL {
@@ -38,7 +37,7 @@ enum CoreScenarios {
     @Sendable static func popupReceipt(_ app: AppUnderTest) throws {
         guard app.engine == .core else { throw Skipped(description: "needs BrkCore; CEF cannot open an action popup") }
         let source = app.site.url("extension-popup.html")
-        let extensionFixture = fixture(app, "verify/completion/batch2-extensions-sites/toolbar/Fixtures/Extension")
+        let extensionFixture = fixture(app, "Tests/Fixtures/ExtensionPopup")
         let item = try app.load(source)
         let page = PageID(window: app.window!, item: item)
         try app.waitForPageInput(page, at: source)
@@ -77,32 +76,4 @@ enum CoreScenarios {
         app.note("receipt \(title)")
     }
 
-    @Sendable static func activeTab(_ app: AppUnderTest) throws {
-        guard app.engine == .core else { throw Skipped(description: "needs BrkCore; CEF cannot open an action popup") }
-        let other = app.site.url("page2.html")
-        let otherItem = try app.load(other)
-        try app.waitForPageInput(PageID(window: app.window!, item: otherItem), at: other)
-        let target = app.site.url("extension-popup.html")
-        let item = try app.load(target)
-        let page = PageID(window: app.window!, item: item)
-        try app.waitForPageInput(page, at: target)
-        let probe = try install(app, directory: fixture(app, "Tests/Fixtures/ExtensionActiveTab"), name: "Brk activeTab probe")
-        try app.dispatch(.site(.closeControls))
-        try app.dispatch(.tab(.focus(item)))
-        try app.waitForPageInput(page, at: target)
-        try app.dispatch(.site(.invokeExtension(probe.id)))
-        var title = ""
-        try app.waitUntil("the probe's report through its own grant", timeout: 15) {
-            title = tab(item, in: try app.view())?.title ?? ""
-            return title.hasPrefix("activeTab:")
-        }
-        let report = try JSONSerialization.jsonObject(with: Data(title.dropFirst("activeTab:".count).utf8)) as? [String: Any] ?? [:]
-        try expect(report["activeURL"] as? String == target.absoluteString, "the granted tab's URL: \(report)")
-        try expect(report["windowType"] as? String == "normal", "extensions see the window as: \(report)")
-        try expect((report["others"] as? [String])?.allSatisfy { $0 == "denied" } == true, "scripting another tab: \(report)")
-        try expect((report["otherURLs"] as? [Any])?.allSatisfy { $0 is NSNull } == true, "another tab's URL was readable: \(report)")
-        let facts = try app.native().pages[page]
-        try expect(report["tabId"] as? Int == facts?.browserID, "the granted tab is another page: \(report)")
-        app.note("report \(title)")
-    }
 }

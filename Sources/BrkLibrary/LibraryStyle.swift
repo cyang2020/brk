@@ -5,7 +5,7 @@ import BrkDomain
 // Owner: F5. The Library views' numbers, colors, copy and icons that the shared tables do not carry. Each number is
 // a `Metric` with its source, like `Metrics`; "cra Lnnn" is a line of the running-Arc measurements that
 // layout-constants.md cites as cra; "P32-x" and "Q05-a" are this round's Arc captures
-// (verify/visual-pairs/run-20261103, a 1280 x 776 pt window, positions in points from the column's or card's left).
+// (2a96a9d7f0:verify/visual-pairs/run-20261103, a 1280 x 776 pt window, positions in points from the column's or card's left).
 // The panel's geometry (navigation column, cells, exit button) is in `Metrics.library` and `LibraryLayout`.
 
 /// The one instance: `LibraryDraw.list.rowPitch.value`.
@@ -312,7 +312,7 @@ public enum LibraryCopy {
         case .spaces: "Search Spaces…"
         case .boosts: "Search Boosts…"
         case .archive: "Search Archive…"
-        case .conversations: "Search Conversations…"
+        case .conversations: "Search Chats…"
         }
     }
     static let filter = "Filter"

@@ -414,7 +414,7 @@ private var M: MaxPaneMetricsTable { MaxPaneMetrics }
 let MaxPaneMetrics = MaxPaneMetricsTable()
 
 struct MaxPaneMetricsTable: MetricGroup {
-    private static let capture = "verify/visual-pairs/run-20261103/P38/P38-b-arc.png"
+    private static let capture = "scripts/station/arc-reference/P38/P38-b-arc.png"
     let introInset = Metric(5.0, .anatomy("\(capture): the paragraph starts at x 138 px, the cards at 128 px"))
     let introTop = Metric(26.5, .anatomy("\(capture): the wave's lowest at y 427 px, the paragraph's first line centred at 497 px"))
     let cardGap = Metric(24.0, .anatomy("\(capture): the Enable card ends at y 760 px, the features card starts at 808 px"))
@@ -433,18 +433,18 @@ struct MaxPaneMetricsTable: MetricGroup {
     let featureRowHeight = Metric(80.0, .anatomy("\(capture): feature rows 808 to 968 to 1130 px"))
     let thumbInset = Metric(11.5, .anatomy("\(capture): a thumbnail's rim starts at x 151 px"))
     let thumbTop = Metric(10.5, .anatomy("\(capture): the thumbnail starts at y 832 px in a row that starts at 808 px"))
-    let textToSwitch = Metric(8.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: a description line ends at x 1131 px, the switch starts at 1148 px"))
-    let thumbGap = Metric(17.5, .anatomy("verify/visual-pairs/run-20261103/P38/P38-max-list-arc.png: the thumbnail ends at x 329 px, the titles' ink starts at 369 px"))
+    let textToSwitch = Metric(8.5, .anatomy("scripts/station/arc-reference/P38/P38-c-arc.png: a description line ends at x 1131 px, the switch starts at 1148 px"))
+    let thumbGap = Metric(17.5, .anatomy("scripts/station/arc-reference/P38/P38-max-list-arc.png: the thumbnail ends at x 329 px, the titles' ink starts at 369 px"))
     let titleTop = Metric(10.0, .anatomy("\(capture): the title is centred at y 845 px in a row that starts at 808 px"))
     let titleGap = Metric(4.0, .anatomy("\(capture): a title's top at y 996 px, the description's first line at 1035 px"))
-    let broomSize = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-max-list-arc.png: the broom's ink spans y 270 to 293 px"))
-    let broomDrop = Metric(-3.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-max-list-arc.png: the line after the broom is 6 px further down than in a row without it"))
-    let descriptionSize = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: 'Have your tabs automatically renamed with tidier, shorter titles when you' spans x 369 to 1131 px, an 11 pt line (13 pt is 880 px)"))
-    let descriptionLeading = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-max-list-arc.png: description lines 28 px apart, an 11 pt line's own height"))
-    let footerSize = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: 'Learn more about what we send' spans x 505 to 862 px, a 12 pt line (13 pt is 387 px)"))
-    let footerTop = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the last card ends at y 1174 px, the note is centred at 1224 px"))
-    let footerGap = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: note and link centred 30 px apart"))
-    let footerBottom = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/P38/P38-c-arc.png: the link is centred at y 1254 px of 1300"))
+    let broomSize = Metric(11.0, .anatomy("scripts/station/arc-reference/P38/P38-max-list-arc.png: the broom's ink spans y 270 to 293 px"))
+    let broomDrop = Metric(-3.0, .anatomy("scripts/station/arc-reference/P38/P38-max-list-arc.png: the line after the broom is 6 px further down than in a row without it"))
+    let descriptionSize = Metric(11.0, .anatomy("scripts/station/arc-reference/P38/P38-c-arc.png: 'Have your tabs automatically renamed with tidier, shorter titles when you' spans x 369 to 1131 px, an 11 pt line (13 pt is 880 px)"))
+    let descriptionLeading = Metric(0.0, .anatomy("scripts/station/arc-reference/P38/P38-max-list-arc.png: description lines 28 px apart, an 11 pt line's own height"))
+    let footerSize = Metric(12.0, .anatomy("scripts/station/arc-reference/P38/P38-c-arc.png: 'Learn more about what we send' spans x 505 to 862 px, a 12 pt line (13 pt is 387 px)"))
+    let footerTop = Metric(16.0, .anatomy("scripts/station/arc-reference/P38/P38-c-arc.png: the last card ends at y 1174 px, the note is centred at 1224 px"))
+    let footerGap = Metric(0.0, .anatomy("scripts/station/arc-reference/P38/P38-c-arc.png: note and link centred 30 px apart"))
+    let footerBottom = Metric(16.0, .anatomy("scripts/station/arc-reference/P38/P38-c-arc.png: the link is centred at y 1254 px of 1300"))
     let popoverWidth = Metric(320.0, .guess("the privacy note's popover"))
     let agentPopup = Metric(150.0, .guess("the Local AI agent card's pop-ups"))
 }

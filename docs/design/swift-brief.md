@@ -22,7 +22,7 @@ Fixed constraints:
 - Shortcuts: one table drives the menu, the CEF `OnPreKeyEvent` handler (priority `app` intercepts before the page, `page` lets the page handle first), and the command bar's command list. Keys per the Arc menu table in anatomy section 2.3.
 - Layout numbers live in one constants file, each with its source (constant name from `layout-constants.md`) or labeled a guess.
 - Theme: gradient plus texture background rendered by us (Metal or Core Image), with our own procedurally generated textures (Arc's asset files are not copied), light and dark derivation, crossfade on space switch.
-- Test strategy: XCTest for the domain and pure layout math; an app-level control socket (as the prototype's `ctl.sh`: load, press, dispatch, view, native frames, screenshot through `CGWindowListCreateImage`, advance clock, quit) driven by a script runner for end-to-end scenarios on this Mac's display; pixel checks against the constants; `scripts/e2e.sh` runs the suite and writes `verify/swift/REPORT.md` and screenshots.
+- Test strategy: XCTest for the domain and pure layout math; an app-level control socket (as the prototype's `ctl.sh`: load, press, dispatch, view, native frames, screenshot through `CGWindowListCreateImage`, advance clock, quit) driven by a script runner for end-to-end scenarios on this Mac's display; pixel checks against the constants; `scripts/e2e.sh` runs the suite and writes `7adf40f551:verify/swift/REPORT.md` and screenshots.
 - Product name in code and bundle: `Brk` (the repository name; "Arc" is The Browser Company's trademark). The user can rename later; keep the name in one place.
 - Signing ad hoc in `scripts/build.sh`; notarization is out of scope.
 

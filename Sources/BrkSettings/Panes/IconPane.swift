@@ -80,7 +80,7 @@ private var I: IconPaneMetricsTable { IconPaneMetrics }
 let IconPaneMetrics = IconPaneMetricsTable()
 
 struct IconPaneMetricsTable: MetricGroup {
-    private static let capture = "verify/visual-pairs/run-20261103/P38/P38-h-arc.png"
+    private static let capture = "scripts/station/arc-reference/P38/P38-h-arc.png"
     let cardPadding = Metric(10.0, .anatomy("\(capture): the card starts at y 216 px, the first row is centred at 316 px"))
     let cardBottom = Metric(27.0, .anatomy("\(capture): the card ends at y 1246 px of 1300"))
     let rowHeight = Metric(80.0, .anatomy("\(capture): rows centred at y 316, 478, 640, 802 px, 2 px hairlines between"))

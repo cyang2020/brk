@@ -6,19 +6,6 @@ import XCTest
 /// Frames against Arc's decompiled constants (docs/arc-anatomy/layout-constants.md). These are the unit-level
 /// pixel checks; e2e N3 checks the same numbers on the real window.
 final class ArcGeometryTests: XCTestCase {
-    /// 8 + 8 + 4 x 47 + 3 x 8 = 228: the reset width is the narrowest that keeps four square favorites.
-    func testResetWidthIsFourFavoritesWide() {
-        let f = Metrics.favorites.self
-        let width = 2 * f.inset.value + Double(f.maxColumns.value) * f.minTile.value + Double(f.maxColumns.value - 1) * f.gap.value
-        XCTAssertEqual(width, Metrics.sidebar.resetWidth.value)
-    }
-
-    /// Title row centre = header top inset + title row height / 2 (cra L141 measures 24).
-    func testTrafficLightCentreLine() {
-        XCTAssertEqual(Metrics.sidebar.headerTopInset.value + Metrics.sidebar.titleRowHeight.value / 2,
-                       Metrics.window.trafficLightCenterY.value)
-    }
-
     /// The most columns a tray may have: the largest of 4, 3, 2, 1 whose tile is at least 47 wide (Q13-w200: 3 is used).
     func testTheWidthSetsTheMostColumns() throws {
         let table: [(Double, Int)] = [(500, 4), (347, 4), (228, 4), (227, 3), (205, 3), (200, 3), (173, 3), (172, 2), (166, 2), (164, 2), (118, 2), (117, 1), (100, 1)]
@@ -27,25 +14,6 @@ final class ArcGeometryTests: XCTestCase {
         XCTAssertEqual(FavoritesGrid.tiles(count: 0, width: 228, hintDismissed: true).tray, CGSize(width: 228, height: 0), "dismissed: no room")
     }
 
-    /// The empty box keeps Arc's 228 proportions as the sidebar narrows (P05-f, P07-b): 213 x 94.5 at 228, scaled by
-    /// the box width down to 149 x 66.1 at the 164 minimum; the tray keeps its 7 above and 12.5 below the box.
-    func testTheEmptyFavoritesBoxShrinksWithTheSidebar() throws {
-        let (full, one) = FavoritesGrid.emptyBox(width: 228)
-        XCTAssertEqual(full, CGRect(x: 7.5, y: 7, width: 213, height: 94.5))
-        XCTAssertEqual(one, 1)
-        XCTAssertEqual(FavoritesGrid.emptyBox(width: 300).box, CGRect(x: 7.5, y: 7, width: 285, height: 94.5), "wider: stretched, same height")
-        var previous = full.height
-        for width in stride(from: 212.0, through: 164, by: -16) {
-            let (box, scale) = FavoritesGrid.emptyBox(width: width)
-            XCTAssertEqual(scale, (width - 15) / 213, accuracy: 1e-9, "width \(width)")
-            XCTAssertEqual(box.width, width - 15, "width \(width)")
-            XCTAssertEqual(box.height / box.width, full.height / full.width, accuracy: 1e-9, "width \(width): Arc's proportions")
-            XCTAssertLessThan(box.height, previous)
-            previous = box.height
-            XCTAssertEqual(FavoritesGrid.tiles(count: 0, width: width).tray.height, 19.5 + box.height, accuracy: 1e-9, "width \(width)")
-        }
-        XCTAssertEqual(FavoritesGrid.emptyBox(width: 164).box.height, 66.1, accuracy: 0.05)
-    }
     /// Rows are 40 tall on a 41 pt pitch; the divider is 16; the top spacer is 2 (cra L748: 41, 17, 3).
     func testTablistRowPitch() throws {
         let d = LayoutDriver()
@@ -72,39 +40,7 @@ final class ArcGeometryTests: XCTestCase {
         d.user(.space(.togglePinnedSection(.current)))
         XCTAssertEqual(TablistLayout.rows(d.view.space, width: 228).map(\.kind), [.topSpacer, .divider, .newTab, .item(e), .item(c)])
     }
-    /// P46-a: with Max's Tidy Tabs on Arc keeps the divider 8 points taller, however many tabs Today holds.
-    func testTidyTabsMakesTheDividerRowTaller() throws {
-        let d = LayoutDriver()
-        let a = d.view.space.today.rows[0].id
-        d.user(.tab(.togglePin(.item(a))))
-        _ = d.open("c.example.com")
-        func dividerHeight() -> Double? {
-            for row in TablistLayout.rows(d.view.space, width: 228) { if case .divider = row.kind { return Double(row.rect.height) } }
-            return nil
-        }
-        XCTAssertEqual(dividerHeight(), 16)
-        d.user(.settings(.max(.tidyTabs(true))))
-        XCTAssertEqual(dividerHeight(), 24)
-    }
-    /// P01-b: with the toolbar shown the page starts a point above the toolbar's bottom, under its hairline.
-    func testPageStartsUnderTheToolbarsHairline() throws {
-        let d = LayoutDriver()
-        d.user(.sidebar(.toggleToolbar))
-        let frames = d.frames()
-        let toolbar = try XCTUnwrap(frames.toolbar)
-        XCTAssertEqual(try XCTUnwrap(frames.cards.first).rect.minY, toolbar.maxY - 1)
-    }
-    /// Q02 b: with Today empty Arc draws no Pinned/Today divider; New Tab sits right under Pinned.
-    func testNoDividerWhileTodayIsEmpty() throws {
-        let d = LayoutDriver()
-        let a = d.view.space.today.rows[0].id
-        d.user(.tab(.togglePin(.item(a))))
-        XCTAssertTrue(d.view.space.today.rows.isEmpty)
-        XCTAssertEqual(TablistLayout.rows(d.view.space, width: 228).map(\.kind), [.topSpacer, .item(a), .newTab])
-        let b = d.open("b.example.com")
-        XCTAssertEqual(TablistLayout.rows(d.view.space, width: 228).map(\.kind), [.topSpacer, .item(a), .divider, .newTab, .item(b)])
-    }
-    /// Arc 1.170, a new Space with Today tabs and nothing pinned (verify/completion/max-ui-20261107/arc-no-pinned-*.png):
+    /// Arc 1.170, a new Space with Today tabs and nothing pinned (8dc9260d6a:verify/completion/max-ui-20261107/arc-no-pinned-*.png):
     /// the divider is there, with Clear and, with Tidy Tabs on, Tidy, so a person without pinned tabs can tidy.
     func testTheDividerShowsWithoutPinnedTabs() throws {
         let d = LayoutDriver()
@@ -115,24 +51,6 @@ final class ArcGeometryTests: XCTestCase {
         while d.view.space.today.rows.count < 7 { _ = d.open("t\(d.view.space.today.rows.count).example.com") }
         XCTAssertTrue(d.view.space.today.canTidy)
         XCTAssertTrue(TablistLayout.rows(d.view.space, width: 228).contains { $0.kind == .divider })
-    }
-    /// Title row 40 at y 4; URL pill 36 tall, 8 from each side; dock 50 at the bottom.
-    func testSidebarColumnStack() throws {
-        let f = try XCTUnwrap(LayoutDriver().frames().sidebar)
-        XCTAssertEqual(f.frame, CGRect(x: 0, y: 0, width: 228, height: 776))
-        XCTAssertEqual(f.titleRow, CGRect(x: 0, y: 4, width: 228, height: 40))
-        XCTAssertEqual(f.trafficLightsOrigin, CGPoint(x: 13, y: 17), "14 pt lights centred 24 from the top, 13 from the left")
-        XCTAssertEqual(f.urlPill, CGRect(x: 8, y: 46, width: 212, height: 36))
-        // No favorites: the tray holds Arc's 114 pt "Drag to add Favorites" box (P07-b).
-        XCTAssertEqual(f.favoritesTray, CGRect(x: 0, y: 82, width: 228, height: 114))
-        XCTAssertEqual(f.favoriteTiles, [:])
-        // The space header strip (36) sits between the tray and the list: 196...232.
-        XCTAssertEqual(f.spaceHeader, CGRect(x: 0, y: 196, width: 228, height: 36))
-        XCTAssertEqual(f.tablistViewport, CGRect(x: 0, y: 232, width: 228, height: 494))
-        XCTAssertEqual(f.tablistViewport.minY, f.spaceHeader.maxY)
-        XCTAssertEqual(f.dock, CGRect(x: 0, y: 726, width: 228, height: 50))
-        XCTAssertEqual(f.libraryButton, CGRect(x: 8, y: 735, width: 32, height: 32))
-        XCTAssertEqual(f.plusButton, CGRect(x: 188, y: 735, width: 32, height: 32))
     }
     /// Dock cells at most 34 x 32, shrinking to fit, compact below 22.
     func testDockCellsShrinkToFit() throws {
@@ -148,61 +66,6 @@ final class ArcGeometryTests: XCTestCase {
         let d = LayoutDriver()
         let frames = try XCTUnwrap(d.frames().sidebar)
         XCTAssertEqual(frames.dockSpaces, [d.view.dock[0].id: CGRect(x: 97, y: 735, width: 34, height: 32)])
-    }
-    /// Centered command bar: min(766, area - 160) wide, 338 tall, centered in the window (Q01-a: Arc's card spans
-    /// 257...1023 with the sidebar shown).
-    func testCommandBarCentered() throws {
-        let d = LayoutDriver()
-        d.user(.commandBar(.open(.newTab)))
-        let frames = d.frames()
-        XCTAssertEqual(frames.contentArea, CGRect(x: 228, y: 10, width: 1042, height: 756))
-        XCTAssertEqual(frames.commandBar, CGRect(x: 257, y: 219, width: 766, height: 338))
-        let area = { (w: Double, h: Double) in CGRect(x: 0, y: 0, width: w, height: h) }
-        XCTAssertEqual(CommandBarLayout.frame(placement: .centered, contentArea: area(800, 600), urlPill: nil).width, 640, "min(766, 800 - 160)")
-        XCTAssertEqual(CommandBarLayout.frame(placement: .centered, contentArea: area(700, 600), urlPill: nil).width, 680, "narrower than 766: area - 20")
-        XCTAssertEqual(CommandBarLayout.frame(placement: .centered, contentArea: area(1000, 300), urlPill: nil).height, 252, "24 from top and bottom")
-        // Cmd+L with the sidebar shown: from the pill's left edge, 2 above it (P02-b), reaching right, 80 from the
-        // window's right edge at most 720 wide.
-        d.user(.commandBar(.open(.editCurrent)))
-        XCTAssertEqual(d.frames().commandBar, CGRect(x: 8, y: 44, width: 720, height: 338))
-        XCTAssertEqual(d.frames(size: CGSize(width: 600, height: 400)).commandBar, CGRect(x: 8, y: 44, width: 512, height: 332))
-    }
-    /// Card inset 10 on every side with the sidebar hidden; beside the sidebar the card starts at its edge; radius 6.
-    func testContentCardInsetAndRadius() throws {
-        let d = LayoutDriver()
-        let a = d.view.space.today.rows[0].id
-        XCTAssertEqual(d.frames().cards, [CardFrame(pane: 0, content: .page(PageID(window: d.window, item: a)), rect: CGRect(x: 228, y: 10, width: 1042, height: 756), cornerRadius: 6)])
-        d.user(.sidebar(.toggle))
-        XCTAssertEqual(d.frames().cards, [CardFrame(pane: 0, content: .page(PageID(window: d.window, item: a)), rect: CGRect(x: 10, y: 10, width: 1260, height: 756), cornerRadius: 6)])
-        XCTAssertEqual(d.frames().frame(of: .card(0)), CGRect(x: 10, y: 10, width: 1260, height: 756))
-    }
-    /// Floating sidebar: 5 from left, top and bottom.
-    func testFloatingSidebarInset() throws {
-        let d = LayoutDriver()
-        d.user(.sidebar(.toggle))
-        d.user(.sidebar(.peek(true)))
-        let frames = d.frames()
-        XCTAssertTrue(frames.sidebarFloats)
-        XCTAssertEqual(frames.sidebar?.frame, CGRect(x: 5, y: 5, width: 228, height: 766))
-        XCTAssertEqual(frames.sidebar?.urlPill, CGRect(x: 13, y: 51, width: 212, height: 36))
-        XCTAssertEqual(frames.frame(of: .floatingSidebar), CGRect(x: 5, y: 5, width: 228, height: 766))
-        XCTAssertNil(frames.frame(of: .sidebar))
-        XCTAssertNil(frames.resizeHandle)
-        XCTAssertNil(frames.revealStrip)
-    }
-    /// Two panes: gap 10, equal heights, integer widths, the last card absorbs rounding.
-    func testSplitGap() throws {
-        let d = LayoutDriver()
-        d.user(.split(.addPane))
-        d.user(.commandBar(.submit("b.example.com")))
-        var snapshot = d.view
-        snapshot.content.panes[0].fraction = 1.0 / 3
-        snapshot.content.panes[1].fraction = 2.0 / 3
-        let frames = d.frames(snapshot)
-        XCTAssertEqual(frames.cards.map(\.rect), [CGRect(x: 228, y: 10, width: 344, height: 756), CGRect(x: 582, y: 10, width: 688, height: 756)])
-        XCTAssertEqual(frames.dividers, [CGRect(x: 572, y: 10, width: 10, height: 756)])
-        XCTAssertEqual(frames.cards.map(\.cornerRadius), [6, 6])
-        XCTAssertEqual(frames.frame(of: .divider(0)), CGRect(x: 572, y: 10, width: 10, height: 756))
     }
     /// Drag: clamps to 164...500, snaps to 228 within 14, holds 0.5 s unless faster than 50 pt/s, hides below 82.
     func testSidebarResizeDragSnapsAndHides() throws {

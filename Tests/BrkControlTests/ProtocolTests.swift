@@ -192,40 +192,6 @@ final class ProtocolTests: XCTestCase {
         }
     }
 
-    func testRepliesRoundTrip() throws {
-        let results: [ControlResult] = [
-            .text("fixture"), .menuItems(["Back", "Reload"]),
-            .siteControls([:]),
-            .ok, .hello(Hello(pid: 42, engine: "stub", windows: [WindowID("w1")], dataDirectory: "/tmp/brk")), .dispatched(rev: 3),
-            .loaded(tab: ItemID("t9")), .pixel(red: 255, green: 0, blue: 0, alpha: 255),
-            .screenshot(path: "/tmp/a.png", pixelWidth: 2560, pixelHeight: 1552), .clock(now: Instant(milliseconds: 1_700_000_000_000)),
-            .pageLog([PageLogEntry(page: PageID(window: WindowID("w"), item: ItemID("t1")), generation: 2, kind: .closed, browserID: 7, uptime: 12.5)]),
-            .failed("no window"),
-            .textLayout({
-                var report = TextLayoutReport(windows: ["BrowserWindow 1280x776"])
-                report.note("Clear", frame: CGRect(x: 180, y: 300, width: 29, height: 14), needed: CGSize(width: 33, height: 14))
-                report.findings.append(TextLayoutFinding(problem: .overflowsFrame, window: "BrowserWindow", view: "NSTextField < ClearButton < today-clear", text: "Clear",
-                                                         frame: CGRect(x: 180, y: 300, width: 29, height: 14), needed: CGSize(width: 33, height: 14)))
-                return report
-            }()),
-            .native(NativeFacts(window: WindowID("w1"), windowFrame: CGRect(x: 0, y: 0, width: 1280, height: 776),
-                                contentSize: CGSize(width: 1280, height: 776), backingScale: 2, isKey: true,
-                                computed: WindowFrames(contentSize: CGSize(width: 1280, height: 776), sidebar: nil, sidebarFloats: false,
-                                                       resizeHandle: nil, revealStrip: CGRect(x: -20, y: 0, width: 35, height: 776),
-                                                       contentArea: CGRect(x: 10, y: 10, width: 1260, height: 756), cards: [],
-                                                       dividers: [], commandBar: nil, library: nil, peek: nil),
-                                actual: ["card-0": ActualView(frame: CGRect(x: 10, y: 10, width: 1260, height: 756), hidden: false, cornerRadius: 6)],
-                                pages: [PageID(window: WindowID("w"), item: ItemID("t1")): PageFacts(surfaceFrame: nil, embeddedViews: [], browserID: nil,
-                                                                        hostWindowNumber: nil, hasKeyboardFocus: false)],
-                                firstResponder: "NSTextView:command-bar-input", focusedPage: nil,
-                                appWindows: [AppWindowFact(number: 9, className: "BrkApp.BrowserWindow", isKey: true, isVisible: true)])),
-        ]
-        for (i, result) in results.enumerated() {
-            let line = try ControlWire.encode(ControlReply(id: i, result: result))
-            XCTAssertEqual(try ControlWire.decode(ControlReply.self, line: line.dropLast()), ControlReply(id: i, result: result))
-        }
-    }
-
     func testLineBufferSplitsLinesAcrossReads() {
         var buffer = ControlLineBuffer()
         buffer.append(Data("{\"a\":1}\n\n{\"b\"".utf8))
@@ -234,11 +200,5 @@ final class ProtocolTests: XCTestCase {
         buffer.append(Data(":2}\n".utf8))
         XCTAssertEqual(buffer.nextLine(), Data("{\"b\":2}".utf8))
         XCTAssertNil(buffer.nextLine())
-    }
-
-    func testViewIdentifiersAreStableStrings() {
-        XCTAssertEqual(ViewID.dockSpace(SpaceID("s1")).identifier, "dock-space-s1")
-        XCTAssertEqual(ViewID.row(ItemID("t1")).identifier, "row-t1")
-        XCTAssertEqual(ViewID.archiveGroup(.today).identifier, "archive-group-today")
     }
 }

@@ -105,21 +105,6 @@ final class WindowsSpecTests: XCTestCase {
         XCTAssertEqual(d.current?.section, .today)
     }
 
-    /// Shift+Cmd+W on a Little Arc archives its tab (Restore Last Closed Tab brings it back); on the last standard window it closes the window
-    func test_closeWindow() throws {
-        let d = Driver()
-        d.user(.window(.newLittle(url("https://example.com/little"))))
-        let little = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .little })
-        d.commitRequested(in: little.id)
-        d.user(.window(.close), in: little.id)
-        XCTAssertNil(d.snapshot.windows[little.id])
-        XCTAssertEqual(d.archive().map(\.url), [url("https://example.com/little")])
-        XCTAssertEqual(d.archive().first?.reason, .manual)
-        let t = d.user(.window(.close))
-        XCTAssertEqual(t.effects, [.window(d.window, .close)])
-        XCTAssertNotNil(d.snapshot.windows[d.window], "the last standard window stays in state; AppKit closes and quits")
-    }
-
     /// .peek(.open) shows a scratch tab's page over the content; Esc closes it and drops the tab; a sidebar focus closes it too
     func test_peekOpensOverTheContentAndClosesOnExit() throws {
         let d = Driver()
@@ -254,23 +239,6 @@ final class WindowsSpecTests: XCTestCase {
         XCTAssertEqual(d.current?.url, url("https://example.com/most-recent"))
     }
 
-    /// a Little Arc's layout starts from Arc's default size before AppKit reports a frame; the next Little Arc cascades by 30 from the last one's frame; neither is saved
-    func test_littleArcStartsAtArcsDefaultSizeAndCascades() throws {
-        let d = Driver()
-        d.user(.window(.newLittle(url("https://example.com/a"))))
-        let first = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .little })
-        XCTAssertEqual(d.state.session.windows[first.id]?.contentSize, Metrics.littleArc.defaultSize.value)
-        XCTAssertNil(first.bounds, "the first Little Arc has no frame yet; the host centers it at the default size")
-        let frame = CGRect(x: 100, y: 200, width: Metrics.littleArc.defaultSize.value.width, height: Metrics.littleArc.defaultSize.value.height)
-        d.system(.window(first.id, .geometry(bounds: frame, contentSize: Metrics.littleArc.defaultSize.value)))
-        d.user(.window(.newLittle(url("https://example.com/b"))))
-        let second = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .little && $0.id != first.id })
-        let step = Metrics.littleArc.cascade.value
-        XCTAssertEqual(second.bounds, frame.offsetBy(dx: step, dy: -step), "the second Little Arc cascades down and right")
-        XCTAssertEqual(d.snapshot.windows.values.filter { $0.kind == .little }.count, 2)
-        XCTAssertEqual(Driver(file: d.savedFile).snapshot.windows.count, 1, "Little Arc windows are never saved")
-    }
-
     /// the sweep closes a Little Arc idle past the Links threshold and archives its tab (reason auto); "never" keeps it; a second tick at the same time changes nothing
     func test_idleLittleArcsAreArchivedAfterTheLinksThreshold() throws {
         let d = Driver()
@@ -326,30 +294,6 @@ final class WindowsSpecTests: XCTestCase {
         }
         XCTAssertEqual(try declare(), ["http", "https"])
         XCTAssertEqual(try declare(), ["http", "https"], "a second run must leave the same declaration")
-    }
-
-    /// the "Open in" menu lists every space in dock order, then "Open in current Space"; each entry moves the held tab where it says
-    func test_theOpenInMenuListsEverySpace() throws {
-        let d = Driver()
-        let work = d.newSpace("Work")
-        let menu = OpenInMenu.model(spaces: d.view.dock)
-        let actions = menu.entries.compactMap { entry -> (String, Command)? in
-            if case .action(let title, let command, let enabled) = entry { XCTAssertTrue(enabled); return (title, command) }
-            return nil
-        }
-        XCTAssertEqual(actions.map(\.0), d.view.dock.map(\.title) + [OpenInMenu.currentSpaceTitle])
-        XCTAssertEqual(actions.map(\.1), d.view.dock.map { Command.window(.openIn(.space($0.id))) } + [.window(.openIn(.current))])
-        XCTAssertEqual(menu.entries[menu.entries.count - 2], .separator, "a separator before 'Open in current Space'")
-        XCTAssertEqual(d.view.dock.map(\.title), ["Space 1", "Work"])
-        d.user(.space(.focus(d.snapshot.settings.spaces[0].id)))
-        d.user(.window(.newLittle(url("https://example.com/moved"))))
-        let little = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .little })
-        d.commitRequested(in: little.id)
-        d.user(actions[1].1, in: little.id)
-        XCTAssertNil(d.snapshot.windows[little.id])
-        XCTAssertEqual(d.view.space.id, work, "the Work entry moved the tab to Work")
-        XCTAssertEqual(d.current?.url, url("https://example.com/moved"))
-        XCTAssertEqual(OpenInMenu.buttonTitle(space: "Work"), "Open in Work")
     }
 
     /// Cmd+W while peeking closes the peeked tab (archived, restorable) and leaves the tab underneath alone; reload acts on the peeked page

@@ -4,7 +4,7 @@
 #
 #   scripts/dock-tile/build-plugin.sh <path to .app>
 #
-# scripts/build.sh and verify/visual-pairs/run-20261103/tools/refresh-app.sh run it. Idempotent.
+# scripts/build.sh and scripts/station/refresh-app.sh run it. Idempotent.
 set -euo pipefail
 APP="${1:?usage: build-plugin.sh <path to .app>}"
 cd "$(dirname "$0")/../.."

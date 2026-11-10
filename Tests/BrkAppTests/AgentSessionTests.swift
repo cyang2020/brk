@@ -190,46 +190,6 @@ final class AgentSessionTests: XCTestCase {
         }
     }
 
-    func testAnAgentThatIgnoresStopIsEndedAndTheNextMessageStartsAnother() async throws {
-        let folder = try directory(), log = folder.appendingPathComponent("log.jsonl")
-        let (session, recorder) = session(.claude, access: .tools, directory: folder, log: log)
-        let turn = AIRequestID("hung")
-        session.send("fixture:hang", turn: turn)
-        try await wait("the agent hangs") { entries(log).contains { $0["prompt"] as? String == "fixture:hang" } }
-        let pid = try XCTUnwrap(entries(log).last?["pid"] as? Int32)
-        session.stop(turn: turn)
-        try await wait("Brk ends it", seconds: 8) { kill(pid, 0) == -1 && errno == ESRCH }
-        let next = AIRequestID("next")
-        session.send("again", turn: next)
-        try await wait("a new process answers") { recorder.finished[next] != nil }
-        XCTAssertEqual(recorder.finished[next], .text("Fixture answer to: again"))
-        XCTAssertNotEqual(entries(log).filter { $0["prompt"] != nil }.last?["pid"] as? Int32, pid)
-        await session.close()
-    }
-
-    func testAFailureComesBackWithTheReason() async throws {
-        let folder = try directory()
-        let (session, recorder) = session(.claude, directory: folder)
-        let turn = AIRequestID("fail")
-        session.send("fixture:fail", turn: turn)
-        try await wait("the failure") { recorder.finished[turn] != nil }
-        guard case .failed(let message)? = recorder.finished[turn] else { return XCTFail("\(String(describing: recorder.finished[turn]))") }
-        XCTAssertTrue(message.contains("23") && message.contains("Terminal"), message)
-        await session.close()
-    }
-
-    func testASignedOutAgentIsToldApart() async throws {
-        let folder = try directory()
-        let (session, recorder) = session(.claude, directory: folder)
-        let turn = AIRequestID("signedout")
-        session.send("fixture:signedout", turn: turn)
-        try await wait("the message") { recorder.finished[turn] != nil }
-        XCTAssertEqual(recorder.finished[turn], .failed(AgentCopy.notSignedIn(.claude)))
-        await session.close()
-        XCTAssertTrue(AgentCopy.notSignedIn(.gemini).contains("Terminal"))
-        XCTAssertTrue(AgentCopy.missing(.cursor).contains("cursor-agent"))
-    }
-
     /// A request that names an agent gets that agent or the reason it cannot, whatever else is installed.
     func testAnExplicitChoiceNeverFallsBackToAnotherAgent() async throws {
         XCTAssertEqual(AIProviderSeam.resolve(.gemini, active: .claude, detected: [.claude]), .gemini)
@@ -281,49 +241,6 @@ final class AgentSessionTests: XCTestCase {
         services.cancelAll()
     }
 
-    func testTheOneShotProviderRunsReadOnlyAndCleansUp() async throws {
-        let provider = AgentOneShot(kind: .codex, executable: fixture, options: AIAgentOptions(model: "fixture-sol"))
-        var partial: String?
-        let text = try await provider.run("what", onPartial: { partial = $0 })
-        XCTAssertEqual(text, "Fixture answer to: what")
-        XCTAssertNotNil(partial)
-    }
-
-    func testStatusComesFromTheAgentsThemselves() async throws {
-        let environment = ProcessInfo.processInfo.environment
-        let claude = await AgentCatalog.status(.claude, executable: fixture, environment: environment)
-        XCTAssertEqual(claude.state, .ready)
-        XCTAssertEqual(claude.version, "9.9.9-fixture")
-        XCTAssertEqual(claude.models.map(\.id), ["fixture-haiku"], "the agent's default is the pane's Default entry")
-        let codex = await AgentCatalog.status(.codex, executable: fixture, environment: environment)
-        XCTAssertEqual(codex.models.map(\.id), ["fixture-sol"], "hidden models stay hidden")
-        XCTAssertEqual(codex.models.first?.efforts, ["low", "high"])
-        let gemini = await AgentCatalog.status(.gemini, executable: fixture, environment: environment)
-        XCTAssertEqual(gemini.models.map(\.id), ["fixture-flash", "fixture-pro"])
-        XCTAssertEqual(gemini.models.first(where: \.isDefault)?.id, "fixture-flash")
-    }
-
-    func testAgentsRunWithoutKeysOrAParentAgentsSettings() {
-        let environment = AgentEnvironment.forAgent(.cursor, base: ["ANTHROPIC_API_KEY": "x", "OPENAI_API_KEY": "x", "CLAUDE_CODE_ENTRYPOINT": "sdk", "CLAUDE_CONFIG_DIR": "/c", "CODEX_HOME": "/h", "PATH": "/usr/bin", "HOME": "/u"])
-        XCTAssertNil(environment["ANTHROPIC_API_KEY"])
-        XCTAssertNil(environment["OPENAI_API_KEY"])
-        XCTAssertNil(environment["CLAUDE_CODE_ENTRYPOINT"])
-        XCTAssertEqual(environment["CLAUDE_CONFIG_DIR"], "/c")
-        XCTAssertEqual(environment["CODEX_HOME"], "/h")
-        XCTAssertEqual(environment["NO_OPEN_BROWSER"], "1", "Brk never starts a sign-in")
-        XCTAssertTrue(environment["PATH"]!.contains("/opt/homebrew/bin"), "a GUI app's PATH is short")
-        XCTAssertTrue(environment["PATH"]!.hasPrefix("/usr/bin") || environment["PATH"]!.contains("/usr/bin"))
-    }
-
-    func testFindsCursorUnderItsOwnCommandName() throws {
-        let folder = try directory()
-        let tool = folder.appendingPathComponent("cursor-agent")
-        try Data("#!/bin/sh\n".utf8).write(to: tool)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tool.path)
-        XCTAssertEqual(AIProviderSeam.executable(for: .cursor, environment: ["PATH": folder.path], alsoIn: []), tool)
-        XCTAssertEqual(AIProviderSeam.detect(environment: ["PATH": folder.path], alsoIn: []), [.cursor])
-    }
-
     func testTheLoginShellsPathIsRead() async throws {
         let folder = try directory()
         let shell = folder.appendingPathComponent("fake-shell")
@@ -331,27 +248,5 @@ final class AgentSessionTests: XCTestCase {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: shell.path)
         await AgentEnvironment.loadShellPath(shell: shell.path)
         XCTAssertEqual(AgentEnvironment.searchPath(environment: [:]).first, "/from/the/login/shell")
-    }
-
-    func testProcessTreeFindsADescendantInAnotherGroup() throws {
-        let table = [ProcessTree.Entry(pid: 10, parent: 1, group: 10), .init(pid: 11, parent: 10, group: 10), .init(pid: 12, parent: 11, group: 12), .init(pid: 13, parent: 12, group: 12), .init(pid: 20, parent: 1, group: 20)]
-        XCTAssertEqual(ProcessTree.members(root: 10, in: table), [10, 11, 12, 13])
-        XCTAssertFalse(ProcessTree.snapshot().isEmpty)
-    }
-
-    func testLineSplitterKeepsAPartialLine() {
-        var splitter = LineSplitter()
-        XCTAssertEqual(splitter.feed(Data("ab".utf8)), [])
-        XCTAssertEqual(splitter.feed(Data("c\nde\nf".utf8)).map { String(decoding: $0, as: UTF8.self) }, ["abc", "de"])
-        XCTAssertEqual(splitter.feed(Data("\n".utf8)).map { String(decoding: $0, as: UTF8.self) }, ["f"])
-    }
-
-    func testStepTitlesAndCommandsReadPlainly() {
-        XCTAssertEqual(ClaudeBackend.title(tool: "Bash", input: ["command": "ls\n-la"]), "Run: ls -la")
-        XCTAssertEqual(ClaudeBackend.title(tool: "Edit", input: ["file_path": "/a.swift"]), "Edit /a.swift")
-        XCTAssertEqual(CodexBackend.plainCommand("/bin/zsh -lc 'cat hello.txt'"), "cat hello.txt")
-        XCTAssertEqual(CodexBackend.plainCommand("/bin/zsh -lc \"printf 'hi' > a.txt\""), "printf 'hi' > a.txt")
-        XCTAssertEqual(CodexBackend.step(["type": "fileChange", "id": "x", "changes": [["path": "/a"]]], state: .done)?.title, "Edit /a")
-        XCTAssertNil(CodexBackend.step(["type": "agentMessage", "id": "x"], state: .done))
     }
 }

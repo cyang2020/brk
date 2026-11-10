@@ -1,0 +1,9 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Opener probe</title>
+<style>body{font:20px -apple-system,sans-serif;margin:40px}button{font:inherit;padding:14px 24px}</style></head>
+<body>
+<h1>Opener probe</h1>
+<p>Click the button: a sign-in style tab opens and closes itself after 3 seconds.</p>
+<button id="go" onclick="window.child=window.open('opener-child.html');document.title='opened'">Open child</button>
+<script>window.addEventListener('message',e=>{document.title='child says: '+e.data});</script>
+</body></html>

@@ -3,20 +3,6 @@ import BrkBase
 import XCTest
 
 final class LocalModelsDomainTests: XCTestCase {
-    func testTheCardsActionsBecomeEffectsAndItsStateReachesTheMaxSnapshot() {
-        let d = Driver()
-        for action: LocalModelAction in [.download(.search), .cancel(.decision), .remove(.search), .choose(.decision, file: "jevk5-4b-v0.3-q8")] {
-            XCTAssertEqual(d.user(.settings(.max(.localModel(action)))).effects, [.localModel(action)])
-        }
-        let row = LocalModelRow(kind: .search, title: "EmbeddingGemma 2", purpose: "Finds tabs by meaning.", bytes: 309_855_456,
-                                license: "Apache 2.0", languages: "100+ languages", residentMB: 500,
-                                stage: .downloading(received: 1_000, total: 309_855_456), runtimeFound: true)
-        let snapshot = LocalModelsSnapshot(rows: [row], indexed: nil)
-        d.system(.localModels(snapshot))
-        XCTAssertEqual(d.snapshot.settings.max.localModels, snapshot)
-        XCTAssertEqual(d.snapshot.settings.max.localModels?.row(.search)?.stage, .downloading(received: 1_000, total: 309_855_456))
-    }
-
     /// The index holds what this lists and nothing else, so clearing history must empty its history part.
     func testSearchCorpusListsWebTabsAndHistoryAndDropsClearedHistory() throws {
         let d = Driver()

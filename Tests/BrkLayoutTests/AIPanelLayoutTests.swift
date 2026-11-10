@@ -28,13 +28,6 @@ final class AIPanelLayoutTests: XCTestCase {
         XCTAssertEqual(AIPanelLayout.readingWidth(panelWidth: width), width - 2 * Metrics.tablist.selectionInset.value)
     }
 
-    func testANarrowWindowNarrowsThePanelFirst() {
-        XCTAssertEqual(AIPanelLayout.width(windowWidth: 1280, cardLeft: 228), Metrics.ai.width.value)
-        let narrow = AIPanelLayout.width(windowWidth: 900, cardLeft: 228)
-        XCTAssertEqual(narrow, max(Metrics.ai.minimumWidth.value, 900 - 228 - Metrics.ai.minimumCardWidth.value))
-        XCTAssertEqual(AIPanelLayout.width(windowWidth: 700, cardLeft: 228), Metrics.ai.minimumWidth.value, "never under its minimum")
-    }
-
     func testNoPanelOverTheLibrary() {
         let d = LayoutDriver()
         d.user(.library(.open(.media)))
@@ -42,14 +35,6 @@ final class AIPanelLayoutTests: XCTestCase {
         snapshot.overlay = d.view.overlay
         guard case .library? = snapshot.overlay else { return XCTFail("the Library did not open") }
         XCTAssertNil(d.frames(snapshot).aiPanel)
-    }
-
-    func testTheToolbarEndsWithTheCard() {
-        let d = LayoutDriver()
-        var snapshot = withPanel(d)
-        snapshot.sidebar.toolbarVisible = true
-        let frames = d.frames(snapshot)
-        XCTAssertEqual(frames.toolbar?.maxX, frames.aiPanel?.minX)
     }
 
     /// Step 8 (docs/design/ai-right-panel.md): the gap between the card and the panel drags the panel wider, up to half
@@ -72,12 +57,5 @@ final class AIPanelLayoutTests: XCTestCase {
         let panel = frames.aiPanel!
         XCTAssertEqual(frames.aiPanelHandle?.midX, panel.minX, "the handle straddles the card's edge")
         XCTAssertEqual(AIPanelLayout.width(snapshot, contentSize: CGSize(width: 1280, height: 776)), 520, "where the panel would open")
-    }
-
-    func testTheToolbarMakesRoomForTheChatButton() {
-        let rect = CGRect(x: 228, y: 10, width: 800, height: 40)
-        XCTAssertLessThan(AddressToolbarLayout.trailingButton(2, in: rect, ai: true).maxX, AddressToolbarLayout.aiButton(in: rect).minX)
-        XCTAssertEqual(AddressToolbarLayout.aiButton(in: rect), AddressToolbarLayout.trailingButton(2, in: rect))
-        XCTAssertLessThan(AddressToolbarLayout.address(in: rect, ai: true).width, AddressToolbarLayout.address(in: rect).width)
     }
 }

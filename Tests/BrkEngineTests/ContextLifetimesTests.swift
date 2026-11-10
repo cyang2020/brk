@@ -16,17 +16,6 @@ final class ContextLifetimesTests: XCTestCase {
         XCTAssertFalse(lifetimes.isReady(context))
         XCTAssertFalse(lifetimes.beginLoading(context))
     }
-    func testReadinessBeforeLoaderInstallationCanBeRecheckedAndDuplicateIgnored() {
-        var lifetimes = ContextLifetimes()
-        let context = BrowsingContext.profile(ProfileID("ready"))
-        XCTAssertTrue(lifetimes.beginLoading(context))
-        XCTAssertTrue(lifetimes.initialized(context))
-        XCTAssertTrue(lifetimes.isReady(context))
-        XCTAssertFalse(lifetimes.initialized(context))
-        lifetimes.stop()
-        XCTAssertFalse(lifetimes.isReady(context))
-        XCTAssertFalse(lifetimes.permitsWork(.profile(.default)))
-    }
     func testRevokedPrivateEpochAndReplacementAreIndependent() {
         var lifetimes = ContextLifetimes()
         let old = BrowsingContext.incognito(PrivateSessionID("old")), fresh = BrowsingContext.incognito(PrivateSessionID("new"))

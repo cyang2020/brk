@@ -116,7 +116,7 @@ public final class CEFEngine: WebEngine {
             }
             config.safeStorage = .mockKeychain
             config.extraCommandLineSwitches["host-resolver-rules"] = "MAP *.brk.test 127.0.0.1, MAP *.localhost 127.0.0.1"
-            // The https fixture's certificate (verify/visual-pairs/https-fixture): Chromium accepts this one public key
+            // The https fixture's certificate (Tests/Fixtures/https-fixture): Chromium accepts this one public key
             // as if a trusted root had issued it. Test launches only; no keychain or system trust setting changes.
             if let spki = ProcessInfo.processInfo.environment["BRK_TEST_TRUSTED_SPKI"], !spki.isEmpty {
                 config.extraCommandLineSwitches["ignore-certificate-errors-spki-list"] = spki

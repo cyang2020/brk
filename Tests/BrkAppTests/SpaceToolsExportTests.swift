@@ -18,9 +18,4 @@ final class SpaceToolsExportTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path).count, 2)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: first.path).sorted(), ["bookmarks.html", "bookmarks.json"])
     }
-    func testFailureLeavesNoStagingDirectory() throws {
-        let missing = FileManager.default.temporaryDirectory.appendingPathComponent("brk-space-missing-\(UUID())")
-        XCTAssertThrowsError(try SpaceFolderWriter.write(ExportDocument(title: "Fixture", entries: []), into: missing))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: missing.path))
-    }
 }

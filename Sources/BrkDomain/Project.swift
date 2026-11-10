@@ -585,6 +585,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         snapshot.historyMeaning = HistoryMeaning(text: results.text, rows: state.historyMeaningRows(results, profile: profile))
     }
     snapshot.plusMenu = PlusMenu.rows(kind: doc.kind, overrides: state.doc.keyOverrides)
+    snapshot.libraryFlyout = state.libraryFlyout(in: id)
     return snapshot
 }
 

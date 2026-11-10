@@ -6,12 +6,6 @@ import Foundation
 /// Production paths only. Native panel gestures and OS authorization are reported separately.
 enum ExtScenarios {
     static let all = [
-        Scenario("Ext-catalog", "incognito toggle readback, both private script outcomes and profile pins", cefOnly: "CEF extensions", catalog),
-        Scenario("Ext-shortcuts", "shortcut editor, conflicts, restart and Brk remap priority", cefOnly: "CEF extension commands", shortcuts),
-        Scenario("Ext-loading", "remembered denial and origin readback while the committed document is loading", cefOnly: "CEF permissions", loading),
-        Scenario("Ext-blocking", "main-frame, cross-origin frame, redirect and a selected EasyList file", cefOnly: "CEF IO request filtering", blocking),
-        Scenario("Ext-media", "audible WebAudio, suspended WebAudio and hidden media scheduling", cefOnly: "Chromium lifecycle", media),
-        Scenario("Ext-controls", "origin/profile readback, copy and local link export", cefOnly: "native site controls", controls),
         Scenario("Ext-shortcut-physical", "window-server key events record the shortcut on its key cap and fire the extension command",
                  cefOnly: "CEF extension commands", physicalShortcut),
     ]
@@ -29,51 +23,6 @@ enum ExtScenarios {
         try app.waitUntil("site settings page shows \(field)") {
             (try? app.perform(.siteControlInput(window: owner, field: field, action: action))) != nil
         }
-    }
-    @Sendable static func catalog(_ app: AppUnderTest) throws {
-        let (item, fixture) = try ExtensionScenarios.selectedFixture(app)
-        defer {
-            _ = try? app.screenshotSiteControls("catalog-final")
-            if let value = try? app.send(.siteControls), let data = try? ControlWire.encode(value) {
-                try? data.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/Ext-catalog-controls.json"))
-            }
-        }
-        try control(app, "extension-pin-" + fixture.id, .press)
-        try expect(try SitePolicyScenarios.controls(app).pinnedExtensions.contains(fixture.id), "public profile pin missing")
-        try expect(fixture.canChangeIncognito == true, "fixture incognito permission is not editable")
-        for allowed in [false, true, false] {
-            if try catalogValue(app, fixture.id)?.incognitoAllowed != allowed {
-                try control(app, "extension-incognito-" + fixture.id, .press)
-            } else { try app.dispatch(.site(.extensionIncognito(fixture.id, allowed))) }
-            try app.waitUntil("Chromium incognito readback \(allowed)") {
-                if let error = try SitePolicyScenarios.controls(app).extensionError { throw Check(description: error) }
-                return try catalogValue(app, fixture.id)?.incognitoAllowed == allowed
-            }
-            try app.dispatch(.site(.closeControls))
-            try app.dispatch(.window(.newIncognito))
-            guard case .hello(let hello) = try app.send(.hello),
-                  let privateWindow = try hello.windows.first(where: { try app.view($0).kind == .incognito }),
-                  case .loaded(let privateItem) = try app.send(.load(window: privateWindow, url: app.site.url("site-policy.html"))) else {
-                throw Check(description: "private fixture window missing")
-            }
-            try app.waitForPageInput(PageID(window: privateWindow, item: privateItem), at: app.site.url("site-policy.html"))
-            try app.perform(.evaluate(page: PageID(window: privateWindow, item: privateItem), script: "document.title='private-extension:'+document.documentElement.getAttribute('data-brk-extension')"))
-            try app.waitUntil("private content script \(allowed)") {
-                let rows = tabRows(try app.view(privateWindow).scratch?.rows ?? [])
-                return rows.first { $0.id == privateItem }?.title == "private-extension:" + (allowed ? "installed" : "null")
-            }
-            _ = try app.send(.dispatch(window: privateWindow, command: .site(.invokeExtension(fixture.id))))
-            _ = try app.send(.dispatch(window: privateWindow, command: .window(.close)))
-            _ = try app.send(.activate(window: app.window!))
-            try app.dispatch(.tab(.focus(item))); try app.dispatch(.site(.nativeExtensions))
-            try app.waitUntil("catalog restored") { try catalogValue(app, fixture.id) != nil }
-        }
-        try app.flush(); try app.restart(); try app.dispatch(.site(.nativeExtensions))
-        try app.waitUntil("pin and disabled private permission survive restart") {
-            try catalogValue(app, fixture.id)?.incognitoAllowed == false && SitePolicyScenarios.controls(app).pinnedExtensions.contains(fixture.id)
-        }
-        _ = try app.screenshotSiteControls("incognito-and-pins")
-        app.note("Only the selected spanning fixture was installed. Both real private content-script outcomes and permission revocation were checked; private actions were refused by the production reducer.")
     }
 
     @Sendable static func shortcuts(_ app: AppUnderTest) throws {

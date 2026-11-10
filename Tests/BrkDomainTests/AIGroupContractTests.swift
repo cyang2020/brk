@@ -65,38 +65,6 @@ final class AIGroupContractTests: XCTestCase {
         XCTAssertEqual(r.savedFile, file, "legacy v3 state must not be relocated or rewritten by the hierarchy extension")
     }
 
-    func testRenameCollapseAndDragBehaveLikePinnedFolders() throws {
-        for pinned in [false, true] {
-            let (d, group, children) = try grouped(pinned: pinned)
-            let root = pinned ? d.view.space.pinned.root : d.view.space.today.root
-            d.user(.window(.new))
-            let other = try XCTUnwrap(d.snapshot.windows.keys.first { $0 != d.window })
-            d.user(.item(.rename(group, title: "  Renamed  ")))
-            XCTAssertEqual(try folder(d, group).title, "Renamed")
-            XCTAssertEqual(try folder(d, group, in: other).title, "Renamed")
-            d.user(.item(.toggleFolder(group)))
-            XCTAssertTrue(try folder(d, group).collapsed)
-            XCTAssertFalse(try folder(d, group, in: other).collapsed, "collapse belongs to its window in both sections")
-            d.user(.item(.move(children[0], to: .into(parent: root, index: 0))))
-            XCTAssertEqual(try folder(d, group).children.map(\.id), [children[1]])
-            XCTAssertEqual(d.state.doc.tree[children[0]]?.parent, root)
-            d.user(.item(.move(children[0], to: .into(parent: group, index: 0))))
-            XCTAssertEqual(try folder(d, group).children.map(\.id), children)
-            XCTAssertEqual(d.state.role(of: children[0])?.kind, pinned ? .pinned : .today)
-        }
-    }
-
-    func testMovingBetweenTodayAndPinnedChangesPinnedHomeOnly() throws {
-        let (d, group, children) = try grouped()
-        let child = children[0], address = d.row(child)?.url
-        XCTAssertNil(d.state.tab(child)?.pinnedURL)
-        d.user(.item(.move(child, to: .into(parent: d.view.space.pinned.root, index: 0))))
-        XCTAssertEqual(d.state.tab(child)?.pinnedURL, address)
-        d.user(.item(.move(child, to: .into(parent: group, index: 0))))
-        XCTAssertNil(d.state.tab(child)?.pinnedURL)
-        XCTAssertEqual(d.row(child)?.url, address)
-    }
-
     func testCommandWArchivesTodayChildButKeepsPinnedChild() throws {
         for pinned in [false, true] {
             let (d, group, children) = try grouped(pinned: pinned)

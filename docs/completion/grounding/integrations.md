@@ -26,7 +26,7 @@ Boosts, Notes, Easels, onboarding, import, and local-folder sync do not have com
 
 ## Verification and remaining questions
 
-The parent independently built `95c46b5` and ran all 45 native scenarios. State repair, restart behavior, multi-page shutdown and report production have current evidence under `verify/swift/focus-parent/`. The source-level acceptance rows distinguish these verified foundations from missing product workflows.
+The parent independently built `95c46b5` and ran all 45 native scenarios. State repair, restart behavior, multi-page shutdown and report production have current evidence under `bf1ea87186:verify/swift/focus-parent/`. The source-level acceptance rows distinguish these verified foundations from missing product workflows.
 
 The cloud reference Arc still shows Sign In. The user has a signed-in Arc on their own Mac and asked about skipping cloud login. The retained offline-auth investigation found a real test-auth path, but did not establish safe profile/preferences isolation or observe the browser window. It is not yet a visual reference.
 

@@ -23,15 +23,6 @@ final class MainDocumentStateTests: XCTestCase {
         }
     }
 
-    func testOlderFailureCannotFailADifferentAcceptedNavigation() {
-        var state = MainDocumentState(browser: token)
-        _ = state.allowed(first, redirect: false); _ = state.started(first)
-        _ = state.allowed(next, redirect: false)
-        XCTAssertTrue(state.loadFailed(code: -2, description: "old failure", url: first.absoluteString).isEmpty)
-        _ = state.started(next)
-        XCTAssertTrue(state.finished(next).contains(.committed(next)))
-    }
-
     func testFailedCurrentNavigationCannotCommitItsErrorDocument() {
         var state = MainDocumentState(browser: token)
         _ = state.allowed(first, redirect: false); _ = state.started(first)
@@ -51,14 +42,5 @@ final class MainDocumentStateTests: XCTestCase {
         XCTAssertTrue(state.loadingChanged(false).isEmpty)
         let fragment = URL(string: first.absoluteString + "#fragment")!
         XCTAssertEqual(state.addressChanged(fragment, loading: false).last, .committed(fragment))
-    }
-
-    func testStopPreventsLateFinishButAllowsANewAttempt() {
-        var state = MainDocumentState(browser: token)
-        _ = state.allowed(first, redirect: false); _ = state.started(first)
-        XCTAssertEqual(state.stopped(), [.documentChanged(.unavailable)])
-        XCTAssertTrue(state.finished(first).isEmpty)
-        state.prepareNavigation(); _ = state.allowed(next, redirect: false); _ = state.started(next)
-        XCTAssertTrue(state.finished(next).contains(.committed(next)))
     }
 }

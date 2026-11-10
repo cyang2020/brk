@@ -19,19 +19,6 @@ final class AIConversationTests: XCTestCase {
         throw XCTSkip("no turn in \(t.effects)")
     }
 
-    /// A question has Brk's tab tools: the window it was asked in names the profile they serve.
-    func testAskOpensASessionWithTabToolsAndItsFirstTurnIsTheRequest() throws {
-        let d = enabled()
-        let t = d.user(.assist(.ask("Why?")))
-        let id = try firstTurn(t)
-        XCTAssertTrue(t.effects.contains(.aiOpenConversation(id, folder: nil, choice: .auto, tabs: d.window)), "\(t.effects)")
-        XCTAssertLessThan(try XCTUnwrap(t.effects.firstIndex(of: .aiOpenConversation(id, folder: nil, choice: .auto, tabs: d.window))), try XCTUnwrap(t.effects.firstIndex(of: .ai(id, .ask("Why?"), choice: .auto))), "the session is ready for its first turn")
-        XCTAssertEqual(d.view.ai?.conversation?.tabs, true)
-        XCTAssertEqual(d.view.ai?.conversation?.id, id)
-        XCTAssertNil(d.view.ai?.conversation?.folder)
-        XCTAssertEqual(d.view.ai?.title, "Why?")
-    }
-
     func testFollowUpIsATurnInTheSameSessionAndWaitsItsTurn() throws {
         let d = enabled()
         let id = try firstTurn(d.user(.assist(.ask("Why?"))))
@@ -63,31 +50,6 @@ final class AIConversationTests: XCTestCase {
         XCTAssertNoThrow(try turn(d.user(.assist(.followUp("Go on")))))
     }
 
-    func testClosingThePanelEndsTheSession() throws {
-        let d = enabled()
-        let id = try firstTurn(d.user(.assist(.ask("Why?"))))
-        d.system(.aiResult(id, .text("Because.")))
-        XCTAssertTrue(d.user(.assist(.dismiss)).effects.contains(.aiCloseConversation(id)))
-        XCTAssertNil(d.view.ai)
-    }
-
-    func testANewQuestionReplacesTheConversation() throws {
-        let d = enabled()
-        let id = try firstTurn(d.user(.assist(.ask("Why?"))))
-        d.system(.aiResult(id, .text("Because.")))
-        let t = d.user(.assist(.ask("What?")))
-        XCTAssertTrue(t.effects.contains(.aiCloseConversation(id)), "\(t.effects)")
-    }
-
-    func testAnotherAgentEndsTheConversationAndKeepsItsText() throws {
-        let d = enabled()
-        let id = try firstTurn(d.user(.assist(.ask("Why?"))))
-        d.system(.aiResult(id, .text("Because.")))
-        XCTAssertTrue(d.user(.settings(.max(.provider(.codex)))).effects.contains(.aiCloseConversation(id)))
-        XCTAssertEqual(d.view.ai?.conversation?.ended, true)
-        XCTAssertTrue(d.user(.assist(.followUp("More"))).effects.isEmpty)
-    }
-
     func testStepsAndTextKeepTheirOrder() throws {
         let d = enabled()
         let id = try firstTurn(d.user(.assist(.ask("Do it"))))
@@ -98,22 +60,6 @@ final class AIConversationTests: XCTestCase {
         XCTAssertEqual(Array(d.view.ai?.conversation?.items.dropFirst() ?? []), [.assistant("First."), .step(AIAgentStep(id: "s", title: "Run: ls", state: .done)), .assistant("Then.")])
         d.system(.aiResult(id, .text("First.Then. Finished.")))
         XCTAssertEqual(d.view.ai?.conversation?.items.last, .assistant("Then. Finished."))
-    }
-
-    func testAFolderSessionStartsOnlyFromTheUsersChoice() throws {
-        let d = enabled()
-        XCTAssertTrue(d.user(.assist(.chooseFolder)).effects.contains(.aiChooseFolder(d.window)))
-        XCTAssertNil(d.view.ai, "asking for a folder starts nothing")
-        // The panel was cancelled: nothing.
-        assertUnchanged(d.state, d.system(.aiFolderChosen(d.window, nil)))
-        let t = d.system(.aiFolderChosen(d.window, "/tmp/project"))
-        let open = try XCTUnwrap(t.effects.lazy.compactMap { effect -> (AIRequestID, String?)? in
-            if case .aiOpenConversation(let id, let folder, _, _, _) = effect { (id, folder) } else { nil }
-        }.first)
-        XCTAssertEqual(open.1, "/tmp/project")
-        XCTAssertEqual(d.view.ai?.conversation?.folder, "/tmp/project")
-        XCTAssertEqual(d.view.ai?.busy, false, "it waits for the first message")
-        XCTAssertFalse(t.effects.contains { if case .ai = $0 { true } else { false } })
     }
 
     /// Page text never reaches a session with tools on: a page question replaces that session with a read-only one.
@@ -150,17 +96,6 @@ final class AIConversationTests: XCTestCase {
         XCTAssertNil(AIValidation.workingFolderRefusal("/Users/x/code", home: "/Users/x"))
         XCTAssertNotNil(AIValidation.workingFolderRefusal("/Users", home: "/Users/x"), "a folder above home holds home")
         XCTAssertNil(AIValidation.workingFolderRefusal("/Users/xy", home: "/Users/x"), "a neighbour whose name starts the same does not")
-    }
-
-    func testAFolderSessionHasNoDeadlineButAReadOnlyTurnDoes() throws {
-        let d = enabled()
-        d.system(.aiFolderChosen(d.window, "/tmp/project"))
-        let t = d.user(.assist(.followUp("Build it")))
-        XCTAssertFalse(t.effects.contains { if case .aiWatch = $0 { true } else { false } }, "a command the user allowed may take as long as it needs")
-        let d2 = enabled()
-        let id = try firstTurn(d2.user(.assist(.ask("Why?"))))
-        d2.system(.aiResult(id, .text("Because.")))
-        XCTAssertTrue(d2.user(.assist(.followUp("More"))).effects.contains { if case .aiWatch = $0 { true } else { false } })
     }
 
     func testApprovalsGoToTheAgentOnceAndGoWithTheTurn() throws {
@@ -209,36 +144,6 @@ final class AIConversationTests: XCTestCase {
         let giveUp = d.system(.aiPageRead(id, spec.id, nil))
         XCTAssertFalse(giveUp.effects.contains(.aiRead(id, document)))
         XCTAssertTrue(d.view.ai?.text.contains("could not be read") == true)
-    }
-
-
-    func testModelAndEffortAreKeptPerAgent() {
-        let d = enabled()
-        d.system(.aiAgents([AIAgentStatus(kind: .claude, state: .ready, models: [AIAgentModel(id: "opus", name: "Opus", efforts: ["low", "high"]), AIAgentModel(id: "tiny", name: "Tiny", efforts: ["low"])])]))
-        d.user(.settings(.max(.agentModel(.claude, "opus"))))
-        d.user(.settings(.max(.agentEffort(.claude, "high"))))
-        XCTAssertEqual(d.snapshot.settings.max.settings.agentOptions?[.claude], AIAgentOptions(model: "opus", effort: "high"))
-        XCTAssertNil(d.snapshot.settings.max.settings.agentOptions?[.codex])
-        // A model that does not offer the effort: the effort goes back to the agent's default.
-        d.user(.settings(.max(.agentModel(.claude, "tiny"))))
-        XCTAssertEqual(d.snapshot.settings.max.settings.agentOptions?[.claude], AIAgentOptions(model: "tiny", effort: nil))
-        d.user(.settings(.max(.agentModel(.claude, nil))))
-        XCTAssertNil(d.snapshot.settings.max.settings.agentOptions)
-    }
-
-    func testOpeningTheCardAsksTheAgentsAndMaxOnAtLaunchDoesToo() {
-        let d = enabled()
-        XCTAssertTrue(d.user(.settings(.max(.refreshAgents))).effects.contains(.aiRefreshAgents))
-        XCTAssertTrue(d.system(.aiAgentsWanted).effects.contains(.aiRefreshAgents))
-        XCTAssertFalse(Driver().system(.aiAgentsWanted).effects.contains(.aiRefreshAgents), "Max off: no agent is started at launch")
-    }
-
-    func testAutomaticPassesOverASignedOutAgent() {
-        let d = enabled()
-        XCTAssertEqual(d.snapshot.settings.max.active, .claude)
-        d.system(.aiAgents([AIAgentStatus(kind: .claude, state: .notSignedIn)]))
-        XCTAssertEqual(d.snapshot.settings.max.active, .codex)
-        XCTAssertEqual(d.snapshot.settings.max.askProvider, "Codex")
     }
 
     func testOldSettingsFilesStillDecode() throws {

@@ -3,7 +3,7 @@ import BrkBase
 import BrkDomain
 
 // Owner: R3-3 (Easels). The board's and the Library cards' numbers and colors. Positions are points measured on this
-// round's Arc captures (verify/visual-pairs/run-20261103, a 1280 x 776 pt window): Q09 a is a new Easel in a card
+// round's Arc captures (2a96a9d7f0:verify/visual-pairs/run-20261103, a 1280 x 776 pt window): Q09 a is a new Easel in a card
 // spanning x 228...1270, y 10...766; P32 c is the Library's Easels page.
 
 let EaselDraw = EaselMetrics()

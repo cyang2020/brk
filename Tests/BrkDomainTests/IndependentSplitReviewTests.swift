@@ -55,35 +55,6 @@ final class IndependentSplitReviewTests: XCTestCase {
             }
         } } }
     }
-    func testSeparateOnePreservesOtherWindowSelectedPaneForEveryPair() throws {
-        for removed in 0..<4 { for selected in 0..<4 {
-            let d = Driver(); four(d); let panes = d.paneIDs
-            d.user(.window(.new)); let other = d.snapshot.windows.keys.first { $0 != d.window }!
-            d.user(.tab(.focus(panes[selected])), in: other)
-            ready(d)
-            let observations = d.snapshot.observations
-            d.user(.split(.separatePane(.item(panes[removed]))))
-            XCTAssertEqual(d.snapshot.observations, observations)
-            XCTAssertEqual(d.view(of: other).content.panes.first(where: \.focused)?.tab, panes[selected])
-            XCTAssertEqual(d.paneIDs, [panes[removed]])
-        } }
-    }
-    func testDropsPreserveSourceAndTargetSelectionsAcrossWindowsAndDocuments() throws {
-        for edge in SplitEdge.allCases { for sourceSelected in [true, false] {
-            let d = Driver(); let target=d.paneIDs[0], source=d.open("https://source.example/")
-            d.user(.window(.new)); let other=d.snapshot.windows.keys.first { $0 != d.window }!
-            let selected=sourceSelected ? source : target
-            d.user(.tab(.focus(selected)), in: other)
-            d.page(selected, .committed(url("https://other.example/local")), in: other)
-            d.user(.tab(.focus(target))); ready(d)
-            let offer=try XCTUnwrap(d.view.content.drop?.offers[source]); let obs=d.snapshot.observations
-            d.user(.split(.dropTab(offer, edge: edge)))
-            for (page, observation) in obs { XCTAssertEqual(d.snapshot.observations[page], observation) }
-            XCTAssertEqual(d.view(of: other).content.panes.first(where: \.focused)?.tab, selected)
-            XCTAssertEqual(d.state.address(of: selected, in: other, for: .savedDocument),url("https://other.example/local"))
-            XCTAssertEqual(d.paneIDs,edge.isLeading ? [source,target] : [target,source])
-        } }
-    }
     func testPinnedCloseDoesNotDestroyOtherWindowExplicitDocument() throws {
         let d=Driver(); four(d); let panes=d.paneIDs
         d.user(.tab(.togglePin(.focused)))

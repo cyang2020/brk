@@ -10,7 +10,7 @@ The product is native Swift 6, AppKit/SwiftUI and pinned Chrome-runtime CEF. `Ap
 
 `PageID` identifies a window/item pair. `BrowserToken` distinguishes native browser incarnations and `DocumentToken` fences main-document operations. Saved logical tree metadata and window-specific live addresses are different. Explicit blank/empty selection must not silently create demand. Hidden or retired pages must not take focus or act on another window.
 
-Accepted public downloads have operation-owned native resources and may outlive Brk tab closure. Private-session epochs and synchronous context revocation precede final drain. A mandatory native close may terminate a transfer and must report the actual failure/recovery result. Never reconstruct its original request or infer that a writer stopped from a closed browser. Read the current production code and `verify/completion/transfers-parent/REPORT.md` before changing these paths.
+Accepted public downloads have operation-owned native resources and may outlive Brk tab closure. Private-session epochs and synchronous context revocation precede final drain. A mandatory native close may terminate a transfer and must report the actual failure/recovery result. Never reconstruct its original request or infer that a writer stopped from a closed browser. Read the current production code and `2e9935b54d:verify/completion/transfers-parent/REPORT.md` before changing these paths.
 
 `StateCodec` v3 saves validated public document state; `StateFile` performs atomic local writes. Scratch/private state remains transient. Sync is a separate explicitly whitelisted protocol, never a copy of `state.json`. The one shortcut/action table drives menu, command bar and key routing. Preserve page-first handling, user remaps and the special documented Downloads priority.
 
@@ -24,7 +24,7 @@ Each implementer owns its entire isolated branch. Prefer dedicated new files for
 
 Keep shared `StateCodec` changes backward-readable and default new optional fields for existing v3 files. The parent owns any coordinated format-version bump. If the feature requires a semantic migration, provide a named migration and fixture tests; do not silently reinterpret an existing field. Do not create parallel global callback sinks, page owners or competing keyboard maps. Existing engine callbacks may be extended with scoped operation owners and explicit teardown.
 
-The main branch has 15 inherited dirty verification files under `verify/swift`; leave them untouched. The parent owns `docs/completion/features.json`, `docs/completion/plan.md`, this batch manifest and `.audit/arc-clone.tsv`. Slice reports/proposals are independent outputs. Existing frozen type files may be extended only when necessary for the assigned feature; preserve their proven invariants and record the deviation with evidence.
+The main branch has 15 inherited dirty verification files under `bf1ea87186:verify/swift`; leave them untouched. The parent owns `docs/completion/features.json`, `docs/completion/plan.md`, this batch manifest and `.audit/arc-clone.tsv`. Slice reports/proposals are independent outputs. Existing frozen type files may be extended only when necessary for the assigned feature; preserve their proven invariants and record the deviation with evidence.
 
 ## What counts as complete
 

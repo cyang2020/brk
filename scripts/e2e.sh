@@ -1,6 +1,7 @@
 #!/bin/bash
-# Runs the end-to-end scenarios on this Mac's display and writes verify/swift/REPORT.md, verify/swift/shots/ and
-# verify/swift/logs/ (each scenario's app stdout and stderr).
+# Runs the end-to-end scenarios on this Mac's display without the native lock, and writes REPORT.md, shots/ and logs/
+# (each scenario's app stdout and stderr) to $E2E_OUT, by default ~/brk-evidence/e2e (outside the repository: run
+# records are not committed, docs/testing-policy.md). For gate runs use scripts/run-native.py, which takes the lock.
 #
 #   scripts/e2e.sh                              # scripts/build.sh, then every scenario against dist/<Product>.app (CEF)
 #   SKIP_BUILD=1 scripts/e2e.sh --only 2,4,R6   # reuse dist/<Product>.app
@@ -26,8 +27,9 @@ else
   APP="dist/$PRODUCT.app"
 fi
 
-mkdir -p verify/swift
+OUT="${E2E_OUT:-$HOME/brk-evidence/e2e}"
+mkdir -p "$OUT"
 status=0
-swift run -c "$CONFIG" brk-e2e --app "$APP" --site Tests/E2ESite --out verify/swift --engine "$ENGINE" "$@" || status=$?
-echo "[e2e] report: verify/swift/REPORT.md (exit $status)"
+swift run -c "$CONFIG" brk-e2e --app "$APP" --site Tests/E2ESite --out "$OUT" --engine "$ENGINE" "$@" || status=$?
+echo "[e2e] report: $OUT/REPORT.md (exit $status)"
 exit "$status"

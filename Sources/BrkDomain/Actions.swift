@@ -429,9 +429,11 @@ extension ActionID {
         case .collapseAllFolders: entry(141, "Collapse All Folders", .tabs, 0, [], .tabTools(.folders(expanded: false)), bar: listing("folder"), hidden: true)
         case .expandAllFolders: entry(142, "Expand All Folders", .tabs, 0, [], .tabTools(.folders(expanded: true)), bar: listing("folder"), hidden: true)
         case .selectNextTab:
-            entry(143, "Next Tab", .tabs, 1, [key([opt, cmd], .downArrow, .app)], .tab(.step(.next)), bar: listing("arrow.right"), repeats: true)
+            // ⇧⌘] and ⇧⌘[ are not in Arc's nib, but Arc 1.170 steps tabs on them (Chrome's reserved next and previous tab
+            // keys; docs/design/input-rules.md). Brk claims them before the page, as Chrome reserves them from pages.
+            entry(143, "Next Tab", .tabs, 1, [key([opt, cmd], .downArrow, .app), key([shift, cmd], .rightBracket, .app)], .tab(.step(.next)), bar: listing("arrow.right"), repeats: true)
         case .selectPreviousTab:
-            entry(144, "Previous Tab", .tabs, 1, [key([opt, cmd], .upArrow, .app)], .tab(.step(.previous)), bar: listing("arrow.left"), repeats: true)
+            entry(144, "Previous Tab", .tabs, 1, [key([opt, cmd], .upArrow, .app), key([shift, cmd], .leftBracket, .app)], .tab(.step(.previous)), bar: listing("arrow.left"), repeats: true)
         case .cycleNextTab:
             entry(145, "Tab Switcher (forward)", .tabs, 1, [key(ctrl, .tab, .app)], .tab(.cycleRecent(.next)), repeats: true, hidden: true)
         case .cyclePreviousTab:

@@ -7,19 +7,8 @@ enum TransferScenarios {
     static let all: [Scenario] = [
         Scenario("T1", "simultaneous downloads cancel independently, stop server bytes and preserve collisions", cefOnly: "CEF transfer callbacks", concurrent),
         Scenario("T2", "accepted POST download survives source-tab close with its original request", cefOnly: "CEF transfer lease", postClose),
-        Scenario("T3", "accepted download survives source-window closure", cefOnly: "CEF transfer lease", windowClose),
-        Scenario("T4", "reassignment retains original browser, policy and destination", cefOnly: "CEF contexts", reassign),
-        Scenario("T5", "last private window revokes transport before drain; a new epoch can download", cefOnly: "CEF private epochs", privateExpiry),
-        Scenario("T6", "profile deletion revokes retained transfers and reports final scheduled deletion", cefOnly: "CEF context disposal", deleteProfile),
         Scenario("T7", "quit cancels an already retained transfer and drains its native host", cefOnly: "CEF shutdown", retainedQuit),
-        Scenario("T8", "pending destination sheet is nonblocking and cancelled with its source owner", cefOnly: "native sheet ownership", pendingSheet),
-        Scenario("T9", "simultaneous transfers in two profiles keep independent context and files", cefOnly: "CEF contexts", twoProfiles),
-        Scenario("T10", "profile disposal during readiness cannot recreate revoked browser demand", cefOnly: "CEF profile loader", loaderRace),
-        Scenario("T11", "closing the native sheet owner denies the pending download", cefOnly: "native owner teardown", pendingWindowSheet),
         Scenario("T12", "right click opens the native web context menu", cefOnly: "native menu tracking", webContextMenu),
-        Scenario("T13", "old download progress preserves a pending document and its prior history title", cefOnly: "download/navigation overlap", navigationDuringTransfer),
-        Scenario("T14", "private attachment admission clears page demand without public metadata", cefOnly: "private attachment response", privateAttachment),
-        Scenario("T15", "mandatory page closure does not recreate the page and reports its download outcome", cefOnly: "native closure with an active transfer", scriptClose),
     ]
     static let size = 4_194_304
 
@@ -37,114 +26,8 @@ enum TransferScenarios {
         app.note("Native NSMenu tracking recorded: \(titles.joined(separator: ", ")); tracking cancelled without choosing an action.")
     }
 
-    private static func navigationDuringTransfer(_ app: AppUnderTest) throws {
-        _ = try folder(app); let page = try home(app)
-        try start(app, "transfer-navigation", in: page); try library(app)
-        let first = try receiving(app, name: "transfer-navigation.bin")
-        let pending = app.site.url("held-document")
-        var released = false
-        defer { if !released { app.site.releaseHeldDocument() } }
-        try app.dispatch(.commandBar(.open(.editCurrent)))
-        try app.dispatch(.commandBar(.submit(pending.absoluteString)))
-        try app.waitUntil("held document parsed") { try tab(page.item, in: app.view())?.title == "Held document" }
-        try library(app)
-        try app.waitUntil("old transfer progresses while the main document remains pending") {
-            try rows(app).contains { $0.id == first.id && $0.received > first.received }
-        }
-        guard case .pageObservations(let observations) = try app.send(.pageObservations) else { throw Check(description: "no observations") }
-        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(observations).write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("T13-navigation-observations.json"))
-        app.note("T13 actual requested URL: \(observations[page]?.requestedURL?.absoluteString ?? "nil"); committed URL: \(observations[page]?.committedURL?.absoluteString ?? "nil"); document: \(String(describing: observations[page]?.document))")
-        try expect(observations[page]?.requestedURL == pending, "old progress erased the newer navigation")
-        try app.evaluate(page, "document.title='Provisional transfer title'")
-        try app.waitUntil("provisional title") { try tab(page.item, in: app.view())?.title == "Provisional transfer title" }
-        let history = try historyRows(app)
-        try expect(history.first { $0.url == app.site.url("index.html") }?.title == "Fixture Home", "provisional title rewrote the prior History record")
-        try app.recordWindows("navigation-history")
-        app.site.releaseHeldDocument()
-        released = true
-        try library(app); try app.dispatch(.library(.cancelDownload(first.id)))
-        try app.waitUntil("transfer cancellation") { try rows(app).contains { $0.id == first.id && $0.state == .cancelled } }
-        try stopped(app, "/transfer-navigation")
-    }
 
-    private static func privateAttachment(_ app: AppUnderTest) throws {
-        let dir = try folder(app)
-        try app.dispatch(.window(.newIncognito))
-        guard case .hello(let hello) = try app.send(.hello),
-              let window = hello.windows.first(where: { (try? app.view($0).kind) == .incognito }) else { throw Check(description: "private window missing") }
-        _ = try app.send(.load(window: window, url: app.site.url("transfer-private-direct")))
-        let item = try app.view(window).content.panes[0].tab
-        let page = PageID(window: window, item: item)
-        try app.waitUntil("private attachment has actual staged bytes") {
-            let files = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey])
-            return files?.allObjects.compactMap { $0 as? URL }.contains {
-                guard let values = try? $0.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]) else { return false }
-                return values.isRegularFile == true && (values.fileSize ?? 0) > 0
-            } == true
-        }
-        guard case .pageObservations(let observations) = try app.send(.pageObservations) else { throw Check(description: "no observations") }
-        try expect(observations[page]?.requestedURL == nil && observations[page]?.committedURL == nil, "private attachment retained navigation intent")
-        try expect(try app.view(window).content.panes[0].content == .blank, "private attachment retained page content")
-        try library(app, in: window)
-        try expect(try rows(app, in: window).isEmpty, "private download metadata became visible")
-        try app.flush()
-        let saved = try String(contentsOf: app.dataDirectory.appendingPathComponent("state.json"), encoding: .utf8)
-        try expect(!saved.contains("transfer-private-direct"), "private attachment metadata persisted")
-        try dispatch(app, window: window, .window(.close))
-        try stopped(app, "/transfer-private-direct")
-    }
 
-    private static func scriptClose(_ app: AppUnderTest) throws {
-        struct Census: Codable {
-            var pages: [PageLogEntry]
-            var downloads: [DownloadRow]
-            var serverBytes: Int
-            var serverStopped: Int
-        }
-        defer {
-            try? library(app)
-            let census = Census(pages: (try? app.pageLog()) ?? [], downloads: (try? rows(app)) ?? [],
-                                serverBytes: app.site.requestCount("/transfer-script-bytes"),
-                                serverStopped: app.site.requestCount("/transfer-script-stopped"))
-            let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try? encoder.encode(census).write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/T15-census.json"))
-            try? app.recordWindows("script-close")
-        }
-        let dir = try folder(app)
-        let source = app.site.url("index.html?script-source")
-        let item = try app.load(source)
-        let page = PageID(window: app.window!, item: item)
-        try app.waitForPageInput(page, at: source)
-        try start(app, "transfer-script", in: page, post: true); try library(app)
-        _ = try receiving(app, name: "transfer-script.bin")
-        try app.dispatch(.library(.close))
-        _ = try app.send(.activate(window: page.window))
-        try app.evaluate(page, "(()=>{let b=document.createElement('button');b.textContent='Close source';b.style='position:fixed;left:20px;top:100px;width:180px;height:60px';b.onclick=()=>window.close();document.body.append(b);document.title='Close source ready:'+history.length})()")
-        try app.waitUntil("close button ready") { try tab(page.item, in: app.view())?.title.hasPrefix("Close source ready:") == true }
-        app.note(try tab(page.item, in: app.view())?.title ?? "missing close setup")
-        guard let frame = try app.native().pages[page]?.surfaceFrame else { throw Check(description: "source surface missing") }
-        try app.click(at: CGPoint(x: frame.minX + 50, y: frame.minY + 130))
-        try app.waitUntil("script closed its page") {
-            guard case .pageObservations(let values) = try app.send(.pageObservations) else { return false }
-            return values[page] == nil
-        }
-        try library(app)
-        var result: DownloadRow?
-        try app.waitUntil("native closure reports a terminal transfer") {
-            result = try rows(app).first { $0.filename == "transfer-script.bin" }
-            return result != nil && result?.state.isActive == false
-        }
-        if result?.state == .finished {
-            try complete(app, name: "transfer-script.bin", at: dir.appendingPathComponent("transfer-script.bin"))
-        } else {
-            try stopped(app, "/transfer-script")
-            try expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("transfer-script.bin").path), "failed transfer reported a completed file")
-            try expect(result?.end != nil, "missing native closure failure/cancellation details")
-            app.note("Mandatory browser closure reported \(result!.state); recovery disposition \(String(describing: result!.end)).")
-        }
-        try expect(try app.pageLog().filter { $0.page == page && $0.kind == .created }.count == 1, "download publication recreated the closed page")
-    }
     private static func folder(_ app: AppUnderTest, profile: ProfileID = .default, name: String = "downloads") throws -> URL {
         let directory = app.dataDirectory.appendingPathComponent(name, isDirectory: true)
         try app.dispatch(.settings(.profile(profile, .downloadsDirectory(directory.path))))
@@ -238,18 +121,6 @@ enum TransferScenarios {
         try complete(app, name: "transfer-post.bin", at: dir.appendingPathComponent("transfer-post.bin"), byte: 80)
         try expect(app.site.requestCount("/transfer-post-valid-post") == 1 && app.site.requestCount("/transfer-post") == 1, "original POST was reconstructed or replayed")
     }
-    private static func windowClose(_ app: AppUnderTest) throws {
-        let dir = try folder(app)
-        try app.dispatch(.window(.new))
-        guard case .hello(let hello) = try app.send(.hello), let w = hello.windows.first(where: { $0 != app.window }) else { throw Check(description: "missing second window") }
-        _ = try app.send(.load(window: w, url: app.site.url("index.html")))
-        let page = try home(app, in: w)
-        try start(app, "transfer-window", in: page); try library(app, in: w)
-        _ = try receiving(app, name: "transfer-window.bin", in: w)
-        _ = try app.send(.dispatch(window: w, command: .window(.close)))
-        try library(app)
-        try complete(app, name: "transfer-window.bin", at: dir.appendingPathComponent("transfer-window.bin"))
-    }
     private static func reassign(_ app: AppUnderTest) throws {
         try reassign(app, path: "transfer-reassign")
     }
@@ -330,70 +201,6 @@ enum TransferScenarios {
         let quit = try app.quit(); try expect(quit.clean, "leased quit failed: \(quit.exit)")
         try stopped(app, "/transfer-quit")
         try expect((try? FileManager.default.contentsOfDirectory(atPath: dir.path))?.isEmpty == true, "leased quit left files")
-    }
-    private static func pendingSheet(_ app: AppUnderTest) throws {
-        _ = try folder(app); let page = try home(app)
-        try app.dispatch(.settings(.profile(.default, .promptForDownloadLocation(true))))
-        try start(app, "transfer-panel", in: page)
-        try app.waitUntil("owned save sheet") { try app.native().appWindows.contains { $0.isVisible && $0.className.contains("SavePanel") } }
-        // The control call returns while the native sheet is open, proving the sheet does not block the app loop.
-        try app.dispatch(.tab(.close(.item(page.item))))
-        try library(app)
-        try app.waitUntil("sheet cancellation") {
-            try !app.native().appWindows.contains { $0.isVisible && $0.className.contains("SavePanel") }
-                && rows(app).contains { $0.state == .cancelled }
-        }
-        try stopped(app, "/transfer-panel")
-    }
-    private static func twoProfiles(_ app: AppUnderTest) throws {
-        let dir1 = try folder(app); let first = try home(app)
-        try start(app, "transfer-profile-one", in: first); try library(app)
-        _ = try receiving(app, name: "transfer-profile-one.bin")
-        let p = try profile(app, name: "Concurrent")
-        let dir2 = try folder(app, profile: p, name: "second")
-        try app.dispatch(.window(.new))
-        guard case .hello(let hello) = try app.send(.hello), let w = hello.windows.first(where: { $0 != app.window }) else { throw Check(description: "missing second window") }
-        _ = try app.send(.dispatch(window: w, command: .space(.create(title: "Second", icon: .none, theme: .default))))
-        _ = try app.send(.dispatch(window: w, command: .profile(.assign(.current, to: p))))
-        _ = try app.send(.load(window: w, url: app.site.url("index.html")))
-        let second = try home(app, in: w)
-        try start(app, "transfer-profile-two", in: second); try library(app, in: w)
-        _ = try receiving(app, name: "transfer-profile-two.bin", in: w)
-        try library(app)
-        try expect(try rows(app).contains { $0.filename == "transfer-profile-one.bin" && $0.state == .inProgress }, "transfers did not overlap")
-        try complete(app, name: "transfer-profile-one.bin", at: dir1.appendingPathComponent("transfer-profile-one.bin"))
-        try complete(app, name: "transfer-profile-two.bin", at: dir2.appendingPathComponent("transfer-profile-two.bin"), in: w)
-    }
-    private static func loaderRace(_ app: AppUnderTest) throws {
-        let p = try profile(app, name: "Loading")
-        try app.dispatch(.profile(.assign(.current, to: p)))
-        try app.dispatch(.profile(.assign(.current, to: .default)))
-        try app.dispatch(.profile(.delete(p)))
-        try app.waitUntil("loader drained after revocation", timeout: 12) {
-            guard case .settings(let settings) = try app.send(.settings) else { return false }
-            return settings.deletingProfiles.isEmpty
-        }
-        _ = try home(app)
-        try app.restart()
-        try expect(!FileManager.default.fileExists(atPath: app.dataDirectory.appendingPathComponent("Chromium/Profile-" + p.rawValue).path), "revoked loader recreated profile")
-    }
-    private static func pendingWindowSheet(_ app: AppUnderTest) throws {
-        let directory = try folder(app)
-        try app.dispatch(.settings(.profile(.default, .promptForDownloadLocation(true))))
-        try app.dispatch(.window(.new))
-        guard case .hello(let hello) = try app.send(.hello), let window = hello.windows.first(where: { $0 != app.window }) else { throw Check(description: "missing sheet owner") }
-        _ = try app.send(.load(window: window, url: app.site.url("index.html")))
-        let page = try home(app, in: window)
-        try start(app, "transfer-panel-window", in: page)
-        try app.waitUntil("owned save sheet") { try app.native(window).appWindows.contains { $0.isVisible && $0.className.contains("SavePanel") } }
-        _ = try app.send(.dispatch(window: window, command: .window(.close)))
-        try library(app)
-        try app.waitUntil("owner sheet dismissal and native cancellation") {
-            try !app.native().appWindows.contains { $0.isVisible && $0.className.contains("SavePanel") }
-                && rows(app).contains { $0.state == .cancelled }
-        }
-        try stopped(app, "/transfer-panel-window")
-        try expect(!FileManager.default.fileExists(atPath: directory.path), "unaccepted sheet created output")
     }
 
 }

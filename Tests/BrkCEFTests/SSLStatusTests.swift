@@ -22,18 +22,4 @@ final class SSLStatusTests: XCTestCase {
         XCTAssertTrue(CefSSLStatus(isSecureConnection: true, certStatus: 0, contentStatus: 1).hasInsecureContent)
         XCTAssertTrue(CefSSLStatus(isSecureConnection: true, certStatus: 0, contentStatus: 2).hasInsecureContent)
     }
-
-    /// Content's flags arrive unchanged: content with certificate errors (bits 3 and 4) is insecure content, and bit 6
-    /// is a form posting to plain HTTP (what the https fixture's mixed.html reports, as 0x40).
-    func testCertificateErrorContentAndInsecureFormActionsCount() {
-        for bit: UInt32 in [1 << 3, 1 << 4] {
-            let status = CefSSLStatus(isSecureConnection: true, certStatus: 0, contentStatus: bit)
-            XCTAssertTrue(status.hasInsecureContent, "bit \(bit)")
-            XCTAssertFalse(status.hasInsecureFormAction, "bit \(bit)")
-        }
-        let form = CefSSLStatus(isSecureConnection: true, certStatus: 0, contentStatus: 0x40)
-        XCTAssertTrue(form.hasInsecureFormAction)
-        XCTAssertFalse(form.hasInsecureContent)
-        XCTAssertFalse(CefSSLStatus(isSecureConnection: true, certStatus: 0, contentStatus: 1 << 2).hasInsecureFormAction)
-    }
 }

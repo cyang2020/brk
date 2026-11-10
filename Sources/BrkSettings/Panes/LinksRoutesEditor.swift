@@ -178,7 +178,7 @@ let AirTrafficControlMetrics = AirTrafficControlMetricsTable()
 
 /// Measured on Arc 1.170's 2x capture of the sheet (sheet x 177 to 1191 px, y 177 to 1175 px), halved to points.
 struct AirTrafficControlMetricsTable: MetricGroup {
-    private static let capture = "verify/visual-pairs/run-20261103/Q06/Q06-a-arc.png"
+    private static let capture = "scripts/station/arc-reference/Q06/Q06-a-arc.png"
     let size = Metric(CGSize(width: 508, height: 500), .anatomy("\(capture): the sheet spans x 177 to 1191 px, y 177 to 1175 px"))
     let padding = Metric(24.0, .anatomy("\(capture): the title starts at x 225 px; the hairlines span x 225 to 1143 px"))
     let headerTop = Metric(32.0, .anatomy("\(capture): New Route spans y 241 to 296 px"))

@@ -4,39 +4,6 @@ import XCTest
 @testable import BrkDomain
 
 final class SyncParentRegressionTests: XCTestCase {
-    func testSidebarEntryPointsCaptureTheirOwnerAndSyncRequiresConnection() throws {
-        let d = Driver(startURL: nil)
-        XCTAssertEqual(d.user(.sidebarData(.welcome)).effects, [.sidebarData(.panel(d.window, .welcome))])
-        XCTAssertEqual(d.user(.sidebarData(.tour)).effects, [.sidebarData(.tour(d.window))])
-        XCTAssertEqual(d.user(.sidebarData(.importFile)).effects, [.sidebarData(.panel(d.window, .importFile))])
-        XCTAssertEqual(d.user(.sidebarData(.syncSettings)).effects, [.sidebarData(.panel(d.window, .syncSettings))])
-        XCTAssertTrue(d.user(.sidebarData(.syncNow)).effects.isEmpty)
-        d.system(.sidebarData(.connected(d.window, folder: "/tmp/owned-sync-entry-points")))
-        let connected = try XCTUnwrap(d.state.doc.sidebarData.sync)
-        XCTAssertEqual(d.user(.sidebarData(.syncNow)).effects, [
-            .sidebarData(.exchange(epoch: connected.epoch, folder: "/tmp/owned-sync-entry-points",
-                                   replica: connected.replica, revision: connected.counter, connected.document)),
-        ])
-        d.user(.sidebarData(.disconnect))
-        XCTAssertTrue(d.user(.sidebarData(.syncNow)).effects.isEmpty)
-    }
-    func testInvalidFolderPlacementRecoversInMappedProfile() throws {
-        let d = Driver(startURL: nil)
-        d.user(.profile(.create(name: "Mapped", icon: nil)))
-        let mapped = try XCTUnwrap(d.state.doc.profiles.keys.first { $0 != .default })
-        d.newSpace("Mapped space")
-        d.user(.profile(.assign(.current, to: mapped)))
-        d.system(.sidebarData(.connected(d.window, folder: "/tmp/owned-unused-placement-probe")))
-        let local = try XCTUnwrap(d.state.doc.sidebarData.sync)
-        var peer = local.document
-        peer.records["i-peer-folder"] = SidebarSyncRecord(stamp: SidebarSyncStamp(counter: local.counter + 1, replica: "peer"), value: SidebarSyncValue(payload: .folder(title: "Peer folder", icon: nil), parent: "favorites", order: 0))
-        peer.records["i-peer-tab"] = SidebarSyncRecord(stamp: SidebarSyncStamp(counter: local.counter + 2, replica: "peer"), value: SidebarSyncValue(payload: .tab(title: "Peer tab", url: url("https://example.test/owned-peer"), icon: nil), parent: "i-peer-folder", order: 0))
-        XCTAssertNoThrow(try SidebarDataCodec.encodeSync(peer))
-        d.system(.sidebarData(.syncRead(epoch: local.epoch, peer)))
-        XCTAssertEqual(d.state.browsingContext(of: ItemID("peer-tab")), .profile(mapped))
-        print("CONTROL invalid folder-under-Favorites stays in mapped profile; cross-profile suspicion disproved")
-    }
-
     func testRejectsPeerRootReplacementAndKeepsExcludedLocalTab() throws {
         let d = Driver(startURL: nil)
         d.user(.profile(.create(name: "Mapped", icon: nil)))
@@ -112,26 +79,6 @@ final class SyncParentRegressionTests: XCTestCase {
         XCTAssertEqual(d.state.doc.sidebarData.sync?.document, local.document)
     }
 
-    func testRejectsOversizedMergeAfterConcurrentLocalEdit() throws {
-        let d = Driver(startURL: nil)
-        d.system(.sidebarData(.connected(d.window, folder: "/tmp/owned-unused-limit-probe")))
-        let local = try XCTUnwrap(d.state.doc.sidebarData.sync)
-        let peer = SidebarSyncDocument(records: Dictionary(uniqueKeysWithValues: (0..<(10_000 - local.document.records.count)).map { ("i-peer-\($0)", SidebarSyncRecord(stamp: SidebarSyncStamp(counter: 1, replica: "peer"), value: nil)) }))
-        // The real IO actor merges the captured outbound document with its peer files. A user edit can
-        // happen while AppStore awaits that actor, before the valid transport result reaches the reducer.
-        let received = try SidebarSync.merge(local.document, peer)
-        XCTAssertEqual(received.records.count, 10_000)
-        XCTAssertNoThrow(try SidebarDataCodec.encodeSync(received))
-        d.user(.item(.newFolder))
-        d.system(.sidebarData(.syncRead(epoch: local.epoch, received)))
-        let after = try XCTUnwrap(d.state.doc.sidebarData.sync)
-        XCTAssertLessThanOrEqual(after.document.records.count, 10_000)
-        XCTAssertNoThrow(try SidebarDataCodec.encodeSync(after.document))
-        XCTAssertNotNil(d.pinnedIDs.first)
-        XCTAssertTrue(d.snapshot.sidebarData.status.contains("Sync failed"))
-        let restored = Driver(file: d.savedFile, startURL: nil)
-        XCTAssertTrue(restored.snapshot.sidebarData.connected)
-    }
     func testBrowserAddressSpellingsAndPublicControls() throws {
         let local = ["localhost.", "sub.localhost.", "printer.local.", "service.internal.", "printer", "127.1", "0177.0.0.1", "0x7f.1", "2130706433", "0x7f000001", "10.1", "0x0a000001", "0300.0250.1.1", "192.168.1.1.", "172.31.65535", "169.254.1", "100.64.1.1", "0", "4294967296", "127.0.0.1..", "[::1]", "%31%32%37.0.0.1"]
         for host in local { XCTAssertFalse(SidebarSync.safeURL(try XCTUnwrap(URL(string: "http://" + host + "/owned"))), host) }

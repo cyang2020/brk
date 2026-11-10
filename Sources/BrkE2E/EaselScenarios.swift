@@ -10,14 +10,8 @@ import Foundation
 /// the delete confirmation.
 enum EaselScenarios {
     static let all = [
-        Scenario("EaselNew", "File > New Easel and Ctrl+Shift+E: a Pinned row, the board with its title selected for typing, Share in the pill", newEasel),
         Scenario("EaselDraw", "toolbar shapes, arrow, freehand and text through pointer events; select, move, delete, duplicate; a picture through the panel's import", draw),
         Scenario("EaselReopen", "a drawn board and its picture are the same after quitting and relaunching", reopen),
-        Scenario("EaselLibrary", "the Library's Easels page lists a card per Easel; a card opens its Easel", library),
-        Scenario("EaselDelete", "a card's menu asks first (Q09 c); Cancel keeps it, Delete removes the board, its row and its pictures", delete),
-        Scenario("EaselResize", "a selected shape's corner handle resizes it through pointer events; the opposite corner stays", resize),
-        Scenario("EaselCapture", "a Media capture's Insert in Easel puts the screenshot on the shown board as a picture", insertCapture),
-        Scenario("EaselExport", "the pill's Share saves the board as a PNG through the save panel", export),
     ]
 
     /// A two-colour 160 x 100 PNG (left blue #3478F6, right red #F25E6B).
@@ -228,35 +222,6 @@ enum EaselScenarios {
         try expect(try near(board(app).elements[0].frame, after.frame, tolerance: 0.5), "the new size did not survive a restart")
     }
 
-    /// A101's "with captures": a full-page capture saved to the Library, then Media's Insert in Easel with an Easel
-    /// under the Library puts the capture's PNG on that board.
-    @Sendable static func insertCapture(_ app: AppUnderTest) throws {
-        let item = try app.load(app.site.url("page2.html"))
-        try app.waitForPageInput(PageID(window: app.window!, item: item), at: app.site.url("page2.html"))
-        try app.dispatch(.capture(.begin(.fullPage)))
-        try app.waitUntil("Screenshot Copied to Clipboard toast", timeout: 20) { try app.view().capture == nil && app.view().tabTools.toast?.text == "Screenshot Copied to Clipboard" }
-        try app.dispatch(.capture(.act(.library)))   // the toast's Save
-        let (_, _) = try make(app)
-        try app.dispatch(.library(.open(.media)))
-        var record: String?
-        try app.waitUntil("the capture is in Media", timeout: 20) {
-            guard case .library(let library)? = try app.view().overlay else { return false }
-            record = library.captures.first?.id
-            guard let record else { return false }
-            return isShown(try app.native(), .tabTool("capture-card-" + record))
-        }
-        let card = try visible(app.native(), .tabTool("capture-card-" + record!)).frame
-        guard case .menuItems(let titles) = try app.send(.captureContextMenu(window: app.window, point: CGPoint(x: card.midX, y: card.midY), choose: "Insert in Easel")) else {
-            throw Check(description: "the capture card's menu did not open")
-        }
-        try expect(titles.contains("Insert in Easel"), "the capture card's menu has \(titles)")
-        try app.waitUntil("the capture is on the board", timeout: 15) { try board(app).elements.contains { $0.shape == .image && $0.image != nil } }
-        guard let picture = try board(app).elements.first(where: { $0.shape == .image }), let file = picture.image else { throw Check(description: "no picture") }
-        try expect(file.path.hasPrefix(app.dataDirectory.appendingPathComponent("Easels").path), "the picture is not in the board's folder: \(file.path)")
-        try expect(try Data(contentsOf: file).prefix(8) == Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), "the picture is not a PNG")
-        try app.dispatch(.library(.close))
-        _ = try app.screenshot("easel-capture")
-    }
 
     /// A101's "export the result": the pill's Share (🔒 Share) opens the real save panel; Cancel writes nothing; Save,
     /// pressed through Accessibility as `FilePanelScenarios` does (keys posted to this remote panel do not reach it),

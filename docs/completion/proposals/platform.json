@@ -1,6 +1,6 @@
 {
   "base_commit": "6d2d6d50694b17d0c5e4ffcaf5b69bff4a30011d",
-  "method": "Read-only current-source and pinned CEF/CefKit audit, code-matched parent evidence reuse (520 SHA-256 matches), and bounded reducer/header probes. No CEF runtime rerun, no feature implementation, no architecture selection. See docs/completion/grounding/platform.md and verify/completion/platform-grounding/probe-results.json. All partial/missing behavior remains in the full completion scope.",
+  "method": "Read-only current-source and pinned CEF/CefKit audit, code-matched parent evidence reuse (520 SHA-256 matches), and bounded reducer/header probes. No CEF runtime rerun, no feature implementation, no architecture selection. See docs/completion/grounding/platform.md and 31357013e5:verify/completion/platform-grounding/probe-results.json. All partial/missing behavior remains in the full completion scope.",
   "features": [
     {
       "id": "A036",
@@ -21,10 +21,10 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only N1",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Repeated Cmd+R reaches the real page and preserves focus; not all navigation actions.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/N1.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/N1.log",
           "scenario": "N1"
         }
       ],
@@ -59,7 +59,7 @@
           "kind": "unit",
           "result": "pass",
           "command": "scripts/build.sh",
-          "artifact": "verify/swift/focus-parent/evidence/build.log",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/evidence/build.log",
           "scope": "KeyRoutingSpecTests and PressCorrelatorTests cover routing state, identity and Downloads priority.",
           "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
         },
@@ -67,27 +67,27 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only N1",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Specific app/page/press-twice chords and repeat reload.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/N1.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/N1.log",
           "scenario": "N1"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-9",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Remapped shortcut routes and the old chord reaches the page.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-9.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-9.log",
           "scenario": "W2-9"
         },
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/platform-grounding/run-probes.py",
-          "artifact": "verify/completion/platform-grounding/probe-results.json",
+          "command": "python3 31357013e5:verify/completion/platform-grounding/run-probes.py",
+          "artifact": "31357013e5:verify/completion/platform-grounding/probe-results.json",
           "scope": "Default Cmd+Shift+J is consumed beforePage and opens Brk Downloads.",
           "provenance": "Executed here. Reducer/header probe only; not real CEF behavior or full feature acceptance."
         }
@@ -392,20 +392,20 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-12",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Cmd+Y displays two real visits inside the Library.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-12.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-12.log",
           "scenario": "W2-12"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11P",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Private title/history and download metadata do not persist.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-11P.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-11P.log",
           "scenario": "W2-11P"
         }
       ],
@@ -443,7 +443,7 @@
           "kind": "unit",
           "result": "pass",
           "command": "scripts/build.sh",
-          "artifact": "verify/swift/focus-parent/evidence/build.log",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/evidence/build.log",
           "scope": "LibrarySpecTests covers saved ledger transitions and profile/private filtering; it explicitly permits cancelled -> finished and does not prove cancellation.",
           "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
         },
@@ -451,47 +451,47 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Real destination and duplicate-name files plus Downloads shortcut.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-11.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-11.log",
           "scenario": "W2-11"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11Q",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Immediate quit after completed download in restored persistent profile.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-11Q.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-11Q.log",
           "scenario": "W2-11Q"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11A",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Immediate quit during active transfer in restored persistent profile.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-11A.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-11A.log",
           "scenario": "W2-11A"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11P",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Private file retained without saved history/download records.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-11P.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-11P.log",
           "scenario": "W2-11P"
         },
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/platform-grounding/run-probes.py",
-          "artifact": "verify/completion/platform-grounding/probe-results.json",
+          "command": "python3 31357013e5:verify/completion/platform-grounding/run-probes.py",
+          "artifact": "31357013e5:verify/completion/platform-grounding/probe-results.json",
           "scope": "Reproduces zero cancellation effects, ignored completion after source close, and ignored completion after profile reassignment.",
           "provenance": "Executed here. Reducer/header probe only; not real CEF behavior or full feature acceptance."
         }
@@ -536,50 +536,50 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only R3",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Cmd+click opens and loads a background tab.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/R3.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/R3.log",
           "scenario": "R3"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P1",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Option+Cmd private link stays private.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-P1.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-P1.log",
           "scenario": "W2-P1"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P1C",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Same private modifier path over custom profile.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-P1C.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-P1C.log",
           "scenario": "W2-P1C"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P2",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Hidden private popup remains in owning private window.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-P2.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-P2.log",
           "scenario": "W2-P2"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P2C",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Hidden private popup remains private over custom profile.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-P2C.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-P2C.log",
           "scenario": "W2-P2C"
         }
       ],
@@ -615,20 +615,20 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only 9",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Restart preserves spaces, pinned/today/current tab/sidebar width and loads only current tab.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/9.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/9.log",
           "scenario": "9"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-3",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Incognito tabs and window omitted after restart.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-3.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-3.log",
           "scenario": "W2-3"
         }
       ],
@@ -663,10 +663,10 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-4",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "New standard window, shared rows and independent loaded page focus.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-4.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-4.log",
           "scenario": "W2-4"
         }
       ],
@@ -754,7 +754,7 @@
           "kind": "unit",
           "result": "pass",
           "command": "scripts/build.sh",
-          "artifact": "verify/swift/focus-parent/evidence/build.log",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/evidence/build.log",
           "scope": "ArcGeometryTests.testWindowPlacementOffScreen passed: offscreen, second display, 50-point overlap, oversize and default frame cases.",
           "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
         },
@@ -762,10 +762,10 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only R8",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Saved (5000,4000) window restored after restart; assertion checks >=100x100 active-display overlap. Source hashes match.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/R8.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/R8.log",
           "scenario": "R8"
         }
       ],
@@ -825,10 +825,10 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-5",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Compact Little Brk size/no-sidebar and Open In to space.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-5.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-5.log",
           "scenario": "W2-5"
         }
       ],
@@ -863,10 +863,10 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-5",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Open In promotes URL into a space; does not cover folder or live-state continuity.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-5.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-5.log",
           "scenario": "W2-5"
         }
       ],
@@ -901,20 +901,20 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-7",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Injected external URL chooses Little Brk or routed space.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-7.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-7.log",
           "scenario": "W2-7"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P1",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Private Option+Cmd link is kept private.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-P1.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-P1.log",
           "scenario": "W2-P1"
         }
       ],
@@ -949,7 +949,7 @@
           "kind": "unit",
           "result": "pass",
           "command": "scripts/build.sh",
-          "artifact": "verify/swift/focus-parent/evidence/build.log",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/evidence/build.log",
           "scope": "WindowsSpecTests.test_idleLittleArcsAreArchivedAfterTheLinksThreshold checks clock threshold, never, idempotence and archive restore; no active-user test.",
           "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
         }
@@ -986,10 +986,10 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-6",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Shift+click creates Peek and Esc closes its page.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-6.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-6.log",
           "scenario": "W2-6"
         }
       ],
@@ -1050,20 +1050,20 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-2",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Custom profile cookies isolated from default with profile UI.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-2.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-2.log",
           "scenario": "W2-2"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-1-edit",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Native profile settings editing persists, not proof every setting is consumed.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-1-edit.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-1-edit.log",
           "scenario": "W2-1-edit"
         }
       ],
@@ -1101,60 +1101,60 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-3",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Incognito window/tab data omitted after restart.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-3.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-3.log",
           "scenario": "W2-3"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-11P",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Private download file remains with no saved metadata.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-11P.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-11P.log",
           "scenario": "W2-11P"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P1",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Private Option+Cmd cookie/metadata isolation.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-P1.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-P1.log",
           "scenario": "W2-P1"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P1C",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Same path over custom profile.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-P1C.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-P1C.log",
           "scenario": "W2-P1C"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P2",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Hidden private popup owner retained.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-P2.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-P2.log",
           "scenario": "W2-P2"
         },
         {
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-P2C",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Same popup path over custom profile.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-P2C.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-P2C.log",
           "scenario": "W2-P2C"
         }
       ],
@@ -1191,8 +1191,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/platform-grounding/run-probes.py",
-          "artifact": "verify/completion/platform-grounding/probe-results.json",
+          "command": "python3 31357013e5:verify/completion/platform-grounding/run-probes.py",
+          "artifact": "31357013e5:verify/completion/platform-grounding/probe-results.json",
           "scope": "Confirms clearHistory emits .forgetBrowsingData(.profile(.default)); no native data-clearing claim.",
           "provenance": "Executed here. Reducer/header probe only; not real CEF behavior or full feature acceptance."
         }
@@ -1575,10 +1575,10 @@
           "kind": "native",
           "result": "pass",
           "command": "swift run -c release brk-e2e --app dist/Brk.app --site Tests/E2ESite --out verify/completion/platform-grounding/native-replay --engine cef --only W2-7",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Injected externalURL follows explicit host route then Little Brk default.",
           "provenance": "Reused parent scenario; command is a reproduction command, not a new run. See parent-evidence-match.json.",
-          "log": "verify/swift/focus-parent/native/logs/W2-7.log",
+          "log": "bf1ea87186:verify/swift/focus-parent/native/logs/W2-7.log",
           "scenario": "W2-7"
         }
       ],
@@ -1616,7 +1616,7 @@
           "kind": "unit",
           "result": "pass",
           "command": "scripts/build.sh",
-          "artifact": "verify/swift/focus-parent/evidence/build.log",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/evidence/build.log",
           "scope": "WindowsSpecTests checks emitted registration effect and idempotent http/https plist declarations, not OS registration.",
           "provenance": "Reused parent run, not rerun here; all 520 manifest hashes match this base."
         }

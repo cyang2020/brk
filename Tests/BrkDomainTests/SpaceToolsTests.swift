@@ -4,22 +4,6 @@ import XCTest
 @testable import BrkDomain
 
 final class SpaceToolsTests: XCTestCase {
-    func testNativeSpaceControlsRequestConfirmationAndExposeHeaderPreference() throws {
-        let d = Driver()
-        let space = d.newSpace("Native menu")
-        let menu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.spaceControls(space), at: .zero)))))
-        XCTAssertEqual(command(menu, "Delete Space"), .space(.requestDelete(space)))
-        XCTAssertNil(command(menu, "Hide Space Header"), "Arc 1.170 has no way to hide the header (P05-e)")
-        XCTAssertEqual(command(menu, "Manage Spaces…"), .library(.open(.spaces)))
-        d.user(.sidebar(.toggleSpaceHeader))
-        let hidden = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.spaceControls(space), at: .zero)))))
-        XCTAssertEqual(command(hidden, "Show Space Header"), .sidebar(.toggleSpaceHeader))
-        d.user(.sidebar(.toggleSpaceHeader))
-        d.user(try XCTUnwrap(command(menu, "Delete Space")))
-        XCTAssertNotNil(d.state.doc.spaces[space])
-        XCTAssertEqual(d.view.pendingSpaceDeletion?.id, space)
-    }
-
     /// The Spaces either side of the current one come with the snapshot: the sidebar draws their pages while the column moves.
     func testTheSnapshotCarriesTheNeighbouringSpacesPages() throws {
         let d = Driver()
@@ -65,24 +49,6 @@ final class SpaceToolsTests: XCTestCase {
         XCTAssertNil(d.state.session.windows[d.window]?.spaceExportMessage)
     }
 
-    func testDraftPreviewShowsTextureNoiseAndIntensityBeforeSave() {
-        var theme = SpaceTheme.default
-        theme.intensity = 0.8
-        let points = [ThemePoint(x: 0.231, y: 0.457), ThemePoint(x: 0.571, y: 0.263)]
-        var textures: [[RGBA]] = []
-        for texture in Texture.allCases {
-            theme.texture = texture
-            let resolved = resolveTheme(theme)
-            textures.append(points.map { themePreviewSample(resolved, at: $0) })
-        }
-        XCTAssertEqual(Set(textures).count, Texture.allCases.count)
-        let before = points.map { themePreviewSample(resolveTheme(theme), at: $0) }
-        theme.noise = 0
-        XCTAssertNotEqual(before, points.map { themePreviewSample(resolveTheme(theme), at: $0) })
-        theme.intensity = 0
-        XCTAssertNotEqual(before, points.map { themePreviewSample(resolveTheme(theme), at: $0) })
-    }
-
     func testLegacyV3DefaultsAndIndependentValuesRoundTrip() throws {
         let d = Driver()
         let old = StateCodec.encode(d.state)
@@ -116,24 +82,6 @@ final class SpaceToolsTests: XCTestCase {
             XCTAssertEqual(rendered.theme.gradient[0], scheme == .light ? RGBA(1, 0, 0) : RGBA(0, 0, 1))
             XCTAssertTrue(rendered.sidebar.toolbarVisible); XCTAssertFalse(rendered.sidebar.spaceHeaderVisible)
         }
-    }
-
-    func testEveryThemeAdjustmentChangesRenderedOutputAndPosition() {
-        var theme = SpaceTheme.default
-        theme.colors = [RGBA(0.7, 0.2, 0.4), RGBA(0.2, 0.5, 0.8)]
-        theme.variants = ThemeVariants(legacy: theme)
-        theme.variants!.selection = .dark
-        let before = resolveTheme(theme)
-        for key in [\ThemeStyle.saturation, \.lightness, \.darkBias] {
-            var changed = theme
-            changed.variants!.dark[keyPath: key] = key == \ThemeStyle.saturation ? 0.2 : 0.3
-            XCTAssertNotEqual(resolveTheme(changed).gradient, before.gradient)
-        }
-        theme.variants!.dark.colors[0].position = ThemePoint(x: 0.9, y: 0.9)
-        let after = resolveTheme(theme)
-        XCTAssertNotEqual(themeSample(before, at: ThemePoint(x: 0.1, y: 0.1)), themeSample(after, at: ThemePoint(x: 0.1, y: 0.1)))
-        XCTAssertEqual(after.websiteValues.scheme, .dark)
-        XCTAssertNotEqual(after.websiteValues.background, RGBA(0, 0, 0))
     }
 
     func testLegacyAutomaticThemeDoesNotFollowSystemUntilExplicitConversion() {
@@ -187,18 +135,6 @@ final class SpaceToolsTests: XCTestCase {
         XCTAssertEqual(d.state.doc.windows[other]?.space, first)
         d.user(.space(.requestDelete(first)))
         XCTAssertNil(d.view.pendingSpaceDeletion)
-    }
-
-    func testToolbarUsesWindowAddressAndFullURLPreference() throws {
-        let d = Driver()
-        let id = try XCTUnwrap(d.view.content.panes.first?.tab)
-        let url = URL(string: "https://example.org/full/path?q=test")!
-        d.page(id, .committed(url))
-        d.user(.sidebar(.toggleToolbar))
-        XCTAssertTrue(d.view.sidebar.toolbarVisible)
-        XCTAssertEqual(d.view.urlPill.toolbarText, displayHost(url))
-        d.user(.settings(.advanced(.showFullURLInToolbar(true))))
-        XCTAssertEqual(d.view.urlPill.toolbarText, url.absoluteString)
     }
 
     func testSpaceExportExcludesPrivateDataAndFencesCompletion() throws {

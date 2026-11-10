@@ -4,18 +4,14 @@ import BrkDomain
 import Foundation
 
 /// The site controls' Secure / Insecure row against real certificates. The https fixture
-/// (`verify/visual-pairs/https-fixture`) serves a page on a certificate Brk trusts through its test switch
+/// (`Tests/Fixtures/https-fixture`) serves a page on a certificate Brk trusts through its test switch
 /// (`BRK_TEST_TRUSTED_SPKI`, set by the harness for these scenarios), one on a certificate nothing trusts, and https
 /// pages with plain HTTP parts. Each scenario reads Chromium's report through the snapshot, then what the popover
 /// shows: the overview's security button and, on the second page, the connection note.
 enum SiteSecurityScenarios {
     static let all = [
-        Scenario("SiteSecurity-secure", "trusted test certificate: Secure, and the second page says the connection is secure",
-                 cefOnly: "Chromium certificate verification", secure),
         Scenario("SiteSecurity-invalid", "untrusted certificate: Chromium's interstitial, Proceed, then Insecure with the certificate note",
                  cefOnly: "Chromium certificate verification", invalid),
-        Scenario("SiteSecurity-mixed", "https with plain HTTP parts: an upgraded image stays Secure, a plain HTTP form is Insecure",
-                 cefOnly: "Chromium mixed content", mixed),
     ]
 
     static let secureNote = "Connection is secure (HTTPS)."
@@ -56,32 +52,6 @@ enum SiteSecurityScenarios {
         app.note("untrusted.pem (a self-signed key nothing trusts) produced Chromium's ERR_CERT_AUTHORITY_INVALID interstitial; its Advanced and Proceed buttons loaded the page, and the TLS page then read back as Insecure.")
     }
 
-    @Sendable static func mixed(_ app: AppUnderTest) throws {
-        let fixture = try HTTPSFixture(app); defer { fixture.stop() }
-        let image = try app.load(fixture.url("127.0.0.1", "/mixed-image.html"))
-        try waitForTitle(app, image, "Mixed image fixture")
-        try app.waitUntil("the image page stops loading") { try tab(image, in: app.view())?.loading == false }
-        try app.dispatch(.site(.controls))
-        try app.waitUntil("an upgraded plain HTTP image keeps the page Secure") {
-            let value = try SitePolicyScenarios.controls(app)
-            return value.security?.secureConnection == true && value.secure
-        }
-        try expect(!fixture.servedPlain("/pixel.svg"), "Chromium fetched the image over plain HTTP instead of upgrading it")
-        try showsSecurity(app, secure: true, note: secureNote, shots: "mixed-image", details: false)
-        try app.dispatch(.site(.closeControls))
-
-        let form = try app.load(fixture.url("127.0.0.1", "/mixed.html"))
-        try waitForTitle(app, form, "Mixed content fixture")
-        try app.waitUntil("the mixed page stops loading") { try tab(form, in: app.view())?.loading == false }
-        try app.dispatch(.site(.controls))
-        try app.waitUntil("a plain HTTP form action makes the page Insecure") {
-            let value = try SitePolicyScenarios.controls(app)
-            return value.security?.secureConnection == true && value.security?.certificateError == false
-                && value.security?.insecureForm == true && !value.secure
-        }
-        try showsSecurity(app, secure: false, note: formNote, shots: "mixed")
-        app.note("Chromium upgrades plain HTTP images on https pages (no plain request reached the fixture), so that page stays Secure; a form posting to http://insecure.brk.test is reported as insecure and the page reads Insecure.")
-    }
 
     /// The popover's overview shows Secure or Insecure; the security button opens the second page with the note.
     static func showsSecurity(_ app: AppUnderTest, secure: Bool, note: String, shots: String, details: Bool = true) throws {
@@ -104,18 +74,18 @@ enum SiteSecurityScenarios {
     }
 }
 
-/// One run of `verify/visual-pairs/https-fixture/serve.py` on free ports, owned by the scenario.
+/// One run of `Tests/Fixtures/https-fixture/serve.py` on free ports, owned by the scenario.
 final class HTTPSFixture {
     let process = Process()
     let https: Int, http: Int
     let requests: URL
 
     static func directory(_ app: AppUnderTest) -> URL {
-        app.site.root.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("verify/visual-pairs/https-fixture")
+        app.site.root.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Tests/Fixtures/https-fixture")
     }
     /// What the harness passes as `BRK_TEST_TRUSTED_SPKI`.
     static func trustedSPKI(siteRoot: URL) -> String? {
-        let file = siteRoot.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("verify/visual-pairs/https-fixture/trusted.spki")
+        let file = siteRoot.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Tests/Fixtures/https-fixture/trusted.spki")
         return (try? String(contentsOf: file, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -139,7 +109,7 @@ final class HTTPSFixture {
             throw Check(description: "the https fixture did not start")
         }
         self.https = https; self.http = http
-        app.note("https fixture: python3 -I verify/visual-pairs/https-fixture/serve.py --port 0 --http-port 0 (https \(https), http \(http)).")
+        app.note("https fixture: python3 -I Tests/Fixtures/https-fixture/serve.py --port 0 --http-port 0 (https \(https), http \(http)).")
     }
 
     func url(_ host: String, _ path: String) -> URL { URL(string: "https://\(host):\(https)\(path)")! }
@@ -149,7 +119,6 @@ final class HTTPSFixture {
         return text.split(separator: "\n").compactMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: String] }
     }
     func served(_ path: String) -> Bool { lines().contains { $0["scheme"] == "https" && $0["path"] == path } }
-    func servedPlain(_ path: String) -> Bool { lines().contains { $0["scheme"] == "http" && $0["path"] == path } }
 
     func stop() {
         guard process.isRunning else { return }

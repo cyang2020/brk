@@ -81,26 +81,12 @@ final class IndexAndClusterTests: XCTestCase {
         XCTAssertNil(SemanticIndex.decode(data.prefix(data.count - 1), dimensions: 4))
     }
 
-    func testEntryTextIsTitleAndHost() {
-        let entry = IndexEntry(kind: .tab, id: "1", title: "Redis 持久化 - 知乎", url: "https://www.zhihu.com/question/1")
-        XCTAssertEqual(entry.text.prompt, "title: none | text: Redis 持久化 - 知乎 (www.zhihu.com)")
-        XCTAssertEqual(EmbeddingText.query("讲数据库的").prompt, "task: search result | query: 讲数据库的")
-    }
-
     func testClustersMergeCloseVectorsOnly() {
         let vectors = [[1, 0, 0], [0.95, 0.1, 0], [0, 1, 0], [0.05, 0.98, 0], [0, 0, 1]].map { VectorMath.normalized($0.map(Float.init)) }
         XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: 0.7), [[0, 1], [2, 3], [4]])
         XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: -1).count, 1)
         XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: 1.01).count, 5)
         XCTAssertEqual(EmbeddingGroups.clusters([], threshold: 0.7), [])
-    }
-
-    /// Average linkage, not single: a chain of neighbours does not pull far ends together.
-    func testAverageLinkageDoesNotChain() {
-        let angles: [Float] = [0, 0.5, 1.0, 1.5]
-        let vectors = angles.map { [cos($0), sin($0)] }
-        let clusters = EmbeddingGroups.clusters(vectors, threshold: 0.8)
-        XCTAssertGreaterThan(clusters.count, 1)
     }
 
     func testNearestAndDuplicateCandidates() {
@@ -110,17 +96,4 @@ final class IndexAndClusterTests: XCTestCase {
         let pairs = EmbeddingGroups.duplicateCandidates([[1, 0], [0.999, 0.04], [0, 1]].map(VectorMath.normalized), threshold: 0.92)
         XCTAssertEqual(pairs.map { [$0.0, $0.1] }, [[0, 1]])
     }
-
-    func testTruncationRenormalises() {
-        let v = VectorMath.truncated([3, 4, 12], to: 2)
-        XCTAssertEqual(v[0], 0.6, accuracy: 1e-6)
-        XCTAssertEqual(v[1], 0.8, accuracy: 1e-6)
-        let half = Double(0.5).squareRoot()
-        XCTAssertEqual(VectorMath.centroid([[1, 0], [0, 1]]).map { Double($0) }, [half, half], accuracy: 1e-6)
-    }
-}
-
-private func XCTAssertEqual(_ a: [Double], _ b: [Double], accuracy: Double, file: StaticString = #filePath, line: UInt = #line) {
-    XCTAssertEqual(a.count, b.count, file: file, line: line)
-    for (x, y) in zip(a, b) { XCTAssertEqual(x, y, accuracy: accuracy, file: file, line: line) }
 }

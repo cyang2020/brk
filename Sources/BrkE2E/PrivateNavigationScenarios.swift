@@ -5,9 +5,6 @@ import Foundation
 
 enum PrivateNavigationScenarios {
     @Sendable static func optionLink(_ app: AppUnderTest) throws { try check(app, popup: false, customProfile: false) }
-    @Sendable static func optionLinkInProfile(_ app: AppUnderTest) throws { try check(app, popup: false, customProfile: true) }
-    @Sendable static func hiddenPopup(_ app: AppUnderTest) throws { try check(app, popup: true, customProfile: false) }
-    @Sendable static func hiddenPopupInProfile(_ app: AppUnderTest) throws { try check(app, popup: true, customProfile: true) }
 
     private static func check(_ app: AppUnderTest, popup: Bool, customProfile: Bool) throws {
         let downloads = app.dataDirectory.appendingPathComponent("downloads")

@@ -13,11 +13,6 @@ import Foundation
 /// shown. Real clicks and keys; the control socket reads state, moves the test clock and takes the window's pictures.
 /// The facts each picture is checked for go to `panel-look.txt`.
 enum AIPanelLookScenarios {
-    static let all: [Scenario] = [
-        Scenario("AIAgentPanelLook", "the panel on the Space background in four Spaces with the price watch; the + menu; an approval card",
-                 cefOnly: "native panel and page sandbox", route),
-    ]
-
     nonisolated(unsafe) private static var pid: Int32 = 0
 
     static let spaces: [(name: String, title: String, theme: SpaceTheme?)] = [

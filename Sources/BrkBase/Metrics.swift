@@ -68,6 +68,7 @@ public struct MetricsTable: MetricGroup {
     public let littleArc = LittleArcMetrics()
     public let peek = PeekMetrics()
     public let library = LibraryMetrics()
+    public let libraryFlyout = LibraryFlyoutMetrics()
     public let settings = SettingsMetrics()
     public let persistence = PersistenceMetrics()
     public let keys = KeyMetrics()
@@ -117,7 +118,7 @@ public struct SidebarMetrics: MetricGroup {
     public let titleRowRightInset = Metric(6.0, .arc("Title row right inset"))
     public let headerBackgroundOverhang = Metric(30.0, .arc("Sidebar header background reaches below the header by", .medium))
     /// With the toolbar shown (Shift+Cmd+D) the favorites tray starts here; its tiles are 8 lower, at 45.
-    public let toolbarTrayTop = Metric(36.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-b: Arc's favorite tiles start 45 below the window top with the toolbar shown"))
+    public let toolbarTrayTop = Metric(36.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P01-b: Arc's favorite tiles start 45 below the window top with the toolbar shown"))
     public let libraryMinWidth = Metric(417.0, .arc("Library (\"home\") panel width", note: "max(417, ...)"))
     public let libraryWindowMargin = Metric(56.0, .arc("Library (\"home\") panel width", note: "window width minus 56"))
 }
@@ -146,16 +147,16 @@ public struct FavoritesMetrics: MetricGroup {
     public let ringRadius = Metric(11.0, .arc("Selected favorite ring", .medium, note: "corner radius 11"))
     /// The empty tray: Arc's dashed "Drag to add Favorites" box 7.5 in from the sides, 7 below the pill, 94.5 tall,
     /// with the space header 12.5 under it.
-    public let emptyTrayHeight = Metric(114.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: Arc's space header starts 114 below the pill when Favorites is empty"))
-    public let emptyBoxInset = Metric(CGSize(width: 7.5, height: 7.0), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the dashed box spans x 7.5 to 220.5 and starts 7 below the pill"))
-    public let emptyBoxHeight = Metric(94.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P07-b: the dashed box is 94.5 tall"))
+    public let emptyTrayHeight = Metric(114.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P07-b: Arc's space header starts 114 below the pill when Favorites is empty"))
+    public let emptyBoxInset = Metric(CGSize(width: 7.5, height: 7.0), .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P07-b: the dashed box spans x 7.5 to 220.5 and starts 7 below the pill"))
+    public let emptyBoxHeight = Metric(94.5, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P07-b: the dashed box is 94.5 tall"))
 }
 
 public struct TablistMetrics: MetricGroup {
     public let rowHeight = Metric(40.0, .arc("Sidebar row height", note: "40"))
     public let rowSpacing = Metric(1.0, .arc("Sidebar row height", .medium, note: "1 pt between rows"))
     public let dividerRowHeight = Metric(16.0, .arc("Pinned/Today divider row", .medium))
-    public let tidyDividerExtra = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P46-a Arc capture: with Max on the hairline is at y 801 px and New Tab at 856 px, 8 and 16 px lower than with Max off"))
+    public let tidyDividerExtra = Metric(8.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P46-a Arc capture: with Max on the hairline is at y 801 px and New Tab at 856 px, 8 and 16 px lower than with Max off"))
     public let dividerRowTallHeight = Metric(24.0, .arc("Pinned/Today divider row", .medium, note: "24 in one state"))
     public let topSpacerHeight = Metric(2.0, .arc("Spacer row at the top of the list", .medium))
     public let headerRowHeight = Metric(36.0, .arc("Another row type (probably folder or split header)", .low))
@@ -172,14 +173,14 @@ public struct TablistMetrics: MetricGroup {
     /// The part of a tab row, as fractions of its height from the top, where a dragged tab joins it in a split; the
     /// quarters above and below still reorder.
     /// The speaker of a tab that is making sound: a button between the icon and the title, from the selection's left edge.
-    public let speakerLeading = Metric(34.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-f-arc.png: the speaker's hover square spans x 42 to 66, the row's selection starts at 8"))
-    public let speakerSide = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-f-arc.png: the speaker's hover square is 24 x 24"))
+    public let speakerLeading = Metric(34.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-f-arc.png: the speaker's hover square spans x 42 to 66, the row's selection starts at 8"))
+    public let speakerSide = Metric(24.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-f-arc.png: the speaker's hover square is 24 x 24"))
     /// How much further right the title starts while the speaker shows.
-    public let speakerTitleAdvance = Metric(26.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-a-arc.png: the title's ink starts at x 70 instead of 44"))
+    public let speakerTitleAdvance = Metric(26.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-a-arc.png: the title's ink starts at x 70 instead of 44"))
     /// The round button at the list's top or bottom edge while the current row is scrolled out of view.
-    public let currentArrowSide = Metric(28.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the circle spans x 100 to 128, y 578 to 606"))
-    public let currentArrowInset = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the circle ends 5 above the list's lower edge at y 611; Q18-media-r-arrow-up-arc.png: it starts 6 below the upper edge"))
-    public let splitJoinZone = Metric(0.25...0.75, .anatomy("verify/visual-pairs/run-20261103/Q15/NOTES.md: 9.5 pt from a row's top or bottom edge reorders, 11.5 pt joins"))
+    public let currentArrowSide = Metric(28.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the circle spans x 100 to 128, y 578 to 606"))
+    public let currentArrowInset = Metric(5.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the circle ends 5 above the list's lower edge at y 611; Q18-media-r-arrow-up-arc.png: it starts 6 below the upper edge"))
+    public let splitJoinZone = Metric(0.25...0.75, .anatomy("eaad5e542c:verify/visual-pairs/run-20261103/Q15/NOTES.md: 9.5 pt from a row's top or bottom edge reorders, 11.5 pt joins"))
 }
 
 public struct DockMetrics: MetricGroup {
@@ -196,57 +197,57 @@ public struct DockMetrics: MetricGroup {
 }
 
 /// Arc's mini player at the bottom of the sidebar (`MediaControlsFeature.MediaControlsView`, read from the binary and
-/// measured; verify/visual-pairs/run-20261103/r5-5/REPORT.md has the addresses).
+/// measured; 650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md has the addresses).
 public struct MiniPlayerMetrics: MetricGroup {
     /// One line of a card: the title, the controls or the volume slider.
-    public let rowHeight = Metric(33.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x102494318: a card at rest is 33 tall"))
+    public let rowHeight = Metric(33.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x102494318: a card at rest is 33 tall"))
     /// A card under the pointer: the title and the controls.
-    public let expandedHeight = Metric(66.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4"))
+    public let expandedHeight = Metric(66.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4"))
     /// With its volume slider open.
-    public let volumeHeight = Metric(99.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4"))
-    public let sideInset = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the card spans x 8 to 220 of a 228 sidebar"))
-    public let bottomGap = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the card ends 8 above Arc's update banner, which ends 8 above the dock; Brk has no banner"))
+    public let volumeHeight = Metric(99.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4"))
+    public let sideInset = Metric(8.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the card spans x 8 to 220 of a 228 sidebar"))
+    public let bottomGap = Metric(8.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the card ends 8 above Arc's update banner, which ends 8 above the dock; Brk has no banner"))
     /// From the list's lower edge down to the stack.
-    public let listGap = Metric(9.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the hairline at y 644, the card from y 653"))
+    public let listGap = Metric(9.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the hairline at y 644, the card from y 653"))
     /// Cards at rest, per card behind the front one: up, narrower in all, and fainter down to a floor.
-    public let restStep = Metric(7.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: yOffset -7 per card"))
-    public let restWidthStep = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: widthOffset 10 per card"))
-    public let restWidthMax = Metric(90.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: widthOffset at most 90"))
-    public let restAlphaStep = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: opacity 1 - 0.2 per card"))
-    public let restAlphaMin = Metric(0.4, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: opacity at least 0.4"))
+    public let restStep = Metric(7.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: yOffset -7 per card"))
+    public let restWidthStep = Metric(10.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: widthOffset 10 per card"))
+    public let restWidthMax = Metric(90.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: widthOffset at most 90"))
+    public let restAlphaStep = Metric(0.2, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: opacity 1 - 0.2 per card"))
+    public let restAlphaMin = Metric(0.4, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: opacity at least 0.4"))
     /// Cards under the pointer, apart.
-    public let expandedGap = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: height + 5 per card"))
-    public let radius = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249a5f4: RoundedRectangle 8, continuous"))
+    public let expandedGap = Metric(5.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4: height + 5 per card"))
+    public let radius = Metric(8.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x10249a5f4: RoundedRectangle 8, continuous"))
     /// The controls row: five buttons, the first and the last this far in, the gaps equal.
-    public let controlsInset = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the buttons centre at 30, 72, 114, 156 and 198 on a card from x 8"))
-    public let buttonSide = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the pause button's hover square spans x 102 to 126"))
+    public let controlsInset = Metric(10.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the buttons centre at 30, 72, 114, 156 and 198 on a card from x 8"))
+    public let buttonSide = Metric(24.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the pause button's hover square spans x 102 to 126"))
     /// The title's frame in the title row, from the card's left edge, and where it stops before the × button.
-    public let titleLeading = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the title's ink starts at x 23, 15 in from the card; the label keeps 2 of its own and the M 1 more"))
+    public let titleLeading = Metric(12.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-e-arc.png: the title's ink starts at x 23, 15 in from the card; the label keeps 2 of its own and the M 1 more"))
     public let titleTrailing = Metric(4.0, .guess("the title's end before the × button; no capture has a title long enough to reach it"))
     /// The volume slider's track in its row, from the card's edges (Q18-media-j-arc).
-    public let sliderInset = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-j-volume-arc.png: the track spans x 16 to 212 on a card from x 8 to 220"))
-    public let sliderTrack = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-j-volume-arc.png: the track is 6 tall"))
-    public let sliderKnob = Metric(CGSize(width: 20, height: 16), .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-j-volume-arc.png: the white knob spans 19.5 x 15.5"))
+    public let sliderInset = Metric(8.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-j-volume-arc.png: the track spans x 16 to 212 on a card from x 8 to 220"))
+    public let sliderTrack = Metric(6.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-j-volume-arc.png: the track is 6 tall"))
+    public let sliderKnob = Metric(CGSize(width: 20, height: 16), .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-j-volume-arc.png: the white knob spans 19.5 x 15.5"))
     /// The pointer leaving the stack closes it at once (Q18, k10), but with a slider open only after this long.
-    public let sliderHoverOffDelay = Metric(2.0, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x102493f9c: debounce(for: 2), and Q18-media-z4, -z5"))
-    public let hoverAnimation = Metric(0.25, .anatomy("verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x102493070: a spring of response 0.25, damping 0.9"))
+    public let sliderHoverOffDelay = Metric(2.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x102493f9c: debounce(for: 2), and Q18-media-z4, -z5"))
+    public let hoverAnimation = Metric(0.25, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x102493070: a spring of response 0.25, damping 0.9"))
 }
 
 public struct ContentMetrics: MetricGroup {
     public let inset = Metric(10.0, .arc("Content card inset", note: "10"))
     /// Between an anchored sidebar and the card: none, the card's left edge is the sidebar's right edge (164, 228 and
     /// 500 wide alike); top, right and bottom keep `inset`.
-    public let sidebarGap = Metric(0.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P01-a and P03-b/c: Arc's card starts at the sidebar width"))
+    public let sidebarGap = Metric(0.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P01-a and P03-b/c: Arc's card starts at the sidebar width"))
     /// Continuous corners.
     public let cornerRadius = Metric(6.0, .arc("Content card corner radius"))
     public let statusBubbleMaxHeight = Metric(40.0, .guess("Chromium's status bubble widget is a short child of the page's host window; its other widgets are taller or are not at its bottom edge"))
     public let fullScreenCornerRadius = Metric(0.0, .arc("Content card corner radius", note: "0 in one state"))
     public let showsShadow = Metric(true, .arc("Content card shadow", .medium))
-    /// Measured round Arc's card (verify/visual-pairs/run-20261103 P01-a, P23-a): 12% black just under it fading out
+    /// Measured round Arc's card (2a96a9d7f0:verify/visual-pairs/run-20261103 P01-a, P23-a): 12% black just under it fading out
     /// within 9 pt, 7% just above it within 5. A split's focused pane casts a wider one (BrkContent's SplitDropDraw).
-    public let shadowRadius = Metric(2.9, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures P01-a: the edges fade like a 2.9 pt Gaussian"))
-    public let shadowOpacity = Metric(0.22, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures P01-a: 12% under the card plus 7% over it"))
-    public let shadowOffset = Metric(1.4, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures P01-a: the shadow sits 1.4 pt below the card"))
+    public let shadowRadius = Metric(2.9, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, Arc captures P01-a: the edges fade like a 2.9 pt Gaussian"))
+    public let shadowOpacity = Metric(0.22, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, Arc captures P01-a: 12% under the card plus 7% over it"))
+    public let shadowOffset = Metric(1.4, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, Arc captures P01-a: the shadow sits 1.4 pt below the card"))
     public let highlightBorder = Metric(2.0, .arc("Content highlight border width", .medium))
     public let splitGap = Metric(10.0, .arc("Split view gap between panes", .low))
     /// Each split pane's header (back, forward, reload, host, close) and the hairline under it.
@@ -281,11 +282,11 @@ public struct CommandBarMetrics: MetricGroup {
     public let centeredInputRowHeight = Metric(64.0, .arc("Command bar input row height", .medium, note: "64 in the other mode"))
     /// Over the URL pill the card starts at the pill's left edge, 1.5 above its top, and is 350 wide until its input
     /// row needs more (P02-b: x 8 to 358 over a pill at 8...220, y 46; P02-c grows to 359 for "Search Google Docs").
-    public let attachedCardWidth = Metric(350.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P02-b Arc capture: edit card 350 pt wide"))
-    public let attachedTopOffset = Metric(-2.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures P02-b/c: the card's top edge 44 (88 px), the pill's top 46"))
+    public let attachedCardWidth = Metric(350.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P02-b Arc capture: edit card 350 pt wide"))
+    public let attachedTopOffset = Metric(-2.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, Arc captures P02-b/c: the card's top edge 44 (88 px), the pill's top 46"))
     /// Rows start right under the input row over the pill and 5 under the hairline when centered; 9 under the last row.
-    public let centeredListTop = Metric(4.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures Q01-a/b: the hairline 64 under the card's top, the first highlight 70.5 (a row's highlight is 2 in)"))
-    public let listBottom = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, Arc captures P02-b, Q01-a/b: the card's bottom edge 10 under the last row's frame (Q01: 547.5 for a top at 219)"))
+    public let centeredListTop = Metric(4.5, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, Arc captures Q01-a/b: the hairline 64 under the card's top, the first highlight 70.5 (a row's highlight is 2 in)"))
+    public let listBottom = Metric(10.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, Arc captures P02-b, Q01-a/b: the card's bottom edge 10 under the last row's frame (Q01: 547.5 for a top at 219)"))
     public let stackSpacing = Metric(10.0, .arc("Command bar inner spacing", .medium, note: "stack spacing 10"))
     public let contentInset = Metric(12.0, .arc("Command bar inner spacing", .medium, note: "inset 12"))
     public let openBounceFrom = Metric(0.95, .arc("Command bar opening bounce", .medium))
@@ -297,7 +298,7 @@ public struct CommandBarMetrics: MetricGroup {
 }
 
 /// Arc's `ARCUI.PageSwipeController` and its owner `WindowLayoutController` (Arc 1.170, addresses in
-/// verify/visual-pairs/run-20261103/r5-7/REPORT.md): the sidebar's pages, how they follow two fingers, where they settle.
+/// 38d57390e3:verify/visual-pairs/run-20261103/r5-7/REPORT.md): the sidebar's pages, how they follow two fingers, where they settle.
 public struct PageSwipeMetrics: MetricGroup {
     fileprivate static let read = "r5-7/REPORT.md, PageSwipeController"
     /// The position moves by this much of `scrollingDeltaX`, the other way (bin:0x100a1ac40, multiplier -0.5).
@@ -367,9 +368,9 @@ public struct ThemeMetrics: MetricGroup {
     public let washSlope = Metric(0.55, .arc("Theme background wash", .low, note: "0.55 x factor"))
     public let washCap = Metric(0.5, .arc("Theme background wash", .low, note: "capped at 0.5"))
     /// A dark color under Arc's dark button: from the navy preset at five slider positions (r5-6/REPORT.md).
-    public let darkColorDarkWash = Metric(207.0 / 255, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md: navy under the dark button runs from #2D4468 towards #CFCFCF"))
-    public let darkColorDarkWashBase = Metric(0.19, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md: 22% at the slider's right end"))
-    public let darkColorDarkWashSlope = Metric(0.62, .anatomy("verify/visual-pairs/run-20261103/r5-6/REPORT.md: 78% at the slider's left end"))
+    public let darkColorDarkWash = Metric(207.0 / 255, .anatomy("f588406ceb:verify/visual-pairs/run-20261103/r5-6/REPORT.md: navy under the dark button runs from #2D4468 towards #CFCFCF"))
+    public let darkColorDarkWashBase = Metric(0.19, .anatomy("f588406ceb:verify/visual-pairs/run-20261103/r5-6/REPORT.md: 22% at the slider's right end"))
+    public let darkColorDarkWashSlope = Metric(0.62, .anatomy("f588406ceb:verify/visual-pairs/run-20261103/r5-6/REPORT.md: 78% at the slider's left end"))
     public let gradientTexturePerFactor = Metric(100.0, .arc("Metal gradient texture size", .low))
     /// Tile sizes of Arc's own textures (px @1x). Ours are generated procedurally at these sizes.
     public let grainTile = Metric(155, .anatomy("visual-and-copy.md, Gradient and grain assets"))
@@ -400,16 +401,16 @@ public struct LittleArcMetrics: MetricGroup {
     public let pillGap = Metric(9.0, .guess("measured on the 2026-11-03 Arc capture P21b: 9 pt between the pill and the Open in button"))
     public let openInHeight = Metric(30.0, .guess("measured on the 2026-11-03 Arc capture P21b: the Open in button is 30 pt tall"))
     public let openInTrailing = Metric(7.0, .guess("measured on the 2026-11-03 Arc capture P21b: the Open in button ends 7 pt from the right"))
-    public let tipFrame = Metric(CGRect(x: 283.5, y: 55, width: 283.5, height: 75), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the tip spans 283.5 points ending 8 from the window's right, y 55 to 130 (x is measured from the right)"))
-    public let tipInset = Metric(10.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the tip's text starts 10.5 in"))
-    public let tipTitleTop = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the title is centred at y 74, the tip starts at 55"))
-    public let tipBodyLine = Metric(17.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the two body lines are centred 17 points apart"))
-    public let tipRadius = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the tip's corners are about 5 points"))
-    public let openInLeading = Metric(4.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the words' ink starts 6.5 points into the button (the label's cell adds 2)"))
-    public let openInKeyGap = Metric(6.5, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the words end 6 points before the ⌘O badge"))
-    public let openInRuleGap = Metric(6.25, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the badge ends 6.25 points before the rule"))
-    public let openInChevronZone = Metric(30.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the rule to the button's end is 29.75 points"))
-    public let openInRuleInset = Metric(6.25, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the rule is 17.5 tall in the 30 pt button"))
+    public let tipFrame = Metric(CGRect(x: 283.5, y: 55, width: 283.5, height: 75), .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the tip spans 283.5 points ending 8 from the window's right, y 55 to 130 (x is measured from the right)"))
+    public let tipInset = Metric(10.5, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the tip's text starts 10.5 in"))
+    public let tipTitleTop = Metric(11.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the title is centred at y 74, the tip starts at 55"))
+    public let tipBodyLine = Metric(17.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the two body lines are centred 17 points apart"))
+    public let tipRadius = Metric(5.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the tip's corners are about 5 points"))
+    public let openInLeading = Metric(4.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the words' ink starts 6.5 points into the button (the label's cell adds 2)"))
+    public let openInKeyGap = Metric(6.5, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the words end 6 points before the ⌘O badge"))
+    public let openInRuleGap = Metric(6.25, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the badge ends 6.25 points before the rule"))
+    public let openInChevronZone = Metric(30.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the rule to the button's end is 29.75 points"))
+    public let openInRuleInset = Metric(6.25, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P21-b Arc capture: the rule is 17.5 tall in the 30 pt button"))
     public let pickerWidth = Metric(247.0, .guess("measured on the 2026-11-03 Arc capture P21c: the space picker is 247 pt wide"))
     public let pickerTop = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P21c: the picker starts 4 pt below the top"))
     public let pickerTrailing = Metric(4.0, .guess("measured on the 2026-11-03 Arc capture P21c: the picker ends 4 pt from the right"))
@@ -473,10 +474,10 @@ public struct LibraryMetrics: MetricGroup {
 public struct SettingsMetrics: MetricGroup {
     /// The window's frame, title bar and pane toolbar included; every pane is shown at this size (Arc 1.170's
     /// settings window does not resize per pane).
-    public let windowSize = Metric(CGSize(width: 684, height: 650), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P38: every Arc settings capture is 1368 x 1300 px"))
+    public let windowSize = Metric(CGSize(width: 684, height: 650), .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P38: every Arc settings capture is 1368 x 1300 px"))
     /// The width of a pane's cards.
-    public let contentWidth = Metric(556.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P38-a-arc.png: cards span x 128 to 1240 px"))
-    public let horizontalPadding = Metric(64.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P38-a-arc.png: 128 px from the window's left edge to a card"))
+    public let contentWidth = Metric(556.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P38-a-arc.png: cards span x 128 to 1240 px"))
+    public let horizontalPadding = Metric(64.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P38-a-arc.png: 128 px from the window's left edge to a card"))
     public let verticalPadding = Metric(20.0, .guess("Settings.Container's vertical padding in the sindresorhus/Settings package source"))
     /// The right-aligned label column (Settings.Container's `minimumLabelWidth`).
     public let labelWidth = Metric(170.0, .guess("label column width; fits 'Archive Little Arcs after:' and 'Air Traffic Control:' at the system font"))
@@ -503,6 +504,86 @@ public struct SettingsMetrics: MetricGroup {
     public let shortcutsListHeight = Metric(360.0, .guess("height of the Shortcuts pane's scrolling list"))
 }
 
+/// The Library button's flyout and badge (Arc: `HomeBadging`, `HomeButton`, `HomeButtonHoverRegionTracker`), read from
+/// Arc 1.170's binary and measured on real Arc; docs/arc-anatomy/library-flyout.md has every probe and address.
+public struct LibraryFlyoutMetrics: MetricGroup {
+    /// The flyout lists the newest items only: its frame is `rows x rowPitch + button` tall.
+    public let rows = Metric(4, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026a9ff0 and 0x1026ab75c: the expanded frame is 256 = 4 x 56 + 32; seven recent items in Arc listed the newest four"))
+    /// A new or finished item becomes the button's badge only when it is younger than this.
+    public let badgeFreshness = Metric(300.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x10269fb4c: HomeBadgingItemsState compares the item's age with 300 s before it shows it"))
+    /// The pointer must rest on the button this long before the flyout opens.
+    public let openDwell = Metric(0.3, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026b5fe8: the button and flyout regions each wait 0.15 s; on Arc a 0.28 s rest never opened it, 0.32 s did, and it showed 0.29 to 0.30 s after the pointer arrived"))
+    /// Resting on the strip right of the button (the Space dots) this long closes an open flyout.
+    public let dockCollapse = Metric(0.5, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026b5fa4: HomeDockRegion waits 0.5 s; on Arc the flyout closed 0.6 s after the pointer moved onto the dots"))
+    /// The hover area over the open flyout: the sidebar's width, this tall from the button's bottom.
+    public let regionHeight = Metric(256.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026ab75c, 0x1026b64b4: the flyout region is the whole expanded frame; on Arc the flyout stayed open at y 600 and closed at y 560 with the button's bottom at 836"))
+    /// The button's own hover square.
+    public let buttonRegion = Metric(32.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026b54c0: HomeButtonRegion is 32 x 32 at the frame's corner"))
+    public let rowPitch = Metric(56.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026aa004: the flyout is n x 56 + 32 tall; rows on Arc sit 56 apart"))
+    public let rowHeight = Metric(48.0, .anatomy("docs/arc-anatomy/library-flyout.md: a hovered row's fill spans y 755 to 803 on Arc"))
+    /// Between the newest row's fill and the button's top.
+    public let rowBottomGap = Metric(1.0, .anatomy("docs/arc-anatomy/library-flyout.md: the newest row's fill ends at y 803, the button starts at 804"))
+    public let rowLeading = Metric(4.0, .anatomy("docs/arc-anatomy/library-flyout.md: the fill starts 4 pt into the 228 pt sidebar (x 324)"))
+    /// A row is the sidebar's width less this.
+    public let rowWidthInset = Metric(16.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026afaa0: a cell is min(width, 1000) - 16 wide; Arc's fill spans x 324 to 536"))
+    public let rowRadius = Metric(12.0, .anatomy("docs/arc-anatomy/library-flyout.md: the fill's corner follows a 12 pt circle (x 331, 329.5, 328, 327, 326.5 at 1 to 5 pt below its top)"))
+    public let iconSize = Metric(40.0, .anatomy("docs/arc-anatomy/library-flyout.md: a document icon's page spans 29 x 37.5 pt, the page of a 40 pt Finder icon; centred 24 pt into the row"))
+    public let iconLeading = Metric(4.0, .anatomy("docs/arc-anatomy/library-flyout.md: the icon's 40 pt box starts at x 328, 4 pt into the row"))
+    public let textLeading = Metric(57.0, .anatomy("docs/arc-anatomy/library-flyout.md: the title and the subtitle start at x 381, 57 pt into the row"))
+    public let titleFont = Metric(14.0, .anatomy("docs/arc-anatomy/library-flyout.md: report.pdf, photo.png and sunset.png read 64.0, 64.5 and 70.5 pt wide, SF 14 regular"))
+    public let subtitleFont = Metric(12.0, .anatomy("docs/arc-anatomy/library-flyout.md: 20 seconds ago, 14 seconds ago and 9 seconds ago read 88.5, 87.5 and 82 pt wide, SF 12 regular"))
+    /// From the row's top to the title's and the subtitle's baselines.
+    public let titleBaseline = Metric(21.8, .anatomy("docs/arc-anatomy/library-flyout.md: in the row at y 587 the title's ascenders start at 598.5 (SF 14's are 10.3 tall)"))
+    public let subtitleBaseline = Metric(36.5, .anatomy("docs/arc-anatomy/library-flyout.md: the subtitle's digits start at 615 (SF 12's are 8.5 tall)"))
+    /// The title and subtitle colours: label and secondary label black (white on a dark theme).
+    public let titleInk = Metric(0.85, .anatomy("docs/arc-anatomy/library-flyout.md: the title's darkest pixels read #262728 on #F1F8FA"))
+    public let subtitleInk = Metric(0.5, .anatomy("docs/arc-anatomy/library-flyout.md: the subtitle's darkest pixels read #787B7D on #F1F8FA"))
+    public let subtitleInkDark = Metric(0.55, .guess("secondaryLabelColor's white in a dark appearance; no dark Space exists in the user's Arc"))
+    /// A running download's ring in its row, and the × that cancels it.
+    public let rowRing = Metric(24.0, .anatomy("docs/arc-anatomy/library-flyout.md: the ring of big-download.bin spans x 336 to 360 on Arc"))
+    public let cancelGlyph = Metric(11.0, .anatomy("docs/arc-anatomy/library-flyout.md: the × beside a running download is 11 pt across, centred 18 pt before the row's right end"))
+    public let cancelTrailing = Metric(18.0, .anatomy("docs/arc-anatomy/library-flyout.md: the × beside a running download is centred at x 518 in the row ending at 536"))
+    /// The backdrop behind the rows: the sidebar's colour, opaque at the top row, fading out above it. Pairs of
+    /// (distance above the top row, opacity), measured from how much of the rows above still shows.
+    public let backdropFade = Metric([140.0, 0.0, 116.0, 0.2, 86.0, 0.36, 50.0, 0.69, 32.0, 0.83, 26.0, 0.89, 0.0, 1.0],
+                                     .anatomy("docs/arc-anatomy/library-flyout.md: with four rows (top row at y 580) the selected tab above shows 100, 80, 64, 31, 17 and 11 percent of its rest contrast at y 440, 464, 494, 530, 548 and 554"))
+    public let fadeIn = Metric(0.1, .anatomy("docs/arc-anatomy/library-flyout.md: the rows go from nothing to 60, 94 and 100 percent in three 1/60 s frames"))
+    public let fadeOut = Metric(0.06, .anatomy("docs/arc-anatomy/library-flyout.md: the rows go to 30, 5 and 0 percent in three 1/60 s frames"))
+    /// A running download's badge: a disc over the button's top-right corner.
+    public let progressBadge = Metric(20.0, .anatomy("docs/arc-anatomy/library-flyout.md: the disc spans x 344 to 364 and y 799 to 819 over the button centred at 344, 820"))
+    public let badgeCenter = Metric([10.0, -11.0], .anatomy("docs/arc-anatomy/library-flyout.md: the disc's centre sits 10 pt right of and 11 pt above the button's centre; a file badge's (a 32 pt icon) 10 right and 10 above"))
+    public let fileBadge = Metric(32.0, .anatomy("docs/arc-anatomy/library-flyout.md: notes.txt's page spans 22 x 30 pt over the button, the page of a 32 pt icon"))
+    public let progressRingWidth = Metric(2.0, .anatomy("docs/arc-anatomy/library-flyout.md: the badge's ring is 2 pt wide in its 20 pt disc"))
+    /// The download blue (`DownloadProgressBarBackground` is the track), sampled on Arc.
+    public let progressBlue = Metric("#1828F8", .anatomy("docs/arc-anatomy/library-flyout.md: the ring and arrow read #1828F8, the disc #E8E8F8, the track #B8C0F8"))
+    public let progressDisc = Metric("#E8E8F8", .anatomy("docs/arc-anatomy/library-flyout.md: the badge disc's fill"))
+    public let progressTrack = Metric("#B8C0F8", .anatomy("docs/arc-anatomy/library-flyout.md: the ring's unfilled part"))
+    /// A new badge springs in (`interpolatingSpring(mass: 1, stiffness: 500, damping: 25, initialVelocity: 10)`) from
+    /// this scale and height above, while the one it replaces fades in `badgeOut`.
+    public let badgeSpring = Metric([1.0, 500.0, 25.0, 10.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026b0b30: Animation.interpolatingSpring(mass:stiffness:damping:initialVelocity:)"))
+    public let badgeEnterScale = Metric(1.5, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026b1510: the badge's insertion scales from 1.5"))
+    public let badgeEnterLift = Metric(16.0, .guess("height the new badge drops from; Arc's transition offsets -80 (bin:0x1026b1528) but the video shows the icon entering just above the button"))
+    public let badgeOut = Metric(0.14, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026ada9c: Animation.linear(duration: 0.14)"))
+    /// The preview a row's click opens (Arc: `ItemPreviewPresenter`, measured on p15 and p16 of docs/arc-anatomy/library-flyout.md).
+    public let previewDim = Metric(0.7, .anatomy("docs/arc-anatomy/library-flyout.md: behind the card the page's white reads #4C4C4C"))
+    public let previewCardWhite = Metric(0.86, .guess("the card behind Quick Look's own view; Arc's reads #DCDCDC to #8A8A8A from a radial shade we do not draw"))
+    /// The card's inset from the window: these fractions of its width and height.
+    public let previewInsets = Metric([0.12, 0.133], .anatomy("docs/arc-anatomy/library-flyout.md: in the 1280 x 776 window the card spans x 153 to 1127 and y 103 to 674, for an image and for a PDF alike"))
+    public let previewRadius = Metric(12.0, .guess("the card's corner; Arc's reads about 12 at 2x"))
+    public let previewToolbar = Metric(46.0, .anatomy("docs/arc-anatomy/library-flyout.md: the toolbar spans y 173 to 219 on the screen"))
+    public let previewPadding = Metric(16.0, .anatomy("docs/arc-anatomy/library-flyout.md: the 320 x 200 image is fitted 15 below the toolbar and 17 above the card's bottom"))
+    public let previewGlyph = Metric(14.0, .guess("× ‹ › … symbol size in the toolbar"))
+    public let previewButton = Metric(28.0, .guess("hit size of the toolbar's glyph buttons"))
+    /// Centres of ×, ‹ and ›, then where the name starts, from the card's left edge.
+    public let previewButtons = Metric([25.0, 61.0, 93.0, 113.0], .anatomy("docs/arc-anatomy/library-flyout.md: × at x 178, ‹ at 214, › at 246 and the name from 266 in the window, the card at 153"))
+    public let previewNameGap = Metric(8.0, .anatomy("docs/arc-anatomy/library-flyout.md: '2 minutes ago' starts 8 pt after 'photo.png'"))
+    public let previewOpenTrailing = Metric(9.0, .anatomy("docs/arc-anatomy/library-flyout.md: 'Open in Preview ↗' spans x 972 to 1118, 9 before the card's right edge"))
+    public let previewOpenHeight = Metric(30.0, .anatomy("docs/arc-anatomy/library-flyout.md: the Open button spans y 111 to 141"))
+    public let previewOpenPadding = Metric(13.0, .anatomy("docs/arc-anatomy/library-flyout.md: the button is 146 wide around a 120 pt label"))
+    public let previewOpenRadius = Metric(8.0, .guess("the Open button's corner"))
+    public let previewMoreGap = Metric(22.0, .anatomy("docs/arc-anatomy/library-flyout.md: the … is centred 22 pt left of the Open button"))
+}
+
 public struct PersistenceMetrics: MetricGroup {
     public let saveDebounce = Metric(0.4, .guess("trailing debounce for state.json writes"))
     public let sweepInterval = Metric(60.0, .guess("real-time interval of the auto-archive sweep; Arc's comes from settings at run time"))
@@ -519,7 +600,7 @@ public struct KeyMetrics: MetricGroup {
 }
 
 public struct FindMetrics: MetricGroup {
-    private static let capture = "verify/visual-pairs/run-20261103/REPORT.md, P18-a/b/d Arc captures measured at 2x"
+    private static let capture = "7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P18-a/b/d Arc captures measured at 2x"
     /// The Cmd+F bar floats at the card's top-right corner and keeps this width however wide the card is.
     public let width = Metric(300.0, .anatomy(capture))
     public let inset = Metric(10.0, .anatomy(capture + ": bar to the card's top and right edges"))
@@ -566,7 +647,7 @@ public struct FindMetrics: MetricGroup {
 /// Arc's site control center (ARC_SiteControlCenter): an NSPopover under the URL pill's site icon. The popover
 /// window is 262 x 227 pt; its body is 237 x 202 pt.
 public struct SiteControlsMetrics: MetricGroup {
-    private static let capture = "verify/visual-pairs/run-20261103/REPORT.md, P36-a Arc capture measured at 2x"
+    private static let capture = "7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P36-a Arc capture measured at 2x"
     public let width = Metric(237.0, .anatomy(capture + ": popover body"))
     public let inset = Metric(10.5, .anatomy(capture + ": buttons to the body's left and right edges"))
     public let top = Metric(9.5, .anatomy(capture + ": the body's edge at y 182 px, the buttons start at 201 px"))
@@ -588,8 +669,8 @@ public struct SiteControlsMetrics: MetricGroup {
     public let sectionFont = Metric(14.0, .anatomy(capture + ": section title cap height 10 pt, semibold"))
     public let rowGap = Metric(13.0, .anatomy(capture + ": the Developer Mode circle is centred at y 520.5 px"))
     public let rowIcon = Metric(32.0, .anatomy(capture + ": Developer Mode circle"))
-    public let rowSpacing = Metric(11.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P36-b Arc capture: the two circles start 86 px apart"))
-    public let rowTitleWidth = Metric(168.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P36-b Arc capture: 'Automatic Picture-In-P…' ends at x 600 px, its title starts at 267 px"))
+    public let rowSpacing = Metric(11.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P36-b Arc capture: the two circles start 86 px apart"))
+    public let rowTitleWidth = Metric(168.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P36-b Arc capture: 'Automatic Picture-In-P…' ends at x 600 px, its title starts at 267 px"))
     public let rowGlyph = Metric(14.0, .anatomy(capture + ": hammer glyph"))
     public let rowText = Metric(51.0, .anatomy(capture + ": Developer Mode title starts"))
     public let rowTitleBaseline = Metric(12.75, .anatomy(capture + ": Developer Mode's glyphs span y 495 to 520 px, the circle's centre 520.5 px"))
@@ -695,30 +776,30 @@ public struct AIMetrics: MetricGroup {
 
 /// Arc's Boost panel, measured on this run's 2x shots (P37-a/b/c/d-arc-editor.png).
 public struct BoostPanelMetrics: MetricGroup {
-    public let size = Metric(CGSize(width: 183, height: 588), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: the panel window, 366 x 1176 px"))
-    public let codeWidth = Metric(480.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: the Code page widens the panel to 960 px"))
-    public let cornerRadius = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: transparent panel corners"))
-    public let headerHeight = Metric(40.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: header with its hairline at y 79 px"))
-    public let tileHeight = Metric(38.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: tiles 76 px tall"))
-    public let tileRadius = Metric(10.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: tile corners"))
+    public let size = Metric(CGSize(width: 183, height: 588), .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: the panel window, 366 x 1176 px"))
+    public let codeWidth = Metric(480.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: the Code page widens the panel to 960 px"))
+    public let cornerRadius = Metric(10.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: transparent panel corners"))
+    public let headerHeight = Metric(40.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: header with its hairline at y 79 px"))
+    public let tileHeight = Metric(38.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: tiles 76 px tall"))
+    public let tileRadius = Metric(10.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: tile corners"))
     public let settingsRadius = Metric(10.0, .guess("My Boost settings card: matches the tiles; Arc's menu was not captured"))
-    public let zapHintHeight = Metric(55.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: P37-c2 Zap strip, hairline at 1416 px to the card bottom at 1526 px"))
-    public let zapOutline = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: P37-c2 the page card's #575757 outline while Zap is on, 6 px"))
+    public let zapHintHeight = Metric(55.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: P37-c2 Zap strip, hairline at 1416 px to the card bottom at 1526 px"))
+    public let zapOutline = Metric(3.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P37 Boost editor shots: P37-c2 the page card's #575757 outline while Zap is on, 6 px"))
 }
 
 /// Arc's capture mode, measured on this run's 2x shots (P33-a/b/c/d-arc.png).
 public struct CaptureMetrics: MetricGroup {
     /// The nominal alphas, calibrated on the window: at 0.224 Brk's mask read white as #CDCDCD (Arc #C6C6C6), at 0.55
     /// its fade read #2A2A2A text as #A6A6A6 (Arc's #1A1A1A reads #949494), so both are set by that ratio.
-    public let pageDim = Metric(0.256, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-a: white page under the mask reads #C6C6C6"))
-    public let sidebarFade = Metric(0.507, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33-a: sidebar text #1A1A1A reads #949494 on an unchanged background"))
-    public let hintCard = Metric(CGSize(width: 355, height: 66), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card, 710 x 132 px"))
-    public let hintCardRadius = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card corners"))
-    public let hintCardBottom = Metric(35.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card ends 70 px above the page bottom"))
-    public let lessonHeight = Metric(46.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a top-right strip, 92 px"))
-    public let lessonRadius = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a top-right strip corners"))
-    public let menuCard = Metric(CGSize(width: 273, height: 354), .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card, 546 x 708 px"))
-    public let menuRadius = Metric(9.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card corners"))
-    public let menuGap = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card starts 6 px right of the selection"))
-    public let menuRowPitch = Metric(40.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c rows 80 px apart"))
+    public let pageDim = Metric(0.256, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33-a: white page under the mask reads #C6C6C6"))
+    public let sidebarFade = Metric(0.507, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33-a: sidebar text #1A1A1A reads #949494 on an unchanged background"))
+    public let hintCard = Metric(CGSize(width: 355, height: 66), .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card, 710 x 132 px"))
+    public let hintCardRadius = Metric(14.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card corners"))
+    public let hintCardBottom = Metric(35.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a bottom card ends 70 px above the page bottom"))
+    public let lessonHeight = Metric(46.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a top-right strip, 92 px"))
+    public let lessonRadius = Metric(12.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-a top-right strip corners"))
+    public let menuCard = Metric(CGSize(width: 273, height: 354), .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card, 546 x 708 px"))
+    public let menuRadius = Metric(9.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card corners"))
+    public let menuGap = Metric(3.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card starts 6 px right of the selection"))
+    public let menuRowPitch = Metric(40.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c rows 80 px apart"))
 }

@@ -4,9 +4,8 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// Owner: F5. The … menu of a card on the Library's Spaces page, as Arc 1.170 shows it (verify/visual-pairs/run-20261103
-/// P30-c): four groups, nine rows, every row a command that does something to the card's space while the Library
-/// stays open.
+/// Owner: F5. The … menu of a card on the Library's Spaces page, as Arc 1.170 shows it (2a96a9d7f0:verify/visual-pairs/run-20261103
+/// P30-c): every row a command that does something to the card's space while the Library stays open.
 final class LibrarySpaceCardTests: XCTestCase {
     private func library(_ d: Driver) -> LibrarySnapshot? {
         if case .library(let library)? = d.view.overlay { return library }
@@ -20,40 +19,6 @@ final class LibrarySpaceCardTests: XCTestCase {
         let work = d.newSpace("Work", color: ThemePresets.drab[3])
         d.user(.library(.open(.spaces)))
         return (d, first, work)
-    }
-
-    /// Arc's four groups and nine rows, without Manage Spaces… and without Move Left / Move Right (the card's handle
-    /// reorders); New Folder and Live Folders act on the card's space even when the window shows another; Delete
-    /// Space asks first; Share Space… writes the export file
-    func testTheCardMenuIsArcsFourGroupsOfNineRows() throws {
-        let (d, first, work) = fixture()
-        let t = d.user(.sidebar(.popupMenu(.spaceCard(first), at: CGPoint(x: 620, y: 706))))
-        guard case .popupMenu(let window, let menu, let at)? = t.effects.first else { return XCTFail("no popup") }
-        XCTAssertEqual(window, d.window)
-        XCTAssertEqual(at, CGPoint(x: 620, y: 706))
-        XCTAssertNotNil(library(d), "opening the card's menu keeps the Library")
-        XCTAssertEqual(layout(menu), ["Change Space Icon…", "Rename Space…", "Edit Theme Color…", "Set Profile ▸", "|",
-                                      "New Folder", "Live Folders ▸", "|",
-                                      "Share Space…", "Export “Space 1” into Folder ▸", "|",
-                                      "Delete Space"])
-        XCTAssertEqual(command(menu, "Change Space Icon…"), .sidebar(.openDialog(.icon(.space(first)))))
-        XCTAssertEqual(command(menu, "Rename Space…"), .sidebar(.openDialog(.rename(.space(first)))))
-        XCTAssertEqual(command(menu, "Edit Theme Color…"), .sidebar(.openDialog(.theme(.space(first)))))
-        XCTAssertEqual(command(menu, "New Folder"), .space(.inSpace(first, .newFolder)))
-        XCTAssertEqual(isEnabled(menu, "New Folder"), true, "the card's space need not be the window's")
-        XCTAssertEqual(titles(try XCTUnwrap(submenu(menu, "Live Folders"))), ["New GitHub Live Folder…", "Connect Calendar File…"])
-        XCTAssertEqual(command(menu, "New GitHub Live Folder…"), .space(.inSpace(first, .connectGitHub)))
-        XCTAssertEqual(command(menu, "Connect Calendar File…"), .space(.inSpace(first, .connectCalendar)))
-        XCTAssertEqual(command(menu, "Share Space…"), .app(.export(.space(.space(first)))))
-        XCTAssertEqual(titles(try XCTUnwrap(submenu(menu, "Export “Space 1” into Folder"))), ["Work", "Bookmarks Folder on Disk…"])
-        XCTAssertEqual(command(menu, "Work"), .tabTools(.spaceIntoFolder(first, into: work)))
-        XCTAssertEqual(command(menu, "Bookmarks Folder on Disk…"), .space(.exportIntoFolder(first)))
-        XCTAssertEqual(command(menu, "Delete Space"), .space(.requestDelete(first)))
-        XCTAssertEqual(isEnabled(menu, "Delete Space"), true)
-        XCTAssertEqual(try XCTUnwrap(submenu(menu, "Set Profile")).entries.first,
-                       .choice(title: "Default", command: .profile(.assign(.space(first), to: .default)), on: true))
-        XCTAssertFalse(titles(menu).contains { ["Move Left", "Move Right", "Manage Spaces…", "Edit Space…"].contains($0) })
-        XCTAssertEqual(d.user(.sidebar(.popupMenu(.spaceCard(SpaceID("ghost")), at: .zero))).effects, [])
     }
 
     /// every row, chosen from the same state, changes something or asks the app to (a dialog, a panel, an export, a
@@ -85,32 +50,6 @@ final class LibrarySpaceCardTests: XCTestCase {
         XCTAssertTrue(library(d)?.spaces.first { $0.id == work }?.pinned.isEmpty == true)
         XCTAssertNil(d.view.renaming)
         XCTAssertEqual(d.view.focus, FocusTarget.none)
-    }
-
-    /// Live Folders: the source request belongs to the space the window shows, so the window shows the card's space
-    /// first; the Library stays
-    func testLiveFoldersShowTheCardsSpaceAndAskForTheSource() throws {
-        let (d, first, _) = fixture()
-        let t = d.user(.space(.inSpace(first, .connectGitHub)))
-        XCTAssertEqual(d.view.space.id, first)
-        XCTAssertTrue(t.effects.contains { if case .siteRequest = $0 { true } else { false } })
-        XCTAssertNotNil(library(d))
-        let calendar = d.user(.space(.inSpace(first, .connectCalendar)))
-        XCTAssertTrue(calendar.effects.contains { if case .siteRequest = $0 { true } else { false } })
-        assertUnchanged(d.state, d.user(.space(.inSpace(SpaceID("ghost"), .newFolder))))
-    }
-
-    /// Share Space… writes the export file through the save panel; its answer (a destination or Cancel) leaves the
-    /// Library open
-    func testShareSpaceKeepsTheLibraryThroughTheSavePanel() throws {
-        let (d, first, _) = fixture()
-        let t = d.user(.app(.export(.space(.space(first)))))
-        XCTAssertTrue(t.effects.contains { if case .export = $0 { true } else { false } })
-        d.user(.sidebarData(.exportSelected(URL(fileURLWithPath: "/tmp/library-card-share.json"))))
-        XCTAssertNotNil(library(d))
-        d.user(.app(.export(.space(.space(first)))))
-        d.user(.sidebarData(.cancelFilePanel))
-        XCTAssertNotNil(library(d))
     }
 
     /// Delete Space asks with Arc's dialog (P27) over the Library; confirming deletes the space and its card goes

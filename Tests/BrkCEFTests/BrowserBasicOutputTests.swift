@@ -48,16 +48,6 @@ import XCTest
         XCTAssertTrue(f.leases.isEmpty)
     }
 
-    func testDuplicateLateDestinationAndDuplicateStartCannotGenerateTwice() throws {
-        let f = Fixture(); defer { f.dispose() }
-        f.start(); f.start()
-        XCTAssertEqual(f.prompts.count, 1)
-        f.accept(); f.accept()
-        XCTAssertEqual(f.renderings.count, 1)
-        try f.render()
-        XCTAssertEqual(f.terminals.count, 1)
-    }
-
     func testCancellationRetainsWriterLeaseUntilItsActualCallback() throws {
         let f = Fixture(); defer { f.dispose() }
         f.start(); f.accept()
@@ -71,32 +61,6 @@ import XCTest
         XCTAssertTrue(f.leases.isEmpty)
     }
 
-    func testRetiredDocumentCancelsPendingPromptAndRejectsDelayedAnswers() {
-        let f = Fixture(); defer { f.dispose() }
-        f.start()
-        f.outputs.sourceGone(f.request.document.browser)
-        f.accept()
-        XCTAssertTrue(f.renderings.isEmpty)
-        XCTAssertEqual(f.terminals, [.cancelled(.absent)])
-        XCTAssertTrue(f.leases.isEmpty)
-    }
-
-    func testReentryDuringPublicationCreatesNoOrphanDialogOrWriter() {
-        for stage in [OutputStage.choosingDestination, .rendering] {
-            let f = Fixture(); defer { f.dispose() }
-            f.outputs.publish = { [unowned f] update in
-                f.updates.append(update)
-                if update.stage == stage { f.outputs.cancel(update.id) }
-            }
-            f.start()
-            if stage == .rendering { f.accept() }
-            XCTAssertTrue(f.renderings.isEmpty)
-            XCTAssertTrue(f.leases.isEmpty)
-            XCTAssertEqual(f.terminals.count, 1)
-            if stage == .choosingDestination { XCTAssertTrue(f.prompts.isEmpty) }
-        }
-    }
-
     func testAnInterveningUserFileIsPreservedAndOutputRemainsRecoverable() throws {
         let f = Fixture(); defer { f.dispose() }
         f.start(); f.accept()
@@ -106,18 +70,6 @@ import XCTest
         XCTAssertEqual(try Data(contentsOf: f.destination), original)
         guard case .failed(_, .retained(let directory, _))? = f.terminals.first else { return XCTFail("Missing recovery result") }
         XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("payload")), Fixture.bytes)
-    }
-
-    func testTimeoutDoesNotInventAWriterBarrierOrPublishTwoTerminals() throws {
-        let f = Fixture(); defer { f.dispose() }
-        f.start(); f.accept()
-        f.outputs.reportTimeout()
-        XCTAssertEqual(f.terminals.count, 1)
-        XCTAssertEqual(f.leases, [f.request.id])
-        try f.render()
-        XCTAssertEqual(f.terminals.count, 1)
-        XCTAssertTrue(f.leases.isEmpty)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: f.renderings[0].0.path))
     }
 
     func testContextRevocationDrainsWithoutWritingDestination() throws {

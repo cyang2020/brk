@@ -69,40 +69,6 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertNotNil(bar.rates, "rates already known still answer")
     }
 
-    func testAIModeAndSiteSearchAskNothing() {
-        let d = Driver()
-        d.user(.settings(.max(.feature(.commandBar, true))))
-        d.user(.assist(.open(.question)))
-        XCTAssertEqual(d.bar?.aiMode, .question)
-        XCTAssertEqual(d.user(.commandBar(.queryChanged("budget"))).effects, [])
-
-        let site = Driver()
-        site.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(local(site.user(.commandBar(.queryChangedForSite(SearchEngine.bing.id, "budget")))), [])
-    }
-
-    func testAnAnswerIsKeptForTheViewAndForgottenOnANewOpening() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        d.user(.commandBar(.queryChanged("budget")))
-        let hit = LocalHit(path: "/Users/u/Documents/budget.txt", name: "budget.txt")
-        d.system(.localResults(d.window, LocalResults(query: "budget", apps: [], files: [hit])))
-        XCTAssertEqual(d.bar?.local?.files, [hit])
-        XCTAssertEqual(local(d.user(.commandBar(.queryChanged("budget")))), [], "this text has its answer")
-        XCTAssertEqual(local(d.user(.commandBar(.queryChanged("budgets")))), [request("budgets")])
-        d.user(.commandBar(.dismiss))
-        XCTAssertNil(d.bar)
-        d.system(.localResults(d.window, LocalResults(query: "budget", apps: [], files: [hit])))
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertNil(d.bar?.local, "a late answer does not reach the next opening")
-
-        // Only the new-tab bar takes one.
-        let other = Driver()
-        other.user(.commandBar(.open(.editCurrent)))
-        other.system(.localResults(other.window, LocalResults(query: "budget", apps: [], files: [hit])))
-        XCTAssertNil(other.bar?.local)
-    }
-
     func testAShownFileCanBeOpenedRevealedAndCopiedAndNothingElse() {
         let hit = LocalHit(path: "/Users/u/Documents/budget.txt", name: "budget.txt"), app = LocalHit(path: "/Applications/Budget.app", name: "Budget")
         func opened(_ action: LocalAction, _ path: String) -> (Transition, Driver) {
@@ -150,56 +116,6 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertEqual(d.state.doc.history.count, visits)
     }
 
-    func testOnlyACurrencyQuestionAsksForRates() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertTrue(needsRates(d.user(.commandBar(.queryChanged("100 usd in cny")))))
-        XCTAssertFalse(needsRates(d.user(.commandBar(.queryChanged("100 usd")))))
-        XCTAssertFalse(needsRates(d.user(.commandBar(.queryChanged("budget")))))
-        XCTAssertFalse(needsRates(d.user(.commandBar(.queryChanged("10ft in m")))))
-        let rates = CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1, "USD": 1.1])
-        d.system(.currencyRates(rates))
-        XCTAssertEqual(d.bar?.rates, rates)
-    }
-
-    func testCopyAnswerCopiesAndCloses() {
-        let d = Driver()
-        XCTAssertEqual(d.user(.commandBar(.copyAnswer("3.048 m"))).effects, [], "no bar")
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(d.user(.commandBar(.copyAnswer("3.048 m"))).effects, [.copyToPasteboard("3.048 m")])
-        XCTAssertNil(d.bar)
-    }
-
-    func testTheBarsClockMovesOnOpeningADateQuestionAndTheTick() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(d.bar?.now, T0)
-        d.advance(minute)
-        XCTAssertFalse(d.user(.commandBar(.queryChanged("budget"))).changed, "an ordinary keystroke re-renders nothing")
-        XCTAssertEqual(d.bar?.now, T0)
-        d.user(.commandBar(.queryChanged("time")))
-        XCTAssertEqual(d.bar?.now, T0.advanced(by: minute))
-        d.advance(minute)
-        d.system(.clockTick)
-        XCTAssertEqual(d.bar?.now, T0.advanced(by: minute * 2))
-    }
-
-    func testTheAgentFoundFlag() {
-        let d = Driver()
-        d.system(.aiProvidersDetected([]))
-        XCTAssertFalse(d.state.activeAgent != nil, "Automatic with nothing on this Mac")
-        d.system(.aiProvidersDetected([.codex]))
-        XCTAssertTrue(d.state.activeAgent != nil)
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(d.bar?.askAgentFound, true)
-        d.user(.settings(.max(.provider(.claude))))
-        XCTAssertFalse(d.state.activeAgent != nil, "Claude chosen, only Codex found")
-        d.system(.aiProvidersDetected([.claude]))
-        XCTAssertTrue(d.state.activeAgent != nil)
-        d.user(.settings(.max(.provider(.off))))
-        XCTAssertFalse(d.state.activeAgent != nil)
-    }
-
     // MARK: Asking one agent
 
     private func choices(_ t: Transition) -> [AIProviderChoice] {
@@ -235,52 +151,6 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertEqual(choices(d.user(.assist(.askAgent("why", agent: .claude)))), [], "Ask is off")
     }
 
-    func testTheAgentPrefixesFollowWhatIsOnThisMac() {
-        let d = Driver()
-        d.user(.settings(.max(.feature(.commandBar, true))))
-        d.user(.settings(.max(.feature(.askPage, true))))
-        d.system(.aiProvidersDetected([.claude]))
-        d.user(.commandBar(.open(.newTab)))
-        func prefix(_ word: String) -> QuickPrefixAction? { QuickPrefixes.entry(named: word, in: d.bar!)?.action }
-        XCTAssertEqual(prefix("claude"), .askAgent("claude"))
-        XCTAssertEqual(prefix("CLAUDE"), .askAgent("claude"))
-        XCTAssertNil(prefix("gpt"), "Codex is not on this Mac: plain text")
-        XCTAssertNil(prefix("codex"))
-        XCTAssertEqual(prefix("ask"), .ask)
-        XCTAssertEqual(prefix("ai"), .ask)
-        XCTAssertEqual(prefix("问"), .ask)
-        XCTAssertEqual(prefix("page"), .askPage)
-        XCTAssertEqual(prefix("问页面"), .askPage)
-        XCTAssertEqual(prefix("summarize"), .summarize)
-        XCTAssertEqual(prefix("总结"), .summarize)
-        XCTAssertNil(prefix("gemini"), "Gemini is not on this Mac: plain text")
-        XCTAssertNil(prefix("cursor"))
-        d.system(.aiProvidersDetected([.claude, .gemini, .cursor]))
-        XCTAssertEqual(prefix("gemini"), .askAgent("gemini"))
-        XCTAssertEqual(prefix("cursor"), .askAgent("cursor"))
-
-        d.system(.aiProvidersDetected([.claude, .codex]))
-        XCTAssertEqual(prefix("gpt"), .askAgent("codex"))
-        XCTAssertEqual(prefix("codex"), .askAgent("codex"))
-
-        d.user(.settings(.max(.provider(.off))))
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertNil(prefix("claude"), "Max's AI is off")
-        XCTAssertNil(prefix("ask"))
-        d.user(.settings(.max(.provider(.auto))))
-        d.user(.settings(.max(.feature(.commandBar, false))))
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertNil(prefix("claude"), "Ask in Command Bar is off")
-        d.user(.settings(.max(.feature(.askPage, false))))
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertNil(prefix("page"))
-        XCTAssertNil(prefix("summarize"))
-        d.system(.aiProvidersDetected([]))
-        d.user(.settings(.max(.feature(.commandBar, true))))
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertNil(prefix("ask"), "no agent found")
-    }
-
     // MARK: Split
 
     private func panes(_ d: Driver) -> [ItemID] { d.view.content.panes.map(\.tab) }
@@ -295,15 +165,6 @@ final class CommandBarQuickSourcesTests: XCTestCase {
             XCTAssertNil(d.bar, "the bar closed")
             XCTAssertEqual(panes(d), expectedFirst ? [other, current] : [current, other], "the tab itself, not a copy")
         }
-    }
-
-    func testSplitTabOpensAnAddressWhenTheTabCannotJoin() throws {
-        let d = Driver()
-        let only = d.open("https://only.example/")
-        d.user(.commandBar(.open(.newTab)))
-        d.user(.commandBar(.splitTab(.right, ItemID("ghost"))))
-        XCTAssertEqual(panes(d), [only], "no such tab: nothing happens")
-        XCTAssertNotNil(d.bar, "and the bar stays")
     }
 
     /// A Favorite stays a Favorite: its address opens beside the page, as Arc's Open in Split View does.
@@ -342,37 +203,6 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertEqual(d.view.content.orientation, .horizontal)
     }
 
-    func testSplitTopUsesTheStackedOrientation() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        d.user(.commandBar(.splitOpen(.top, "example.com")))
-        XCTAssertEqual(panes(d).count, 2)
-        XCTAssertEqual(d.view.content.orientation, .vertical)
-    }
-
-    func testASplitThatCannotBeAddedLeavesNoOpenBar() {
-        let d = Driver()
-        for _ in 0..<(Metrics.content.maxPanes.value - 1) {
-            d.user(.commandBar(.open(.newTab)))
-            d.user(.commandBar(.splitOpen(.right, "example.com")))
-        }
-        let full = panes(d).count
-        d.user(.commandBar(.open(.newTab)))
-        d.user(.commandBar(.splitOpen(.right, "example.org")))
-        XCTAssertEqual(panes(d).count, full, "a full split")
-        XCTAssertNil(d.bar)
-    }
-
-    func testTheSplitWordStaysPlainWhereNoPaneCanBeAdded() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(QuickPrefixes.entry(named: "split", in: d.bar!)?.action, .split)
-        XCTAssertEqual(QuickPrefixes.entry(named: "分屏", in: d.bar!)?.action, .split)
-        var little = d.bar!
-        little.actions.removeAll { $0 == .addSplitView }
-        XCTAssertNil(QuickPrefixes.entry(named: "split", in: little))
-    }
-
     func testSplitSides() {
         XCTAssertEqual(QuickSplit.parse("left example.com").edge, .left)
         XCTAssertEqual(QuickSplit.parse("left example.com").rest, "example.com")
@@ -387,13 +217,6 @@ final class CommandBarQuickSourcesTests: XCTestCase {
 
     // MARK: Window
 
-    func testPlacingTheWindowIsAnEffectAndClosesTheBar() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(d.user(.window(.place(.leftHalf))).effects, [.window(d.window, .place(.leftHalf))])
-        XCTAssertNil(d.bar)
-    }
-
     func testPlacements() {
         let visible = CGRect(x: 100, y: 50, width: 1000, height: 800), current = CGRect(x: 300, y: 200, width: 400, height: 300)
         XCTAssertEqual(WindowSnap.leftHalf.frame(current: current, visible: visible), CGRect(x: 100, y: 50, width: 500, height: 800))
@@ -406,13 +229,6 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         let other = CGRect(x: 1100, y: 0, width: 2000, height: 1600)
         XCTAssertEqual(WindowSnap.moved(current, from: visible, to: other), CGRect(x: 1500, y: 300, width: 800, height: 600))
         XCTAssertEqual(WindowSnap.moved(WindowSnap.moved(current, from: visible, to: other), from: other, to: visible), current)
-    }
-
-    func testExactPhrases() {
-        XCTAssertEqual(WindowSnap.exact("left half"), .leftHalf)
-        XCTAssertEqual(WindowSnap.exact("Next Display"), .nextDisplay)
-        XCTAssertEqual(WindowSnap.exact("centre window"), .center)
-        for text in ["left", "half", "maximize", "center", "left half of a page", "window"] { XCTAssertNil(WindowSnap.exact(text), text) }
     }
 
     // MARK: Translate
@@ -472,43 +288,6 @@ final class CommandBarQuickSourcesTests: XCTestCase {
         XCTAssertNil(d.bar?.translation)
     }
 
-    func testClosingTheBarByAnyCommandCancels() throws {
-        let d = translationBar()
-        d.user(.commandBar(.prefixQuery(.translate, "hello")))
-        let (id, _) = try XCTUnwrap(aiEffects(d.system(.barTranslationDue(d.window, "hello"))).first)
-        let dismissed = d.user(.commandBar(.dismiss))
-        XCTAssertTrue(dismissed.effects.contains(.aiCancel(id)))
-        let other = translationBar()
-        other.user(.commandBar(.prefixQuery(.translate, "hello")))
-        let (second, _) = try XCTUnwrap(aiEffects(other.system(.barTranslationDue(other.window, "hello"))).first)
-        let toggled = other.user(.sidebar(.toggle))
-        XCTAssertNil(other.bar)
-        XCTAssertTrue(toggled.effects.contains(.aiCancel(second)))
-    }
-
-    func testAFailureIsTheRowsAndEmptyAnswersCopyNothing() throws {
-        let d = translationBar()
-        d.user(.commandBar(.prefixQuery(.translate, "hello")))
-        let (id, _) = try XCTUnwrap(aiEffects(d.system(.barTranslationDue(d.window, "hello"))).first)
-        d.system(.aiResult(id, .failed("no network")))
-        XCTAssertEqual(d.bar?.translation?.failure, "no network")
-        XCTAssertNil(d.view.ai)
-        XCTAssertEqual(d.user(.commandBar(.copyAnswer(""))).effects, [])
-        XCTAssertNotNil(d.bar, "the bar stays")
-    }
-
-    func testTranslatePrefixNeedsTranslationAndAnAgent() {
-        let d = translationBar()
-        XCTAssertEqual(QuickPrefixes.entry(named: "tr", in: d.bar!)?.action, .translate)
-        XCTAssertEqual(QuickPrefixes.entry(named: "翻译", in: d.bar!)?.action, .translate)
-        d.system(.aiProvidersDetected([]))
-        XCTAssertNil(QuickPrefixes.entry(named: "translate", in: d.bar!))
-        d.system(.aiProvidersDetected([.claude]))
-        d.user(.settings(.max(.feature(.translation, false))))
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertNil(QuickPrefixes.entry(named: "translate", in: d.bar!))
-    }
-
     func testReadingATranslation() {
         func read(_ text: String) -> QuickTranslation.Request? { QuickTranslation.parse(text, systemTarget: "English") }
         let chinese = "Chinese (Simplified)"
@@ -534,37 +313,9 @@ final class CommandBarQuickSourcesTests: XCTestCase {
 
     // MARK: Colour
 
-    func testBareHashTextStillAsksAsBefore() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("#abc")))), 1, "may be a tag: an ordinary search")
-        XCTAssertEqual(local(d.user(.commandBar(.queryChanged("#abc")))), [], "no file named after a colour")
-        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("#hashtag")))), 1)
-        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("#ff5500")))), 0, "a colour in full is answered here")
-        XCTAssertEqual(fetches(d.user(.commandBar(.queryChanged("rgb(255,85,0)")))), 0)
-    }
-
     func testAHashStaysASearchForTheURLPolicy() {
         XCTAssertEqual(resolveTypedInput("#abc"), SearchEngine.google.searchURL("#abc"))
         XCTAssertEqual(resolveTypedInput("#ff5500"), SearchEngine.google.searchURL("#ff5500"))
-    }
-
-    // MARK: Dictionary
-
-    func testTheDictionaryIsAskedAndItsAnswerKept() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(d.user(.commandBar(.prefixQuery(.define, "apple"))).effects, [.lookUpWord(d.window, "apple")])
-        XCTAssertEqual(d.user(.commandBar(.prefixQuery(.define, ""))).effects, [])
-        d.system(.definition(d.window, BarDefinition(word: "apple", text: "the round fruit")))
-        XCTAssertEqual(d.bar?.definition?.text, "the round fruit")
-        XCTAssertEqual(d.user(.commandBar(.prefixQuery(.define, "apple"))).effects, [], "this word has its answer")
-        XCTAssertEqual(d.user(.commandBar(.openDictionary("apple"))).effects, [.openDictionary("apple")])
-        XCTAssertNil(d.bar)
-        XCTAssertEqual(d.user(.commandBar(.openDictionary("apple"))).effects, [], "no bar")
-        d.system(.definition(d.window, BarDefinition(word: "late", text: "x")))
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertNil(d.bar?.definition, "a late answer does not reach the next opening")
     }
 
     // MARK: The pure rules

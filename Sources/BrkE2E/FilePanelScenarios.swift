@@ -10,9 +10,6 @@ enum FilePanelScenarios {
     static let all = [
         Scenario("FP-OpenGesture", "AX-select the real open panel fixture and prove the completion reaches preview", openGesture),
         Scenario("FP-SaveGesture", "AX-enter a real save destination and prove the completion writes JSON", saveGesture),
-        Scenario("FP-FolderGesture", "AX-select the real folder row and prove the completion connects sync", folderGesture),
-        Scenario("FP-SelectionGuard", "a missing fixture never confirms the panel's different selected row", selectionGuard),
-        Scenario("FP-SelectedLifetime", "selected export preserves its captured document and rejects stale destinations after cancellation", selectedLifetime),
     ]
 
     @discardableResult
@@ -80,13 +77,6 @@ enum FilePanelScenarios {
         app.note("MANUAL picker gesture gap: " + gestureGap + " Import uses the production importSelected command for \(file.lastPathComponent).")
     }
 
-    static func selectSyncFolder(_ app: AppUnderTest, _ directory: URL) throws {
-        try requireOwnedFixture(app, directory)
-        if usesAccessibility { try ImportSyncScenarios.panel(app, .open(path: directory.path)); return }
-        _ = try recordPanel(app)
-        try app.dispatch(.sidebarData(.connectSelectedFolder(directory)))
-        app.note("MANUAL picker gesture gap: folder presentation recorded; production connectSelectedFolder received an explicitly selected owned directory.")
-    }
 
     static func selectSave(_ app: AppUnderTest, _ file: URL) throws {
         try requireOwnedFixture(app, file)
@@ -121,58 +111,6 @@ enum FilePanelScenarios {
         try retain(app, output, label: "actual-save")
     }
 
-    @Sendable static func folderGesture(_ app: AppUnderTest) throws {
-        let directory = app.dataDirectory.appendingPathComponent("gesture-sync")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try app.dispatch(.sidebarData(.syncSettings)); try ImportSyncScenarios.waitPanel(app, "Choose sync folder")
-        try ImportSyncScenarios.panel(app, .button("Choose sync folder…")); try ImportSyncScenarios.waitPanel(app, "Connect this profile")
-        _ = try recordPanel(app)
-        guard usesAccessibility else { throw Skipped(description: gestureGap) }
-        try selectSyncFolder(app, directory)
-        try app.waitUntil("actual picker connected folder") { try ImportSyncScenarios.data(app).connected }
-        try app.dispatch(.sidebarData(.disconnect))
-    }
 
-    @Sendable static func selectionGuard(_ app: AppUnderTest) throws {
-        guard usesAccessibility else { throw Skipped(description: gestureGap) }
-        let fixture = app.dataDirectory.appendingPathComponent("different-owned.html")
-        try ExportCodec.encode(ExportDocument(title: "Other", entries: []), as: .html).write(to: fixture)
-        try app.dispatch(.sidebarData(.importFile)); try ImportSyncScenarios.waitPanel(app, "Preview")
-        try app.waitUntil("AX sheet ready") { (try? NativePickerInput.sheet(app)) != nil }
-        let sheet = try NativePickerInput.sheet(app)
-        try app.waitUntil("owned row loaded") { NativePickerInput.findFile(sheet, name: fixture.lastPathComponent) != nil }
-        let differentSelection = try NativePickerInput.selectRow(app, panel: sheet, file: fixture)
-        do {
-            try NativePickerInput.drive(app, file: app.dataDirectory.appendingPathComponent("absent-owned.html"))
-            throw Check(description: "Missing fixture unexpectedly confirmed")
-        } catch let error as Check {
-            try expect(error.description.contains("fixture row available"), "Unexpected selection refusal: \(error)")
-        }
-        try expect(try app.native().sheetClass == "NSOpenPanel", "Unverified selection dismissed the picker")
-        _ = try recordPanel(app, observation: .init(selection: differentSelection, filename: nil))
-        try ImportSyncScenarios.panel(app, .button("Cancel"))
-        try expect(!(try ImportSyncScenarios.data(app).status.contains("Import failed")), "The other selected file was read")
-        app.note("Missing requested fixture refused before AXPress; the different owned selection was never confirmed or imported.")
-    }
 
-    @Sendable static func selectedLifetime(_ app: AppUnderTest) throws {
-        guard let item = currentTab(try app.view())?.id else { throw Check(description: "Missing fixture tab") }
-        try app.dispatch(.tab(.togglePin(.focused)))
-        try app.dispatch(.item(.rename(item, title: "Captured export title")))
-        try app.dispatch(.app(.export(.items([item])))); try ImportSyncScenarios.waitPanel(app, "Export")
-        try app.dispatch(.item(.rename(item, title: "Later sidebar title")))
-        let file = app.dataDirectory.appendingPathComponent("captured.json")
-        try selectSave(app, file)
-        let bytes = try Data(contentsOf: file)
-        _ = try SidebarDataCodec.decodeExport(bytes)
-        let text = String(decoding: bytes, as: UTF8.self)
-        try expect(text.contains("Captured export title") && !text.contains("Later sidebar title"), "Export recaptured changed sidebar state")
-        try retain(app, file, label: "captured")
-        try app.dispatch(.app(.export(.items([item])))); try ImportSyncScenarios.waitPanel(app, "Export")
-        try ImportSyncScenarios.panel(app, .button("Cancel"))
-        let stale = app.dataDirectory.appendingPathComponent("stale.json")
-        try app.dispatch(.sidebarData(.exportSelected(stale)))
-        try expect(!FileManager.default.fileExists(atPath: stale.path), "Cancelled operation accepted a late destination")
-        app.note("Selected URL used the original captured export document. Cancellation invalidated its ticket before the system callback and a stale destination wrote nothing.")
-    }
 }

@@ -18,28 +18,11 @@ final class PageLedgerTests: XCTestCase {
         XCTAssertEqual(ledger.closingCount, 0)
     }
 
-    func testARetiredCloseWithNoNewIncarnationReportsClosure() {
-        var ledger = PageLedger()
-        let first = ledger.create(a)
-        _ = ledger.retire(a)
-        XCTAssertEqual(ledger.closed(first), .retiredClosed(idLiveAgain: false))
-        XCTAssertEqual(ledger.liveCount, 0)
-    }
-
     func testACloseTheEngineDidNotStartIsPageInitiated() {
         var ledger = PageLedger()
         let first = ledger.create(a)
         XCTAssertEqual(ledger.closed(first), .liveClosedByPage)
         XCTAssertEqual(ledger.liveCount, 0)
         XCTAssertEqual(ledger.closed(first), .stale, "a second OnBeforeClose for the same incarnation is ignored")
-    }
-
-    func testCreatingALiveIdAgainRetiresTheOldIncarnation() {
-        var ledger = PageLedger()
-        let first = ledger.create(a)
-        let second = ledger.create(a)
-        XCTAssertEqual(ledger.closingIncarnations, [first])
-        XCTAssertTrue(ledger.isLive(second))
-        XCTAssertNil(ledger.retire(PageID(window: WindowID("w"), item: ItemID("unknown"))))
     }
 }

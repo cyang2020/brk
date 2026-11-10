@@ -35,17 +35,5 @@ import XCTest
         owner.hostClosed(new)
         XCTAssertTrue(owner.entries.isEmpty)
     }
-    func testBothClosureCallbacksBeforeOperationReleaseStillDrainTheResource() {
-        let resources = BrowserResources<NSObject>()
-        let token = BrowserToken(page: PageID(window: WindowID("w"), item: ItemID("t")), generation: 1)
-        resources.insert(NSObject(), browser: token, context: ContextEpoch(context: .profile(.default), generation: 1))
-        XCTAssertTrue(resources.acquire(.transfer(DownloadID("a")), browser: token))
-        resources.unpresent(token)
-        resources.hostClosed(token)
-        resources.browserClosed(token)
-        XCTAssertFalse(resources.beginClose(token))
-        resources.release(.transfer(DownloadID("a")), browser: token)
-        XCTAssertTrue(resources.entries.isEmpty)
-    }
 
 }

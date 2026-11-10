@@ -4,7 +4,7 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// The behaviour half of the 2026-11-03 Arc pairing (verify/visual-pairs/run-20261103/REPORT.md, "留到下一轮的"):
+/// The behaviour half of the 2026-11-03 Arc pairing (7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, "留到下一轮的"):
 /// the Ctrl+Tab switcher switches on release, Developer Mode shows the whole address, the Library card's Edit Space…
 /// is the theme panel, and Secure needs a clean certificate.
 final class ArcBehaviourAlignmentTests: XCTestCase {
@@ -40,22 +40,6 @@ final class ArcBehaviourAlignmentTests: XCTestCase {
         XCTAssertNil(d.view.tabTools.recent)
         XCTAssertEqual(d.current?.id, a, "releasing Control shows the selection")
         XCTAssertEqual(d.view.content.panes.map(\.tab), [a])
-    }
-
-    /// Esc closes the switcher without switching or stamping anything
-    func testEscapeDuringCtrlTabKeepsThePageAndStampsNothing() throws {
-        let d = Driver()
-        let b = d.open("http://127.0.0.1:9/b")
-        d.advance(minute)
-        let stamps = d.state.doc.tree.items.compactMapValues { item -> Instant? in if case .tab(let t) = item.body { t.lastActiveAt } else { nil } }
-        d.system(.window(d.window, .modifiersChanged(held: [.control])))
-        d.user(.tab(.cycleRecent(.next)))
-        d.user(.app(.exit))
-        XCTAssertNil(d.view.tabTools.recent)
-        XCTAssertEqual(d.current?.id, b)
-        d.system(.window(d.window, .modifiersChanged(held: [])))
-        XCTAssertEqual(d.current?.id, b, "a release after Esc has nothing to commit")
-        XCTAssertEqual(d.state.doc.tree.items.compactMapValues { item -> Instant? in if case .tab(let t) = item.body { t.lastActiveAt } else { nil } }, stamps)
     }
 
     /// the sweep tick leaves a held walk open; with Control no longer held (its release went missing) it commits

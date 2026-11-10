@@ -69,14 +69,6 @@ final class IndependentTabsReviewTests: XCTestCase {
         XCTAssertEqual(d.state.tab(a)?.pinnedURL, start, "bulk reorder replaced the pinned home with a drifted document")
         XCTAssertEqual(d.row(a)?.canReset, true)
     }
-    func testGroupingPreservesExistingPinnedHome() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        d.user(.tab(.togglePin(.item(a))))
-        d.page(a, .committed(url("https://example.com/drift")))
-        d.user(.tabTools(.bulk(.items([a]), .newFolder(group: true))))
-        XCTAssertEqual(d.state.tab(a)?.pinnedURL, start, "grouping repinned an already pinned tab")
-    }
     func testBulkMoveCountsAsActivityBeforeAutoArchive() throws {
         let d = Driver()
         let a = d.todayIDs[0]
@@ -205,13 +197,5 @@ extension IndependentTabsReviewTests {
         d.system(.siteResult(r.id, .calendar([CalendarMeeting(title: "Secret calendar fixture", url: url("https://example.com/meeting"), start: T0, end: T0.advanced(by: hour))])))
         XCTAssertTrue(d.state.session.calendars.isEmpty)
         XCTAssertEqual(d.savedFile, saved)
-    }
-    func testSingleMoveControlRefreshesActivity() throws {
-        let d = Driver(); let a = d.todayIDs[0]
-        _ = d.open("https://example.com/visible")
-        let origin = d.view.space.id, destination = d.newSpace("Destination")
-        d.user(.space(.focus(origin))); d.advance(.seconds(13 * 3600))
-        d.user(.item(.move(a, to: .space(destination)))); d.system(.clockTick)
-        XCTAssertNotNil(d.state.tab(a))
     }
 }

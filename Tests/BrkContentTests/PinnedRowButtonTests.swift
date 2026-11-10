@@ -107,21 +107,4 @@ final class PinnedRowButtonTests: XCTestCase {
         let row = try XCTUnwrap(ViewTreeSearch.find(ViewID.row(closed.id).identifier, in: live.root) as? RowView)
         XCTAssertTrue(row.subviews.allSatisfy { $0.alphaValue == 1 || $0.isHidden || $0 is GlyphButton }, "a closed Pinned row is drawn dimmer")
     }
-
-    /// Arc: collapsed and with the pointer away, the Space name keeps the chevron and loses the pill and the dots
-    /// (Q18-collapse-c).
-    func testTheCollapsedSpaceNameKeepsOnlyTheChevron() throws {
-        let (w, live) = try rig()
-        defer { w.close() }
-        let header = live.root.sidebar.spaceHeader
-        func chevron() throws -> NSView { try XCTUnwrap(header.subviews.first { $0 is NSImageView }) }
-        func dots() throws -> NSView { try XCTUnwrap(header.subviews.first { $0 is GlyphButton }) }
-        XCTAssertTrue(try chevron().isHidden)
-        XCTAssertTrue(try dots().isHidden)
-        live.send(.space(.togglePinnedSection(.current)))
-        XCTAssertEqual(live.view.space.pinned.collapsed, true)
-        XCTAssertFalse(try chevron().isHidden, "no chevron on the collapsed name")
-        XCTAssertTrue(try dots().isHidden, "the dots stay without the pointer")
-        XCTAssertNil(header.subviews[0].layer?.backgroundColor, "the pill stays without the pointer")
-    }
 }

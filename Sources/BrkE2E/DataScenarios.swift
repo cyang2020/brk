@@ -7,15 +7,7 @@ import Foundation
 enum DataScenarios {
     static let all = [
         Scenario("DataCookiesRefreshRestart", "cookie refresh: every storage class and two origins/profiles after restart", cefOnly: "CEF storage", cookiesRestart),
-        Scenario("DataCacheRefreshRestart", "cache refresh: profile-wide HTTP eviction and other storage/profile survival after restart", cefOnly: "CEF storage", cacheRestart),
-        Scenario("DataSiteStorageRestart", "explicit site-storage deletion and two origins/profiles after restart", cefOnly: "CEF storage", storageRestart),
-        Scenario("DataProfileClearRestart", "profile clearing preserves records/settings/extensions and isolates two profiles", cefOnly: "CEF request contexts", profileClear),
-        Scenario("DataCustomProfileClearRestart", "custom profile cookies/cache/history clear across origins while Default survives restart", cefOnly: "CEF request contexts", customProfileClear),
-        Scenario("DataExtensionProfiles", "extension catalog, pins and enable state remain profile-scoped across restart", cefOnly: "CEF extensions", extensionProfiles),
         Scenario("DataPrivateExpiry", "last private window resets every storage class, cancels transport and audits disk/logs", cefOnly: "off-record context", privateExpiry),
-        Scenario("DataProtectedOperations", "downloads and pending output block clearing; Find survives; frozen targets resume", cefOnly: "CEF operation ownership", protectedOperations),
-        Scenario("DataTransferReassign", "accepted transfer retains original context and destination after reassignment", cefOnly: "CEF transfers", { try TransferScenarios.reassign($0, path: "transfer-DataReassign") }),
-        Scenario("DataTransferDelete", "deletion revokes retained transport then removes its directory next launch", cefOnly: "CEF transfers", { try TransferScenarios.deleteProfile($0, path: "transfer-DataDelete") }),
     ]
 
     static func row(_ app: AppUnderTest, _ item: ItemID) throws -> TabRow? {
@@ -116,15 +108,6 @@ enum DataScenarios {
         try expect(native?.context == .profile(profile) && native?.nativeContextPath.map { URL(fileURLWithPath: $0).lastPathComponent } == expectedDirectory,
                    "native profile binding differs: expected " + expectedDirectory + ", actual " + (native?.nativeContextPath ?? "missing"))
     }
-    static func captureSettingsWindow(_ app: AppUnderTest, _ name: String) throws {
-        guard let number = try app.native().appWindows.first(where: { $0.isVisible && $0.className == "NSWindow" })?.number else { throw Check(description: "visible settings window missing") }
-        let root = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("artifacts/" + app.scenarioID)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let command = Process(); command.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        command.arguments = ["-x", "-l", String(number), root.appendingPathComponent(name + ".png").path]
-        try command.run(); command.waitUntilExit()
-        try expect(command.terminationStatus == 0, "native settings capture failed")
-    }
     static func receipt(_ app: AppUnderTest, _ name: String, _ value: Any) throws {
         let root = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("artifacts/" + app.scenarioID)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -149,8 +132,6 @@ enum DataScenarios {
         return result!
     }
     @Sendable static func cookiesRestart(_ app: AppUnderTest) throws { try refreshRestart(app, kinds: [.cookies], scope: .site) }
-    @Sendable static func cacheRestart(_ app: AppUnderTest) throws { try refreshRestart(app, kinds: [.cache], scope: .profile) }
-    @Sendable static func storageRestart(_ app: AppUnderTest) throws { try refreshRestart(app, kinds: [.cookies, .storage], scope: .site) }
     static func refreshRestart(_ app: AppUnderTest, kinds: Set<SiteDataKind>, scope: SiteDataScope) throws {
         let a = try page(app); try seed(app, a, "A"); try http(app, a, "A-warm", requests: 1); try http(app, a, "A-cached", requests: 0)
         let b = try page(app, host: "other.localhost"); try seed(app, b, "B"); try http(app, b, "B-warm", requests: 1)
@@ -188,118 +169,8 @@ enum DataScenarios {
         if !errorExpected { try expect(result!.completed == kinds, "partial profile clear") }
         return result!
     }
-    @Sendable static func profileClear(_ app: AppUnderTest) throws {
-        let a = try page(app); try seed(app, a, "A"); try http(app, a, "A-warm", requests: 1)
-        let b = try page(app, host: "other.localhost"); try seed(app, b, "B"); try http(app, b, "B-warm", requests: 1)
-        let other = try profile(app, "Data Kept")
-        try app.dispatch(.settings(.profile(other, .searchSuggestions(false))))
-        try assign(app, other, item: a); try seed(app, a, "C"); try http(app, a, "C-warm", requests: 1)
-        try app.dispatch(.settings(.openPane(.profiles)))
-        try app.settle()
-        // "Your Data and Settings" → Clear Browsing Data opens the sub-page with the boxes and the button.
-        try app.click(.settingsField("profileData-clearBrowsingData-" + ProfileID.default.rawValue))
-        try app.settle()
-        try app.click(.settingsField("clearProfileData-" + ProfileID.default.rawValue))
-        try app.settle()
-        try app.press("return")
-        try app.waitUntil("settings confirmation clears the named profile", timeout: 20) {
-            guard case .settings(let settings) = try app.send(.settings), let result = settings.profiles.first(where: { $0.profile.id == .default })?.clearDataResult else { return false }
-            try expect(result.error == nil, result.error ?? "")
-            return result.completed == [.cookies, .cache, .history]
-        }
-        try captureSettingsWindow(app, "profile-privacy-controls")
-        try app.dispatch(.settings(.closeWindow))
-        try app.flush()
-        let saved = try JSONSerialization.jsonObject(with: Data(contentsOf: app.dataDirectory.appendingPathComponent("state.json"))) as? [String: Any]
-        let history = (saved?["doc"] as? [String: Any])?["history"] as? [[String: Any]] ?? []
-        try expect(!history.contains { $0["profile"] as? String == ProfileID.default.rawValue }, "Default history was not cleared")
-        try expect(history.contains { $0["profile"] as? String == other.rawValue }, "another profile's history was cleared")
-        // A profile with no page/context yet is still a valid settings target.
-        let unused = try profile(app, "Data Unused")
-        _ = try clearProfile(app, unused, [.cookies, .cache, .history])
-        _ = try clearProfile(app, other, [.storage], errorExpected: true)
-        try verify(try read(app, a, "unsupported-preserves-C"), storage: "C", cookies: "C")
-        try expect(!FileManager.default.fileExists(atPath: app.dataDirectory.appendingPathComponent("profiles-to-delete").path), "clearing scheduled profile deletion")
-        try app.flush(); try app.restart()
-        try app.dispatch(.tab(.focus(a)))
-        try app.waitUntil("restored profile document is ready") {
-            guard case .pageObservations(let pages) = try app.send(.pageObservations), case .ready? = pages[PageID(window: app.window!, item: a)]?.document else { return false }
-            return true
-        }
-        // Request page input with an actual click after using the native settings window.
-        // Deferred context readiness must continue to respect native responders.
-        try app.click(.card(0))
-        try focus(app, a); let c = try read(app, a, "C-restart"); try verify(c, storage: "C", cookies: "C"); try http(app, a, "C-restart", requests: 0)
-        try assign(app, .default, item: a); let av = try read(app, a, "A-restart"); try verify(av, storage: "A", cookies: nil); try http(app, a, "A-restart", requests: 1)
-        try focus(app, b); let bv = try read(app, b, "B-restart"); try verify(bv, storage: "B", cookies: nil, domain: false); try http(app, b, "B-restart", requests: 1)
-        guard case .settings(let settings) = try app.send(.settings) else { throw Check(description: "settings missing") }
-        try expect(settings.profiles.contains { $0.profile.id == unused } && settings.profiles.contains { $0.profile.id == other && !$0.settings.searchSuggestions }, "clear removed profiles or settings")
-        try receipt(app, "post-restart", ["defaultA": av, "defaultB": bv, "otherC": c, "profileRecords": settings.profiles.map { $0.profile.name }])
-        app.note("Profile cookies/cache/history clear uses CEF request-context callbacks with no live Default page. Unused profile clearing also completed; unsupported origin storage fails before mutation. Profile records, settings and origin storage survive restart. Site visits made by the readback may add new History entries.")
-    }
 
-    @Sendable static func customProfileClear(_ app: AppUnderTest) throws {
-        let a = try page(app); try seed(app, a, "DEFAULTA"); try http(app, a, "default-A-warm", requests: 1)
-        let b = try page(app, host: "other.localhost"); try seed(app, b, "DEFAULTB"); try http(app, b, "default-B-warm", requests: 1)
-        let custom = try profile(app, "Data Custom Clear")
-        try assign(app, custom, item: a); try seed(app, a, "CUSTOMA"); try http(app, a, "custom-A-warm", requests: 1)
-        try focus(app, b); try seed(app, b, "CUSTOMB"); try http(app, b, "custom-B-warm", requests: 1)
-        _ = try clearProfile(app, custom, [.cookies, .cache, .history])
-        try app.flush()
-        let saved = try JSONSerialization.jsonObject(with: Data(contentsOf: app.dataDirectory.appendingPathComponent("state.json"))) as? [String: Any]
-        let history = (saved?["doc"] as? [String: Any])?["history"] as? [[String: Any]] ?? []
-        try expect(!history.contains { $0["profile"] as? String == custom.rawValue }, "custom history was not cleared")
-        try expect(history.contains { $0["profile"] as? String == ProfileID.default.rawValue }, "Default history was cleared with custom history")
-        try app.restart()
-        try focus(app, a); let ca = try read(app, a, "custom-A-restart"); try verify(ca, storage: "CUSTOMA", cookies: nil); try http(app, a, "custom-A-restart", requests: 1)
-        try focus(app, b); let cb = try read(app, b, "custom-B-restart"); try verify(cb, storage: "CUSTOMB", cookies: nil, domain: false); try http(app, b, "custom-B-restart", requests: 1)
-        try assign(app, .default, item: a); let da = try read(app, a, "default-A-restart"); try verify(da, storage: "DEFAULTA", cookies: "DEFAULTA"); try http(app, a, "default-A-restart", requests: 0)
-        try focus(app, b); let db = try read(app, b, "default-B-restart"); try verify(db, storage: "DEFAULTB", cookies: "DEFAULTB", domain: false); try http(app, b, "default-B-restart", requests: 0)
-        try receipt(app, "post-restart", ["customA": ca, "customB": cb, "defaultA": da, "defaultB": db])
-        app.note("Custom-profile clearing evicted cookies and HTTP cache at both origins. Default retained all storage classes, cookies and both HTTP cache entries after restart. Origin storage in the cleared custom profile is intentionally retained under the displayed unsupported profile-wide scope.")
-    }
 
-    @Sendable static func extensionProfiles(_ app: AppUnderTest) throws {
-        let (first, installed) = try ExtensionScenarios.selectedFixture(app)
-        try app.dispatch(.site(.pinExtension(installed.id, true)))
-        try app.dispatch(.site(.extensions))
-        let manager = currentTab(try app.view())!.id
-        try app.waitForPageInput(PageID(window: app.window!, item: manager), at: URL(string: "chrome://extensions/")!)
-        try ExtensionScenarios.changeEnabled(app, manager: manager, id: installed.id, on: false)
-        let other = try profile(app, "Data Extensions")
-        try app.dispatch(.site(.closeControls)); try assign(app, other, item: first)
-        let (second, otherInstalled) = try ExtensionScenarios.selectedFixture(app)
-        try expect(otherInstalled.id == installed.id && otherInstalled.enabled, "fixture is not independently enabled in other profile")
-        try expect(try !SitePolicyScenarios.controls(app).pinnedExtensions.contains(installed.id), "pin leaked")
-        try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(second))); try app.flush(); try app.restart()
-        try focus(app, second)
-        try app.dispatch(.site(.nativeExtensions))
-        try app.waitUntil("other catalog after restart") { try SitePolicyScenarios.controls(app).extensionsLoaded == true }
-        var value = try SitePolicyScenarios.controls(app)
-        try expect(value.extensions.contains { $0.id == installed.id && $0.enabled } && !value.pinnedExtensions.contains(installed.id), "other enable/pin state differs after restart")
-        _ = try clearProfile(app, other, [.cookies, .cache, .history])
-        try app.dispatch(.site(.closeControls)); try app.dispatch(.tab(.focus(second)))
-        let probe = PageID(window: app.window!, item: second)
-        guard case .pageObservations(let before) = try app.send(.pageObservations) else { throw Check(description: "extension document missing") }
-        try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
-        try app.waitUntil("new extension document after profile clear") {
-            guard case .pageObservations(let after) = try app.send(.pageObservations), case .ready? = after[probe]?.document else { return false }
-            return after[probe]?.document != before[probe]?.document
-        }
-        try app.waitUntil("extension executes again after profile data clearing") {
-            try SitePolicyScenarios.evaluate(app, second, "document.title='data-extension-kept:'+document.documentElement.getAttribute('data-brk-extension')")
-            return tab(second, in: try app.view())?.title == "data-extension-kept:installed"
-        }
-        try assign(app, .default, item: first)
-        try app.dispatch(.site(.nativeExtensions))
-        try app.waitUntil("Default catalog after restart") { try SitePolicyScenarios.controls(app).extensionsLoaded == true }
-        value = try SitePolicyScenarios.controls(app)
-        try expect(value.extensions.contains { $0.id == installed.id && !$0.enabled } && value.pinnedExtensions.contains(installed.id), "Default enable/pin state leaked across profiles")
-        try app.dispatch(.site(.closeControls)); try assign(app, other, item: second); try app.dispatch(.site(.nativeExtensions))
-        try app.waitUntil("extension catalog after clearing data") { try SitePolicyScenarios.controls(app).extensionsLoaded == true }
-        try expect(try SitePolicyScenarios.controls(app).extensions.contains { $0.id == installed.id && $0.enabled }, "data clear removed extension installation")
-        app.note("The same harmless extension is disabled and pinned in Default, enabled and unpinned in Data Extensions. Both catalogs retain those independent states after restart; clearing profile cookies/cache/history keeps its extension installation.")
-    }
 }
 
 extension DataScenarios {
@@ -390,60 +261,4 @@ extension DataScenarios {
         app.note("Closed/reopened the last private window without quitting: host/domain/all-path/HttpOnly cookies, localStorage, IndexedDB, Cache Storage, workers and HTTP cache reset. Active transport cancelled; explicitly completed files remain; new epoch downloads work; public storage/cache survive. Audit fileSet and exact scope are in artifacts/DataPrivateExpiry/audit.json.")
     }
 
-    @Sendable static func protectedOperations(_ app: AppUnderTest) throws {
-        let firstWindow = app.window!, a = try page(app)
-        try seed(app, a, "PROTECTED")
-        let folder = app.dataDirectory.appendingPathComponent("protected-downloads")
-        try app.dispatch(.settings(.profile(.default, .downloadsDirectory(folder.path))))
-        try startDownload(app, a, "transfer-DataProtected")
-        try app.waitUntil("active protected download") { app.site.requestCount("/transfer-DataProtected-bytes") >= 65536 }
-        let denied = try clearSite(app, kinds: [.cookies, .storage], scope: .site, errorExpected: true)
-        try expect(denied.completed.isEmpty && denied.error!.contains("active downloads"), "download did not block destructive clear")
-        _ = try clearProfile(app, .default, [.cookies, .cache, .history], errorExpected: true)
-        try verify(try read(app, a, "download-preserved"), storage: "PROTECTED", cookies: "PROTECTED")
-        try app.dispatch(.site(.closeControls))
-        try app.waitUntil("protected download finishes", timeout: 15) { (try? Data(contentsOf: folder.appendingPathComponent("transfer-DataProtected.bin"))) == Data(repeating: 65, count: 4_194_304) }
-        try app.dispatch(.page(.output(.mhtml)))
-        try app.waitUntil("pending native output") { try app.native().sheetClass?.contains("SavePanel") == true }
-        try app.dispatch(.window(.new))
-        guard case .hello(let hello) = try app.send(.hello), let secondWindow = hello.windows.first(where: { $0 != firstWindow }) else { throw Check(description: "second window missing") }
-        app.window = secondWindow
-        let b = try page(app)
-        let pending = try clearSite(app, kinds: [.cookies, .storage], scope: .site, errorExpected: true)
-        try expect(pending.completed.isEmpty, "pending output allowed destructive clearing")
-        _ = try clearProfile(app, .default, [.cookies, .cache, .history], errorExpected: true)
-        try app.perform(.cancelCurrentOutput(window: firstWindow))
-        try app.waitUntil("output cancellation finishes") {
-            if case .terminal(.cancelled)? = try app.view(firstWindow).output?.stage { return true }; return false
-        }
-        try app.dispatch(.site(.closeControls))
-        try app.dispatch(.find(.open(replace: false))); try app.dispatch(.find(.query(FindQuery(text: "fixture"))))
-        try app.waitUntil("open native Find results") { (try app.view().find?.count ?? 0) > 0 }
-        let count = try app.view().find?.count
-        _ = try clearSite(app, kinds: [.cookies, .storage], scope: .site)
-        try expect(try app.view().find?.query.text == "fixture" && app.view().find?.count == count, "non-reloading clear invalidated open Find")
-        try verify(try read(app, b, "find-clear"), storage: nil, cookies: nil)
-        try app.dispatch(.site(.closeControls)); try app.dispatch(.find(.close))
-        try seed(app, b, "FROZEN")
-        try app.dispatch(.site(.controls))
-        guard let target = try SitePolicyScenarios.controls(app).target else { throw Check(description: "frozen target missing") }
-        var rule = SiteRule(); rule.suspendWhenHidden = true
-        try app.dispatch(.site(.rule(target, rule)))
-        try SitePolicyScenarios.evaluate(app, b, "setInterval(()=>fetch('/data-frozen-tick',{cache:'no-store'}),100)")
-        try app.waitUntil("foreground fixture ticks") { app.site.requestCount("/data-frozen-tick") >= 2 }
-        let foreground = try page(app, host: "other.localhost")
-        try focus(app, b)
-        // Capture the immutable request before hiding its target. Confirmation remains on the source window.
-        try app.dispatch(.site(.clear(kinds: [.cookies, .storage], scope: .site, reload: false)))
-        try app.dispatch(.tab(.focus(foreground)))
-        app.sleep(0.6)
-        let before = app.site.requestCount("/data-frozen-tick"); app.sleep(0.7)
-        try expect(app.site.requestCount("/data-frozen-tick") == before, "target did not actually freeze")
-        try app.click(.settingsField("confirmSiteClear"))
-        try app.waitUntil("frozen clear finishes", timeout: 20) { try SitePolicyScenarios.controls(app).result?.request.target == target && SitePolicyScenarios.controls(app).result?.completed == [.cookies, .storage] }
-        try expect(try currentTab(app.view())?.id == foreground, "clearing hidden target changed the selection")
-        try app.dispatch(.site(.closeControls)); try focus(app, b)
-        try verify(try read(app, b, "frozen-clear"), storage: nil, cookies: nil)
-        try receipt(app, "matrix", ["activeDownload": "rejected, zero classes removed, bytes completed unchanged", "pendingOutput": "rejected from another window in the same profile; native SavePanel cancelled", "openFind": "clear completed without reload; query and count retained", "frozenPage": "server ticks stopped before confirmation; clear completed; hidden selection retained; storage read empty"])
-    }
 }

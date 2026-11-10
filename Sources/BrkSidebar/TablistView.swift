@@ -930,11 +930,27 @@ final class RowView: HoverView {
         guard let row else { return }
         if case .folder(let folder) = row, folder.group { dispatch(.tabTools(.closeGroup(folder.id))); return }
         if case .folder(let folder) = row, folder.live != nil { dispatch(.tabTools(.site(.refreshFolder(folder.id)))); return }
-        // A Pinned row that is not the current tab is archived, like a Today row (Arc, Q18-rowbutton-pinned-x-removed-the-row).
-        var action = BulkTabAction.close
-        if case .tab(let tab) = row, section != .today, section != .scratch, !keepsPinned(tab) { action = .archive }
-        dispatch(.tabTools(.bulk(.items(closeTargets?(row.id) ?? [row.id]), action)))
+        dispatch(.tabTools(.bulk(.items(closeTargets?(row.id) ?? [row.id]), closeAction(row))))
         onClearMultiselect?()
+    }
+
+    /// A Pinned row that is not the current tab is archived, like a Today row (Arc, Q18-rowbutton-pinned-x-removed-the-row).
+    private func closeAction(_ row: Row) -> BulkTabAction {
+        if case .tab(let tab) = row, section != .today, section != .scratch, !keepsPinned(tab) { return .archive }
+        return .close
+    }
+
+    // MARK: Middle-click: a tab row goes as its × sends it, this row alone (Arc 1.170 archives a middle-clicked tab,
+    // docs/design/input-rules.md). The press is claimed so the list does not take it for anything else.
+
+    override func otherMouseDown(with event: NSEvent) {
+        guard event.buttonNumber == 2, case .tab? = row else { super.otherMouseDown(with: event); return }
+    }
+
+    override func otherMouseUp(with event: NSEvent) {
+        guard event.buttonNumber == 2, let row, case .tab = row else { super.otherMouseUp(with: event); return }
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        dispatch(.tabTools(.bulk(.items([row.id]), closeAction(row))))
     }
 
     // MARK: Rename field: Return commits, Escape cancels, losing focus commits.

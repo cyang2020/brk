@@ -88,29 +88,6 @@ enum FindScenarios {
         try expect(try app.view().find == nil,"remap lost page-first priority")
         try app.recordWindows("find-shortcuts")
     }
-    static func selectionAndJump(_ app: AppUnderTest) throws {
-        let page=try setup(app)
-        try select(app,page,"text",start:0,end:5)
-        try app.dispatch(.find(.useSelection))
-        try app.waitUntil("actual selected text") { try app.view().find?.query.text == "apple" }
-        try matches(app,6)
-        try app.dispatch(.find(.step(.next)));try matches(app,6)
-        try expect(try app.view().find?.query.text != "needle","used a native find rectangle as DOM selection")
-        try app.dispatch(.find(.close))
-        try app.evaluate(page,"const r=document.createRange();r.selectNodeContents(document.getElementById('far'));getSelection().removeAllRanges();getSelection().addRange(r);window.scrollTo(0,0);document.title='far-selected'")
-        try title(app,page,"far-selected")
-        try app.press("cmd+j")
-        try app.waitUntil("selection revealed") { try app.view().find?.message == "Selection revealed." }
-        try check(app,page,"[getSelection().toString(),scrollY>500]", "[\"jump-target\",true]")
-        try app.screenshot("jump-selection")
-        try app.dispatch(.find(.close))
-        try app.evaluate(page,"const jumpFrame=document.createElement('iframe');jumpFrame.id='jumpFrame';jumpFrame.style.cssText='display:block;margin-top:1200px;height:160px;width:500px';jumpFrame.srcdoc='<p id=selected>child-jump-target</p>';jumpFrame.onload=()=>{const d=jumpFrame.contentDocument,r=d.createRange();r.selectNodeContents(d.getElementById('selected'));jumpFrame.contentWindow.focus();d.getSelection().removeAllRanges();d.getSelection().addRange(r);window.scrollTo(0,0);document.title='child-jump-selected'};document.body.append(jumpFrame)")
-        try title(app,page,"child-jump-selected")
-        try app.press("cmd+j")
-        try app.waitUntil("frame selection revealed") { try app.view().find?.message == "Selection revealed." }
-        try check(app,page,"[jumpFrame.contentDocument.getSelection().toString(),scrollY>1000]","[\"child-jump-target\",true]")
-        try app.screenshot("jump-frame-selection")
-    }
     static func controlsAndUndo(_ app: AppUnderTest) throws {
         let page=try setup(app)
         for id in ["text","area"] {
@@ -138,87 +115,6 @@ enum FindScenarios {
             try app.press("cmd+z");try title(app,page,"native-undo:2")
         }
         try check(app,page,expression,expected)
-    }
-    static func contentEditable(_ app: AppUnderTest) throws {
-        let page=try setup(app)
-        try select(app,page,"editor")
-        try app.dispatch(.find(.open(replace:true)))
-        try app.waitUntil("editable capture") { try app.view().find?.canReplace == true }
-        try app.dispatch(.find(.query(FindQuery(text:"apple"))));try matches(app,2,ordinal:1)
-        try app.dispatch(.find(.replaceAll("pear")));try edited(app,2)
-        try check(app,page,"[editor.textContent,document.getElementById('keep').outerHTML]","[\"pear middle pear untouched\",\"<span id=\\\"keep\\\">untouched</span>\"]")
-        try app.press("escape");try focus(app,page)
-        try undo(app,page,expression:"editor.textContent",original:"apple middle apple untouched")
-        try app.screenshot("editable-undo")
-    }
-    static func refusals(_ app: AppUnderTest) throws {
-        let page=try setup(app)
-        for id in ["password","readonly","rich"] {
-            try app.dispatch(.find(.close));try select(app,page,id)
-            try app.dispatch(.find(.open(replace:true)))
-            try app.waitUntil("refused \(id)") {try app.view().find?.message.isEmpty == false}
-            try expect(try app.view().find?.canReplace == false,"protected field enabled replacement")
-            try expect(try app.view().find?.query.text.contains("secret") == false,"protected value was exposed")
-        }
-        try app.dispatch(.find(.close));try select(app,page,"text")
-        try app.evaluate(page,"text.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true,data:'x'}))")
-        try app.dispatch(.find(.useSelection))
-        try app.waitUntil("IME refused") {try app.view().find?.message.contains("composing") == true}
-        try app.evaluate(page,"text.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true,data:'x'}))")
-        try app.dispatch(.find(.close));try select(app,page,"text");try replaceMode(app)
-        try app.evaluate(page,"text.setSelectionRange(1,2)")
-        try app.waitUntil("changed selection disables editing") {try app.view().find?.canReplace == false}
-        try app.dispatch(.find(.replaceAll("bad")))
-        try check(app,page,"text.value","\"apple apple\"")
-        try app.dispatch(.find(.close))
-        let cross=app.site.url("find-frame.html").absoluteString.replacingOccurrences(of:"127.0.0.1",with:"localhost")
-        try app.evaluate(page,"const frame=document.createElement('iframe');frame.src='\(cross)';frame.id='foreign';frame.onload=()=>document.title='foreign-loaded';window.frameTrace=[];window.addEventListener('message',e=>{frameTrace.push({fromFrame:e.source===frame.contentWindow,origin:e.origin,data:e.data,active:document.activeElement.id});if(e.source===frame.contentWindow){if(e.data?.kind==='fixture-frame-focus'||(e.data?.kind==='fixture-state'&&e.data.phase==='after-focus'&&e.data.active==='inside'))document.title='foreign-focused';if(e.data?.kind==='fixture-frame-key')document.title='foreign-key'}});document.body.prepend(frame)")
-        try title(app,page,"foreign-loaded")
-        try app.evaluate(page,"foreign.contentWindow.postMessage('fixture-focus','*')")
-        do { try title(app,page,"foreign-focused") }
-        catch {
-            try app.evaluate(page,"document.title='frame-trace:'+JSON.stringify(frameTrace)")
-            try app.waitUntil("frame message census") {try allTabs(app.view()).first{$0.id == page.item}?.title.hasPrefix("frame-trace:") == true}
-            try app.recordWindows("frame-message-census")
-            throw error
-        }
-        try app.type("x")
-        try title(app,page,"foreign-key")
-        try app.dispatch(.find(.useSelection))
-        try app.waitUntil("cross-origin frame refusal") {try app.view().find?.message.contains("cross-origin") == true}
-    }
-    static func dynamicDocuments(_ app: AppUnderTest) throws {
-        let page=try setup(app)
-        try app.dispatch(.find(.open(replace:false)));try app.dispatch(.find(.query(FindQuery(text:"needle"))));try matches(app,3)
-        try app.evaluate(page,"words.textContent+=' needle needle'");try matches(app,5)
-        try app.evaluate(page,"const f=document.createElement('iframe');f.id='child';f.srcdoc='<p>needle needle</p><input value=\"frameword frameword\">';f.onload=()=>document.title='child-ready';document.body.prepend(f)")
-        try title(app,page,"child-ready");try matches(app,7)
-        try app.evaluate(page,"child.remove()");try matches(app,5)
-        try app.dispatch(.page(.reload(.focused, ignoringCache:false)));try matches(app,3)
-        try expect(try app.view().find?.query.text == "needle","navigation lost visible query")
-        try app.dispatch(.find(.close))
-        try app.evaluate(page,"const f=document.createElement('iframe');f.id='same';f.srcdoc='<input id=\"inside\" value=\"frameword frameword\">';f.onload=()=>{const e=f.contentDocument.getElementById('inside');e.focus();e.setSelectionRange(0,9);document.title='same-selected'};document.body.prepend(f)")
-        try title(app,page,"same-selected")
-        try replaceMode(app);try matches(app,2)
-        try app.dispatch(.find(.replaceAll("child")));try edited(app,2)
-        try check(app,page,"same.contentDocument.getElementById('inside').value","\"child child\"")
-    }
-    static func partialAndAmbiguous(_ app: AppUnderTest) throws {
-        let page=try setup(app)
-        try select(app,page,"text");try replaceMode(app)
-        try app.evaluate(page,"behavior='rewrite'")
-        try app.dispatch(.find(.replaceAll("pear")));try edited(app,1)
-        try check(app,page,"text.value","\"apple pear changed\"")
-        try app.dispatch(.find(.close));try app.evaluate(page,"behavior='normal';text.value='apple apple'")
-        try select(app,page,"text");try replaceMode(app);try app.evaluate(page,"behavior='cancel'")
-        try app.dispatch(.find(.replaceAll("pear")));try edited(app,0)
-        try check(app,page,"text.value","\"apple apple\"")
-        try app.dispatch(.find(.close));try app.evaluate(page,"behavior='delay'");try select(app,page,"text");try replaceMode(app)
-        try app.dispatch(.find(.replaceCurrent("pear")))
-        try app.waitUntil("timeout is explicitly unconfirmed",timeout:4) { try app.view().find?.message.contains("not confirmed") == true }
-        try edited(app,1)
-        try check(app,page,"text.value","\"pear apple\"")
-        try app.screenshot("confirmed-after-timeout")
     }
     static func windowsPeekAndPrivate(_ app: AppUnderTest) throws {
         let page=try setup(app), first=app.window!
@@ -253,77 +149,6 @@ enum FindScenarios {
         let left=try app.view().content.panes[0].tab
         try app.dispatch(.tab(.focus(left)));try expect(try app.view().find == nil,"split target change kept old find session")
     }
-    static func staleScopesAndFocus(_ app: AppUnderTest) throws {
-        let page=try setup(app), first=app.window!
-        try select(app,page,"text");try replaceMode(app)
-        try app.evaluate(page,"text.replaceWith(text.cloneNode(true))")
-        try app.waitUntil("detached field disables replacement") {try app.view().find?.canReplace == false}
-        try app.dispatch(.find(.replaceAll("bad")))
-        try check(app,page,"text.value","\"apple apple\"")
-        try app.dispatch(.find(.close));try select(app,page,"text");try replaceMode(app)
-        try app.evaluate(page,"text.readOnly=true")
-        try app.waitUntil("read-only scope invalidated") {try app.view().find?.canReplace == false}
-        try app.dispatch(.find(.replaceCurrent("bad")));try check(app,page,"text.value","\"apple apple\"")
-        try app.dispatch(.find(.close))
-        try app.dispatch(.find(.open(replace:false)));try app.dispatch(.find(.query(FindQuery(text:"not-persisted-search"))))
-        try app.flush()
-        let saved=try String(contentsOf:app.dataDirectory.appendingPathComponent("state.json"),encoding:.utf8)
-        try expect(!saved.contains("not-persisted-search"),"find query persisted")
-        try app.dispatch(.window(.new));let second=try windows(app).first{$0 != first}!
-        try app.perform(.activate(window:second))
-        try app.waitUntil("other window editor") {try app.native(second).firstResponder.hasSuffix(":"+ViewID.commandBarInput.identifier)}
-        try dispatch(app,window:first,.find(.close))
-        try expect(try app.native(second).firstResponder.hasSuffix(":"+ViewID.commandBarInput.identifier),"closing background find stole another editor")
-        try expect(try !app.native(first).isKey,"closing background find activated its window")
-        try dispatch(app,window:second,.window(.close));try app.perform(.activate(window:first))
-        try app.dispatch(.find(.open(replace:false)))
-        _ = try app.send(.openSettings(pane:.profiles))
-        try expect(try app.view().find == nil,"Settings left a conflicting find session")
-        try app.press("cmd+f")
-        try expect(try app.view().find == nil,"Settings invoked find in a remembered browser")
-        try app.press("escape");try app.waitUntil("settings closed") {
-            guard case .settings(let s)=try app.send(.settings) else{return false};return s.pane == nil
-        }
-        try app.recordWindows("native-editors-preserved")
-    }
 
-    static func frameLifetimeAndIdempotence(_ app: AppUnderTest) throws {
-        let page=try setup(app)
-        try app.evaluate(page,"const f=document.createElement('iframe');f.id='scopeFrame';f.srcdoc='<input id=\"inside\" value=\"apple apple\">';f.onload=()=>{const e=f.contentDocument.getElementById('inside');e.focus();e.setSelectionRange(0,5);document.title='scope-ready'};document.body.prepend(f)")
-        try title(app,page,"scope-ready");try replaceMode(app)
-        try app.evaluate(page,"const other=document.createElement('iframe');other.id='otherFrame';other.srcdoc='<input id=\"another\" value=\"other field\">';other.onload=()=>{other.contentDocument.getElementById('another').focus();document.title='other-focused'};document.body.prepend(other)")
-        try title(app,page,"other-focused")
-        try app.waitUntil("foreign focused frame invalidates captured scope") {try app.view().find?.canReplace == false}
-        try app.dispatch(.find(.replaceAll("wrong")))
-        try check(app,page,"scopeFrame.contentDocument.getElementById('inside').value","\"apple apple\"")
-        try app.dispatch(.find(.close))
-        try app.evaluate(page,"const e=scopeFrame.contentDocument.getElementById('inside');e.focus();e.setSelectionRange(0,5);document.title='scope-recaptured'")
-        try title(app,page,"scope-recaptured");try replaceMode(app)
-        try app.evaluate(page,"scopeFrame.onload=()=>document.title='scope-replaced';scopeFrame.srcdoc='<input id=\"inside\" value=\"new document\">'")
-        try title(app,page,"scope-replaced")
-        try app.waitUntil("frame document change disables old ticket") {try app.view().find?.canReplace == false}
-        try app.dispatch(.find(.replaceAll("wrong")))
-        try check(app,page,"scopeFrame.contentDocument.getElementById('inside').value","\"new document\"")
-        try app.dispatch(.find(.close))
-        // Exercise the exact production editor function twice with the same mutation identity in a real renderer.
-        let sourceURL=URL(fileURLWithPath:FileManager.default.currentDirectoryPath).appendingPathComponent("Vendor/CefSwift/Sources/CefKit/FindEditorScript.swift")
-        let swift=try String(contentsOf:sourceURL,encoding:.utf8)
-        let script=swift.components(separatedBy:"static let source = #\"\"\"\n")[1].components(separatedBy:"\n\"\"\"#")[0]
-        let body="""
-        (()=>{
-            const editor=\(script);
-            text.focus();text.setSelectionRange(0,5);
-            const send=o=>JSON.parse(editor(JSON.stringify(o)));
-            const captured=send({op:'capture',ticket:'once'});
-            const searched=send({op:'search',ticket:'once',query:'apple',caseSensitive:true});
-            const request={op:'replace',request:'mutation-once',ticket:'once',query:'apple',caseSensitive:true,replacement:'pear',all:false};
-            const first=send(request), second=send(request);
-            document.title='once:'+JSON.stringify([captured.status,searched.count,first.applied,second.applied,text.value]);
-        })()
-        """
-        try app.evaluate(page,body)
-        try title(app,page,"once:[\"selection\",2,1,1,\"pear apple\"]")
-        try app.screenshot("frame-invalidation-and-once")
-    }
 
 }

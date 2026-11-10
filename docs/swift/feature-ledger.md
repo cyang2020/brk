@@ -9,8 +9,8 @@ The Arc side comes from `docs/arc-anatomy/model-and-shortcuts.md` (sections 1 to
 What was checked directly, and how:
 
 - `swift test --scratch-path /tmp/brk-ledger-build` on `c61735f`: 302 tests executed, 0 failures. The test results below belong to that revision.
-- The e2e scenarios (ids 0 to 9, R2 to R10, N1 to N4, defined in `docs/design/swift/module-map.md`, "E2E scenarios") have not yet produced a result. The first integrated run against the real Chromium app crashed the runner before it wrote `verify/swift/REPORT.md` (audit row 2026-10-30T11:45:31Z; `/tmp/int-swift-e2e.log` ends with "Trace/BPT trap: 5"). That run left screenshots in `verify/swift/shots/`, failure captures for N1, R2 and R3, and no log at all for N2, N3 and N4. A scenario id in this ledger therefore means "this scenario covers it", not "it passed on the real app", unless the row says otherwise.
-- Screenshots `verify/swift/shots/2-command-bar.png` and `7-archive.png` were looked at: sidebar with title row, URL pill, the Favorites empty state, the New Tab row, a selected Today row, the dock, a white rounded card, the centered command bar, and the archive page inside the card.
+- The e2e scenarios (ids 0 to 9, R2 to R10, N1 to N4, defined in `docs/design/swift/module-map.md`, "E2E scenarios") have not yet produced a result. The first integrated run against the real Chromium app crashed the runner before it wrote `7adf40f551:verify/swift/REPORT.md` (audit row 2026-10-30T11:45:31Z; `/tmp/int-swift-e2e.log` ends with "Trace/BPT trap: 5"). That run left screenshots in `7adf40f551:verify/swift/shots/`, failure captures for N1, R2 and R3, and no log at all for N2, N3 and N4. A scenario id in this ledger therefore means "this scenario covers it", not "it passed on the real app", unless the row says otherwise.
+- Screenshots `7adf40f551:verify/swift/shots/2-command-bar.png` and `7-archive.png` were looked at: sidebar with title row, URL pill, the Favorites empty state, the New Tab row, a selected Today row, the dock, a white rounded card, the centered command bar, and the archive page inside the card.
 
 ### Status words
 
@@ -220,7 +220,7 @@ S: up to a day of one worker. M: a few days. L: about a week, or several workers
 | **Cross-cutting** | | | | | | |
 | Saved state and repair | anatomy-m 1.3 | JSON stores, versioned, repaired on load | done | RS `test_statecodec...` (6 tests), `testRestoreRepairsAStoredSplit`, APP `test_aStaleDebouncedWriteNeverOverwritesAFlush`; `Sources/BrkDomain/Codec.swift` | none | none |
 | Clean quit with many pages | (Brk need) | No crash on quit | done | APP `test_orderedQuitFlushesBeforeShutdown...`; W2's gate: 15 of 15 clean quits (audit row 2026-10-30T11:44:44Z); scenario N4 has not run yet | 14 yes (`quitArc`) | S: run N4 |
-| E2E report on the real app | `docs/design/swift/module-map.md` "E2E scenarios" | (Brk need) proof that each scenario passes | partial | Exists: 24 scenarios in `Sources/BrkE2E/`. Missing: the runner traps before writing `verify/swift/REPORT.md`; N1, R2, R3 failed; N2 to N4 never ran (`verify/swift/logs/`) | none | S |
+| E2E report on the real app | `docs/design/swift/module-map.md` "E2E scenarios" | (Brk need) proof that each scenario passes | partial | Exists: 24 scenarios in `Sources/BrkE2E/`. Missing: the runner traps before writing `7adf40f551:verify/swift/REPORT.md`; N1, R2, R3 failed; N2 to N4 never ran (`verify/swift/logs/`) | none | S |
 | Pixel identity with Arc | user decision "pixel-identical UI" (audit row 2026-10-30T06:53:30Z); `docs/arc-anatomy/layout-constants.md` | Every screen matches Arc | not started | N3 compares frames with our constants only; no capture of the real Arc exists to compare against | none | L |
 
 ## Counts per status

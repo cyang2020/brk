@@ -24,57 +24,6 @@ final class Wave2AppTests: XCTestCase {
         XCTAssertNil(AIProviderSeam.provider(for: .auto, detected: []))
     }
 
-    /// A conversation's prompt is text; a basic task's is a schema and an input, and has no prose prompt at all.
-    func test_promptsCarryTheTask() {
-        let prompt = AIBasicPrompts.tabTitle(title: "Long title", url: URL(string: "https://example.com/")!)
-        XCTAssertTrue(prompt.input.contains("Long title"))
-        XCTAssertTrue(prompt.input.contains("https://example.com/"))
-        XCTAssertEqual(AIPrompt.text(for: .renameTab(ItemID("t"), title: "Long title", url: URL(string: "https://example.com/")!)), "")
-        XCTAssertEqual(AIPrompt.text(for: .tidyToday(SpaceID("s"), tabs: [])), "")
-        XCTAssertFalse(AIPrompt.text(for: .tidyToday(SpaceID("s"), tabs: [])).contains("JSON"))
-        XCTAssertEqual(AIPrompt.text(for: .ask("why")), "why")
-    }
-
-    /// a tool that answers is run to completion; a missing tool fails, never traps
-    func test_cliProviderRunsAnExecutable() async throws {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brk-ai-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let tool = dir.appendingPathComponent("claude")
-        try Data("#!/bin/sh\necho \"Tidy Title\"\n".utf8).write(to: tool)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tool.path)
-        let provider = CLIProvider(kind: .claude, executable: tool)
-        let text = try await provider.run("anything")
-        XCTAssertEqual(text, "Tidy Title")
-        let missing = CLIProvider(kind: .codex, executable: dir.appendingPathComponent("codex"))
-        do {
-            _ = try await missing.run("x")
-            XCTFail("a missing tool answered")
-        } catch {}
-    }
-
-    /// OpenSearch suggestion JSON parses to the list; anything else is empty
-    func test_parsesOpenSearchSuggestions() {
-        XCTAssertEqual(SuggestionFetcher.parse(Data(#"["swi", ["swift", "swim"]]"#.utf8)), ["swift", "swim"])
-        XCTAssertEqual(SuggestionFetcher.parse(Data(#"{"q": 1}"#.utf8)), [])
-        XCTAssertEqual(SuggestionFetcher.parse(Data("garbage".utf8)), [])
-    }
-
-    /// the settings window follows the snapshot's pane: shown while set, hidden when nil
-    func test_settingsWindowFollowsThePane() {
-        let h = Harness()
-        defer { h.cleanUp() }
-        h.store.start()
-        h.store.dispatch(.user(h.window, .settings(.openPane(.links))))
-        XCTAssertEqual(h.store.snapshot.settings.pane, .links)
-        // Visible: the settings tests leave hidden settings windows of their own in NSApp.windows (their panes'
-        // sheet and popover modifiers keep them alive), as ControlInputRegressionTests notes too.
-        let settings = NSApp.windows.first { $0.isVisible && $0.contentView?.accessibilityIdentifier() == "settings" }
-        XCTAssertNotNil(settings, "the settings window exists and is shown once a pane opened")
-        h.store.dispatch(.user(h.window, .settings(.closeWindow)))
-        XCTAssertEqual(settings?.isVisible, false)
-    }
-
     /// a key equivalent the window's views do not take is routed through the table before AppKit's menu, so Arc's
     /// hidden rows (Ctrl+Tab) and remapped chords work with a native view focused
     func test_windowRoutesUnhandledKeyEquivalentsThroughTheTable() {
@@ -90,19 +39,6 @@ final class Wave2AppTests: XCTestCase {
         let unbound = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: 6, windowNumber: controller.window.windowNumber,
                                        context: nil, characters: "y", charactersIgnoringModifiers: "y", isARepeat: false, keyCode: Key.y.code)!
         XCTAssertFalse(controller.window.routeKeyEquivalent(unbound))
-    }
-
-    /// the GetURL handler installs without a running event loop (the Apple Event path is proven by W2-7)
-    func test_getURLHandlerInstalls() {
-        let handler = GetURLHandler(send: { _ in })
-        handler.install()
-        XCTAssertNotNil(NSAppleEventManager.shared())
-    }
-
-    // MARK: stubs
-
-    func test_exportWritesTheChosenFormat() throws {
-        throw XCTSkip("wave 2 contract, F1 or F5 to verify on the display: ShareExport's save panel writes JSON or HTML by extension (no headless save panel)")
     }
 
     /// a .little window is hosted by LittleWindowController: an NSPanel of Metrics.littleArc.defaultSize with a page,

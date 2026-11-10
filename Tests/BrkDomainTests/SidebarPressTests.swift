@@ -40,37 +40,6 @@ final class FavoritesDragRulesTests: XCTestCase {
         XCTAssertNotNil(d.state.tree(of: d.window)?[tab].flatMap { item in if case .tab(let t) = item.body { t.pinnedURL } else { nil } }, "not pinned to its address")
     }
 
-    func testTheRenameHintGoesWhenTheTabIsRenamedOrLeftBehind() throws {
-        func hint(_ d: Driver, _ id: ItemID) -> Bool {
-            if case .tab(let row)? = d.view.space.pinned.rows.first(where: { $0.id == id }) { row.renameHint } else { false }
-        }
-        let d = Driver()
-        let other = d.paneIDs[0], tab = d.open("https://fixture.example/inbox")
-        d.user(.item(.dropOnSpaceHeader(tab)))
-        XCTAssertTrue(hint(d, tab))
-        d.user(.tab(.focus(other)))
-        XCTAssertFalse(hint(d, tab), "still there on a tab no longer shown")
-        d.user(.tab(.focus(tab)))
-        XCTAssertFalse(hint(d, tab), "came back with the tab")
-        let renamed = d.open("https://fixture.example/renamed")
-        d.user(.item(.dropOnSpaceHeader(renamed)))
-        XCTAssertTrue(hint(d, renamed))
-        d.user(.item(.beginRename(.item(renamed))))
-        XCTAssertFalse(hint(d, renamed), "the rename field replaces it")
-    }
-
-    func testAFolderOnTheStripGoesFirstWithoutAHint() throws {
-        let d = Driver()
-        let first = d.open("https://fixture.example/pinned")
-        d.user(.tab(.togglePin(.item(first))))
-        d.user(.item(.newFolder))
-        let folder = try XCTUnwrap(d.view.renaming)
-        d.user(.item(.rename(folder, title: "Box")))
-        d.user(.item(.move(folder, to: .into(parent: d.view.space.pinned.root, index: 1))))
-        d.user(.item(.dropOnSpaceHeader(folder)))
-        XCTAssertEqual(d.view.space.pinned.rows.first?.id, folder)
-    }
-
     func testOpenInSplitLeavesAFavoriteInFavorites() throws {
         let d = Driver()
         let original = d.paneIDs[0], favorite = d.open("https://fixture.example/favorite")

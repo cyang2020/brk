@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tracks fixture</title>
+<style>body{font:20px -apple-system,sans-serif;margin:40px}button{font:inherit;padding:18px 34px;margin-right:16px}</style></head>
+<body>
+<h1>Tracks fixture</h1>
+<p>The media fixture's tone, on a page that says it has a previous and a next track.</p>
+<button id="play" onclick="document.getElementById('a').play();document.title='Tracks fixture (playing)'">Play</button>
+<button id="pause" onclick="document.getElementById('a').pause();document.title='Tracks fixture (paused)'">Pause</button>
+<p><audio id="a" loop controls src="tone.wav"></audio></p>
+<p id="log">none</p>
+<script>
+let n = 0;
+navigator.mediaSession.metadata = new MediaMetadata({title: 'Fixture tone', artist: 'Brk fixture', album: 'Visual pairs'});
+navigator.mediaSession.setActionHandler('nexttrack', () => { n++; document.getElementById('log').textContent = 'next ' + n; document.title = 'Tracks fixture (next ' + n + ')'; });
+navigator.mediaSession.setActionHandler('previoustrack', () => { n--; document.getElementById('log').textContent = 'previous ' + n; document.title = 'Tracks fixture (previous ' + n + ')'; });
+</script>
+</body></html>

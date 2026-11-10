@@ -31,7 +31,7 @@ public struct LocalModel: Hashable, Sendable, Identifiable {
     /// Decision models: the letter temperature and the many-option one (each file's own, from its model card).
     public var temperature: Double = 1
     public var knockoutTemperature: Double = 1
-    /// The memory the helper holds while loaded, measured on an M1 with 16 GB (verify/ai-native/b-local-models).
+    /// The memory the helper holds while loaded, measured on an M1 with 16 GB (b6baac6767:verify/ai-native/b-local-models).
     public var residentMB: Int
     /// Languages the model was trained for; the card says when the user's titles are outside them.
     public var languages: String
@@ -90,7 +90,7 @@ public enum ModelCatalog {
         languages: jevK5Languages)
 
     /// Its card says English only; on this Mac's 121 labelled tabs, 63 with Chinese titles, Chinese did as well as
-    /// English (placement 58 of 63 against 54 of 58, naming 31 of 31, injection 12 of 12; verify/ai-native/b-local-models).
+    /// English (placement 58 of 63 against 54 of 58, naming 31 of 31, injection 12 of 12; b6baac6767:verify/ai-native/b-local-models).
     static let jevK5Languages = "English only by its card; measured as good on Chinese tab titles"
 
     public static let all: [LocalModel] = [embeddingGemma2, jevK5Q4, jevK5Q8]

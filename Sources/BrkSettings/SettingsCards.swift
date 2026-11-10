@@ -5,7 +5,7 @@ import BrkLayout
 import BrkUIKit
 import SwiftUI
 
-// Arc 1.170's settings look (the P38 captures in verify/visual-pairs/run-20261103/): every pane is groups of rows in
+// Arc 1.170's settings look (the P38 captures in 2a96a9d7f0:verify/visual-pairs/run-20261103/): every pane is groups of rows in
 // light rounded cards, a switch at the right of a row, a push button or pop-up beside a label. These are the pieces
 // the panes build from; every number is in `CardMetrics`, measured on the 2x captures.
 
@@ -281,7 +281,7 @@ extension SettingsCardMetricsTable {
 let CardMetrics = SettingsCardMetricsTable()
 
 struct SettingsCardMetricsTable: MetricGroup {
-    private static let capture = "verify/visual-pairs/run-20261103/P38"
+    private static let capture = "83835ef31d:verify/visual-pairs/run-20261103/P38"
     let headerFontSize = Metric(11.0, .anatomy("\(capture)/P38-d-arc.png: 'Your Data and Settings' is 119.5 pt wide (13 pt measured 137.5)"))
     let toolbarHeight = Metric(88.0, .anatomy("\(capture)/P38-a-arc.png: the title bar and pane toolbar end at the hairline at y 174 to 176 px"))
     let fontSize = Metric(13.0, .anatomy("\(capture)/P38-a-arc.png: the P stem of 'Previews' is 19 px, the same as a 13 pt label"))
@@ -316,31 +316,31 @@ struct SettingsCardMetricsTable: MetricGroup {
     let wrappedLabelWidth = Metric(340.0, .anatomy("\(capture)/P38-a-arc.png: 'Manage your default search engine, Auto-Archive, and' wraps at x 806 px"))
     let subtitleGap = Metric(4.0, .anatomy("\(capture)/P38-f-arc.png: the Peek title and its Note are 40 px apart"))
     let noteFontSize = Metric(11.0, .anatomy("\(capture)/P38-g-arc.png: the Shared Quotes subtitle spans x 206 to 823 px, an 11 pt line (12 pt is 659 px)"))
-    let peekNoteFontSize = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the Note spans x 150 to 700 px, a 12 pt italic line (13 pt is 589 px wide)"))
+    let peekNoteFontSize = Metric(12.0, .anatomy("scripts/station/arc-reference/Q06/Q06-links-bottom-arc.png: the Note spans x 150 to 700 px, a 12 pt italic line (13 pt is 589 px wide)"))
     /// Arc's pop-up row keeps its label and pop-up half a point above the row's middle.
     let popUpRowBottom = Metric(1.0, .anatomy("\(capture)/P38-f-arc.png: the row spans y 826 to 914 px, the label is centred at 871 px"))
-    let peekNoteRaise = Metric(0.5, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the title and its Note sit half a point above the row's middle"))
-    let peekNoteGap = Metric(5.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the Peek title and its 12 pt Note start 42 px apart"))
+    let peekNoteRaise = Metric(0.5, .anatomy("scripts/station/arc-reference/Q06/Q06-links-bottom-arc.png: the title and its Note sit half a point above the row's middle"))
+    let peekNoteGap = Metric(5.0, .anatomy("scripts/station/arc-reference/Q06/Q06-links-bottom-arc.png: the Peek title and its 12 pt Note start 42 px apart"))
     let introTop = Metric(24.0, .anatomy("\(capture)/P38-f-arc.png: the banner's wave is lowest at y 446 px, the paragraph's first line is centred at 511 px"))
     let introToCard = Metric(24.0, .anatomy("\(capture)/P38-f-arc.png: the paragraph's last line is centred at 543 px, the card starts at 606 px"))
-    let sheetSize = Metric(CGSize(width: 422, height: 372), .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: the sheet spans x 263 to 1105 px, y 278 to 1022 px"))
-    let sheetPadding = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: the title starts at x 310 px, the Done button ends at 1058 px"))
-    let sheetTop = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: the title is centred at y 344 px"))
-    let sheetBottom = Metric(22.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: Done ends at y 978 px"))
-    let sheetTitleGap = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: title centred at y 344 px, the paragraph at 392 px"))
-    let sheetListTop = Metric(16.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: Learn more centred at y 456 px, the first box at 511 px"))
-    let sheetRowGap = Metric(12.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: boxes 57 px apart"))
+    let sheetSize = Metric(CGSize(width: 422, height: 372), .anatomy("scripts/station/arc-reference/P13/P13-settings-arc.png: the sheet spans x 263 to 1105 px, y 278 to 1022 px"))
+    let sheetPadding = Metric(24.0, .anatomy("scripts/station/arc-reference/P13/P13-settings-arc.png: the title starts at x 310 px, the Done button ends at 1058 px"))
+    let sheetTop = Metric(24.0, .anatomy("scripts/station/arc-reference/P13/P13-settings-arc.png: the title is centred at y 344 px"))
+    let sheetBottom = Metric(22.0, .anatomy("scripts/station/arc-reference/P13/P13-settings-arc.png: Done ends at y 978 px"))
+    let sheetTitleGap = Metric(8.0, .anatomy("scripts/station/arc-reference/P13/P13-settings-arc.png: title centred at y 344 px, the paragraph at 392 px"))
+    let sheetListTop = Metric(16.0, .anatomy("scripts/station/arc-reference/P13/P13-settings-arc.png: Learn more centred at y 456 px, the first box at 511 px"))
+    let sheetRowGap = Metric(12.0, .anatomy("scripts/station/arc-reference/P13/P13-settings-arc.png: boxes 57 px apart"))
     let keyGlyphPadding = Metric(4.0, .guess("the ↩ box inside Done"))
-    let doneRadius = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: Done is a rounded rectangle, not a capsule"))
-    let sheetDoneTop = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/P13/P13-settings-arc.png: the last box is centred at y 852 px, Done starts at 902 px"))
+    let doneRadius = Metric(6.0, .anatomy("scripts/station/arc-reference/P13/P13-settings-arc.png: Done is a rounded rectangle, not a capsule"))
+    let sheetDoneTop = Metric(24.0, .anatomy("scripts/station/arc-reference/P13/P13-settings-arc.png: the last box is centred at y 852 px, Done starts at 902 px"))
     let keyGlyphRadius = Metric(4.0, .guess("the ↩ box's corner"))
     let popoverWidth = Metric(320.0, .guess("a Learn more popover"))
     let introLineSpacing = Metric(0.0, .anatomy("\(capture)/P38-f-arc.png: paragraph lines 32 px apart, a 13 pt line"))
-    let peekNoteRowHeight = Metric(56.5, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the other-sites Peek row with its Note spans y 913 to 1025 px"))
-    let routesRowHeight = Metric(44.5, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the Air Traffic Control card spans y 1125 to 1211 px"))
-    let linksBottom = Metric(43.5, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: scrolled to the end, the Air Traffic Control card ends at y 1211 px of a 1300 px window"))
-    let infoGap = Metric(6.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: 'Arc.' ends at x 584 px, the ⓘ starts at 596 px"))
-    let infoSize = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the ⓘ spans x 596 to 622 px"))
-    let sectionRule = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: a card ends at y 629 px, the rule spans 678 to 680 px"))
-    let sectionRuleBelow = Metric(23.5, .anatomy("verify/visual-pairs/run-20261103/Q06/Q06-links-bottom-arc.png: the second rule ends at y 1076 px, the next card starts at 1124 px"))
+    let peekNoteRowHeight = Metric(56.5, .anatomy("scripts/station/arc-reference/Q06/Q06-links-bottom-arc.png: the other-sites Peek row with its Note spans y 913 to 1025 px"))
+    let routesRowHeight = Metric(44.5, .anatomy("scripts/station/arc-reference/Q06/Q06-links-bottom-arc.png: the Air Traffic Control card spans y 1125 to 1211 px"))
+    let linksBottom = Metric(43.5, .anatomy("scripts/station/arc-reference/Q06/Q06-links-bottom-arc.png: scrolled to the end, the Air Traffic Control card ends at y 1211 px of a 1300 px window"))
+    let infoGap = Metric(6.0, .anatomy("scripts/station/arc-reference/Q06/Q06-links-bottom-arc.png: 'Arc.' ends at x 584 px, the ⓘ starts at 596 px"))
+    let infoSize = Metric(14.0, .anatomy("scripts/station/arc-reference/Q06/Q06-links-bottom-arc.png: the ⓘ spans x 596 to 622 px"))
+    let sectionRule = Metric(24.0, .anatomy("scripts/station/arc-reference/Q06/Q06-links-bottom-arc.png: a card ends at y 629 px, the rule spans 678 to 680 px"))
+    let sectionRuleBelow = Metric(23.5, .anatomy("scripts/station/arc-reference/Q06/Q06-links-bottom-arc.png: the second rule ends at y 1076 px, the next card starts at 1124 px"))
 }

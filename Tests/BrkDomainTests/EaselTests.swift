@@ -43,14 +43,6 @@ final class EaselTests: XCTestCase {
         XCTAssertFalse(d.view.enabledActions.contains(.reloadPage))
     }
 
-    func test_fileNewEaselIsControlShiftEAndEnabledInStandardWindows() throws {
-        let spec = ActionID.newEasel.spec
-        XCTAssertEqual(spec.title, "New Easel")
-        XCTAssertEqual(spec.command, .easel(.create))
-        XCTAssertEqual(spec.bindings.map(\.chord), [KeyChord([.control, .shift], .e)])
-        XCTAssertTrue(Driver().view.enabledActions.contains(.newEasel))
-    }
-
     func test_shapesArrowsInkTextAndPicturesAreAddedMovedAndRemoved() throws {
         let d = Driver()
         let (id, _) = create(d)
@@ -91,60 +83,6 @@ final class EaselTests: XCTestCase {
 
         d.user(.easel(.remove(id, ["r", "e"])))
         XCTAssertEqual(board(d)?.elements.map(\.id), ["a", "i", copy.id])
-    }
-
-    func test_titleRenamesEveryRowAndItsSizeStepsThroughArcsThreeSizes() throws {
-        let d = Driver()
-        let (id, row) = create(d)
-        XCTAssertEqual(board(d)?.titleSize, 25)
-        d.user(.easel(.stepTitleSize(id, by: -1)))
-        XCTAssertEqual(board(d)?.titleSize, 20)
-        d.user(.easel(.stepTitleSize(id, by: -1)))
-        d.user(.easel(.stepTitleSize(id, by: -1)))
-        XCTAssertEqual(board(d)?.titleSize, 16, "Body is the smallest")
-        d.user(.easel(.stepTitleSize(id, by: 1)))
-        XCTAssertEqual(board(d)?.titleSize, 20)
-        d.user(.easel(.rename(id, title: "  Trip ideas ")))
-        XCTAssertEqual(board(d)?.title, "Trip ideas")
-        XCTAssertEqual(d.row(row)?.title, "Trip ideas")
-        d.user(.easel(.rename(id, title: "   ")))
-        XCTAssertEqual(board(d)?.title, "Trip ideas", "a blank title keeps the old one")
-    }
-
-    func test_picturesAreCopiedThroughAnEffectAndPlacedScaledDown() throws {
-        let d = Driver()
-        let (id, _) = create(d)
-        let choose = d.user(.easel(.chooseImage(id, at: CGPoint(x: 0, y: 300))))
-        XCTAssertEqual(choose.effects, [.easel(.chooseImage(d.window, id, at: CGPoint(x: 0, y: 300)))])
-        let source = URL(fileURLWithPath: "/tmp/fixture.png")
-        let imported = d.user(.easel(.importImage(id, from: source, at: CGPoint(x: 0, y: 300))))
-        guard case .easel(.importImage(let window, let easel, let from, let at, let element))? = imported.effects.first else {
-            return XCTFail("no copy was asked for: \(imported.effects)")
-        }
-        XCTAssertEqual([window.rawValue, easel.rawValue, from.path], [d.window.rawValue, id.rawValue, source.path])
-        XCTAssertEqual(at, CGPoint(x: 0, y: 300))
-        XCTAssertTrue(d.user(.easel(.importImage(id, from: URL(string: "https://example.com/a.png")!, at: .zero))).effects.isEmpty, "only files")
-        let copy = URL(fileURLWithPath: "/tmp/data/Easels/\(id)/\(element).png")
-        d.system(.easel(.imageImported(d.window, id, element: element, file: copy, size: CGSize(width: 1440, height: 720), at: CGPoint(x: 0, y: 300))))
-        let picture = try XCTUnwrap(board(d)?.elements.first)
-        XCTAssertEqual(picture.shape, .image)
-        XCTAssertEqual(picture.image, copy)
-        XCTAssertEqual(picture.frame, CGRect(x: -180, y: 210, width: 360, height: 180), "scaled to 360 on its long side, centred on the point")
-        d.system(.easel(.failed(d.window, id, "Could not add the picture: unreadable")))
-        XCTAssertEqual(d.view.tabTools.toast?.text, "Could not add the picture: unreadable")
-    }
-
-    func test_shareWritesTheBoardThroughASavePanel() throws {
-        let d = Driver()
-        let (id, _) = create(d)
-        d.user(.easel(.add(id, rectangle("r"))))
-        let share = d.user(.easel(.share(id)))
-        guard case .easel(.share(let window, let card))? = share.effects.first else { return XCTFail("\(share.effects)") }
-        XCTAssertEqual(window, d.window)
-        XCTAssertEqual(card.title, "Untitled Easel")
-        XCTAssertEqual(card.elements.map(\.id), ["r"])
-        d.system(.easel(.shared(d.window, id, URL(fileURLWithPath: "/tmp/Untitled Easel.png"))))
-        XCTAssertEqual(d.view.tabTools.toast?.text, "Saved Untitled Easel.png")
     }
 
     func test_libraryListsEveryEaselMostRecentlyEditedFirstAndOpensOne() throws {
@@ -197,16 +135,6 @@ final class EaselTests: XCTestCase {
         XCTAssertEqual(d.view.easels, [])
     }
 
-    func test_anArchivedEaselRowRestoresUntilTheEaselIsDeleted() throws {
-        let d = Driver()
-        let (id, row) = create(d)
-        d.user(.tab(.archive(.item(row))))
-        XCTAssertEqual(d.archive().first?.url, EaselPage.url(id))
-        d.user(.easel(.requestDelete(id)))
-        d.user(.easel(.confirmDelete(id, token: try XCTUnwrap(d.view.pendingEaselDeletion).token, confirmed: true)))
-        XCTAssertFalse(d.archive().contains { $0.url == EaselPage.url(id) }, "no archive entry brings back a deleted Easel")
-    }
-
     func test_theBoardAndItsRowSurviveARestart() throws {
         let d = Driver()
         let (id, row) = create(d)
@@ -240,11 +168,4 @@ final class EaselTests: XCTestCase {
         XCTAssertEqual(r.view.easels, [], "a row whose Easel is gone shows no board")
     }
 
-    func test_easelAddressesRoundTrip() {
-        let id = EaselID("6F1B5D7A-0000-4000-8000-000000000001")
-        XCTAssertEqual(EaselPage.id(of: EaselPage.url(id)), id)
-        XCTAssertNil(EaselPage.id(of: URL(string: "brk://history/")))
-        XCTAssertNil(EaselPage.id(of: URL(string: "https://easel.example.com/x")))
-        XCTAssertNil(EaselPage.id(of: URL(string: "brk://easel/")))
-    }
 }

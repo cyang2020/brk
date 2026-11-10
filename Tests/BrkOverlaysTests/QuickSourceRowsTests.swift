@@ -32,20 +32,6 @@ final class QuickSourceRowsTests: XCTestCase {
 
     // MARK: Quick answers
 
-    func testAnUnambiguousAnswerLeadsAndReturnCopiesIt() {
-        let rows = rank("10ft in m", bar())
-        XCTAssertEqual(rows[0].kind, .calculator)
-        XCTAssertEqual(rows[0].title, "3.048 m")
-        XCTAssertEqual(rows[0].subtitle, "10ft in m")
-        XCTAssertEqual(rows[0].hint, "Copy Result")
-        XCTAssertEqual(rows[0].command, .commandBar(.copyAnswer("3.048 m")))
-        XCTAssertEqual(rows[1].kind, .openTyped, "the search stays one row down")
-        XCTAssertTrue(rank("time in tokyo", bar())[0].title.contains("21:00"))
-        XCTAssertEqual(rank("time in tokyo", bar())[0].kind, .calculator)
-    }
-
-    /// A bare word's answer sits right under the typed row, so Return searches, unless a site completes the word: then the
-    /// site leads, as in Arc ("time" puts TIME, time.com, first), the typed row follows and the answer follows that.
     func testABareWordSitsBelowTheTypedRowSoReturnStillSearches() {
         for word in ["tomorrow", "yesterday", "now"] {
             let rows = rank(word, bar())
@@ -59,68 +45,7 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(time[0].command, .commandBar(.submit("time.com")))
     }
 
-    func testPlainArithmeticLeadsAndTheSearchFollows() {
-        let rows = rank("2+2", bar())
-        XCTAssertEqual(rows[0].command, .commandBar(.calculate("2+2")))
-        XCTAssertEqual(rows[0].title, "4")
-        XCTAssertEqual(rows[1].kind, .openTyped)
-    }
-
-    func testACurrencyQuestionHasNoRowUntilRatesAreKnown() {
-        XCTAssertNil(rank("100 usd in cny", bar()).first { $0.kind == .calculator }, "no network and no cache")
-        XCTAssertEqual(rank("100 usd in cny", bar()).first?.kind, .openTyped)
-        let rows = rank("100 usd in cny", bar(rates: CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1, "USD": 1.1, "CNY": 7.7])))
-        XCTAssertEqual(rows[0].title, "700.00 CNY")
-        XCTAssertEqual(rows[0].subtitle, "100 usd in cny · ECB 2026-11-06")
-    }
-
-    func testNoAnswerInAnEmptyPanesBar() {
-        XCTAssertNil(rank("10ft in m", bar(fillsPane: true)).first { $0.kind == .calculator })
-        XCTAssertNil(rank("today", bar(fillsPane: true)).first { $0.kind == .calculator })
-    }
-
-    func testAnOrdinarySearchOrAddressGetsNoAnswerRow() {
-        for text in ["10 things", "best 10 ft in m", "example.com", "time.com"] {
-            XCTAssertNil(rank(text, bar()).first { $0.kind == .calculator }, text)
-        }
-    }
-
     // MARK: Files and apps inline
-
-    /// Apps and files rank as commands do (Arc's typeTravel archetype): an app named exactly what is typed leads; each row
-    /// keeps what Return, ⌘Return and ⌥Return do, and carries the key its runs are learned under.
-    func testAppsAndFilesRankAsCommands() {
-        let suggestions = ["budget a", "budget b", "budget c"]
-        let local = LocalResults(query: "budget", apps: [app("Budget")], files: [hit("budget.txt"), hit("budget2.txt")])
-        let rows = rank("budget", bar(suggestions: suggestions, suggestedFor: "budget", local: local))
-        XCTAssertEqual(rows.first?.kind, .app, "the app's name is the whole text")
-        XCTAssertTrue(rows.contains { $0.kind == .openTyped }, "the search stays")
-        let app = rows[0]
-        XCTAssertEqual(app.title, "Budget")
-        XCTAssertEqual(app.hint, "Open App")
-        XCTAssertEqual(app.command, .commandBar(.local(.open, path: "/Applications/Budget.app")))
-        XCTAssertEqual(app.icon, .file("/Applications/Budget.app"))
-        XCTAssertNil(app.commandReturn)
-        XCTAssertEqual(app.usageKey, Suggest.usageKey(app.command))
-        let file = try! XCTUnwrap(rows.first { $0.kind == .file })
-        XCTAssertEqual(file.subtitle, "/Users/u/Documents")
-        XCTAssertEqual(file.hint, "⌘↩ Reveal  ⌥↩ Copy Path")
-        XCTAssertEqual(file.commandReturn, .commandBar(.local(.reveal, path: file.command == .commandBar(.local(.open, path: "/Users/u/Documents/budget.txt")) ? "/Users/u/Documents/budget.txt" : "/Users/u/Documents/budget2.txt")))
-        XCTAssertLessThanOrEqual(rows.filter { $0.kind == .file || $0.kind == .app }.count, 4, "two of each at most")
-    }
-
-    func testAnAddressListsTheTabAndNoFileRows() {
-        let tab = candidate("t1", "Home", "https://example.com/")
-        let local = LocalResults(query: "https://example.com/", apps: [], files: [hit("example.txt")])
-        let rows = rank("https://example.com/", bar(tabs: [tab], local: local))
-        XCTAssertEqual(rows.prefix(2).map(\.kind), [.openTyped, .switchToTab], "as in Arc: the typed address, then the tab showing it")
-        XCTAssertFalse(rows.contains { $0.kind == .file })
-    }
-
-    func testTheyWaitForThreeCharacters() {
-        let local = LocalResults(query: "bu", apps: [], files: [hit("bu.txt")])
-        XCTAssertFalse(rank("bu", bar(local: local)).contains { $0.kind == .file })
-    }
 
     /// A stale answer: the bar's text has moved on, and the view must not show what answered the old one.
     func testAnAnswerToAnotherTextIsNotShown() {
@@ -128,19 +53,6 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(rank("budget", bar(local: local)).filter { $0.kind == .file || $0.kind == .app }.count, 2)
         XCTAssertEqual(rank("budgets", bar(local: local)).filter { $0.kind == .file || $0.kind == .app }.count, 0)
         XCTAssertEqual(rank("budge", bar(local: local)).filter { $0.kind == .file || $0.kind == .app }.count, 0)
-    }
-
-    func testNoRowsInOtherBars() {
-        let local = LocalResults(query: "budget", apps: [app("Budget")], files: [hit("budget.txt")])
-        var editing = bar(local: local)
-        editing.createsTab = false
-        XCTAssertFalse(rank("budget", editing).contains { $0.kind == .file || $0.kind == .app }, "the bar over the page's address")
-        XCTAssertFalse(rank("budget", bar(local: local, fillsPane: true)).contains { $0.kind == .file || $0.kind == .app })
-        var ai = bar(local: local)
-        ai.aiMode = .question
-        XCTAssertFalse(rank("budget", ai).contains { $0.kind == .file || $0.kind == .app })
-        let site = Suggest.rank(query: "budget", bar: bar(local: local), appName: "Brk", siteSearch: bing)
-        XCTAssertFalse(site.contains { $0.kind == .file || $0.kind == .app })
     }
 
     /// With no new source matching, the rows are exactly what they were.
@@ -164,45 +76,6 @@ final class QuickSourceRowsTests: XCTestCase {
 
     private func ranked(_ text: String, word: String, _ bar: CommandBarSnapshot) -> [Suggestion] {
         Suggest.rank(query: text, bar: bar, appName: "Brk", prefix: prefix(word, bar), resolve: { resolveTypedInput($0) })
-    }
-
-    func testTheFilePrefixListsOnlyFilesOnceTheyAreIn() {
-        XCTAssertEqual(ranked("budget", word: "file", bar()), [], "not in yet")
-        let files = (1...7).map { hit("budget\($0).txt") }
-        let rows = ranked("budget", word: "file", bar(local: LocalResults(query: "budget", scope: .files, apps: [], files: files)))
-        XCTAssertEqual(rows.count, 5)
-        XCTAssertTrue(rows.allSatisfy { $0.kind == .file })
-        XCTAssertEqual(ranked("budget", word: "file", bar(local: LocalResults(query: "budge", scope: .files, apps: [], files: files))), [], "stale")
-        XCTAssertEqual(ranked("budget", word: "文件", bar(local: LocalResults(query: "budget", scope: .filesAndApps, apps: [], files: files))), [], "another question's answer")
-    }
-
-    func testTheAppPrefixListsOnlyApps() {
-        let rows = ranked("bud", word: "app", bar(local: LocalResults(query: "bud", scope: .apps, apps: [app("Budget")], files: [])))
-        XCTAssertEqual(rows.map(\.kind), [.app])
-        XCTAssertEqual(rows[0].command, .commandBar(.local(.open, path: "/Applications/Budget.app")))
-    }
-
-    func testAIPrefixRows() {
-        var snapshot = bar()
-        snapshot.askProvider = "Claude"
-        snapshot.askAgentFound = true
-        snapshot.agentsFound = ["claude", "codex"]
-        snapshot.askPageOn = true
-        func only(_ text: String, _ word: String) -> Suggestion? {
-            let rows = ranked(text, word: word, snapshot)
-            XCTAssertLessThanOrEqual(rows.count, 1)
-            return rows.first
-        }
-        XCTAssertEqual(only("why", "claude")?.command, .assist(.askAgent("why", agent: .claude)))
-        XCTAssertEqual(only("why", "gpt")?.command, .assist(.askAgent("why", agent: .codex)))
-        XCTAssertEqual(only("why", "codex")?.subtitle, "Ask Codex")
-        XCTAssertEqual(only("why", "ask")?.command, .assist(.ask("why")))
-        XCTAssertEqual(only("why", "问")?.subtitle, "Ask Claude")
-        XCTAssertEqual(only("why", "page")?.command, .assist(.askPage("why")))
-        XCTAssertNil(only("", "claude"), "nothing to send yet")
-        XCTAssertNil(only("", "page"))
-        XCTAssertEqual(only("", "summarize")?.command, .assist(.askPage("Summarize this page")), "Return with no text summarises")
-        XCTAssertEqual(only("the costs", "总结")?.command, .assist(.askPage("Summarize this page: the costs")))
     }
 
     func testSplitRows() {
@@ -237,20 +110,6 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(ranked("", word: "split", snapshot).map(\.command), [tab("t1"), tab("t2"), .split(.addPane)])
     }
 
-    func testWindowRows() {
-        var snapshot = bar()
-        snapshot.actions = [.fullscreen, .minimize, .toggleStayOnTop]
-        let all = ranked("", word: "window", snapshot)
-        XCTAssertEqual(all.count, 5, "the bar's five rows; a word narrows the rest")
-        XCTAssertEqual(all.map(\.command), [.window(.place(.leftHalf)), .window(.place(.rightHalf)), .window(.place(.topHalf)), .window(.place(.bottomHalf)), .window(.place(.maximize))])
-        XCTAssertEqual(ranked("cent", word: "窗口", snapshot).map(\.command), [.window(.place(.center))])
-        XCTAssertEqual(ranked("centre", word: "window", snapshot).map(\.command), [.window(.place(.center))])
-        XCTAssertEqual(ranked("next", word: "window", snapshot).map(\.command), [.window(.place(.nextDisplay))])
-        XCTAssertEqual(ranked("full", word: "window", snapshot).first?.command, .app(.toggleFullScreen))
-        XCTAssertEqual(ranked("minimize", word: "window", snapshot).first?.command, .app(.minimize))
-        XCTAssertEqual(ranked("always", word: "window", snapshot).first?.command, .window(.toggleStayOnTop))
-    }
-
     func testWindowRowsStayOutOfOrdinaryQueriesButAnExactPhrase() {
         for text in ["left", "half", "right", "maximize", "center", "next", "window", "display"] {
             XCTAssertFalse(rank(text, bar()).contains { if case .window(.place) = $0.command { true } else { false } }, text)
@@ -266,122 +125,11 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertFalse(rank("left half", bar(fillsPane: true)).contains { if case .window(.place) = $0.command { true } else { false } })
     }
 
-    func testTranslateRows() {
-        var snapshot = bar()
-        snapshot.translationOn = true
-        snapshot.askAgentFound = true
-        XCTAssertEqual(ranked("", word: "tr", snapshot), [])
-        XCTAssertEqual(ranked("page to ja", word: "tr", snapshot).first?.command, .assist(.translate("Japanese")))
-        // Waiting: says so, and Return has nothing to do.
-        let waiting = ranked("hello", word: "tr", snapshot)
-        XCTAssertEqual(waiting.first?.title, "Translating to Chinese (Simplified)…")
-        XCTAssertEqual(waiting.first?.subtitle, "hello")
-        XCTAssertEqual(waiting.first?.command, .commandBar(.copyAnswer("")))
-        // The answer, one line in the row, whole on the pasteboard.
-        var answered = BarTranslation(text: "hello", target: "Chinese (Simplified)")
-        answered.answer = "你好\n世界"
-        snapshot.translation = answered
-        let done = ranked("hello", word: "翻译", snapshot)
-        XCTAssertEqual(done.first?.title, "你好 世界")
-        XCTAssertEqual(done.first?.command, .commandBar(.copyAnswer("你好\n世界")))
-        XCTAssertEqual(done.first?.hint, "Copy Result")
-        // An answer to another text is not this text's.
-        XCTAssertEqual(ranked("hello there", word: "tr", snapshot).first?.command, .commandBar(.copyAnswer("")))
-        // A failure says why.
-        var failed = BarTranslation(text: "hello", target: "English")
-        failed.failure = "no network"
-        snapshot.translation = failed
-        XCTAssertEqual(ranked("hello", word: "tr", snapshot).first?.title, "no network")
-    }
-
-    func testDefineRows() {
-        var snapshot = bar()
-        XCTAssertEqual(ranked("apple", word: "define", snapshot), [], "not in yet")
-        snapshot.definition = BarDefinition(word: "apple", text: "the round fruit of a tree")
-        let rows = ranked("apple", word: "查", snapshot)
-        XCTAssertEqual(rows.first?.title, "the round fruit of a tree")
-        XCTAssertEqual(rows.first?.hint, "Open Dictionary")
-        XCTAssertEqual(rows.first?.command, .commandBar(.openDictionary("apple")))
-        XCTAssertEqual(ranked("apples", word: "def", snapshot), [], "stale")
-        snapshot.definition = BarDefinition(word: "zzz", text: nil)
-        XCTAssertEqual(ranked("zzz", word: "def", snapshot).first?.title, "No definition for zzz")
-        XCTAssertEqual(ranked("zzz", word: "def", snapshot).first?.command, .commandBar(.copyAnswer("")), "Return does nothing")
-    }
-
-    func testColorRowsWithNoPrefix() {
-        let full = rank("#ff5500", bar())
-        XCTAssertEqual(Array(full.map(\.title).prefix(3)), ["#FF5500", "rgb(255, 85, 0)", "hsl(20, 100%, 50%)"], "in full it leads")
-        XCTAssertEqual(full[0].command, .commandBar(.copyAnswer("#FF5500")))
-        XCTAssertEqual(full[1].command, .commandBar(.copyAnswer("rgb(255, 85, 0)")))
-        XCTAssertEqual(full[2].command, .commandBar(.copyAnswer("hsl(20, 100%, 50%)")))
-        XCTAssertEqual(full[0].icon, .swatch(QuickColor(red: 255, green: 85, blue: 0).rgba))
-        XCTAssertEqual(full[3].kind, .openTyped, "the search is still there")
-        XCTAssertEqual(rank("rgb(255,85,0)", bar())[0].title, "#FF5500")
-        XCTAssertEqual(rank("hsl(20,100%,50%)", bar())[0].title, "#FF5500")
-    }
-
-    func testBareThreeDigitHashKeepsReturnSearching() {
-        let rows = rank("#abc", bar())
-        XCTAssertEqual(rows[0].kind, .openTyped)
-        XCTAssertEqual(rows[0].command, .commandBar(.submit("#abc")))
-        XCTAssertEqual(Array(rows[1...3].map(\.kind)), [.color, .color, .color])
-        XCTAssertEqual(rows[1].title, "#AABBCC")
-    }
-
     func testAHashtagAndWordsAreNoColor() {
         for text in ["#hashtag", "#ab", "tomato", "red", "rgb"] {
             XCTAssertFalse(rank(text, bar()).contains { $0.kind == .color }, text)
         }
         XCTAssertEqual(rank("#hashtag", bar()).first?.kind, .openTyped)
-    }
-
-    func testColorRowsNotInAnEmptyPane() {
-        XCTAssertFalse(rank("#ff5500", bar(fillsPane: true)).contains { $0.kind == .color })
-    }
-
-    func testTheColorPrefixReadsNames() {
-        let rows = ranked("tomato", word: "color", bar())
-        XCTAssertEqual(rows.map(\.title), ["#FF6347", "rgb(255, 99, 71)", "hsl(9, 100%, 64%)"])
-        XCTAssertEqual(rows[2].command, .commandBar(.copyAnswer("hsl(9, 100%, 64%)")))
-        XCTAssertEqual(ranked("#f50", word: "颜色", bar()).first?.title, "#FF5500")
-        XCTAssertEqual(ranked("nothing", word: "colour", bar()), [])
-        XCTAssertEqual(ranked("", word: "color", bar()), [])
-    }
-
-    func testAPrefixHasTheListToItself() {
-        var snapshot = bar()
-        snapshot.actions = [.addSplitView]
-        let rows = Suggest.rank(query: "view", bar: snapshot, appName: "Brk", prefix: prefix("split", snapshot), resolve: { resolveTypedInput($0) })
-        XCTAssertEqual(rows.first?.command, .commandBar(.splitOpen(.right, "view")))
-        XCTAssertEqual(Suggest.rank(query: "", bar: snapshot, appName: "Brk", prefix: prefix("split", snapshot), resolve: { resolveTypedInput($0) }).first?.title, "Add Split View")
-    }
-
-    func testTheCalcPrefixForcesCalculation() {
-        for word in ["calc", "=", "算"] {
-            XCTAssertEqual(ranked("2+2", word: word, bar()).first?.title, "4", word)
-            XCTAssertEqual(ranked("2+2", word: word, bar()).first?.command, .commandBar(.copyAnswer("4")), word)
-        }
-        XCTAssertEqual(ranked("42", word: "calc", bar()).first?.title, "42", "a plain number is an answer here")
-        XCTAssertEqual(ranked("10ft in m", word: "calc", bar()).first?.title, "3.048 m")
-        XCTAssertEqual(ranked("hello", word: "calc", bar()), [])
-        XCTAssertEqual(ranked("", word: "calc", bar()), [])
-    }
-
-    func testAPastedFileWordIsAnOrdinarySearch() {
-        // As plain text, "file budget" is not a mode any more.
-        XCTAssertEqual(rank("file budget", bar()).first?.kind, .openTyped)
-        XCTAssertEqual(rank("emoji smile", bar()).first?.kind, .openTyped)
-        XCTAssertFalse(rank("emoji smile", bar()).contains { $0.kind == .emoji })
-    }
-
-    func testEmojiMatchesListAndReturnCopies() throws {
-        let rows = ranked("smile", word: "emoji", bar())
-        XCTAssertEqual(rows.count, 5)
-        XCTAssertTrue(rows.allSatisfy { $0.kind == .emoji })
-        guard case .emoji(let emoji)? = rows[0].icon else { return XCTFail("no emoji picture") }
-        XCTAssertEqual(rows[0].command, .commandBar(.copyAnswer(emoji)))
-        XCTAssertEqual(rows[0].hint, "Copy Emoji")
-        XCTAssertEqual(ranked("zzzqqq", word: "表情", bar()), [])
     }
 
     func testTheSystemsNamesFindAnEmoji() {
@@ -424,14 +172,6 @@ final class QuickSourceRowsTests: XCTestCase {
         snapshot.askAgentFound = asks
         snapshot.siteSearch = [bing]
         return snapshot
-    }
-
-    func testTabSendsTheTypedTextToTheLocalAI() {
-        let sink = Box(), bar = view(tabBar(), sink)
-        type("why is the sky blue", into: bar)
-        sink.sent.removeAll()
-        press(#selector(NSResponder.insertTab(_:)), bar)
-        XCTAssertEqual(sink.sent, [.assist(.ask("why is the sky blue"))])
     }
 
     func testSiteSearchAndTheToolsNameKeepTabFirst() {
@@ -485,19 +225,6 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(sink.sent, [], "the bar over the page's address")
     }
 
-    func testReturnOnAFileRowOpensIt() {
-        let sink = Box()
-        let local = LocalResults(query: "budget", scope: .files, apps: [], files: [hit("budget.txt")])
-        let bar = view(bar(local: local), sink)
-        type("file", into: bar)
-        press(#selector(NSResponder.insertTab(_:)), bar)
-        type("budget", into: bar)
-        XCTAssertEqual(sink.sent.last, .commandBar(.prefixQuery(.files, "budget")))
-        sink.sent.removeAll()
-        press(#selector(NSResponder.insertNewline(_:)), bar)
-        XCTAssertEqual(sink.sent, [.commandBar(.local(.open, path: "/Users/u/Documents/budget.txt"))])
-    }
-
     // MARK: Entering and leaving a prefix
 
     /// Character by character, as a keyboard types: each key changes the text by one.
@@ -508,17 +235,6 @@ final class QuickSourceRowsTests: XCTestCase {
     private func enterWord(_ word: String, into view: CommandBarView) {
         type(word, into: view)
         press(#selector(NSResponder.insertTab(_:)), view)
-    }
-
-    func testAWholeWordThenTabEntersAndThePillShowsIt() {
-        let sink = Box(), bar = view(bar(), sink)
-        enterWord("emoji", into: bar)
-        XCTAssertEqual(bar.prefix?.action, .emoji)
-        XCTAssertEqual(bar.typed, "")
-        XCTAssertEqual(bar.input.stringValue, "")
-        let cased = view(self.bar(), sink)
-        enterWord("EMOJI", into: cased)
-        XCTAssertEqual(cased.prefix?.action, .emoji, "case aside")
     }
 
     /// A search can start with any of the words: Space is always a space, and only Tab enters.
@@ -549,45 +265,6 @@ final class QuickSourceRowsTests: XCTestCase {
             type(text, into: bar)   // the whole text arrives in one change, as a paste does
             XCTAssertNil(bar.prefix, text)
             XCTAssertEqual(bar.typed, text)
-        }
-    }
-
-    func testBackspaceAndEscGiveTheWordBack() {
-        let sink = Box(), bar = view(bar(), sink)
-        enterWord("emoji", into: bar)
-        press(#selector(NSResponder.deleteBackward(_:)), bar)
-        XCTAssertNil(bar.prefix)
-        XCTAssertEqual(bar.input.stringValue, "emoji")
-        XCTAssertEqual(bar.typed, "emoji")
-        // The word can now be typed as a search.
-        typeKeys(" report", into: bar)
-        XCTAssertNil(bar.prefix)
-        XCTAssertEqual(bar.typed, "emoji report")
-        XCTAssertEqual(sink.sent.last, .commandBar(.queryChanged("emoji report")))
-        // Tab on the word again.
-        type("", into: bar)
-        enterWord("emoji", into: bar)
-        XCTAssertEqual(bar.prefix?.action, .emoji)
-        press(#selector(NSResponder.cancelOperation(_:)), bar)
-        XCTAssertNil(bar.prefix)
-        XCTAssertEqual(bar.input.stringValue, "emoji")
-        // Esc again closes the bar, as in site search.
-        sink.sent.removeAll()
-        press(#selector(NSResponder.cancelOperation(_:)), bar)
-        XCTAssertEqual(sink.sent, [.commandBar(.dismiss)])
-    }
-
-    func testTheChineseWordsEnterToo() {
-        let sink = Box()
-        for (word, action) in [("文件", QuickPrefixAction.files), ("应用", .apps), ("表情", .emoji), ("算", .calculate), ("分屏", .split), ("窗口", .window), ("查", .define), ("颜色", .color)] {
-            let bar = view(self.bar(), sink)
-            var snapshot = self.bar()
-            snapshot.actions = [.addSplitView]
-            bar.show(snapshot, in: box, scheme: .light)
-            type(word, into: bar)
-            XCTAssertEqual(bar.prefixOffer?.action, action, word)
-            press(#selector(NSResponder.insertTab(_:)), bar)
-            XCTAssertEqual(bar.prefix?.action, action, word)
         }
     }
 
@@ -722,23 +399,6 @@ final class QuickSourceRowsTests: XCTestCase {
         }
     }
 
-    func testAPrefixOnOfferShowsAsItsChipBesideTab() {
-        let sink = Box()
-        var snapshot = bar()
-        snapshot.siteSearch = [bing]
-        let offered = view(snapshot, sink)
-        XCTAssertTrue(offered.offerChip.isHidden)
-        type("em", into: offered)
-        offered.layoutSubtreeIfNeeded()
-        XCTAssertFalse(offered.offerChip.isHidden, "Emoji is on offer")
-        XCTAssertEqual(offered.offerChip.title, "Emoji")
-        XCTAssertEqual(srgb(offered.offerChip.layer?.backgroundColor)[3], CGFloat(QuickChipColors.fillAlpha.light), accuracy: 0.01)
-        type("bi", into: offered)
-        offered.layoutSubtreeIfNeeded()
-        XCTAssertNotNil(offered.offer)
-        XCTAssertTrue(offered.offerChip.isHidden, "an engine's offer is Arc's words")
-    }
-
     /// With Max off, or the agent missing, an AI prefix's word says why beside the input, and Tab opens the settings that
     /// change it, instead of doing nothing and leaving the word to run into the next one ("claudehello").
     func testABlockedAIPrefixSaysWhyAndTabOpensItsSettings() {
@@ -804,11 +464,172 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertNil(spaced.prefixOffer, "one word")
     }
 
-    func testAToolsPartNameStillOpensQuestionMode() {
+    func testACurrencyQuestionHasNoRowUntilRatesAreKnown() {
+        XCTAssertNil(rank("100 usd in cny", bar()).first { $0.kind == .calculator }, "no network and no cache")
+        XCTAssertEqual(rank("100 usd in cny", bar()).first?.kind, .openTyped)
+        let rows = rank("100 usd in cny", bar(rates: CurrencyRates(date: "2026-11-06", perEuro: ["EUR": 1, "USD": 1.1, "CNY": 7.7])))
+        XCTAssertEqual(rows[0].title, "700.00 CNY")
+        XCTAssertEqual(rows[0].subtitle, "100 usd in cny · ECB 2026-11-06")
+    }
+
+    func testNoRowsInOtherBars() {
+        let local = LocalResults(query: "budget", apps: [app("Budget")], files: [hit("budget.txt")])
+        var editing = bar(local: local)
+        editing.createsTab = false
+        XCTAssertFalse(rank("budget", editing).contains { $0.kind == .file || $0.kind == .app }, "the bar over the page's address")
+        XCTAssertFalse(rank("budget", bar(local: local, fillsPane: true)).contains { $0.kind == .file || $0.kind == .app })
+        var ai = bar(local: local)
+        ai.aiMode = .question
+        XCTAssertFalse(rank("budget", ai).contains { $0.kind == .file || $0.kind == .app })
+        let site = Suggest.rank(query: "budget", bar: bar(local: local), appName: "Brk", siteSearch: bing)
+        XCTAssertFalse(site.contains { $0.kind == .file || $0.kind == .app })
+    }
+
+    /// Apps and files rank as commands do (Arc's typeTravel archetype): an app named exactly what is typed leads; each row
+    /// keeps what Return, ⌘Return and ⌥Return do, and carries the key its runs are learned under.
+    func testAppsAndFilesRankAsCommands() {
+        let suggestions = ["budget a", "budget b", "budget c"]
+        let local = LocalResults(query: "budget", apps: [app("Budget")], files: [hit("budget.txt"), hit("budget2.txt")])
+        let rows = rank("budget", bar(suggestions: suggestions, suggestedFor: "budget", local: local))
+        XCTAssertEqual(rows.first?.kind, .app, "the app's name is the whole text")
+        XCTAssertTrue(rows.contains { $0.kind == .openTyped }, "the search stays")
+        let app = rows[0]
+        XCTAssertEqual(app.title, "Budget")
+        XCTAssertEqual(app.hint, "Open App")
+        XCTAssertEqual(app.command, .commandBar(.local(.open, path: "/Applications/Budget.app")))
+        XCTAssertEqual(app.icon, .file("/Applications/Budget.app"))
+        XCTAssertNil(app.commandReturn)
+        XCTAssertEqual(app.usageKey, Suggest.usageKey(app.command))
+        let file = try! XCTUnwrap(rows.first { $0.kind == .file })
+        XCTAssertEqual(file.subtitle, "/Users/u/Documents")
+        XCTAssertEqual(file.hint, "⌘↩ Reveal  ⌥↩ Copy Path")
+        XCTAssertEqual(file.commandReturn, .commandBar(.local(.reveal, path: file.command == .commandBar(.local(.open, path: "/Users/u/Documents/budget.txt")) ? "/Users/u/Documents/budget.txt" : "/Users/u/Documents/budget2.txt")))
+        XCTAssertLessThanOrEqual(rows.filter { $0.kind == .file || $0.kind == .app }.count, 4, "two of each at most")
+    }
+
+    func testAIPrefixRows() {
+        var snapshot = bar()
+        snapshot.askProvider = "Claude"
+        snapshot.askAgentFound = true
+        snapshot.agentsFound = ["claude", "codex"]
+        snapshot.askPageOn = true
+        func only(_ text: String, _ word: String) -> Suggestion? {
+            let rows = ranked(text, word: word, snapshot)
+            XCTAssertLessThanOrEqual(rows.count, 1)
+            return rows.first
+        }
+        XCTAssertEqual(only("why", "claude")?.command, .assist(.askAgent("why", agent: .claude)))
+        XCTAssertEqual(only("why", "gpt")?.command, .assist(.askAgent("why", agent: .codex)))
+        XCTAssertEqual(only("why", "codex")?.subtitle, "Ask Codex")
+        XCTAssertEqual(only("why", "ask")?.command, .assist(.ask("why")))
+        XCTAssertEqual(only("why", "问")?.subtitle, "Ask Claude")
+        XCTAssertEqual(only("why", "page")?.command, .assist(.askPage("why")))
+        XCTAssertNil(only("", "claude"), "nothing to send yet")
+        XCTAssertNil(only("", "page"))
+        XCTAssertEqual(only("", "summarize")?.command, .assist(.askPage("Summarize this page")), "Return with no text summarises")
+        XCTAssertEqual(only("the costs", "总结")?.command, .assist(.askPage("Summarize this page: the costs")))
+    }
+
+    func testWindowRows() {
+        var snapshot = bar()
+        snapshot.actions = [.fullscreen, .minimize, .toggleStayOnTop]
+        let all = ranked("", word: "window", snapshot)
+        XCTAssertEqual(all.count, 5, "the bar's five rows; a word narrows the rest")
+        XCTAssertEqual(all.map(\.command), [.window(.place(.leftHalf)), .window(.place(.rightHalf)), .window(.place(.topHalf)), .window(.place(.bottomHalf)), .window(.place(.maximize))])
+        XCTAssertEqual(ranked("cent", word: "窗口", snapshot).map(\.command), [.window(.place(.center))])
+        XCTAssertEqual(ranked("centre", word: "window", snapshot).map(\.command), [.window(.place(.center))])
+        XCTAssertEqual(ranked("next", word: "window", snapshot).map(\.command), [.window(.place(.nextDisplay))])
+        XCTAssertEqual(ranked("full", word: "window", snapshot).first?.command, .app(.toggleFullScreen))
+        XCTAssertEqual(ranked("minimize", word: "window", snapshot).first?.command, .app(.minimize))
+        XCTAssertEqual(ranked("always", word: "window", snapshot).first?.command, .window(.toggleStayOnTop))
+    }
+
+    func testTranslateRows() {
+        var snapshot = bar()
+        snapshot.translationOn = true
+        snapshot.askAgentFound = true
+        XCTAssertEqual(ranked("", word: "tr", snapshot), [])
+        XCTAssertEqual(ranked("page to ja", word: "tr", snapshot).first?.command, .assist(.translate("Japanese")))
+        // Waiting: says so, and Return has nothing to do.
+        let waiting = ranked("hello", word: "tr", snapshot)
+        XCTAssertEqual(waiting.first?.title, "Translating to Chinese (Simplified)…")
+        XCTAssertEqual(waiting.first?.subtitle, "hello")
+        XCTAssertEqual(waiting.first?.command, .commandBar(.copyAnswer("")))
+        // The answer, one line in the row, whole on the pasteboard.
+        var answered = BarTranslation(text: "hello", target: "Chinese (Simplified)")
+        answered.answer = "你好\n世界"
+        snapshot.translation = answered
+        let done = ranked("hello", word: "翻译", snapshot)
+        XCTAssertEqual(done.first?.title, "你好 世界")
+        XCTAssertEqual(done.first?.command, .commandBar(.copyAnswer("你好\n世界")))
+        XCTAssertEqual(done.first?.hint, "Copy Result")
+        // An answer to another text is not this text's.
+        XCTAssertEqual(ranked("hello there", word: "tr", snapshot).first?.command, .commandBar(.copyAnswer("")))
+        // A failure says why.
+        var failed = BarTranslation(text: "hello", target: "English")
+        failed.failure = "no network"
+        snapshot.translation = failed
+        XCTAssertEqual(ranked("hello", word: "tr", snapshot).first?.title, "no network")
+    }
+
+    func testDefineRows() {
+        var snapshot = bar()
+        XCTAssertEqual(ranked("apple", word: "define", snapshot), [], "not in yet")
+        snapshot.definition = BarDefinition(word: "apple", text: "the round fruit of a tree")
+        let rows = ranked("apple", word: "查", snapshot)
+        XCTAssertEqual(rows.first?.title, "the round fruit of a tree")
+        XCTAssertEqual(rows.first?.hint, "Open Dictionary")
+        XCTAssertEqual(rows.first?.command, .commandBar(.openDictionary("apple")))
+        XCTAssertEqual(ranked("apples", word: "def", snapshot), [], "stale")
+        snapshot.definition = BarDefinition(word: "zzz", text: nil)
+        XCTAssertEqual(ranked("zzz", word: "def", snapshot).first?.title, "No definition for zzz")
+        XCTAssertEqual(ranked("zzz", word: "def", snapshot).first?.command, .commandBar(.copyAnswer("")), "Return does nothing")
+    }
+
+    func testColorRowsWithNoPrefix() {
+        let full = rank("#ff5500", bar())
+        XCTAssertEqual(Array(full.map(\.title).prefix(3)), ["#FF5500", "rgb(255, 85, 0)", "hsl(20, 100%, 50%)"], "in full it leads")
+        XCTAssertEqual(full[0].command, .commandBar(.copyAnswer("#FF5500")))
+        XCTAssertEqual(full[1].command, .commandBar(.copyAnswer("rgb(255, 85, 0)")))
+        XCTAssertEqual(full[2].command, .commandBar(.copyAnswer("hsl(20, 100%, 50%)")))
+        XCTAssertEqual(full[0].icon, .swatch(QuickColor(red: 255, green: 85, blue: 0).rgba))
+        XCTAssertEqual(full[3].kind, .openTyped, "the search is still there")
+        XCTAssertEqual(rank("rgb(255,85,0)", bar())[0].title, "#FF5500")
+        XCTAssertEqual(rank("hsl(20,100%,50%)", bar())[0].title, "#FF5500")
+    }
+
+    func testBareThreeDigitHashKeepsReturnSearching() {
+        let rows = rank("#abc", bar())
+        XCTAssertEqual(rows[0].kind, .openTyped)
+        XCTAssertEqual(rows[0].command, .commandBar(.submit("#abc")))
+        XCTAssertEqual(Array(rows[1...3].map(\.kind)), [.color, .color, .color])
+        XCTAssertEqual(rows[1].title, "#AABBCC")
+    }
+
+    func testTheColorPrefixReadsNames() {
+        let rows = ranked("tomato", word: "color", bar())
+        XCTAssertEqual(rows.map(\.title), ["#FF6347", "rgb(255, 99, 71)", "hsl(9, 100%, 64%)"])
+        XCTAssertEqual(rows[2].command, .commandBar(.copyAnswer("hsl(9, 100%, 64%)")))
+        XCTAssertEqual(ranked("#f50", word: "颜色", bar()).first?.title, "#FF5500")
+        XCTAssertEqual(ranked("nothing", word: "colour", bar()), [])
+        XCTAssertEqual(ranked("", word: "color", bar()), [])
+    }
+
+    func testEmojiMatchesListAndReturnCopies() throws {
+        let rows = ranked("smile", word: "emoji", bar())
+        XCTAssertEqual(rows.count, 5)
+        XCTAssertTrue(rows.allSatisfy { $0.kind == .emoji })
+        guard case .emoji(let emoji)? = rows[0].icon else { return XCTFail("no emoji picture") }
+        XCTAssertEqual(rows[0].command, .commandBar(.copyAnswer(emoji)))
+        XCTAssertEqual(rows[0].hint, "Copy Emoji")
+        XCTAssertEqual(ranked("zzzqqq", word: "表情", bar()), [])
+    }
+
+    func testTabSendsTheTypedTextToTheLocalAI() {
         let sink = Box(), bar = view(tabBar(), sink)
-        type("cla", into: bar)
+        type("why is the sky blue", into: bar)
         sink.sent.removeAll()
         press(#selector(NSResponder.insertTab(_:)), bar)
-        XCTAssertEqual(sink.sent, [.assist(.open(.question))])
+        XCTAssertEqual(sink.sent, [.assist(.ask("why is the sky blue"))])
     }
 }

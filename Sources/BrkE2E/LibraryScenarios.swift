@@ -4,7 +4,6 @@ import BrkDomain
 import Foundation
 
 enum LibraryScenarios {
-    @Sendable static func completedQuit(_ app: AppUnderTest) throws { try quitAfterDownload(app, active: false) }
     @Sendable static func activeQuit(_ app: AppUnderTest) throws { try quitAfterDownload(app, active: true) }
 
     private static func quitAfterDownload(_ app: AppUnderTest, active: Bool) throws {

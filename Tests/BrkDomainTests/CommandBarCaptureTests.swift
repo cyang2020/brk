@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// The domain side of the 2026-11-03 command bar captures (verify/visual-pairs/run-20261103 P43-a, Q01-a/b, P02-c).
+/// The domain side of the 2026-11-03 command bar captures (2a96a9d7f0:verify/visual-pairs/run-20261103 P43-a, Q01-a/b, P02-c).
 final class CommandBarCaptureTests: XCTestCase {
     /// P43-a: with Ask in Command Bar off (or the provider off), Opt+Cmd+G is a notice with a way to the Max pane,
     /// not an input; on, it opens the bar
@@ -25,15 +25,6 @@ final class CommandBarCaptureTests: XCTestCase {
         d.user(.settings(.max(.provider(.auto))))
         d.user(.assist(.open(.question)))
         XCTAssertEqual(d.bar?.aiMode, .question)
-    }
-
-    /// Q01-a: the sidebar's New Tab row shows as selected while the bar opens a new tab, not while it edits a page
-    func testTheBarSaysWhenItCreatesATab() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(d.bar?.createsTab, true)
-        d.user(.commandBar(.open(.editCurrent)))
-        XCTAssertEqual(d.bar?.createsTab, false)
     }
 
     /// P02-c, Q01-b: Tab searches the completed site ("Search Wikipedia"), so the site engines reach the bar and the

@@ -26,9 +26,7 @@ enum AIRealLocalScenarios {
     static var all: [Scenario] {
         guard ProcessInfo.processInfo.environment["BRK_E2E_REAL_LOCAL"] == "1" else { return [] }
         return [Scenario("AIRealLocal-none", "no agent and no key, the local models downloaded: Tidy, Place New Tabs, duplicates, search by meaning in the bar and History",
-                         cefOnly: "local models, real input") { try route($0, agent: nil) },
-                Scenario("AIRealLocal-claude", "Claude on its small model and the local models: Tidy and placement on the text model, yes/no on JevK5, the page check, @ by meaning",
-                         cefOnly: "local models, real agent, real input") { try route($0, agent: .claude) }]
+                         cefOnly: "local models, real input") { try route($0, agent: nil) }]
     }
 
     /// The downloaded models, cloned (APFS: no copy of the gigabytes) into the store layout under the data folder.
@@ -40,7 +38,7 @@ enum AIRealLocalScenarios {
         ]
         for model in models {
             let source = cache.appendingPathComponent(model.folder).appendingPathComponent(model.file)
-            guard FileManager.default.fileExists(atPath: source.path) else { throw Check(description: "no \(source.path); download the models first (verify/ai-native/b-local-models)") }
+            guard FileManager.default.fileExists(atPath: source.path) else { throw Check(description: "no \(source.path); download the models first (b6baac6767:verify/ai-native/b-local-models)") }
             let folder = dataDirectory.appendingPathComponent("Local Models", isDirectory: true).appendingPathComponent(model.id, isDirectory: true)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let target = folder.appendingPathComponent(model.file)

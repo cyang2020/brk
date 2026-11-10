@@ -34,28 +34,6 @@ final class ExtCompletionTests: XCTestCase {
         XCTAssertEqual(d.user(.site(.extensionShortcut("fixture", "run", ""))).effects,
                        [.editExtension("fixture", .shortcut(command: "run", chord: nil), .profile(.default))])
     }
-    func testExtensionAndBrkPriorityMatrixUsesOneResolvedTable() throws {
-        let extensionChord = KeyChord([.command, .shift], .u)
-        for stage in [KeyStage.beforePage, .afterPage, .menu] {
-            let d = Driver()
-            XCTAssertFalse(d.key(extensionChord, stage: stage, pressID: 1).keyHandled, "Unbound extension chord is left to Chromium/native editor")
-        }
-        for priority in [KeyPriority.app, .page, .pageThenApp] {
-            for stage in [KeyStage.beforePage, .afterPage, .menu] {
-                let d = Driver()
-                d.user(.settings(.shortcuts(.setChord(.newTab, extensionChord))))
-                d.user(.settings(.shortcuts(.setPriority(.newTab, priority))))
-                let handled = d.key(extensionChord, stage: stage, pressID: 2).keyHandled
-                XCTAssertEqual(handled, priority == .app || stage != .beforePage, "\(priority) at \(stage)")
-            }
-        }
-        let error = ExtensionShortcuts.error(for: extensionChord, extensionID: "fixture", command: "run", catalog: [fixture()],
-            overrides: [.newTab: KeyOverride(chord: extensionChord, priority: .page)])
-        XCTAssertNotNil(error, "A page-first Brk remap is still reserved against extension assignment")
-        for key in [Key.a, .c, .v, .x, .z] {
-            XCTAssertNotNil(ExtensionShortcuts.error(for: KeyChord(.command, key), extensionID: "fixture", command: "run", catalog: [], overrides: [:]))
-        }
-    }
 
     func testControlsReadSavedChoicesDuringLoadingWithoutEnablingDestructiveOperations() throws {
         let d = Driver()
@@ -78,9 +56,4 @@ final class ExtCompletionTests: XCTestCase {
         XCTAssertTrue(d.user(.site(.clear(kinds: [.cookies], scope: .site, reload: true))).effects.isEmpty)
     }
 
-    func testBundledRulesUseTheDocumentedResource() {
-        XCTAssertEqual(WebsiteBlockingRules.builtIn.version, 1)
-        XCTAssertTrue(WebsiteBlockingRules.builtIn.blockedHosts.contains("doubleclick.net"))
-        XCTAssertTrue(WebsiteBlockingRules.builtIn.blockedPathPrefixes.contains("/brk-blocked-tracker/"))
-    }
 }

@@ -1,0 +1,149 @@
+# 原生场景分组。scripts/run-native.py --set smoke,<area> 按这里展开。规则在 docs/testing-policy.md。
+# 每行：组名 场景编号。smoke 每次合并都跑；其余组只在分支改到那一块时跑。
+# 新场景要在这里登记到一个组，否则不会被门跑到。
+
+# smoke：真实键盘、鼠标、触控板走的主要流程，每次合并都跑（约 1.5 分钟）
+smoke R53-PressOpens
+smoke PB1R
+smoke R56-SwipeReal
+smoke R54-Halves
+smoke N3R
+smoke 2
+smoke 9
+smoke N4
+
+# core：开标签、切 Space、分屏、自动归档、关闭、重启、页面和 GPU 崩溃恢复
+core 4
+core 6
+core 7
+core 8
+core R3
+core R7a
+core R7b
+core R8
+core R9
+core R10
+
+# keys：按键路由、快捷键重映射、扩展快捷键
+keys N1
+keys N2
+keys PB1
+keys PB1H
+keys W2-9
+keys R44-ShortcutKeys
+keys Ext-shortcut-physical
+keys Input-TabKeys
+keys Input-SideButtons
+keys Input-SwipeIndicator
+keys Input-MiddleClick
+
+# find：页内查找
+find F1
+find F3
+find F8
+find F12
+
+# windows：多窗口、Little Arc、Peek、外链、全屏、退出确认
+windows W2-4
+windows W2-5
+windows W2-6
+windows W2-7
+windows R36-LittleEntry
+windows PB3
+windows SettingsQuit
+
+# profiles：设置窗口、Profile、无痕、站点数据
+profiles W2-1
+profiles W2-2
+profiles W2-3
+profiles W2-P1
+profiles DataPrivateExpiry
+profiles DataCookiesRefreshRestart
+
+# downloads：下载
+downloads W2-11
+downloads W2-11A
+downloads T1
+downloads T2
+downloads T7
+downloads LibraryDownload-Cancel
+downloads LibraryFlyout-Hover
+downloads LibraryFlyout-Running
+
+# pages：页面右键菜单、页面身份、缩放、复制粘贴、存储打印、弹窗、历史
+pages T12
+pages I1
+pages I5
+pages BB2
+pages BB4
+pages BB6
+pages OpenerTab
+pages HistoryRestore
+pages W2-12
+
+# sites：广告拦截、清站点数据、权限、证书、扩展
+sites SitePolicy-blocking
+sites SitePolicy-clear
+sites SitePermission-prompt
+sites SiteSecurity-invalid
+sites Extension-install
+sites Core-popup
+
+# sidebar：侧栏拖拽、Favorites、重命名、Toast、标签工具、分屏工具、文字截断
+sidebar R53-TabIn
+sidebar R53-Out
+sidebar R53-Reorder
+sidebar R53-SplitSides
+sidebar R49-Rename
+sidebar R49-Toasts
+sidebar TabTools1
+sidebar SplitTools1
+sidebar TextLayout
+
+# spaces：新建 Space
+spaces SpaceTools-2
+
+# commandbar：命令栏
+commandbar QuickBar-Answers
+commandbar QuickBar-Prefix
+commandbar QuickBar-Files
+commandbar R49-Suggestions
+commandbar Ranking-CmdT
+
+# media：媒体播放、截图
+media R55-Row
+media R55-Card
+media CaptureProduct
+
+# library：Easel、Boost、文件面板导入导出、首次启动、所有画面没有文字被截断
+library EaselDraw
+library EaselReopen
+library Boost-CSS
+library FP-OpenGesture
+library FP-SaveGesture
+library ImportSync-Onboarding
+library TextLayout
+
+# ai：夹具 agent 的 AI 功能（不花额度）
+ai AICommand
+ai AIOrganize
+ai AITranslateOffer
+ai AIKeysUI
+ai AIAgentChat-claude
+ai AIAgentChat-codex
+ai AIAgentTools-claude
+ai AIAgentTools-codex
+ai AIAgentQuit
+ai AIAgentLivePages
+ai AIPagesFixture
+ai AIAgentThreads-Spaces
+ai AIAgentThreads-Waiting
+ai AIAgentRightPanel-Toggle
+ai AIAgentRightPanel-EdgeDrop
+ai AIAgentRightPanel-Migration
+
+# real：真实 agent，花用户额度，只在 agent 相关代码改了时跑，需要设环境变量（见 docs/testing-policy.md）
+real AIRealUI-claude
+real AIRealUIBasic-claude
+real AIRealRightPanel-claude
+real AIRealLocal-none

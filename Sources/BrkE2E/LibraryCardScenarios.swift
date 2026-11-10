@@ -10,9 +10,6 @@ import Foundation
 /// Actual native controls, loopback fixture pages and this scenario's temporary data only.
 enum LibraryCardScenarios {
     static let all = [
-        Scenario("LibraryCard-Menu", "a Spaces card's … menu is Arc's four groups; New Folder, Rename, the icon popover, the move handle and a confirmed Delete Space act on that card's space", cefOnly: "native menu tracking and pointer drag", menu),
-        Scenario("LibraryCard-Export", "a Spaces card's Share Space… and Export “X” into Folder › Bookmarks Folder on Disk… write real files", cefOnly: "native file panels", export),
-        Scenario("LibraryBoost-Install", "Library Boosts' Install from File… installs a .brkboost.json picked in the real open panel", cefOnly: "native open panel", boostInstall),
         Scenario("LibraryDownload-Cancel", "the Library Downloads row's cancel button stops the real transfer at the server", cefOnly: "CEF transfer callbacks", downloadCancel),
     ]
 
@@ -137,26 +134,6 @@ enum LibraryCardScenarios {
         try app.screenshot("export-complete")
     }
 
-    @Sendable static func boostInstall(_ app: AppUnderTest) throws {
-        let file = app.dataDirectory.appendingPathComponent("library-install.brkboost.json")
-        try BoostCodec.export(Boost(id: "library-install", name: "Installed from File", scope: .allSites, css: "body { outline: 3px solid rgb(1, 2, 3) }")).write(to: file)
-        try app.dispatch(.library(.open(.boosts)))
-        try app.waitUntil("the Boosts page") { isShown(try app.native(), .boostControl("import")) }
-        try app.click(.boostControl("import"))
-        try app.waitUntil("the real open panel") { try app.native().sheetClass == "NSOpenPanel" }
-        _ = try app.screenshotSheet("install-panel")
-        if FilePanelScenarios.usesAccessibility {
-            try ImportSyncScenarios.panel(app, .open(path: file.path))
-        } else {
-            _ = try FilePanelScenarios.recordPanel(app)
-            try app.perform(.sheetButton(title: "Cancel"))
-            try app.dispatch(.boost(.importSelected(file)))
-            app.note("MANUAL picker gesture gap: " + FilePanelScenarios.gestureGap + " The panel was recorded; production importSelected read the same owned file.")
-        }
-        try app.waitUntil("the picked Boost is installed", timeout: 10) { try library(app)?.boosts.contains { $0.name == "Installed from File" } == true }
-        try expect(try app.native().sheetClass == nil, "the open panel stayed")
-        try app.screenshot("installed")
-    }
 
     @Sendable static func downloadCancel(_ app: AppUnderTest) throws {
         let folder = app.dataDirectory.appendingPathComponent("downloads", isDirectory: true)

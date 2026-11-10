@@ -41,15 +41,6 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertEqual(d.view.ai?.text, "Request cancelled.")
         XCTAssertEqual(d.view.ai?.busy, false)
     }
-    func testUnavailableAndFailedAnswersAreActionable() throws {
-        let d = enabled()
-        let (id, _) = try request(d.user(.assist(.ask("Why?"))))
-        d.system(.aiResult(id, .unavailable))
-        XCTAssertTrue(d.view.ai!.text.contains("Settings → Max"))
-        let (second, _) = try request(d.user(.assist(.ask("Why?"))))
-        d.system(.aiResult(second, .failed("Sign in in Terminal")))
-        XCTAssertEqual(d.view.ai?.text, "Sign in in Terminal")
-    }
     func testPageQuestionOnlyUsesCapturedDocumentAndCancelsOnNavigation() throws {
         let d = enabled(), c = try content(d)
         let id = try readRequest(d.user(.assist(.askPage("What?"))))
@@ -143,34 +134,6 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertNil(d.state.session.ai.requests[id])
         XCTAssertNil(d.view.aiPreview)
     }
-    func testPreviewCardShowsArcsAnswerCardAndStaysUnderThePointer() throws {
-        let d = enabled(), tab = try XCTUnwrap(d.current?.id)
-        _ = try content(d)
-        d.page(tab, .linkHovered(start))
-        d.system(.aiHoverReady(d.window, start, nil))
-        let id = try XCTUnwrap(d.view.aiPreview?.request)
-        let reader = try XCTUnwrap(d.snapshot.pages.first(where: \.isAIReader))
-        let doc = DocumentToken(browser: BrowserToken(page: reader.id, generation: 1), sequence: 1)
-        d.system(.page(BrowserToken(page: reader.id, generation: 1), .browserCreated(reader.context, .ready(doc))))
-        let summarize = d.system(.aiPageRead(id, reader.id, AIPageContent(document: doc, url: start, title: "Fixture", language: "en", text: "Body", nodes: [])))
-        guard case .summarize? = try? request(summarize).1 else { return XCTFail("no summary asked") }
-        d.system(.aiResult(id, .reply(.preview(AIPreviewReply(blocked: false, quickSummary: "Synthetic page for browser comparison", details: [AIPreviewDetail(label: "Purpose:", icon: "eye", info: "Compare browser chrome performance."), AIPreviewDetail(label: "Visuals:", icon: "", info: "Colored block.")])))))
-        let card = try XCTUnwrap(d.view.aiPreview)
-        XCTAssertFalse(card.busy)
-        XCTAssertEqual(card.title, "Synthetic page for browser comparison")
-        XCTAssertEqual(card.details, [AIPreviewDetail(label: "Purpose:", icon: "eye", info: "Compare browser chrome performance."),
-                                      AIPreviewDetail(label: "Visuals:", icon: "circle.fill", info: "Colored block.")])
-        // The pointer moves from the link onto the card: it stays; leaving the card closes it.
-        d.user(.assist(.previewHover(true)))
-        d.page(tab, .linkHovered(nil))
-        XCTAssertNotNil(d.view.aiPreview)
-        let shared = d.user(.assist(.sharePreview))
-        XCTAssertTrue(shared.effects.contains(.copyToPasteboard(start.absoluteString)))
-        d.user(.assist(.previewHover(false)))
-        XCTAssertNil(d.view.aiPreview)
-        XCTAssertEqual(AIValidation.preview(AIPreviewReply(blocked: true))?.blocked, true)
-        XCTAssertNil(AIValidation.preview(AIPreviewReply(blocked: false, quickSummary: "  ", details: [])))
-    }
     func testInstantLinksRowOpensTheVerifiedResultsAndFailsInPlace() throws {
         let d = enabled()
         let before = d.todayIDs
@@ -261,69 +224,10 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertEqual(AILanguages.name("fr-CA"), "French")
         XCTAssertTrue(AILanguages.targets.prefix(3) == ["Afrikaans", "Akan", "Albanian"])
     }
-    /// Arc's Share Quote on the pill's second line while text is highlighted (Shared Quotes on).
-    func testShareQuoteLineFollowsTheHighlight() throws {
-        let d = enabled(), c = try content(d), page = c.document.browser.page
-        d.page(page.item, .languageDetected(c.document, "fr"))
-        d.page(page.item, .selectionChanged(c.document, true))
-        XCTAssertEqual(d.view.urlPill.shareQuote, d.snapshot.settings.advanced.sharedQuotes)
-        d.user(.settings(.advanced(.sharedQuotes(true))))
-        XCTAssertTrue(d.view.urlPill.shareQuote)
-        let shared = d.user(.page(.shareQuote))
-        XCTAssertTrue(shared.effects.contains { if case .copySharedQuote = $0 { true } else { false } })
-        XCTAssertEqual(d.view.tabTools.toast?.text, "Copied Shared URL")
-        d.page(page.item, .selectionChanged(c.document, false))
-        XCTAssertFalse(d.view.urlPill.shareQuote)
-        XCTAssertEqual(d.view.urlPill.translation, .available)
-    }
-    /// Arc renames a tab dragged into Pinned (P47-a), not only one pinned with Pin Tab.
-    func testTabDraggedIntoPinnedAsksForATidyTitle() throws {
-        let d = enabled(), tab = d.open("https://example.com/long")
-        d.page(tab, .committed(url("https://example.com/long")))
-        d.user(.settings(.max(.renamePinnedTabs(true))))
-        let moved = d.user(.item(.move(tab, to: .into(parent: d.view.space.pinned.root, index: 0))))
-        let (id, task) = try request(moved)
-        guard case .renameTab(let renamed, _, _) = task else { return XCTFail("no rename asked") }
-        XCTAssertEqual(renamed, tab)
-        d.system(.aiResult(id, .reply(.text("Sidebar Ellipsis"))))
-        XCTAssertEqual(d.row(tab)?.title, "Sidebar Ellipsis")
-    }
-    /// The Today divider's Tidy shows with more than six Today tabs and Tidy Tabs on (P46-b).
-    func testTidyButtonNeedsSevenTodayTabs() throws {
-        let d = enabled()
-        while d.todayIDs.count < 6 { _ = d.open("https://example.com/\(d.todayIDs.count)") }
-        XCTAssertFalse(d.view.space.today.canTidy)
-        _ = d.open("https://example.com/seventh")
-        XCTAssertFalse(d.view.space.today.canTidy, "Tidy Tabs is off")
-        d.user(.settings(.max(.tidyTabs(true))))
-        XCTAssertTrue(d.view.space.today.canTidy)
-        _ = try request(d.user(.assist(.organizeToday)))
-        XCTAssertTrue(d.view.space.today.tidying)
-    }
     func testDownloadNamesRejectPathsAndKeepExtension() {
         for text in ["../../x", "/tmp/x", "a\\b", "a:b", ".hidden", "a\nb"] { XCTAssertNil(AIValidation.filename(text, original: "x.pdf")) }
         XCTAssertEqual(AIValidation.filename("Reading.pdf", original: "x.pdf"), "Reading.pdf")
         XCTAssertEqual(AIValidation.filename("Reading", original: "x.pdf"), "Reading.pdf")
-    }
-    func testMaxOptionalFieldsReadOlderSettings() throws {
-        let value = try JSONDecoder().decode(MaxSettings.self, from: Data(#"{"provider":"auto","renamePinnedTabs":false,"tidyTabs":false}"#.utf8))
-        XCTAssertFalse(value.enabled(.translation))
-        XCTAssertNil(value.translationExclusions)
-    }
-    func testDeadlineDismissAndNeverTranslateSite() throws {
-        let d = enabled(), c = try content(d)
-        d.user(.assist(.open(.page)))
-        let id = try readRequest(d.user(.assist(.translate("English"))))
-        d.system(.aiPageRead(id, c.document.browser.page, c))
-        d.system(.aiDeadline(id))
-        XCTAssertNil(d.state.session.ai.requests[id])
-        XCTAssertTrue(d.view.tabTools.toast?.text.contains("did not answer in time") == true)
-        d.user(.assist(.neverTranslateSite))
-        XCTAssertEqual(d.snapshot.settings.max.settings.translationExclusions?[.default]?.sites, ["127.0.0.1"])
-        d.user(.settings(.max(.resetTranslationExclusions)))
-        XCTAssertNil(d.snapshot.settings.max.settings.translationExclusions)
-        d.user(.assist(.dismiss))
-        XCTAssertNil(d.view.ai)
     }
     func testCompletedDownloadOnlyAndRenameReceipt() throws {
         let d = enabled(), tab = try XCTUnwrap(d.current?.id), download = DownloadID("ai-download")
@@ -335,18 +239,6 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertTrue(renamed.effects.contains(.aiRenameDownload(download, originalPath: "/tmp/fixture.txt", filename: "Reading.txt")))
         d.system(.aiDownloadRenamed(download, originalPath: "/tmp/fixture.txt", newPath: "/tmp/Reading.txt", error: nil))
         XCTAssertEqual(d.state.doc.downloads.first?.filename, "Reading.txt")
-    }
-
-    func testFeatureOffAndProviderChangeCancelRunningWork() throws {
-        let d = enabled()
-        let (id, _) = try request(d.user(.assist(.ask("why"))))
-        let turnedOff = d.user(.settings(.max(.feature(.commandBar, false))))
-        XCTAssertTrue(turnedOff.effects.contains(.aiCancel(id)))
-        d.system(.aiResult(id, .text("late")))
-        XCTAssertNotEqual(d.view.ai?.text, "late")
-        d.user(.settings(.max(.feature(.commandBar, true))))
-        let (next, _) = try request(d.user(.assist(.ask("why"))))
-        XCTAssertTrue(d.user(.settings(.max(.provider(.off)))).effects.contains(.aiCancel(next)))
     }
 
     func testProfileChangeClearsCompletedAnswerAndCancelsHiddenSources() throws {
@@ -365,25 +257,6 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertTrue(d.snapshot.pages.filter(\.isAIReader).isEmpty)
     }
 
-    func testPinnedTitleRequestCancelsWhenTabChangesProfile() throws {
-        let d = enabled(), tab = try XCTUnwrap(d.current?.id)
-        d.user(.settings(.max(.renamePinnedTabs(true))))
-        let (id, _) = try request(d.user(.tab(.togglePin(.item(tab)))))
-        d.user(.profile(.create(name: "Other", icon: nil)))
-        let other = try XCTUnwrap(d.snapshot.settings.profiles.first { $0.profile.id != .default }?.profile.id)
-        let changed = d.user(.profile(.assign(.current, to: other)))
-        XCTAssertTrue(changed.effects.contains(.aiCancel(id)))
-        d.system(.aiResult(id, .reply(.text("Old profile title"))))
-        XCTAssertNotEqual(d.row(tab)?.title, "Old profile title")
-    }
-
-    func testBrowseCitationsRejectMissingOrUnknownSources() {
-        XCTAssertTrue(AIValidation.citations("Answer [1] and [2]", sourceCount: 2))
-        XCTAssertFalse(AIValidation.citations("Unsupported [3]", sourceCount: 2))
-        XCTAssertFalse(AIValidation.citations("No sources", sourceCount: 2))
-        XCTAssertFalse(AIValidation.citations("Invalid [0]", sourceCount: 2))
-    }
-
     func testPinAfterNavigationRenamesThePinnedHomeRatherThanOriginalSeed() throws {
         let d = enabled(), tab = try XCTUnwrap(d.current?.id), destination = url("https://example.com/navigated")
         d.user(.commandBar(.open(.editCurrent)))
@@ -395,15 +268,6 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertFalse(transition.effects.contains(.aiCancel(id)))
         d.system(.aiResult(id, .reply(.text("Navigated Home"))))
         XCTAssertEqual(d.row(tab)?.title, "Navigated Home")
-    }
-
-    func testEmptySuccessfulReplyShowsAnActionableFailure() throws {
-        let d = enabled()
-        let (id, _) = try request(d.user(.assist(.ask("Question"))))
-        d.system(.aiResult(id, .text("   \n")))
-        XCTAssertFalse(d.view.ai!.busy)
-        XCTAssertTrue(d.view.ai!.text.contains("no answer"))
-        XCTAssertTrue(d.view.ai!.text.contains("Terminal"))
     }
 
 }

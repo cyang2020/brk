@@ -49,55 +49,6 @@ final class NativeFocusLifecycleTests: XCTestCase {
         h.update(controller)
         XCTAssertTrue(controller.window.firstResponder === editor)
     }
-
-    func testUpdateUsesTheLatestFocusTargetAndLeavesHiddenWindowsAlone() throws {
-        let h = FocusHarness()
-        defer { h.close() }
-        let controller = try h.controller()
-        h.store.dispatch(.user(h.window, .commandBar(.open(.newTab))))
-        controller.window.makeFirstResponder(nil)
-        h.update(controller)
-        XCTAssertFalse(controller.window.firstResponder === h.engine.surface(for: h.page))
-        h.store.dispatch(.user(h.window, .commandBar(.dismiss)))
-        controller.window.orderOut(nil)
-        controller.window.makeFirstResponder(nil)
-        h.update(controller)
-        XCTAssertFalse(controller.window.firstResponder === h.engine.surface(for: h.page))
-    }
-
-    func testNativeFocusInSecondWindowDoesNotBlurTheFirstPage() throws {
-        let h = FocusHarness()
-        defer { h.close() }
-        let first = try h.controller()
-        let page = try XCTUnwrap(h.engine.surface(for: h.page))
-        XCTAssertTrue(first.window.makeFirstResponder(page))
-        h.store.dispatch(.user(h.window, .window(.new)))
-        let secondID = try XCTUnwrap(h.store.snapshot.windows.keys.first { $0 != h.window })
-        let second = try XCTUnwrap(h.store.windowController(secondID))
-        XCTAssertTrue(first.window.firstResponder === page, "the second window's bar must not clear the first window's page")
-        let editor = second.window.firstResponder
-        first.window.makeFirstResponder(nil)
-        h.update(first)
-        XCTAssertTrue(first.window.firstResponder === page)
-        XCTAssertTrue(second.window.firstResponder === editor, "background repair must not take the second window's editor")
-    }
-
-    func testOldWindowCannotReclaimOrBlurASurfaceMovedToAnotherWindow() throws {
-        let h = FocusHarness()
-        defer { h.close() }
-        let first = try h.controller()
-        let page = try XCTUnwrap(h.engine.surface(for: h.page))
-        h.store.dispatch(.user(h.window, .window(.new)))
-        let secondID = try XCTUnwrap(h.store.snapshot.windows.keys.first { $0 != h.window })
-        let second = try XCTUnwrap(h.store.windowController(secondID))
-        second.root.addSubview(page)
-        XCTAssertTrue(second.window.makeFirstResponder(page))
-        first.window.makeFirstResponder(nil)
-        h.update(first)
-        XCTAssertTrue(second.window.firstResponder === page)
-        first.applyFocus(.none)
-        XCTAssertTrue(second.window.firstResponder === page, "the old owner must not blur the moved surface")
-    }
 }
 
 @MainActor

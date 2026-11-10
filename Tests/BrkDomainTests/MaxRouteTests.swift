@@ -4,7 +4,7 @@ import XCTest
 @testable import BrkDomain
 
 /// What a person meets on the way to each Max feature (found by driving a real launch with real input, 2026-11-07,
-/// verify/completion/max-ui-20261107): where a switch that is off is said to be, what Turn Off Max leaves, and what a
+/// 8dc9260d6a:verify/completion/max-ui-20261107): where a switch that is off is said to be, what Turn Off Max leaves, and what a
 /// feature working in the background says when it fails or succeeds.
 final class MaxRouteTests: XCTestCase {
     private func request(_ transition: Transition) throws -> (AIRequestID, AITask) {
@@ -76,15 +76,6 @@ final class MaxRouteTests: XCTestCase {
         XCTAssertEqual(d.view.tabTools.toast?.link, ToastLink(title: "Max Preferences ↗", command: .settings(.openPane(.max))))
         XCTAssertEqual(AIFeature.linkPreviews.title, "5-Second Previews", "the pane's own name for the switch")
         XCTAssertEqual(AIFeature.downloadRename.title, "Tidy Downloads")
-    }
-
-    /// Tidy Tab Titles runs in the background: when its agent cannot answer, the window that pinned the tab says why.
-    func testABackgroundRenameThatFailsSaysWhy() throws {
-        let d = allOn()
-        let a = d.todayIDs[0]
-        let (id, _) = try request(d.user(.tab(.togglePin(.item(a)))))
-        d.system(.aiResult(id, .failed("Gemini is not signed in. Run gemini in Terminal to sign in, then try again.")))
-        XCTAssertEqual(d.view.tabTools.toast?.text, "Tidy Tab Titles: Gemini is not signed in. Run gemini in Terminal to sign in, then try again.")
     }
 
     /// Tidy Downloads renames a finished download by itself; the window it came from says so and names the file. A

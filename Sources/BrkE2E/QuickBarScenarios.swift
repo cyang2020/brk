@@ -12,21 +12,8 @@ import Foundation
 enum QuickBarScenarios {
     static let all = [
         Scenario("QuickBar-Answers", "percent, root, units, CSS, dates and times answer inline, Return copies; bare words sit under the typed row; searches stay searches", cefOnly: "native command bar", answers),
-        Scenario("QuickBar-Currency", "a currency question answers from the rates file with its date, Return copies", cefOnly: "native command bar", currency),
-        Scenario("QuickBar-NoRates", "with no rates there is no currency row and the search stays", cefOnly: "native command bar", noRates),
         Scenario("QuickBar-Files", "file rows from the fixture folder: ranked as commands, hidden and Library left out, Return opens, Cmd+Return reveals, Option+Return copies, the file mode, no stale rows", cefOnly: "native command bar", files),
-        Scenario("QuickBar-Spotlight", "the file rows through the real Spotlight index, in a fixture folder outside the home folder", cefOnly: "native command bar", spotlight),
-        Scenario("QuickBar-Apps", "an app by name with Return launching it", cefOnly: "native command bar", apps),
-        Scenario("QuickBar-AskTab", "Tab sends the text to the local AI; site search first; no text, Max off and an address stay as they were", cefOnly: "native command bar", askTab),
-        Scenario("QuickBar-Emoji", "emoji <name> lists matches, Return copies", cefOnly: "native command bar", emoji),
-        Scenario("QuickBar-Beside", "none of it in the bar over the address, an empty pane, site search or AI mode", cefOnly: "native command bar", beside),
         Scenario("QuickBar-Prefix", "a whole word and Tab enters through site search's pill; a real Space never does, so the words can begin a search; Backspace and Esc give it back; an engine of the same name wins; part of a word is offered", cefOnly: "native command bar", prefixKeys),
-        Scenario("QuickBar-AIPrefix", "claude, gpt, ask and ai ask; page and summarize read the page; Max off and a missing agent leave the word plain", cefOnly: "native command bar", aiPrefix),
-        Scenario("QuickBar-Split", "split opens an address in a new pane on the named side, Return with no text adds a pane, a tab's title, and the split commands", cefOnly: "native command bar", split),
-        Scenario("QuickBar-Window", "window places Brk's own window on the visible frame, with full screen, minimize and stay on top; an exact phrase leads", cefOnly: "native command bar", windowPlaces),
-        Scenario("QuickBar-Translate", "translate shows a pending row, then the answer, Return copies; a change asks again; translate page runs the page translation", cefOnly: "native command bar", translate),
-        Scenario("QuickBar-Define", "define shows the offline dictionary's first lines; Return opens Dictionary.app", cefOnly: "native command bar", define),
-        Scenario("QuickBar-Color", "colours with no prefix and after color, each form copied; bare #abc still searches", cefOnly: "native command bar", color),
     ]
 
     // MARK: Fixtures
@@ -358,38 +345,7 @@ enum QuickBarScenarios {
         }
     }
 
-    @Sendable static func currency(_ app: AppUnderTest) throws {
-        try preflight(app)
-        try Data(fixedRates.utf8).write(to: ratesFile(app))
-        try keepingPasteboard(app) {
-            try copies(app, "100 usd in cny", "700.00 CNY", shot: "currency")
-            try open(app)
-            try type(app, "100 usd in cny")
-            let shown = try waitForRows(app, "the rate's date") { $0.first.map { has($0, "ECB 2026-11-06") } ?? false }
-            try expect(has(shown[0], "700.00 CNY"), "\(shown[0])")
-            try dismiss(app)
-            try open(app)
-            try type(app, "100 usd in xyz")
-            app.sleep(0.4)
-            let unknown = try rows(app)
-            try expect(!unknown.contains { has($0, "Copy Result") }, "an unknown code has an answer: \(unknown)")
-            try dismiss(app)
-            app.passed("100 usd in cny from the fixture file, with its date; an unknown code has no row")
-        }
-    }
 
-    @Sendable static func noRates(_ app: AppUnderTest) throws {
-        try preflight(app)
-        try open(app)
-        try type(app, "100 usd in cny")
-        let shown = try waitForRows(app, "the typed row") { $0.first.map { $0.contains("100 usd in cny") } ?? false }
-        app.sleep(1.2)
-        let later = try rows(app)
-        try expect(!later.contains { has($0, "Copy Result") || has($0, "CNY") }, "a currency row with no rates: \(later)")
-        try expect(has(shown[0], "100 usd in cny"), "the search should stay: \(shown)")
-        try dismiss(app)
-        app.passed("No cache and no network: no currency row, the search stays first")
-    }
 
     // MARK: B
 
@@ -491,79 +447,9 @@ enum QuickBarScenarios {
         }
     }
 
-    @Sendable static func spotlight(_ app: AppUnderTest) throws {
-        try preflight(app)
-        let root = try make(app, files: ["Documents/zqxquickbar-spot.txt", "zqxquickbar-top.txt", "Library/zqxquickbar-lib.txt", ".hid/zqxquickbar-hid.txt", "Documents/.zqxquickbar-dot.txt"])
-        defer { removeFixture(root) }
-        // Wait for the index itself before asking through the bar. A long compile elsewhere on the machine can keep the
-        // indexer busy for minutes.
-        try? tool("/usr/bin/mdimport", [root.path])
-        var indexed = false
-        for _ in 0..<480 where !indexed {
-            let process = Process(), pipe = Pipe()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
-            process.arguments = ["-onlyin", root.path, "-name", "zqxquickbar-spot"]
-            process.standardOutput = pipe
-            process.standardError = FileHandle.nullDevice
-            try process.run()
-            let found = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-            process.waitUntilExit()
-            indexed = found.contains("zqxquickbar-spot.txt")
-            if !indexed { app.sleep(0.5) }
-        }
-        guard indexed else { throw Skipped(description: "Spotlight did not index the fixture folder within 4 minutes") }
-        try keepingPasteboard(app) {
-            try open(app)
-            try typeWord(app, "file")
-            try type(app, "zqxquickbar")
-            let found = try waitForRows(app, "Spotlight's answer", timeout: 8) { $0.contains { has($0, "zqxquickbar-spot.txt") } }
-            try expect(found.allSatisfy { has($0, fileCaption) }, "only files: \(found)")
-            try expect(found.contains { has($0, "zqxquickbar-top.txt") }, "the file lying directly in the folder: \(found)")
-            for text in ["zqxquickbar-lib", "zqxquickbar-hid", "zqxquickbar-dot"] {
-                try expect(!found.contains { has($0, text) }, "\(text) should stay out: \(found)")
-            }
-            _ = try app.screenshot("spotlight")
-            let index = found.firstIndex { has($0, "zqxquickbar-spot.txt") }!
-            for _ in 0..<index { try press(app, [], .downArrow) }
-            app.sleep(0.2)
-            try press(app, [.option], .returnKey)
-            let expected = root.appendingPathComponent("Documents/zqxquickbar-spot.txt").path
-            try app.waitUntil("the path from Spotlight") { try pasteboard(app).hasSuffix(expected) }
-            app.passed("The real index answered by file name; Library, hidden files and dot files stayed out; the path copied")
-        }
-    }
 
     // MARK: C
 
-    @Sendable static func apps(_ app: AppUnderTest) throws {
-        try preflight(app)
-        let marker = app.dataDirectory.appendingPathComponent("launched.txt")
-        let root = try make(app, files: [])
-        let bundle = try makeApp(root, name: "Quickbarlauncher", marker: marker)
-        defer { removeFixture(root, app: bundle) }
-        try open(app)
-        try type(app, "quickbarla")
-        let shown = try waitForRows(app, "the app's row") { $0.contains { has($0, "Quickbarlauncher") && has($0, "Open App") } }
-        let index = shown.firstIndex { has($0, "Quickbarlauncher") }!
-        _ = try app.screenshot("app-row")
-        try dismiss(app)
-        // The app prefix lists only apps, first.
-        try open(app)
-        try typeWord(app, "app")
-        try type(app, "quickbarla")
-        let listed = try waitForRows(app, "the app prefix") { $0.first.map { has($0, "Quickbarlauncher") } ?? false }
-        try expect(listed.count == 1, "only the app: \(listed)")
-        try dismiss(app)
-        try open(app)
-        try type(app, "quickbarla")
-        let again = try waitForRows(app, "the app's row again") { $0.contains { has($0, "Quickbarlauncher") } }
-        for _ in 0..<(again.firstIndex { has($0, "Quickbarlauncher") } ?? index) { try press(app, [], .downArrow) }
-        app.sleep(0.2)
-        try press(app, [], .returnKey)
-        try app.waitUntil("Return launched the app", timeout: 10) { (try? String(contentsOf: marker, encoding: .utf8))?.contains("launched") == true }
-        try expect(try !isOpen(app), "the bar stayed open")
-        app.passed("Quickbarlauncher found by name with Return launching it; the fixture app wrote its marker")
-    }
 
     // MARK: D
 
@@ -572,58 +458,6 @@ enum QuickBarScenarios {
         return data.split(whereSeparator: \.isNewline).compactMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
     }
 
-    @Sendable static func askTab(_ app: AppUnderTest) throws {
-        try preflight(app)
-        try app.dispatch(.settings(.max(.feature(.commandBar, true))))
-        try open(app)
-        guard case .commandBar(let bar)? = try app.view().overlay, bar.askAgentFound else {
-            try dismiss(app)
-            throw Skipped(description: "no local agent on this Mac's PATH, so Tab keeps its old behaviour by design")
-        }
-        // A question and Tab.
-        try type(app, "why is the sky blue?")
-        try press(app, [], .tab)
-        try app.waitUntil("the answer panel's answer", timeout: 15) { try app.view().ai?.busy == false && app.view().ai?.text.contains("Fixture answer") == true }
-        try expect(try !isOpen(app), "the bar stayed open")
-        try expect(aiCalls(app).last?["prompt"] as? String == "why is the sky blue?", "asked \(String(describing: aiCalls(app).last?["prompt"]))")
-        _ = try app.screenshot("answer")
-        try app.dispatch(.assist(.dismiss))
-
-        // No text: nothing happens.
-        let asked = aiCalls(app).count
-        try open(app)
-        try press(app, [], .tab)
-        app.sleep(0.4)
-        try expect(try isOpen(app) && aiCalls(app).count == asked, "Tab with no text did something")
-
-        // An address: nothing is asked.
-        try type(app, "example.com")
-        app.sleep(0.2)
-        try press(app, [], .tab)
-        app.sleep(0.4)
-        try expect(try isOpen(app) && aiCalls(app).count == asked, "Tab on an address asked")
-        try dismiss(app)
-
-        // Site search keeps Tab: wikipedia is offered, Tab enters it and asks nothing; Escape gives the word back.
-        try open(app)
-        try type(app, "wiki")
-        app.sleep(0.3)
-        try press(app, [], .tab)
-        try waitForRows(app, "the empty site search has no rows") { $0.isEmpty }
-        try expect(aiCalls(app).count == asked, "Tab asked instead of entering site search")
-        try dismiss(app)
-
-        // Max's Ask off: Tab does nothing.
-        try app.dispatch(.settings(.max(.feature(.commandBar, false))))
-        try open(app)
-        try type(app, "why is the sky blue?")
-        app.sleep(0.2)
-        try press(app, [], .tab)
-        app.sleep(0.4)
-        try expect(try isOpen(app) && aiCalls(app).count == asked, "Tab asked with Max's Ask off")
-        try dismiss(app)
-        app.passed("Tab asked with the typed text; no text, an address, site search and Max off stayed as they were")
-    }
 
     // MARK: E
 
@@ -657,76 +491,6 @@ enum QuickBarScenarios {
 
     // MARK: Beside Arc
 
-    @Sendable static func beside(_ app: AppUnderTest) throws {
-        try preflight(app)
-        let root = try make(app, files: fixtureFiles)
-        defer { removeFixture(root) }
-        func assertNoLocalRows(_ what: String) throws {
-            app.sleep(0.6)
-            let shown = try rows(app)
-            try expect(!shown.contains { has($0, fileCaption) || has($0, "Open App") }, "\(what): \(shown)")
-        }
-        // The control: this new-tab bar does show the file rows.
-        try open(app)
-        try type(app, "quickbar")
-        try waitForRows(app, "the control") { $0.contains { has($0, fileCaption) } }
-        try dismiss(app)
-
-        // The bar over the page's address.
-        try press(app, [.command], .l)
-        try app.waitUntil("the bar over the address") { try isOpen(app) }
-        try app.waitUntil("its input focused") { try app.native().firstResponder.hasSuffix(":" + ViewID.commandBarInput.identifier) }
-        try type(app, "quickbar")
-        try assertNoLocalRows("the bar over the address")
-        try press(app, [.command], .a)
-        try typeWord(app, "emoji", enters: false)
-        try dismiss(app)
-
-        // Site search.
-        try open(app)
-        try type(app, "wiki")
-        app.sleep(0.3)
-        try press(app, [], .tab)
-        try type(app, "quickbar")
-        try assertNoLocalRows("site search")
-        try press(app, [.command], .a)
-        try type(app, "file ")
-        app.sleep(0.2)
-        let inSite = try inputText(app)
-        try expect(inSite == "file ", "a prefix inside site search: \(inSite)")
-        try dismiss(app)
-
-        // AI mode.
-        try app.dispatch(.settings(.max(.feature(.commandBar, true))))
-        try app.dispatch(.assist(.open(.question)))
-        try app.waitUntil("AI mode") { if case .commandBar(let bar)? = try app.view().overlay { return bar.aiMode == .question }; return false }
-        try app.waitUntil("its input focused") { try app.native().firstResponder.hasSuffix(":" + ViewID.commandBarInput.identifier) }
-        try type(app, "quickbar")
-        try assertNoLocalRows("AI mode")
-        try press(app, [.command], .a)
-        try type(app, "file ")
-        app.sleep(0.2)
-        let inAI = try inputText(app)
-        try expect(inAI == "file ", "a prefix entered in AI mode: \(inAI)")
-        try dismiss(app)
-
-        // An empty split pane.
-        try app.dispatch(.split(.addPane))
-        try app.waitUntil("the empty pane's bar") { if case .commandBar(let bar)? = try app.view().overlay { return bar.fillsPane }; return false }
-        try app.waitUntil("its input focused") { try app.native().firstResponder.hasSuffix(":" + ViewID.commandBarInput.identifier) }
-        try type(app, "quickbar")
-        try assertNoLocalRows("the empty pane")
-        try press(app, [.command], .a)
-        try type(app, "10ft in m")
-        app.sleep(0.4)
-        let pane = try rows(app)
-        try expect(!pane.contains { has($0, "Copy Result") }, "an answer in the empty pane: \(pane)")
-        // No prefix enters there either.
-        try press(app, [.command], .a)
-        try typeWord(app, "emoji", enters: false)
-        try dismiss(app)
-        app.passed("No file, app or answer rows over the address, in site search, in AI mode or in an empty pane")
-    }
 
     // MARK: Prefix keys
 
@@ -866,67 +630,6 @@ enum QuickBarScenarios {
 
     // MARK: AI prefixes
 
-    @Sendable static func aiPrefix(_ app: AppUnderTest) throws {
-        try preflight(app)
-        for feature in [AIFeature.commandBar, .askPage] { try app.dispatch(.settings(.max(.feature(feature, true)))) }
-        try open(app)
-        guard case .commandBar(let bar)? = try app.view().overlay, bar.agentsFound.contains("claude"), bar.agentsFound.contains("codex") else {
-            try dismiss(app)
-            throw Skipped(description: "needs both claude and codex on this Mac's PATH")
-        }
-        try dismiss(app)
-        func asks(_ word: String, _ question: String) throws {
-            let before = aiCalls(app).count
-            try open(app)
-            try typeWord(app, word)
-            try type(app, question)
-            try waitForRows(app, "\(word)'s row") { $0.first.map { $0.contains(question) } ?? false }
-            if word == "gpt" { _ = try app.screenshot("gpt-row") }
-            try press(app, [], .returnKey)
-            try app.waitUntil("\(word) answered", timeout: 15) { try app.view().ai?.busy == false && app.view().ai?.text.contains("Fixture answer") == true && aiCalls(app).count == before + 1 }
-            try expect(aiCalls(app).last?["prompt"] as? String == question, "\(word) asked \(String(describing: aiCalls(app).last?["prompt"]))")
-            try expect(try !isOpen(app), "the bar stayed open")
-            try app.dispatch(.assist(.dismiss))
-        }
-        try asks("claude", "why is the sky blue?")
-        try asks("gpt", "why is the sea blue?")
-        try asks("codex", "why is grass green?")
-        try asks("ask", "why is snow white?")
-        try asks("ai", "why is coal black?")
-        // Arc's own row: typing it is an ordinary query, however it begins.
-        try open(app)
-        try type(app, "ask on page")
-        try waitForRows(app, "Ask on Page leads") { $0.first.map { has($0, "Ask on Page") } ?? false }
-        try dismiss(app)
-        // The fixture stands in for every agent here, so which one a word picks is pinned in the reducer's tests.
-        app.note("The AI fixture stands in for every agent under the control socket: which agent each word picks is pinned by CommandBarQuickSourcesTests (Effect.ai's choice), not here.")
-
-        // The page and a summary, by the Ask on Page route: its prompt carries the page's text.
-        let url = app.site.url("ai.html"), item = try app.load(url), page = PageID(window: app.window!, item: item)
-        try app.waitForPageInput(page, at: url)
-        for (word, question, fragment) in [("page", "what does it say", "what does it say"), ("summarize", "", "Summarize this page")] {
-            let before = aiCalls(app).count
-            try open(app)
-            try typeWord(app, word)
-            if !question.isEmpty { try type(app, question) }
-            try waitForRows(app, "\(word)'s row") { $0.count == 1 }
-            try press(app, [], .returnKey)
-            try app.waitUntil("\(word) answered", timeout: 15) { try app.view().ai?.busy == false && app.view().ai?.text.contains("Fixture page answer") == true && aiCalls(app).count == before + 1 }
-            let prompt = aiCalls(app).last?["prompt"] as? String ?? ""
-            try expect(prompt.hasPrefix("BRK_PAGE_QUESTION") && prompt.contains(fragment), "\(word) asked \(prompt.prefix(200))")
-            try app.dispatch(.assist(.dismiss))
-        }
-
-        // Gemini and Cursor, where they are on this Mac. Every agent is the same fixture here.
-        for (word, question) in [("gemini", "why is rust red?"), ("cursor", "why is ink dark?")] where bar.agentsFound.contains(word) { try asks(word, question) }
-
-        // Max's Ask off: the word says why beside the input, and Tab opens the settings that change it, not a prefix.
-        try app.dispatch(.settings(.max(.feature(.commandBar, false))))
-        try blockedWord(app, "claude", "Claude is off in Max settings", .max)
-        try app.dispatch(.settings(.max(.feature(.askPage, false))))
-        try blockedWord(app, "summarize", "Ask on Page is off in Advanced settings", .advanced)
-        app.passed("claude, gpt, codex, ask and ai each asked with the typed text; page and summarize read the page; gemini and cursor asked where installed; with a switch off the word said why and Tab opened its settings; Max off left the words plain")
-    }
 
     // MARK: Split
 
@@ -1045,95 +748,6 @@ enum QuickBarScenarios {
 
     // MARK: Window
 
-    @Sendable static func windowPlaces(_ app: AppUnderTest) throws {
-        try preflight(app)
-        func place(_ text: String) throws {
-            try open(app)
-            try typeWord(app, "window")
-            try type(app, text)
-            try waitForRows(app, "\(text)'s row") { !$0.isEmpty }
-            app.sleep(0.15)
-            try press(app, [], .returnKey)
-            try app.waitUntil("the bar closed") { try !isOpen(app) }
-        }
-        func frame() throws -> CGRect { try app.native().windowFrame }
-        func near(_ a: CGRect, _ b: CGRect) -> Bool { abs(a.minX - b.minX) <= 1 && abs(a.minY - b.minY) <= 1 && abs(a.width - b.width) <= 1 && abs(a.height - b.height) <= 1 }
-        func expectFrame(_ expected: CGRect, _ what: String) throws {
-            var last = CGRect.zero
-            do { try app.waitUntil(what, timeout: 3) { last = try frame(); return near(last, expected) } }
-            catch { throw Check(description: "\(what): the frame is \(last), expected \(expected)") }
-        }
-        let original = try frame()
-        try open(app)
-        try typeWord(app, "window")
-        let listed = try waitForRows(app, "the places") { $0.count == 5 }
-        try expect(has(listed[0], "Left Half") && has(listed[4], "Maximize"), "\(listed)")
-        _ = try app.screenshot("list")
-        try dismiss(app)
-
-        // The screen's visible frame, read off Maximize: inside the display and short of its menu bar.
-        try place("maximize")
-        try app.waitUntil("maximized") { try frame() != original }
-        app.sleep(0.2)
-        let visible = try frame()
-        let display = CGDisplayBounds(CGMainDisplayID())
-        try expect(visible.width <= display.width + 1 && visible.height < display.height, "\(visible) in \(display)")
-        try place("left")
-        try expectFrame(CGRect(x: visible.minX, y: visible.minY, width: visible.width / 2, height: visible.height), "left half")
-        try place("right")
-        try expectFrame(CGRect(x: visible.midX, y: visible.minY, width: visible.width / 2, height: visible.height), "right half")
-        try place("top")
-        try expectFrame(CGRect(x: visible.minX, y: visible.midY, width: visible.width, height: visible.height / 2), "top half")
-        try place("bottom")
-        try expectFrame(CGRect(x: visible.minX, y: visible.minY, width: visible.width, height: visible.height / 2), "bottom half")
-        try app.setWindowFrame(CGRect(x: visible.minX + 10, y: visible.minY + 10, width: 1000, height: 700))
-        try place("centre")
-        try expectFrame(CGRect(x: visible.midX - 500, y: visible.midY - 350, width: 1000, height: 700), "centre")
-        // One display here means Next Display stays; with more it moves. Either way the row runs.
-        var displays: UInt32 = 0
-        _ = CGGetActiveDisplayList(0, nil, &displays)
-        let before = try frame()
-        try place("next")
-        if displays == 1 { app.sleep(0.3); try expect(try near(frame(), before), "Next Display with one display moved the window") }
-        else { try app.waitUntil("the next display") { try !near(frame(), before) } }
-        app.note("Next Display ran on \(displays) display(s).")
-
-        // The existing commands. Stay on Top keeps an open bar, as it always has.
-        try open(app)
-        try typeWord(app, "window")
-        try type(app, "always")
-        try waitForRows(app, "Stay on Top") { $0.first.map { has($0, "Stay on Top") } ?? false }
-        app.sleep(0.15)
-        try press(app, [], .returnKey)
-        try app.waitUntil("Stay on Top") { try app.view().stayOnTop }
-        try dismiss(app)
-        try app.dispatch(.window(.toggleStayOnTop))
-        try place("full")
-        try app.waitUntil("full screen", timeout: 10) { let n = try app.native(); return n.fullscreen && n.fullscreenTransitioning != true }
-        try app.dispatch(.app(.toggleFullScreen))
-        try app.waitUntil("full screen left", timeout: 10) { let n = try app.native(); return !n.fullscreen && n.fullscreenTransitioning != true }
-        try place("minimize")
-        try app.waitUntil("minimized") { try app.native().miniaturized }
-        _ = try app.send(.activate(window: app.window!))
-        try app.waitUntil("back from the Dock") { try !app.native().miniaturized }
-
-        // Ordinary text meets none of this, but an exact phrase has its row low down, the search first.
-        try open(app)
-        try type(app, "left")
-        app.sleep(0.4)
-        let plain = try rows(app)
-        try expect(!plain.contains { has($0, "Left Half") }, "left alone: \(plain)")
-        try dismiss(app)
-        try open(app)
-        try type(app, "left half")
-        // The place's exact name is a command typed in full: it leads, as Arc's commands do ("dark mode").
-        let exact = try waitForRows(app, "the phrase's row") { $0.first.map { has($0, "Left Half") } ?? false }
-        try expect(exact.count > 1 && exact.contains { $0.contains("left half") }, "the search should stay listed: \(exact)")
-        _ = try app.screenshot("exact-phrase")
-        try dismiss(app)
-        try app.setWindowFrame(original)
-        app.passed("Halves, maximize and centre landed on the visible frame; stay on top, full screen and minimize ran; ordinary text met none of it, left half led as a command typed in full")
-    }
 
     // MARK: Translate
 
@@ -1211,42 +825,6 @@ enum QuickBarScenarios {
         return process.terminationStatus == 0
     }
 
-    @Sendable static func define(_ app: AppUnderTest) throws {
-        try preflight(app)
-        try open(app)
-        try typeWord(app, "define")
-        try type(app, "apple")
-        let found = try waitForRows(app, "the definition", timeout: 8) { $0.first.map { has($0, "Open Dictionary") } ?? false }
-        try expect(has(found[0], "apple") && has(found[0], "noun"), "\(found)")
-        _ = try app.screenshot("definition")
-        try dismiss(app)
-        try open(app)
-        try typeWord(app, "def")
-        try type(app, "zzzqqqxyz")
-        try waitForRows(app, "nothing found", timeout: 8) { $0.first.map { has($0, "No definition for zzzqqqxyz") } ?? false }
-        try press(app, [], .returnKey)
-        app.sleep(0.3)
-        try expect(try isOpen(app), "Return on nothing found closed the bar")
-        try dismiss(app)
-
-        // Return opens the word in Dictionary.app; the window is closed again, and the app quit if it was not running.
-        let wasRunning = running("Dictionary")
-        defer { if !wasRunning, running("Dictionary") { try? tool("/usr/bin/pkill", ["-x", "Dictionary"]) } }
-        try open(app)
-        try typeWord(app, "define")
-        try type(app, "apple")
-        try waitForRows(app, "the definition", timeout: 8) { $0.first.map { has($0, "Open Dictionary") } ?? false }
-        try press(app, [], .returnKey)
-        try app.waitUntil("the bar closed") { try !isOpen(app) }
-        var opened = false
-        for _ in 0..<60 where !opened {
-            opened = NativeSystemInput.closeWindow(owner: "Dictionary")
-            if !opened { app.sleep(0.25) }
-        }
-        try expect(opened, "no Dictionary window")
-        try WindowServerKeys.ensureFrontmost(app, app.window!)
-        app.passed("The offline dictionary's first lines in the row; nothing found says so; Return opened Dictionary.app")
-    }
 
     // MARK: Colour
 

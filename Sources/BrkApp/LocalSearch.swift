@@ -37,7 +37,7 @@ final class LocalSearch {
     /// The real home folder, or under the control socket only the fixture folder.
     ///
     /// On the real path ordinary typing does not reach the file index, only the `file` prefix does. The first real search
-    /// made macOS ask for the Desktop folder (verify/visual-pairs/run-20261103/cmdt/NOTES.md), and a question that comes up
+    /// made macOS ask for the Desktop folder (324e78837a:verify/visual-pairs/run-20261103/cmdt/NOTES.md), and a question that comes up
     /// while typing a web search is one nobody asked for. Whether the home scope asks anything is not checked yet.
     static func live(send: @escaping @MainActor (Input) -> Void, options: LaunchOptions = LaunchOptions()) -> LocalSearch {
         if options.controlSocket != nil {

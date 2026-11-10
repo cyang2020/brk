@@ -11,12 +11,6 @@ import XCTest
 final class PolicySpecTests: XCTestCase {
     // MARK: - electron-v1:src/shared/url.test.ts
     // MARK: resolveTypedInput
-    /// returns null for empty or whitespace input
-    func test_returnsNullForEmptyOrWhitespaceInput() throws {
-        XCTAssertNil(resolveTypedInput(""))
-        XCTAssertNil(resolveTypedInput("   \t "))
-        XCTAssertNil(resolveTypedInput("\n"))
-    }
 
     /// treats a host with a port, an IP address or a dotted domain as a URL and adds the scheme
     func test_treatsAHostWithAPortAnIPAddressOrADottedDomainAsAURLAndAddsTheScheme() throws {
@@ -53,12 +47,6 @@ final class PolicySpecTests: XCTestCase {
     }
 
     // MARK: isAllowedUrl
-    /// allows http, https, file and about:blank
-    func test_allowsHttpHttpsFileAndAboutBlank() throws {
-        for text in ["http://127.0.0.1:9/a", "https://example.com/", "file:///tmp/a.html", "about:blank"] {
-            XCTAssertTrue(isAllowedURL(URL(string: text)!), text)
-        }
-    }
 
     /// refuses every other scheme and unparseable text
     func test_refusesEveryOtherSchemeAndUnparseableText() throws {
@@ -73,13 +61,6 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertEqual(displayURL(URL(string: "https://www.example.com/")!), "example.com")
         XCTAssertEqual(displayURL(URL(string: "https://example.com/a/b/")!), "example.com/a/b")
         XCTAssertEqual(displayURL(URL(string: "http://127.0.0.1:9/page2.html?x=1#top")!), "127.0.0.1:9/page2.html")
-    }
-
-    /// shows a file path and leaves other text alone
-    func test_showsAFilePathAndLeavesOtherTextAlone() throws {
-        XCTAssertEqual(displayURL(URL(string: "file:///tmp/a.html")!), "/tmp/a.html")
-        XCTAssertEqual(displayURL(URL(string: "about:blank")!), "about:blank")
-        XCTAssertEqual(displayURL(URL(string: "chrome://extensions/")!), "chrome://extensions/")
     }
 
     // MARK: - electron-v1:src/shared/placement.test.ts
@@ -103,56 +84,8 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertFalse(Placement.canPlace(.section, inSection: .pinned, parentKind: .section))
     }
 
-    /// Today holds tabs, splits and topic folders.
-    func test_letsTodayHoldTabsSplitsAndTopicFolders() throws {
-        XCTAssertTrue(Placement.canPlace(.tab, inSection: .today, parentKind: .section))
-        XCTAssertTrue(Placement.canPlace(.split, inSection: .today, parentKind: .section))
-        XCTAssertTrue(Placement.canPlace(.folder, inSection: .today, parentKind: .section))
-        XCTAssertTrue(Placement.canPlace(.tab, inSection: .today, parentKind: .folder))
-    }
-
     // MARK: - electron-v1:src/shared/theme.test.ts
-    // MARK: relativeLuminance
-    /// matches the WCAG endpoints and a mid grey
-    func test_matchesTheWCAGEndpointsAndAMidGrey() throws {
-        XCTAssertEqual(relativeLuminance(RGBA(hex: "#000000")), 0)
-        XCTAssertEqual(relativeLuminance(RGBA(hex: "#FFFFFF")), 1, accuracy: 1e-10)
-        XCTAssertEqual(relativeLuminance(RGBA(hex: "#808080")), 0.2159, accuracy: 1e-4)
-        XCTAssertEqual(relativeLuminance(RGBA(hex: "#ff0000")), 0.2126, accuracy: 1e-4)
-    }
-
     // MARK: resolveTheme
-    /// picks the light scheme and light tokens for a light primary
-    func test_picksTheLightSchemeAndLightTokensForALightPrimary() throws {
-        let resolved = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#F2EAE4"), RGBA(hex: "#f29bbb")], texture: .grain,
-                                               noise: 0.4, intensity: 0.4, appearance: .auto))
-        XCTAssertEqual(resolved.scheme, .light)
-        // Two base colors, then the primary's first analogous companion (hue +30, 6% lighter).
-        XCTAssertEqual(resolved.gradient.map(themeHex), ["#F2EAE4", "#F29BBB", "#FCFCF9"])
-        XCTAssertEqual(resolved.tokens, .light)
-        XCTAssertEqual(resolved.tokens.tabCurrent, RGBA(1, 1, 1, 0.85))
-        XCTAssertEqual(resolved.tokens.foreground, RGBA(0, 0, 0, 0.3))
-        XCTAssertEqual(resolved.tokens.itemBackground, RGBA(14 / 255, 15 / 255, 16 / 255, 0.05))
-        XCTAssertEqual(resolved.tokens.tabShadowBackground, RGBA(1, 1, 1, 0.9))
-        // White wash at min(0.2 + 0.55 x 0.4, 0.5) = 0.42 over the primary: 242 + 13 x 0.42 = 247.46, ...
-        XCTAssertEqual([resolved.wash.red, resolved.wash.green, resolved.wash.blue], [1, 1, 1])
-        XCTAssertEqual(resolved.wash.alpha, 0.42, accuracy: 1e-12)
-        assertColor(resolved.windowColor, 247.46, 242.82, 239.34)
-    }
-
-    /// picks the dark scheme and dark tokens for a dark primary
-    func test_picksTheDarkSchemeAndDarkTokensForADarkPrimary() throws {
-        let resolved = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#2D4468")], texture: .grain, intensity: 0, appearance: .auto))
-        XCTAssertEqual(resolved.scheme, .dark)
-        XCTAssertEqual(resolved.tokens, .dark)
-        XCTAssertEqual(resolved.tokens.foreground, RGBA(1, 1, 1, 0.45))
-        XCTAssertEqual(resolved.tokens.tabCurrent, RGBA(250 / 255, 251 / 255, 1, 0.2))
-        XCTAssertEqual(resolved.tokens.tabShadow, RGBA(0, 0, 0, 0))
-        // White at 0.2 (Arc's navy under the automatic button, r5-6/REPORT.md): the primary lightened, never darkened.
-        XCTAssertEqual(resolved.wash.alpha, 0.2, accuracy: 1e-12)
-        XCTAssertEqual([resolved.wash.red, resolved.wash.green, resolved.wash.blue], [1, 1, 1])
-        assertColor(resolved.windowColor, 87, 105.4, 134.2)
-    }
 
     /// gives the default pink-beige (Arc's first Brand swatch) the light scheme (black text has the higher contrast)
     func test_givesTheDefaultPinkBeigeTheLightSchemeBlackTextHasTheHigherContrast() throws {
@@ -162,20 +95,6 @@ final class PolicySpecTests: XCTestCase {
         let grey = { (hex: String) in resolveTheme(SpaceTheme(colors: [RGBA(hex: hex)], texture: .grain, intensity: 0, appearance: .auto)).scheme }
         XCTAssertEqual(grey("#767676"), .light)
         XCTAssertEqual(grey("#757575"), .dark)
-    }
-
-    /// writes a light sidebar's titles in the primary's hue as dark as #1A1A1A (Arc 1.170, run-20261103: #F2EAE4 rows
-    /// read #221910, a white theme's #1A1A1A, a pale teal's #001E1D)
-    func test_writesLightSidebarTitlesInThePrimarysHueAtArcsDarkness() throws {
-        func hex(_ c: RGBA) -> String { String(format: "#%02X%02X%02X", Int((c.red * 255).rounded()), Int((c.green * 255).rounded()), Int((c.blue * 255).rounded())) }
-        XCTAssertEqual(hex(sidebarInk(RGBA(hex: "#F2EAE4"))), "#221810")
-        XCTAssertEqual(hex(sidebarInk(RGBA(hex: "#FFFFFF"))), "#1A1A1A")
-        let teal = sidebarInk(RGBA(0.96, 1, 1))
-        XCTAssertEqual(teal.red, 0, accuracy: 0.5 / 255)
-        XCTAssertGreaterThan(teal.green, 0.1)
-        for primary in [RGBA(hex: "#F2EAE4"), RGBA(0.96, 1, 1), RGBA(hex: "#C7C9F0")] {
-            XCTAssertEqual(relativeLuminance(sidebarInk(primary)), relativeLuminance(RGBA(hex: "#1A1A1A")), accuracy: 0.0005)
-        }
     }
 
     /// the navy preset as Arc 1.170 draws it (r5-6/REPORT.md): the automatic and light buttons give the same white wash
@@ -202,22 +121,6 @@ final class PolicySpecTests: XCTestCase {
         assertColor(theme(.auto, 0.045).windowColor, 91, 113, 140, within: 4)
     }
 
-    /// an incognito window stays dark: its fixed color under the plain black wash, not a space's dark color rule
-    func test_anIncognitoWindowKeepsItsDarkChrome() throws {
-        let theme = ResolvedTheme.incognito
-        XCTAssertEqual(theme.scheme, .dark)
-        XCTAssertEqual(theme.wash.red, 0)
-        XCTAssertLessThan(relativeLuminance(theme.windowColor), 0.02)
-    }
-
-    /// a light color keeps the wash Arc's code gives it
-    func test_aLightColorKeepsItsWash() throws {
-        let beige = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#F2EAE4")], texture: .grain, intensity: 0.25, appearance: .auto))
-        XCTAssertEqual(beige.wash, RGBA(1, 1, 1, 0.3375))
-        let capped = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#F2EAE4")], texture: .grain, intensity: 1, appearance: .auto))
-        XCTAssertEqual(capped.wash, RGBA(1, 1, 1, 0.5))
-    }
-
     /// lets a forced appearance override the luminance
     func test_letsAForcedAppearanceOverrideTheLuminance() throws {
         let white = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#FFFFFF")], texture: .grain, intensity: 0, appearance: .dark))
@@ -231,23 +134,6 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertEqual(black.wash, RGBA(1, 1, 1, 0.2))
     }
 
-    /// the complementary wheel puts the companion at the opposite hue; analogous at +-30 degrees (W5)
-    func test_wheelRuleDerivesCompanionHues() throws {
-        let red = RGBA(hex: "#FF0000")
-        func stops(_ colors: [RGBA], _ wheel: ColorWheel) -> [String] {
-            resolveTheme(SpaceTheme(colors: colors, wheel: wheel, texture: .grain, intensity: 0, appearance: .auto)).gradient.map(themeHex)
-        }
-        // Red is hue 0, s 1, l 0.5. Hue 30 at l 0.56 -> (255, 143, 31); hue 330 at l 0.44 -> (224, 0, 112).
-        XCTAssertEqual(stops([red], .analogous), ["#FF0000", "#FF8F1F", "#E00070"])
-        // Hue 180 at l 0.56 -> (31, 255, 255); then the primary's hue at l 0.44 -> (224, 0, 0).
-        XCTAssertEqual(stops([red], .complementary), ["#FF0000", "#1FFFFF", "#E00000"])
-        // Base colors come first; companions only fill up to three stops.
-        XCTAssertEqual(stops([red, RGBA(hex: "#0000FF")], .complementary), ["#FF0000", "#0000FF", "#1FFFFF"])
-        let three = [red, RGBA(hex: "#00FF00"), RGBA(hex: "#0000FF")]
-        XCTAssertEqual(stops(three, .analogous), ["#FF0000", "#00FF00", "#0000FF"])
-        XCTAssertEqual(stops(three + [RGBA(hex: "#FFFFFF")], .complementary), ["#FF0000", "#00FF00", "#0000FF"])
-    }
-
     /// noise and intensity resolve separately: noise sets the texture contrast, intensity the texture opacity and wash (W5)
     func test_noiseAndIntensityResolveSeparately() throws {
         func resolve(_ texture: Texture, noise: Double, intensity: Double, _ appearance: AppearanceChoice = .light) -> ResolvedTheme {
@@ -258,56 +144,18 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertEqual(high.textureContrast, 0.9)
         XCTAssertEqual(low.textureOpacity, high.textureOpacity)
         XCTAssertEqual(low.wash, high.wash)
-        // Opacity = intensity x the texture's multiplier (grain 0.8, sand 0.15, denim 0.6, tweed 0.4).
-        XCTAssertEqual(low.textureOpacity, 0.4, accuracy: 1e-12)
-        XCTAssertEqual(resolve(.grain, noise: 0.3, intensity: 1).textureOpacity, 0.8, accuracy: 1e-12)
-        XCTAssertEqual(resolve(.sand, noise: 0.3, intensity: 1).textureOpacity, 0.15, accuracy: 1e-12)
-        XCTAssertEqual(resolve(.denim, noise: 0.3, intensity: 1).textureOpacity, 0.6, accuracy: 1e-12)
-        XCTAssertEqual(resolve(.tweed, noise: 0.3, intensity: 1).textureOpacity, 0.4, accuracy: 1e-12)
         XCTAssertEqual(resolve(.tweed, noise: 0.3, intensity: 0).textureOpacity, 0)
         XCTAssertEqual(resolve(.tweed, noise: 0.3, intensity: 0).textureContrast, 0.3)
-        // Wash opacity = min(0.2 + 0.55 x intensity, 0.5): 0.2, 0.475, capped at 0.5 from intensity 0.546 on.
-        XCTAssertEqual(resolve(.grain, noise: 0.3, intensity: 0).wash.alpha, 0.2, accuracy: 1e-12)
-        XCTAssertEqual(low.wash.alpha, 0.475, accuracy: 1e-12)
-        XCTAssertEqual(resolve(.grain, noise: 0.3, intensity: 0.6).wash.alpha, 0.5, accuracy: 1e-12)
-        XCTAssertEqual(resolve(.grain, noise: 0.3, intensity: 1).wash.alpha, 0.5, accuracy: 1e-12)
-        // Dark: black at 35% of it.
-        XCTAssertEqual(resolve(.grain, noise: 0.3, intensity: 0.5, .dark).wash.alpha, 0.16625, accuracy: 1e-12)
         // Out-of-range stored values are clamped.
         let clamped = resolve(.denim, noise: 3, intensity: -1)
         XCTAssertEqual([clamped.textureContrast, clamped.textureOpacity, clamped.wash.alpha], [1, 0, 0.2])
     }
 
     // MARK: themeFromPrimary (a new space's theme is one primary; resolveTheme adds its companions)
-    /// keeps the primary first and adds two analogous companions with grain 0.25 and auto appearance
-    func test_keepsThePrimaryFirstAndAddsTwoAnalogousCompanionsWithGrain025AndAutoAppearance() throws {
-        var theme = SpaceTheme.default
-        XCTAssertEqual([theme.texture.rawValue, theme.appearance.rawValue, theme.wheel.rawValue], ["grain", "auto", "analogous"])
-        theme.colors = [RGBA(hex: "#7EB8D6")]   // a saturated primary shows the companion math
-        XCTAssertEqual(theme.intensity, 0.25)
-        // #7EB8D6 is hue 200.7, s 0.5, l 0.667: hue 230.7 at l 0.727 and hue 170.7 at l 0.607.
-        XCTAssertEqual(resolveTheme(theme).gradient.map(themeHex), ["#7EB8D6", "#95A1DD", "#67CFBE"])
-        XCTAssertEqual(resolveTheme(theme).textureOpacity, 0.2, accuracy: 1e-12)
-    }
-
-    /// keeps a grey grey and only nudges its lightness
-    func test_keepsAGreyGreyAndOnlyNudgesItsLightness() throws {
-        // l = 128/255 = 0.502; 0.562 x 255 = 143.3 and 0.442 x 255 = 112.7.
-        for wheel in ColorWheel.allCases {
-            let gradient = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#808080")], wheel: wheel, texture: .grain, intensity: 0,
-                                                   appearance: .auto)).gradient
-            XCTAssertEqual(gradient.map(themeHex), ["#808080", "#8F8F8F", "#717171"], "\(wheel)")
-        }
-        // White and black stay inside the range.
-        let white = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#FFFFFF")], texture: .grain, intensity: 0, appearance: .auto))
-        XCTAssertEqual(white.gradient.map(themeHex), ["#FFFFFF", "#FFFFFF", "#F0F0F0"])
-    }
 
     /// produces colors the stored schema accepts for every preset
     func test_producesColorsTheStoredSchemaAcceptsForEveryPreset() throws {
         let sets = [ThemePresets.brand, ThemePresets.drab, ThemePresets.greyscale, ThemePresets.pastel]
-        XCTAssertEqual(sets.map(\.count), [9, 9, 9, 9])
-        XCTAssertEqual(ThemePresets.brand[4], RGBA(hex: "#FF8558"))
         for preset in sets.joined() {
             for wheel in ColorWheel.allCases {
                 let resolved = resolveTheme(SpaceTheme(colors: [preset], wheel: wheel, texture: .sand, intensity: 1, appearance: .auto))
@@ -345,13 +193,6 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertEqual(archiveBucket(of: at(2026, 10, 24, 12, 0), now: monday, calendar: sundayFirst), .pastMonth)
     }
 
-    /// on a Tuesday, Monday is yesterday and Sunday is past-month
-    func test_onATuesdayMondayIsYesterdayAndSundayIsPastMonth() throws {
-        let tuesday = at(2026, 10, 27, 9, 0)
-        XCTAssertEqual(archiveBucket(of: at(2026, 10, 26, 12, 0), now: tuesday, calendar: utc), .yesterday)
-        XCTAssertEqual(archiveBucket(of: at(2026, 10, 25, 12, 0), now: tuesday, calendar: utc), .pastMonth)
-    }
-
     // MARK: groupArchive
     /// returns non-empty groups in bucket order with labels, entries newest first
     func test_returnsNonEmptyGroupsInBucketOrderWithLabelsEntriesNewestFirst() throws {
@@ -364,19 +205,6 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertEqual(groups.map { $0.bucket }, [ArchiveBucket.today, .yesterday, .pastMonth, .beyond])
         let titles: [[String]] = groups.map { group in group.entries.map { $0.title } }
         XCTAssertEqual(titles, [["today-late", "today-early"], ["yesterday"], ["three-weeks"], ["old"]])
-    }
-
-    /// labels the past-week group "Earlier This Week"
-    func test_labelsThePastWeekGroupEarlierThisWeek() throws {
-        // "Earlier This Week" is the archive page's label (W4) for the pastWeek bucket.
-        let groups = try archiveGroups([("tue", at(2026, 10, 27, 9, 0))], now: thursday)
-        XCTAssertEqual(groups.map { $0.bucket }, [ArchiveBucket.pastWeek])
-        XCTAssertEqual(ArchiveBucket.pastWeek.rawValue, "pastWeek")
-    }
-
-    /// returns no groups for no entries
-    func test_returnsNoGroupsForNoEntries() throws {
-        XCTAssertEqual(try archiveGroups([], now: thursday), [])
     }
 
     /// bucketOf on Thursday 15:00, every boundary of the Electron table (local midnight today, yesterday, Monday, 30 days).

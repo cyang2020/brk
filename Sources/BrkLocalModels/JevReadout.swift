@@ -135,7 +135,7 @@ extension JevAnswer {
     }
 }
 
-/// JevK5 picks "none of these" far too often, and the fix measured for it. On 121 labelled tabs (verify/ai-native/
+/// JevK5 picks "none of these" far too often, and the fix measured for it. On 121 labelled tabs (75d4fe4a81:verify/ai-native/
 /// b-local-models), placing a tab among its five closest groups plus "none": every tab that fits no group had P(none) of
 /// 0.93 or more, but so did many that fit one, and the plain pick sent 55 of 111 such tabs to "none". Answering none
 /// only at P(none) ≥ 0.95, and otherwise the best other option with the others' probabilities renormalised, placed 112
