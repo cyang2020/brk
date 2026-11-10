@@ -8,7 +8,7 @@ import QuickLookUI
 /// Arc's preview of a Library item (`HomeBadging.ItemPreviewPresenter`, opened by a click on a flyout row): the window
 /// dims, a card over its middle shows the file through Quick Look, and the card's toolbar holds ×, ‹ ›, the name and its
 /// age, a … menu and "Open in <app> ↗". Esc, × or a click on the dimmed window closes it. Measured on Arc 1.170
-/// (verify/library-hover-preview/README.md, p15 and p16).
+/// (docs/arc-anatomy/library-flyout.md, p15 and p16).
 @MainActor
 final class LibraryItemPreviewView: NSView {
     private let dispatch: Dispatch

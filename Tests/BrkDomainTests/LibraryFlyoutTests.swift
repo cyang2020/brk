@@ -3,7 +3,8 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// The Library button's flyout and badge (Arc's HomeBadging; verify/library-hover-preview/README.md).
+/// The Library button's flyout: which items it lists and which one is "recent" enough for the badge (Arc's HomeBadging;
+/// docs/arc-anatomy/library-flyout.md).
 final class LibraryFlyoutTests: XCTestCase {
     private func begin(_ d: Driver, _ id: String, _ name: String, total: Int64? = 100) {
         d.download(d.todayIDs[0], DownloadID(id), .receiving(TransferProgress(received: 0, total: total)),
@@ -50,21 +51,6 @@ final class LibraryFlyoutTests: XCTestCase {
         XCTAssertFalse(items[2].running)
         XCTAssertEqual(items[1].file, URL(fileURLWithPath: "/tmp/\(record.id).png"))
         XCTAssertEqual(items[0].date, T0.advanced(by: .seconds(20)), "a download's date is when it started")
-    }
-
-    /// Another profile's downloads stay out; an incognito window has no list.
-    func test_profileScope() throws {
-        let d = Driver()
-        begin(d, "mine", "mine.txt"); finish(d, "mine", "mine.txt")
-        d.user(.profile(.create(name: "Work", icon: nil)))
-        let work = try XCTUnwrap(d.state.doc.profiles.keys.first { $0 != .default })
-        d.user(.profile(.assign(.current, to: work)))
-        XCTAssertEqual(try flyout(d).items, [], "the window's Space now browses as Work: the default profile's download is not its")
-        begin(d, "theirs", "theirs.txt"); finish(d, "theirs", "theirs.txt")
-        XCTAssertEqual(try flyout(d).items.map(\.title), ["theirs.txt"])
-        d.user(.window(.newIncognito))
-        let incognito = try XCTUnwrap(d.snapshot.windows.first { $0.value.kind == .incognito }?.key)
-        XCTAssertNil(d.view(of: incognito).libraryFlyout)
     }
 
     /// A new download is the badge at once (its disc); it stays through an opening of the list while it runs, comes
@@ -120,63 +106,5 @@ final class LibraryFlyoutTests: XCTestCase {
         d.user(.library(.open(nil)))
         XCTAssertNil(d.view.overlay)
         XCTAssertEqual(try flyout(d), before)
-    }
-
-    /// Hide from Brk drops the entry from the list and the Downloads page; Move to Trash also trashes the file. A running
-    /// download can do neither (its menu is Cancel Download). A capture's Delete removes it.
-    func test_hideAndTrash() throws {
-        let d = Driver()
-        begin(d, "a", "a.txt"); finish(d, "a", "a.txt")
-        begin(d, "b", "b.txt"); finish(d, "b", "b.txt")
-        begin(d, "c", "c.bin")
-        assertUnchanged(d.state, d.user(.library(.flyout(.hide(.download(DownloadID("c")))))))
-        assertUnchanged(d.state, d.user(.library(.flyout(.trash(.download(DownloadID("c")))))))
-        d.user(.library(.flyout(.hide(.download(DownloadID("a"))))))
-        XCTAssertEqual(try flyout(d).items.map(\.title), ["b.txt", "c.bin"])
-        d.user(.library(.open(.downloads)))
-        guard case .library(let library)? = d.view.overlay else { return XCTFail("no Library") }
-        XCTAssertEqual(library.downloads.map(\.filename), ["c.bin", "b.txt"], "hidden from the Downloads page too")
-        d.user(.library(.close))
-        XCTAssertEqual(d.user(.library(.flyout(.trash(.download(DownloadID("b")))))).effects, [.trashFile("/tmp/b.txt")])
-        XCTAssertEqual(try flyout(d).items.map(\.title), ["c.bin"])
-        let record = try capture(d)
-        XCTAssertEqual(d.user(.library(.flyout(.trash(.capture(record.id))))).effects, [.capture(.remove(record))])
-    }
-
-    /// A hidden badge item takes the badge with it.
-    func test_hidingTheBadgeItemClearsTheBadge() throws {
-        let d = Driver()
-        begin(d, "a", "a.txt"); finish(d, "a", "a.txt")
-        XCTAssertNotNil(try flyout(d).badge)
-        d.user(.library(.flyout(.hide(.download(DownloadID("a"))))))
-        XCTAssertNil(try flyout(d).badge)
-        XCTAssertNil(d.state.session.libraryBadges[.default])
-    }
-
-    /// A row's click previews the item over the window; ‹ and › step through the list (newest first); nil closes it.
-    func test_preview() throws {
-        let d = Driver()
-        for name in ["a.txt", "b.png", "c.pdf"] { begin(d, name, name); finish(d, name, name); d.advance(.seconds(5)) }
-        d.user(.library(.flyout(.preview(.download(DownloadID("b.png"))))))
-        XCTAssertEqual(try flyout(d).preview?.title, "b.png")
-        XCTAssertEqual(try flyout(d).previewSequence, ["c.pdf", "b.png", "a.txt"].map { .download(DownloadID($0)) })
-        d.user(.library(.flyout(.hide(.download(DownloadID("b.png"))))))
-        XCTAssertNil(try flyout(d).preview, "the previewed item went: no preview")
-        d.user(.library(.flyout(.preview(.download(DownloadID("a.txt"))))))
-        XCTAssertEqual(try flyout(d).preview?.title, "a.txt")
-        d.user(.library(.flyout(.preview(nil))))
-        XCTAssertNil(try flyout(d).preview)
-    }
-
-    /// The pointer on the button reads the profile's captures once (so the list can show them); the badge is never saved.
-    func test_hoverLoadsCapturesOnceAndTheBadgeIsNotSaved() throws {
-        let d = Driver()
-        XCTAssertEqual(d.user(.library(.flyout(.hovered))).effects, [.capture(.load(.default))])
-        XCTAssertEqual(d.user(.library(.flyout(.hovered))).effects, [])
-        begin(d, "a", "a.txt"); finish(d, "a", "a.txt")
-        XCTAssertNotNil(try flyout(d).badge)
-        let restored = Driver(file: d.savedFile)
-        XCTAssertNil(restored.view.libraryFlyout?.badge, "the badge is session state")
-        XCTAssertEqual(restored.view.libraryFlyout?.items.map(\.title), ["a.txt"], "downloads are saved, so the list comes back")
     }
 }

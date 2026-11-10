@@ -5,7 +5,7 @@ import BrkLayout
 import BrkUIKit
 
 // Owner: W3. The Library button's flyout and badge (Arc: `HomeBadging.HomeButton`, `HomeButtonHoverRegionTracker`,
-// `HomeBadgingCell`; verify/library-hover-preview/README.md has every number's probe).
+// `HomeBadgingCell`; docs/arc-anatomy/library-flyout.md has every number's probe).
 //
 // The pointer resting `openDwell` on the dock's Library button opens a list of the profile's newest Library items over
 // the bottom of the sidebar, newest at the bottom next to the button. While it is open the pointer may travel anywhere

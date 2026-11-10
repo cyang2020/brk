@@ -1,7 +1,7 @@
 import BrkBase
 import Foundation
 
-// Owner: F5. The Library button's flyout and badge (Arc: `HomeBadging`; verify/library-hover-preview/README.md).
+// Owner: F5. The Library button's flyout and badge (Arc: `HomeBadging`; docs/arc-anatomy/library-flyout.md).
 //
 // Resting the pointer on the dock's Library button opens a list of the profile's newest Library items over the bottom of
 // the sidebar: its downloads and its captures, newest at the bottom next to the button, at most four. A new item (a

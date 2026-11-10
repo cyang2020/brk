@@ -570,7 +570,7 @@ public enum LibraryCommand: Hashable, Sendable, Codable {
     case flyout(LibraryFlyoutCommand)
 }
 
-/// What the Library button's flyout reports (verify/library-hover-preview/README.md).
+/// What the Library button's flyout reports (docs/arc-anatomy/library-flyout.md).
 public enum LibraryFlyoutCommand: Hashable, Sendable, Codable {
     /// The pointer reached the button: the profile's captures are read so the flyout can list them.
     case hovered

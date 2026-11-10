@@ -233,6 +233,30 @@ final class FixtureServer: @unchecked Sendable {
             var byte: UInt8 = 0
             _ = read(fd, &byte, 1)
             return
+        } else if path.hasPrefix("/attach/"), case let file = root.appendingPathComponent(String(path.split(separator: "?")[0].dropFirst("/attach/".count))).standardizedFileURL,
+                  file.path.hasPrefix(root.path + "/"), let body = try? Data(contentsOf: file) {
+            // A site file sent as an attachment, so the browser downloads it under its own name (the Library flyout's rows).
+            response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"\(file.lastPathComponent)\"\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body
+        } else if path.hasPrefix("/download-slow") {
+            // `bytes` sent evenly over `seconds` (default 1 MB over 8 s) under `name`: a download that stays running.
+            let query = URLComponents(string: target)?.queryItems ?? []
+            let name = query.first { $0.name == "name" }?.value ?? "slow.bin"
+            let size = Int(query.first { $0.name == "bytes" }?.value ?? "") ?? 1_048_576
+            let seconds = Double(query.first { $0.name == "seconds" }?.value ?? "") ?? 8
+            let header = Data("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"\(name)\"\r\nContent-Length: \(size)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8)
+            guard header.withUnsafeBytes({ write(fd, $0.baseAddress!, $0.count) }) == header.count else { return }
+            let steps = 40, piece = Data(repeating: 66, count: size / steps)
+            for step in 0..<steps {
+                let chunk = step == steps - 1 ? Data(repeating: 66, count: size - piece.count * (steps - 1)) : piece
+                var offset = 0
+                while offset < chunk.count {
+                    let n = chunk.withUnsafeBytes { write(fd, $0.baseAddress! + offset, $0.count - offset) }
+                    guard n > 0 else { return }
+                    offset += n
+                }
+                usleep(useconds_t(seconds / Double(steps) * 1_000_000))
+            }
+            return
         } else if path == "/download" {
             let body = Data("fixture download\n".utf8)
             response = Data("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=\"fixture.txt\"\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8) + body
