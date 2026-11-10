@@ -20,7 +20,8 @@ final class ImportRulesTests: XCTestCase {
         "BrkOverlays": ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "AppKit", "SwiftUI", "Foundation", "CoreGraphics", "UniformTypeIdentifiers"],
         "BrkLibrary": ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "AppKit", "Foundation", "CoreGraphics"],
         "BrkSettings": ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "AppKit", "SwiftUI", "Foundation", "CoreGraphics"],
-        "BrkContent": ["BrkBase", "BrkDomain", "BrkLayout", "BrkTheme", "BrkUIKit", "BrkSidebar", "BrkOverlays", "BrkLibrary", "AppKit", "Foundation", "CoreGraphics", "WebKit"],
+        // QuickLookUI: the Library item preview shows the file through QLPreviewView, as Arc's ItemPreviewPresenter does.
+        "BrkContent": ["BrkBase", "BrkDomain", "BrkLayout", "BrkTheme", "BrkUIKit", "BrkSidebar", "BrkOverlays", "BrkLibrary", "AppKit", "Foundation", "CoreGraphics", "WebKit", "QuickLookUI"],
         "BrkControl": ["BrkBase", "BrkDomain", "BrkLayout", "Foundation", "CoreGraphics"],
         "BrkLocalModels": ["BrkBase", "Foundation", "CryptoKit", "Accelerate"],
         "BrkApp": ["NaturalLanguage", "PDFKit", "Carbon", "CoreServices", "UserNotifications", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "LocalAuthentication", "Security", "os"],

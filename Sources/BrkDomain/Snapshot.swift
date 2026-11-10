@@ -105,6 +105,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var tabTools = TabToolsSnapshot()
     /// The mini players at the bottom of the sidebar, oldest first; the last is the front card.
     public var miniPlayers: [MiniPlayerSnapshot] = []
+    /// The Library button's flyout and badge (`AppState.libraryFlyout(in:)`); nil in an incognito or Little Arc window.
+    public var libraryFlyout: LibraryFlyoutSnapshot? = nil
     public var boostEditor: BoostEditor? = nil
     public var ai: AIAnswerSnapshot? = nil
     /// The agents ready on this Mac and their models, for the + menu's agent list (docs/design/ai-threads.md).

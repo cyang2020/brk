@@ -43,6 +43,8 @@ public final class SidebarView: NSView {
     let dock: DockView
     /// Arc's mini players, between the list and the dock.
     let miniPlayers: MiniPlayerStackView
+    /// The Library button's flyout over the bottom of the column and its badge in the dock (Arc: `HomeBadging`).
+    let libraryFlyout: LibraryFlyoutView
     /// The edge views straddle or sit outside the column, so they live beside it in the root (installed when this
     /// view moves into a superview) and are framed from `WindowFrames`.
     let resizeHandle: ResizeHandleView
@@ -123,6 +125,8 @@ public final class SidebarView: NSView {
         var miniPlayers: [MiniPlayerSnapshot]
         var miniPlayerHover: MiniPlayerHover?
         var aiToggle: AIToggleSnapshot?
+        var libraryFlyout: LibraryFlyoutSnapshot?
+        var libraryOpen: Bool
     }
 
     public init(dispatch: @escaping Dispatch) {
@@ -135,11 +139,15 @@ public final class SidebarView: NSView {
         tablist = TablistView(dispatch: dispatch, drag: drag)
         dock = DockView(dispatch: dispatch)
         miniPlayers = MiniPlayerStackView(dispatch: dispatch)
+        libraryFlyout = LibraryFlyoutView(dispatch: dispatch)
         resizeHandle = ResizeHandleView(dispatch: dispatch)
         revealStrip = RevealStripView(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [backdrop, header, urlPill, pagesClip, dock, miniPlayers, edgeFeedback] as [NSView] { addSubview(view) }
+        for view in [backdrop, header, urlPill, pagesClip, dock, miniPlayers, libraryFlyout, edgeFeedback] as [NSView] { addSubview(view) }
+        dock.addSubview(libraryFlyout.badge)
+        libraryFlyout.faded = [pagesClip, miniPlayers]
+        libraryFlyout.host = self
         pagesClip.clipsToBounds = true
         pagesClip.addSubview(strip)
         pagesClip.addSubview(favorites)
@@ -239,7 +247,8 @@ public final class SidebarView: NSView {
                           dock: dockItems, plusMenu: snapshot.plusMenu, renaming: snapshot.renaming, theme: snapshot.theme, frames: frames.sidebar,
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
                           newTabCurrent: newTabCurrent, creatingSpace: snapshot.dialog == .newSpace, favoritesDrag: favoritesDrag,
-                          miniPlayers: snapshot.miniPlayers, miniPlayerHover: miniPlayers.hover, aiToggle: snapshot.aiToggle)
+                          miniPlayers: snapshot.miniPlayers, miniPlayerHover: miniPlayers.hover, aiToggle: snapshot.aiToggle,
+                          libraryFlyout: snapshot.libraryFlyout, libraryOpen: libraryOpen(snapshot))
         guard slice != last else { return }
         let previous = last
         // While a drag changes the grid, and as it ends, the tiles and everything under them slide.
@@ -291,6 +300,9 @@ public final class SidebarView: NSView {
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
         dock.render(dockItems, frames: f, palette: palette, creating: slice.creatingSpace, plusMenu: slice.plusMenu)
+        libraryFlyout.badge.place(around: f.libraryButton.offsetBy(dx: -f.dock.minX, dy: -f.dock.minY))
+        libraryFlyout.render(slice.creatingSpace ? nil : snapshot.libraryFlyout, button: local(f.libraryButton), sidebarWidth: f.frame.width, palette: palette,
+                             now: snapshot.now, enabled: !slice.libraryOpen && !slice.creatingSpace, in: self)
         // Arc's Create a Space flow takes the column's place between the title row and the dock (P24 a).
         if slice.creatingSpace { for view in [urlPill, favorites, tablist, spaceHeader] as [NSView] { view.isHidden = true } }
         else { tablist.isHidden = false }
@@ -1260,3 +1272,12 @@ enum Slide {
 /// The sidebar's row of pages: the Library first, then the Spaces in dock order (Arc: `WindowLayoutPage`).
 enum SidebarPage: Hashable { case library, space(SpaceID) }
 typealias SpacePager = PagePager<SidebarPage>
+
+extension SidebarView: LibraryFlyoutHost {
+    /// A flyout row's click: Arc previews the item over the window.
+    func flyoutOpen(_ item: LibraryFlyoutItem) {
+        libraryFlyout.dismiss()
+        dispatch(.library(.flyout(.preview(item.key))))
+    }
+}
+

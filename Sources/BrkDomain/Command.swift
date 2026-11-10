@@ -566,6 +566,22 @@ public enum LibraryCommand: Hashable, Sendable, Codable {
     /// transcript, every page it made and its rows.
     case requestDeleteConversation(AIRequestID)
     case confirmDeleteConversation(AIRequestID, token: String, confirmed: Bool)
+    /// The Library button's flyout (Arc: `HomeBadging`): the pointer on the button, the flyout opening, a row's menu.
+    case flyout(LibraryFlyoutCommand)
+}
+
+/// What the Library button's flyout reports (verify/library-hover-preview/README.md).
+public enum LibraryFlyoutCommand: Hashable, Sendable, Codable {
+    /// The pointer reached the button: the profile's captures are read so the flyout can list them.
+    case hovered
+    /// The flyout opened (Arc's `onDidExpandFlyout`): a finished item's badge goes away.
+    case expanded
+    /// Hide from Brk: the entry leaves the flyout and the Library; the file stays.
+    case hide(LibraryItemKey)
+    /// Move to Trash: the file goes to the Trash and the entry leaves the list.
+    case trash(LibraryItemKey)
+    /// A row's click: Arc's preview card over the window (`ItemPreviewPresenter`); nil closes it.
+    case preview(LibraryItemKey?)
 }
 
 /// Window commands. The dispatching window is the one the command came from; a new window takes its space.

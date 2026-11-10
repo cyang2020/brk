@@ -98,6 +98,7 @@ extension Work {
             guard state.doc.profiles[record.profile] != nil else { effects.append(.capture(.remove(record))); return }
             if !state.session.captures.records.contains(where: { $0.id == record.id }) { state.session.captures.records.insert(record, at: 0) }
             state.session.captures.files[record.id] = file
+            offerLibraryBadge(.capture(record.id), profile: record.profile, date: record.createdAt)
             let window = request.document.browser.page.window
             if let capture = state.session.windows[window]?.capture, capture.request == request {
                 state.session.windows[window]?.capture = nil
