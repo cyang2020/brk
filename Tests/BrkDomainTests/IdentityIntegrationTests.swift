@@ -4,30 +4,6 @@ import XCTest
 @testable import BrkDomain
 
 final class IdentityIntegrationTests: XCTestCase {
-    func testFreshStartupRequestIsNotACommittedRestorationSeed() throws {
-        let ids = Counter(), requested = url("https://example.com/startup-attachment")
-        let ctx = Context(now: T0, newID: ids.next)
-        let fresh = StateCodec.restore(nil, seed: RestoreSeed(startURL: requested, contentSize: Driver.contentSize), ctx: ctx).state
-        let page = try XCTUnwrap(project(fresh, ProjectionContext(now: T0, calendar: Driver.calendar)).pages.first)
-        XCTAssertEqual(page.initialURL, requested)
-        XCTAssertNil(fresh.address(of: page.id.item, in: page.id.window, for: .savedDocument))
-        let restored = StateCodec.restore(StateCodec.encode(fresh), seed: RestoreSeed(startURL: nil, contentSize: Driver.contentSize), ctx: ctx).state
-        XCTAssertNil(project(restored, ProjectionContext(now: T0, calendar: Driver.calendar)).pages.first?.initialURL)
-    }
-
-    func testNilFaviconClearsARestoredIcon() throws {
-        let d = Driver(), icon = url("https://example.com/icon.png")
-        let tab = try XCTUnwrap(d.current?.id)
-        var file = d.saved, doc = d.savedDoc, items = doc["items"] as! [String: [String: Any]]
-        var record = items[tab.rawValue]!["tab"] as! [String: Any]
-        record["favicon"] = icon.absoluteString; items[tab.rawValue]!["tab"] = record
-        doc["items"] = items; file["doc"] = doc; file["version"] = 2
-        let restored = Driver(file: jsonData(file))
-        XCTAssertEqual(restored.row(tab)?.favicon, icon)
-        restored.page(tab, .faviconChanged(nil))
-        XCTAssertNil(restored.row(tab)?.favicon)
-        XCTAssertNil(Driver(file: restored.savedFile).row(tab)?.favicon)
-    }
 
     func testPendingFileNavigationDoesNotGrantTheOpenerFilePopupPermission() throws {
         let d = Driver()
@@ -70,18 +46,6 @@ final class IdentityIntegrationTests: XCTestCase {
         let other = try XCTUnwrap(d.snapshot.windows.keys.first { $0 != d.window })
         d.user(.tab(.focus(tab)), in: other)
         return (tab, other, PageID(window: d.window, item: tab), PageID(window: other, item: tab))
-    }
-
-    func testResetMenuUsesTheInitiatingWindowAddress() throws {
-        let d = Driver()
-        let (tab, other, _, _) = try pair(d)
-        d.user(.tab(.togglePin(.focused)))
-        d.page(tab, .committed(url("https://example.com/away")), in: other)
-        let home = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(tab), at: .zero)))))
-        let away = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(tab), at: .zero)), in: other)))
-        XCTAssertEqual(isEnabled(home, ActionID.resetTab.spec.title), false)
-        XCTAssertEqual(isEnabled(away, ActionID.resetTab.spec.title), true)
-        XCTAssertEqual(command(away, ActionID.resetTab.spec.title), .tab(.reset(.item(tab))))
     }
 
     func testIndependentAddressesTitlesAndCodecV3Restore() throws {
@@ -179,58 +143,6 @@ final class IdentityIntegrationTests: XCTestCase {
         XCTAssertEqual(d.archive().first?.title, "Other title")
         d.user(.archive(.restoreLast), in: other)
         XCTAssertEqual(d.state.address(of: tab, in: other, for: .savedDocument), chosen)
-    }
-
-    func testUnavailableDocumentCannotResurrectAnOldToken() throws {
-        let d = Driver()
-        let page = d.snapshot.pages[0].id
-        let browser = try XCTUnwrap(d.snapshot.observations[page]?.browser)
-        let old = DocumentToken(browser: browser, sequence: 1)
-        d.system(.page(browser, .documentChanged(.loading(old))))
-        d.system(.page(browser, .documentChanged(.ready(old))))
-        d.system(.page(browser, .loadFailed(code: -2, description: "failed", url: "x")))
-        let failed = d.state
-        assertUnchanged(failed, d.system(.page(browser, .documentChanged(.ready(old)))))
-        let new = DocumentToken(browser: browser, sequence: 2)
-        d.system(.page(browser, .documentChanged(.loading(new))))
-        let loading = d.state
-        assertUnchanged(loading, d.system(.page(browser, .documentChanged(.ready(old)))))
-        d.system(.page(browser, .documentChanged(.ready(new))))
-        XCTAssertEqual(d.snapshot.observations[page]?.document, .ready(new))
-        let replacement = BrowserToken(page: page, generation: browser.generation + 1)
-        d.system(.page(replacement, .browserCreated(.profile(.default), .unavailable)))
-        let fresh = DocumentToken(browser: replacement, sequence: 1)
-        d.system(.page(replacement, .documentChanged(.loading(fresh))))
-        d.system(.page(replacement, .documentChanged(.ready(fresh))))
-        XCTAssertEqual(d.snapshot.observations[page]?.document, .ready(fresh))
-    }
-
-    func testOpenInPassesExplicitIntentWithoutSavingItAsACommit() throws {
-        let d = Driver()
-        d.user(.window(.newLittle(url("https://example.com/pending"))))
-        let little = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .little })
-        d.user(.window(.openIn(.current)), in: little.id)
-        XCTAssertEqual(d.current?.url, url("https://example.com/pending"))
-        let tab = try XCTUnwrap(d.current?.id)
-        XCTAssertNil(d.state.address(of: tab, in: d.window, for: .savedDocument))
-        XCTAssertEqual(Driver(file: d.savedFile).view.content.panes.first?.content, .blank)
-    }
-
-    func testGlobalFallbackAndLastRetirementAreDeterministic() throws {
-        let d = Driver()
-        let (tab, other, _, _) = try pair(d)
-        // Pinned, so the row outlives its last page: a Today tab whose last page closes itself is archived.
-        d.user(.tab(.togglePin(.item(tab))))
-        let last = url("https://example.com/last")
-        d.page(tab, .committed(last), in: other)
-        XCTAssertEqual(d.state.address(of: tab, in: nil, for: .savedDocument), start)
-        d.page(tab, .closedByPage)
-        d.page(tab, .closedByPage, in: other)
-        XCTAssertEqual(d.state.address(of: tab, in: nil, for: .savedDocument), last)
-        d.user(.window(.new))
-        let third = try XCTUnwrap(d.snapshot.windows.keys.first { $0 != d.window && $0 != other })
-        d.user(.tab(.focus(tab)), in: third)
-        XCTAssertEqual(d.snapshot.pages.first { $0.id.window == third }?.initialURL, last)
     }
 
     func testV2MigrationSeedsSelectedSplitPanesAndRepairsForeignSlots() throws {

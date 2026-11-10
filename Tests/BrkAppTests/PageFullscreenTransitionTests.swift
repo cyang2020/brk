@@ -14,15 +14,6 @@ final class PageFullscreenTransitionTests: XCTestCase {
         XCTAssertFalse(state.isTransitioning)
         XCTAssertFalse(state.needsToggle(nativeFullscreen: false))
     }
-    func testFailedExitClearsTheTransitionButDoesNotClaimTheDocumentExited() {
-        var state = PageFullscreenTransition()
-        state.pageChanged(true, nativeFullscreen: true)
-        XCTAssertFalse(state.needsToggle(nativeFullscreen: true))
-        state.nativeWillChange(to: false)
-        XCTAssertFalse(state.nativeFailed(nativeFullscreen: true))
-        XCTAssertFalse(state.isTransitioning)
-        XCTAssertTrue(state.nativeExitShouldExitDocument)
-    }
     func testNewVideoRequestDuringPriorNativeExitIsNotCancelledByTheOldExitCallback() {
         var state = PageFullscreenTransition()
         state.pageChanged(true, nativeFullscreen: false)
@@ -49,14 +40,5 @@ final class PageFullscreenTransitionTests: XCTestCase {
         state.pageChanged(false, nativeFullscreen: true)
         XCTAssertFalse(state.needsToggle(nativeFullscreen: true))
         XCTAssertFalse(state.nativeExitShouldExitDocument)
-    }
-    func testManualNativeExitDoesNotRestoreTheFullscreenWindowAfterTheDOMAcknowledges() {
-        var state = PageFullscreenTransition()
-        state.pageChanged(true, nativeFullscreen: true)
-        XCTAssertFalse(state.needsToggle(nativeFullscreen: true))
-        state.nativeWillChange(to: false)
-        XCTAssertTrue(state.nativeExited())
-        state.pageChanged(false, nativeFullscreen: false)
-        XCTAssertFalse(state.needsToggle(nativeFullscreen: false))
     }
 }

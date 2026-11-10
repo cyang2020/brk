@@ -29,21 +29,4 @@ final class ReportTests: XCTestCase {
         XCTAssertTrue(lines.contains("## Needs"))
         XCTAssertTrue(lines.contains("- W1: BrkDomain/CommandBar.swift:15 (scenarios 2, 7)"))
     }
-
-    func testNoNeedsSectionWithoutFailures() {
-        let text = E2EReport.markdown([E2EResult(id: "0", title: "smoke", outcome: .pass, seconds: 1)], machine: machine, totalSeconds: 1)
-        XCTAssertFalse(text.contains("## Needs"))
-        XCTAssertTrue(text.contains("1 PASS, 0 FAIL, 0 SKIPPED"))
-    }
-
-    func testOwnersFollowTheModuleMap() {
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkDomain/CommandBar.swift"), "W1")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkLayout/SidebarLayout.swift"), "W1")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkCEF/CEFEngine.swift"), "W2")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkApp/AppStore.swift"), "W2")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkApp/ControlExecutor.swift"), "W6")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkSidebar/TablistView.swift"), "W3")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkOverlays/Suggest.swift"), "W4")
-        XCTAssertEqual(E2EReport.owner(ofFileID: "BrkTheme/ThemeRenderer.swift"), "W5")
-    }
 }

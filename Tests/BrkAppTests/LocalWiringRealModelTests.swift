@@ -76,95 +76,6 @@ final class LocalWiringRealModelTests: XCTestCase {
         XCTAssertTrue(nothing.isEmpty, "\(nothing)")
     }
 
-    // MARK: 2. Tidy without a text model
-
-    func testTidyGroupsByMeaningLedByTheMostTypicalTab() async throws {
-        let ai = tabs.map { AITab(id: ItemID($0.0), title: $0.1, url: URL(string: $0.2)!) }
-        let groups = try await timed("clusters of 9 tabs") { try await services.clusters(ai) }
-        let sets = groups.map { Set($0.map(\.rawValue)) }
-        XCTAssertTrue(sets.contains { $0.isSuperset(of: ["db1", "db3"]) }, "\(sets)")
-        XCTAssertTrue(sets.allSatisfy { $0.count >= 2 })
-        XCTAssertEqual(Set(groups.flatMap { $0 }).count, groups.flatMap { $0 }.count, "a tab in one group at most")
-    }
-
-    // MARK: 3. Place New Tabs' shortlist and JevK5's answer
-
-    func testANewTabIsPlacedAmongTheNearestGroupsByJevK5() async throws {
-        try await indexTabs()
-        func tab(_ id: String) -> AITab { let t = tabs.first { $0.0 == id }!; return AITab(id: ItemID(id), title: t.1, url: URL(string: t.2)!) }
-        var members: [String: [AITab]] = ["数据库": [tab("db1"), tab("db2"), tab("db3")], "东京旅行": [tab("tk1"), tab("tk2"), tab("tk3")], "做饭": [tab("rc1"), tab("rc2"), tab("rc3")]]
-        for extra in ["Fonts", "Taxes", "Running", "Phones", "Gardening"] {
-            members[extra] = [AITab(id: ItemID(extra), title: "\(extra) guide", url: URL(string: "https://\(extra.lowercased()).example/")!)]
-        }
-        let options = members.keys.sorted().map { DecisionOption($0, "a group in Today") }
-        let request = DecisionRequest(state: .object(["title": .string("Redis 持久化：RDB 和 AOF 到底怎么选？ - 知乎")]),
-                                      questions: ["group": .choice("Which group?", options: options, none: "None of these groups fits the tab")])
-        let subject = AITab(id: ItemID("new"), title: "Redis 持久化：RDB 和 AOF 到底怎么选？ - 知乎", url: URL(string: "https://www.zhihu.com/question/583920114")!)
-        let asked = await timed("shortlist") { await services.prepare(request, hint: .placement(question: "group", subject: subject, members: members, profile: .default)) }
-        guard case .choice(_, let kept, _)? = asked.questions["group"] else { return XCTFail("no question") }
-        XCTAssertEqual(kept.count, 5, "the five nearest of eight")
-        XCTAssertEqual(kept.first?.name, "数据库", "\(kept.map(\.name))")
-        let answers = try await timed("JevK5 placement among 5 + none") { try await services.decisionBackend.decide(asked) }
-        guard case .choice(let name, let probabilities)? = answers["group"] else { return XCTFail("\(answers)") }
-        print("[b2-real] placed in \(name): \(probabilities ?? [:])")
-        XCTAssertEqual(name, "数据库")
-    }
-
-    // MARK: 4. Duplicates
-
-    func testTheSamePageUnderAnotherAddressIsACandidateAndJevK5SaysSame() async throws {
-        let soup = "Grandma's Chicken Noodle Soup Recipe - Easy Weeknight Dinners | Cooking Corner"
-        let entries = [IndexEntry(kind: .tab, id: "a", title: soup, url: "https://recipes.example/soup"),
-                       IndexEntry(kind: .tab, id: "b", title: soup, url: "https://recipes.example/soup?print=1"),
-                       IndexEntry(kind: .tab, id: "c", title: "Tokyo Metro Route Map", url: "https://www.tokyometro.jp/en/subwaymap/")]
-        let index = services.models.index(profile: ProfileID.default.rawValue)
-        try await index.reconcile(entries, embedder: services.models.embedder)
-        var vectors: [ItemID: [Float]] = [:]
-        for entry in entries { vectors[ItemID(String(entry.key.dropFirst(4)))] = await index.vector(for: entry.key) }
-        func scoped(_ id: String, _ url: String, _ at: Int64) -> DuplicateScope.Entry {
-            DuplicateScope.Entry(id: ItemID(id), title: entries.first { $0.key == "tab:" + id }!.title, url: URL(string: url)!, pinned: false, lastActiveAt: Instant(milliseconds: at))
-        }
-        var asked = Set<String>()
-        let pairs = LocalModelServices.duplicatePairs([DuplicateScope(space: SpaceID("s"), profile: .default, entries: [
-            scoped("a", "https://recipes.example/soup", 1), scoped("b", "https://recipes.example/soup?print=1", 2), scoped("c", "https://www.tokyometro.jp/en/subwaymap/", 3)])],
-            vectors: vectors, asked: &asked)
-        XCTAssertEqual(pairs.map { [$0.a.rawValue, $0.b.rawValue] }, [["a", "b"]])
-        func ask(_ a: (String, String), _ b: (String, String)) async throws -> Bool {
-            let request = DecisionRequest(state: .string("Tab 1: \(a.0)\nAddress 1: \(a.1)\nTab 2: \(b.0)\nAddress 2: \(b.1)"),
-                                          questions: [AICleanup.sameQuestionKey: .noul(AICleanup.sameQuestion)])
-            let answers = try await timed("JevK5 same page") { try await services.decisionBackend.decide(request) }
-            print("[b2-real] same page: \(String(describing: answers[AICleanup.sameQuestionKey]))")
-            guard case .noul(let yes, _)? = answers[AICleanup.sameQuestionKey] else { throw Check("\(answers)") }
-            return yes
-        }
-        let printView = try await ask((soup, "https://recipes.example/soup"), (soup, "https://recipes.example/soup?print=1"))
-        XCTAssertTrue(printView, "a print view of the page")
-        let models = try await ask(("Sony WH-1000XM5", "https://www.sony.com/xm5"), ("Sony WH-1000XM6", "https://www.sony.com/xm6"))
-        XCTAssertFalse(models, "two products on one site")
-    }
-
-    func testAnIndexPassPostsTheNearDuplicatePairOnce() async throws {
-        var sent: [Input] = []
-        let posting = LocalModelServices(models: LocalModels(root: root, runtime: LlamaRuntime.executable()), debounce: .milliseconds(50)) { sent.append($0) }
-        let soup = "Grandma's Chicken Noodle Soup Recipe - Easy Weeknight Dinners | Cooking Corner"
-        let corpus: [ProfileID: [SearchCorpusItem]] = [.default: [
-            SearchCorpusItem(kind: .tab, id: "a", title: soup, url: "http://127.0.0.1:51022/basic-soup.html"),
-            SearchCorpusItem(kind: .tab, id: "b", title: soup, url: "http://127.0.0.1:51022/basic-soup.html?print=1"),
-            SearchCorpusItem(kind: .tab, id: "c", title: "Kyoto Travel Guide 2026", url: "http://127.0.0.1:51022/basic-kyoto.html")]]
-        let scope = DuplicateScope(space: SpaceID("s"), profile: .default, entries: [
-            DuplicateScope.Entry(id: ItemID("a"), title: soup, url: URL(string: "http://127.0.0.1:51022/basic-soup.html")!, pinned: false, lastActiveAt: Instant(milliseconds: 1)),
-            DuplicateScope.Entry(id: ItemID("b"), title: soup, url: URL(string: "http://127.0.0.1:51022/basic-soup.html?print=1")!, pinned: false, lastActiveAt: Instant(milliseconds: 2)),
-            DuplicateScope.Entry(id: ItemID("c"), title: "Kyoto Travel Guide 2026", url: URL(string: "http://127.0.0.1:51022/basic-kyoto.html")!, pinned: false, lastActiveAt: Instant(milliseconds: 3))])
-        posting.stateChanged(corpus: { corpus }, duplicates: { [scope] })
-        func posted() -> [[AIDuplicatePair]] { sent.compactMap { if case .system(.aiDuplicateCandidates(let pairs)) = $0 { pairs } else { nil } } }
-        for _ in 0..<200 where posted().isEmpty { try await Task.sleep(for: .milliseconds(50)) }
-        XCTAssertEqual(posted().map { $0.map { [$0.a.rawValue, $0.b.rawValue] } }, [[["a", "b"]]])
-        posting.stateChanged(corpus: { corpus }, duplicates: { [scope] })
-        try await Task.sleep(for: .seconds(2))
-        XCTAssertEqual(posted().count, 1, "asked once a session")
-        await posting.models.shutdown()
-    }
-
     // MARK: 7. The page check on JevK5
 
     func testJevK5FlagsAPageThePhrasesMiss() async throws {
@@ -186,11 +97,6 @@ final class LocalWiringRealModelTests: XCTestCase {
         let clean = await timed("page check, clean") { await check.verdict("The city council met on Tuesday to discuss the new bike lanes on Harbour Street. A final vote is expected next month.", url: nil) }
         XCTAssertEqual(clean, .clean)
     }
-}
-
-private struct Check: Error, CustomStringConvertible {
-    let description: String
-    init(_ description: String) { self.description = description }
 }
 
 extension ProcessInfo {

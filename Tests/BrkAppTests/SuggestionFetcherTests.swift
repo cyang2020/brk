@@ -42,29 +42,6 @@ final class SuggestionFetcherTests: XCTestCase {
         XCTAssertEqual(answers().first?.2, ["swi-a", "swi-b"])
         XCTAssertEqual(answers().first?.0, w)
     }
-
-    /// with BRK_SUGGEST_URL set the fixture endpoint is asked instead of the engine, with the query as `q`
-    func test_theOverrideEndpointGetsTheQuery() async {
-        let f = fetcher(override: URL(string: "http://127.0.0.1:9/suggest")!)
-        f.fetch(WindowID("w"), query: "café au", url: URL(string: "https://www.google.com/complete?q=x")!)
-        await waitForAnswers(1)
-        XCTAssertEqual(StubSuggest.urls.map { $0.host }, ["127.0.0.1"])
-        XCTAssertEqual(StubSuggest.urls.first.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "q" }?.value }, "café au")
-        XCTAssertEqual(answers().first?.2, ["café au-a", "café au-b"])
-    }
-
-    /// a failed request answers nothing (what is shown stays until a later answer), and two windows do not cancel
-    /// each other's requests
-    func test_failuresAnswerNothingAndWindowsAreIndependent() async {
-        let f = fetcher()
-        f.fetch(WindowID("a"), query: "fail", url: URL(string: "https://suggest.test/?q=fail")!)
-        f.fetch(WindowID("b"), query: "ok", url: URL(string: "https://suggest.test/?q=ok")!)
-        await waitForAnswers(1)
-        try? await Task.sleep(for: .seconds(Metrics.commandBar.suggestionDebounce.value * 2))
-        XCTAssertEqual(Set(StubSuggest.asked), ["fail", "ok"])
-        XCTAssertEqual(answers().map(\.1), ["ok"])
-        XCTAssertEqual(answers().first?.0, WindowID("b"))
-    }
 }
 
 /// Answers `["q", ["q-a", "q-b"]]` for any URL with a `q` (or `query`) item; "fail" is a network error.

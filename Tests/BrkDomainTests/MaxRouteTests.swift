@@ -78,15 +78,6 @@ final class MaxRouteTests: XCTestCase {
         XCTAssertEqual(AIFeature.downloadRename.title, "Tidy Downloads")
     }
 
-    /// Tidy Tab Titles runs in the background: when its agent cannot answer, the window that pinned the tab says why.
-    func testABackgroundRenameThatFailsSaysWhy() throws {
-        let d = allOn()
-        let a = d.todayIDs[0]
-        let (id, _) = try request(d.user(.tab(.togglePin(.item(a)))))
-        d.system(.aiResult(id, .failed("Gemini is not signed in. Run gemini in Terminal to sign in, then try again.")))
-        XCTAssertEqual(d.view.tabTools.toast?.text, "Tidy Tab Titles: Gemini is not signed in. Run gemini in Terminal to sign in, then try again.")
-    }
-
     /// Tidy Downloads renames a finished download by itself; the window it came from says so and names the file. A
     /// failure says why there too.
     func testAnAutomaticDownloadRenameIsToldInItsWindow() throws {

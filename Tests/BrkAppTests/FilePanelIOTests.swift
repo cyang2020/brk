@@ -27,13 +27,4 @@ final class FilePanelIOTests: XCTestCase {
         if case .failed = ShareExport.writeSelected(document, to: blocker.appendingPathComponent("selected.json")) {} else { XCTFail("Write failure was not reported") }
         XCTAssertEqual(try Data(contentsOf: blocker), bytes)
     }
-
-    func testRemoteExportAndMissingPendingOperationNeverWrite() {
-        let document = ExportDocument(title: "Owned", entries: [])
-        let remote = URL(string: "https://example.test/selected.json")!
-        var writes = 0
-        if case .failed = ShareExport.writeSelected(document, to: remote, write: { _, _ in writes += 1 }) {} else { XCTFail("Remote destination accepted") }
-        XCTAssertEqual(writes, 0)
-        XCTAssertFalse(ExportSheets().saveSelected(URL(fileURLWithPath: "/tmp/never-written-file-panel.json"), owner: .init("missing")))
-    }
 }

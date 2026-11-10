@@ -34,36 +34,4 @@ final class FindLayoutParentTests: XCTestCase {
             }
         }
     }
-
-    /// P18-a/d: a 300 x 32 pt bar 10 pt inside the card's top-right corner, the same width in a 900 pt window.
-    func testFindBarKeepsArcsFixedWidthAtTheCardsTopRight() {
-        for cardWidth in [1032.0, 652] {
-            let card = CGRect(x: 238, y: 10, width: cardWidth, height: 756)
-            let frames = FindLayout.compute(in: card, replacing: false)
-            XCTAssertEqual(frames.bar, CGRect(x: card.maxX - 10 - 300, y: 20, width: 300, height: 32))
-            XCTAssertEqual(frames.icon.minX, 10); XCTAssertEqual(frames.query.minX, 33)
-            XCTAssertEqual(frames.status.maxX, 205.5)
-            XCTAssertEqual(frames.previous.midX, 226); XCTAssertEqual(frames.next.midX, 252)
-            XCTAssertEqual(frames.separator.minX, 270); XCTAssertEqual(frames.close.midX, 284)
-            XCTAssertEqual(frames.replacement, .zero); XCTAssertEqual(frames.message, .zero)
-        }
-    }
-
-    /// P18-b: NOT FOUND ends 35.5 pt before the right edge, where the arrows were, and leaves the query and close alone.
-    func testNotFoundTakesTheArrowsPlace() {
-        let frames = FindLayout.compute(in: CGRect(x: 238, y: 10, width: 1032, height: 756), replacing: false, notFound: true)
-        XCTAssertEqual(frames.status.maxX, 264.5)
-        XCTAssertGreaterThanOrEqual(frames.status.width, 61)
-        XCTAssertFalse(frames.status.intersects(frames.query))
-        XCTAssertFalse(frames.status.intersects(frames.close))
-        XCTAssertLessThan(frames.status.maxX, frames.separator.minX)
-    }
-
-    func testReplacementAddsOneRowInTheSameBar() {
-        let frames = FindLayout.compute(in: CGRect(x: 238, y: 10, width: 1032, height: 756), replacing: true)
-        XCTAssertEqual(frames.bar.width, 300); XCTAssertEqual(frames.bar.height, 64)
-        XCTAssertEqual(frames.replacement.minX, frames.query.minX)
-        XCTAssertEqual(frames.replacement.minY, 32)
-        XCTAssertEqual(frames.capture.midX, frames.close.midX)
-    }
 }

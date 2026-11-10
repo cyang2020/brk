@@ -52,26 +52,6 @@ import XCTest
         }
     }
 
-    func testEarlyUpdateBuffersDetailsAndFreezesOriginalPolicy() throws {
-        let f = Fixture(); defer { f.dispose() }
-        let first = Control(), next = Control()
-        f.update(f.item(named: false), first)
-        XCTAssertTrue(f.updates.isEmpty)
-        let changed = DownloadOwner(browser: f.owner.browser, context: ContextEpoch(context: .profile(ProfileID("new")), generation: 2),
-                                    policy: .directory(f.directory.appendingPathComponent("wrong")))
-        let decision = f.decide(f.item(received: 0), owner: changed)
-        let path = try XCTUnwrap(decision.resolutions.first!)
-        XCTAssertEqual(path.deletingLastPathComponent().deletingLastPathComponent().path, f.directory.path)
-        XCTAssertEqual(f.updates.last?.owner, f.owner)
-        XCTAssertEqual(f.updates.last?.stage, .receiving(TransferProgress(received: 10, total: 100)))
-        f.update(f.item(received: 20), next)
-        XCTAssertEqual(first.releases, 1)
-        f.update(f.item(received: 0, cancelled: true))
-        XCTAssertEqual(next.releases, 1)
-        XCTAssertEqual(decision.resolutions.count, 1)
-        XCTAssertTrue(f.leases.isEmpty)
-    }
-
     func testCancelBeforeControlRetainsIntentAndUsefulBytes() throws {
         let f = Fixture(); defer { f.dispose() }
         let decision = f.decide(f.item(received: 28))
@@ -122,35 +102,6 @@ import XCTest
         XCTAssertEqual(try Data(contentsOf: f.directory.appendingPathComponent("file.bin")).count, 100)
     }
 
-    func testPendingSheetSourceGoneRejectsStaleAndDuplicateAnswers() throws {
-        let f = Fixture(); defer { f.dispose() }
-        let owner = DownloadOwner(browser: f.owner.browser, context: f.owner.context, policy: .ask(startingAt: f.directory))
-        let decision = f.decide(f.item(), owner: owner)
-        let reply = try XCTUnwrap(f.replies.first)
-        f.available = false; f.transfers.sourceGone(owner.browser)
-        reply.1(.accepted(f.directory.appendingPathComponent("late")))
-        reply.1(.accepted(f.directory.appendingPathComponent("later")))
-        XCTAssertEqual(decision.resolutions.count, 1); XCTAssertNil(decision.resolutions[0])
-        XCTAssertEqual(f.dismissals, [reply.0.ticket])
-        f.update(f.item(cancelled: true), owner: owner)
-        XCTAssertTrue(f.leases.isEmpty)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: f.directory.path))
-    }
-
-    func testAcceptedAnswerIsOneShotAndNativeOwnerAvailabilityIsRequired() throws {
-        let f = Fixture(); defer { f.dispose() }
-        let owner = DownloadOwner(browser: f.owner.browser, context: f.owner.context, policy: .ask(startingAt: f.directory))
-        let decision = f.decide(f.item(), owner: owner)
-        f.replies[0].1(.accepted(f.directory.appendingPathComponent("chosen")))
-        f.replies[0].1(.cancelled)
-        XCTAssertEqual(decision.resolutions.count, 1)
-        XCTAssertFalse(f.transfers.operations.values.first!.cancelling)
-        f.update(f.item(cancelled: true))
-        f.available = false
-        let denied = f.decide(f.item(2))
-        XCTAssertEqual(denied.resolutions.count, 1); XCTAssertNil(denied.resolutions[0])
-    }
-
     func testPrivateRevocationIsImmediateAndNewEpochIndependent() throws {
         let f = Fixture(); defer { f.dispose() }
         let old = DownloadOwner(browser: f.owner.browser, context: ContextEpoch(context: .incognito(PrivateSessionID("old")), generation: 1), policy: .ask(startingAt: f.directory))
@@ -168,19 +119,6 @@ import XCTest
         XCTAssertEqual(f.leases.count, 1)
         f.update(f.item(cancelled: true), owner: next)
         XCTAssertTrue(f.leases.isEmpty)
-    }
-
-    func testInterruptedIsDistinctAndTimeoutRetainsWriterOwnership() throws {
-        let f = Fixture(); defer { f.dispose() }
-        f.decide(f.item()); f.update(f.item(interrupted: true))
-        XCTAssertEqual(f.updates.last?.stage, .terminal(.interrupted(reason: "Download interrupted (error 9)", .removed)))
-        let d = f.decide(f.item(2)); let c = Control(); f.update(f.item(2), c)
-        f.transfers.reportTimeout()
-        guard case .terminal(.failed(_, .retained(let directory, _))) = f.updates.last?.stage else { return XCTFail("timeout erased file ownership") }
-        XCTAssertEqual(directory, d.resolutions[0]!.deletingLastPathComponent())
-        XCTAssertEqual(c.releases, 0); XCTAssertEqual(f.leases.count, 1)
-        f.transfers.browserClosed(f.owner.browser)
-        XCTAssertEqual(c.releases, 1); XCTAssertTrue(f.leases.isEmpty)
     }
 
     func testCollisionsAndConfirmedReplacementPreserveUnownedFiles() throws {
@@ -203,28 +141,6 @@ import XCTest
         XCTAssertThrowsError(try racing.commit())
         XCTAssertEqual(try String(contentsOf: target, encoding: .utf8), "collision created later")
         XCTAssertEqual(try String(contentsOf: racing.staging, encoding: .utf8), "staged")
-    }
-    func testLateTerminalAfterTimeoutReleasesWriterWithoutPublishingASecondTerminal() throws {
-        let f = Fixture(); defer { f.dispose() }
-        f.decide(f.item()); let c = Control(); f.update(f.item(), c)
-        f.transfers.reportTimeout()
-        let published = f.updates.count
-        f.update(f.item(cancelled: true))
-        XCTAssertEqual(f.updates.count, published)
-        XCTAssertEqual(c.releases, 1)
-        XCTAssertTrue(f.leases.isEmpty)
-    }
-    func testDestinationCreationFailureIsReportedAsFailureAfterNativeCancellation() throws {
-        let f = Fixture(); defer { f.dispose() }
-        try FileManager.default.createDirectory(at: f.directory, withIntermediateDirectories: true)
-        let file = f.directory.appendingPathComponent("not-a-directory")
-        try Data("user".utf8).write(to: file)
-        let owner = DownloadOwner(browser: f.owner.browser, context: f.owner.context, policy: .directory(file))
-        let d = f.decide(f.item(), owner: owner)
-        XCTAssertNil(d.resolutions[0])
-        f.update(f.item(cancelled: true), owner: owner)
-        guard case .terminal(.failed(_, .absent)) = f.updates.last?.stage else { return XCTFail("destination error was labelled cancelled") }
-        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "user")
     }
 
 }

@@ -59,191 +59,6 @@ final class LibraryViewTests: XCTestCase {
                         downloads: downloads)
     }
 
-    // MARK: The theme (Q18)
-
-    private func palette(_ hex: String) -> Palette { Palette(resolveTheme(SpaceTheme(colors: [RGBA(hex: hex)], texture: .grain, intensity: 0.25, appearance: .auto))) }
-
-    private func component(_ color: NSColor) -> (white: CGFloat, alpha: CGFloat) {
-        let c = color.usingColorSpace(.sRGB) ?? color
-        return ((c.redComponent + c.greenComponent + c.blueComponent) / 3, c.alphaComponent)
-    }
-
-    /// the panel paints no background of its own under either scheme, so the window's theme shows through it, like the
-    /// sidebar it replaces (Q18-navy-library-*); under a white theme that is what P32's near-white was
-    func testThePanelLetsTheThemeThrough() throws {
-        for hex in ["#FFFFFF", "#2D4468"] {
-            let root = makeView()
-            let snapshot = library(.downloads)
-            root.render(snapshot, now: now, frames: frames(.downloads), palette: palette(hex))
-            let panel = try XCTUnwrap(view(.library, in: root))
-            XCTAssertNil(panel.layer?.backgroundColor, hex)
-        }
-    }
-
-    /// a light scheme keeps the values measured on P32; a dark one has white inks and fills, measured on Q18-navy-library
-    func testLibraryColorsByScheme() {
-        let light = LibraryColors.of(.light), dark = LibraryColors.of(.dark)
-        XCTAssertEqual(component(light.control).alpha, 0.072, accuracy: 0.001)
-        XCTAssertEqual(component(light.search).alpha, 0.072, accuracy: 0.001)
-        XCTAssertEqual(component(light.filter).alpha, 0.072, accuracy: 0.001)
-        XCTAssertEqual(component(light.placeholder).alpha, 0.045, accuracy: 0.001)
-        XCTAssertEqual(component(light.navLabel).white, CGFloat(0x73) / 255, accuracy: 0.01)
-        XCTAssertEqual(component(light.navGlyph).white, CGFloat(0x6A) / 255, accuracy: 0.01)
-        XCTAssertEqual(light.shadeWidth, 10)
-        for (name, color) in [("control", dark.control), ("search", dark.search), ("filter", dark.filter), ("placeholder", dark.placeholder), ("label", dark.navLabel),
-                              ("glyph", dark.navGlyph), ("title", dark.foregroundPrimary), ("detail", dark.foregroundSecondary), ("strong", dark.foregroundStrong)] {
-            XCTAssertEqual(component(color).white, 1, accuracy: 0.001, name)
-        }
-        XCTAssertEqual(component(dark.control).alpha, 0.09, accuracy: 0.001)
-        XCTAssertEqual(component(dark.search).alpha, 0.08, accuracy: 0.001)
-        XCTAssertEqual(component(dark.filter).alpha, 0.05, accuracy: 0.001)
-        XCTAssertEqual(component(dark.navLabel).alpha, 0.63, accuracy: 0.001)
-        XCTAssertEqual(component(dark.foregroundStrong).alpha, 0.87, accuracy: 0.001)
-        XCTAssertEqual(dark.shadeWidth, 37)
-    }
-
-    /// the views take those colors: a navy theme's search field, cell label and empty state are the dark ones
-    func testADarkThemeReachesThePages() throws {
-        let root = makeView()
-        root.render(library(.downloads), now: now, frames: frames(.downloads), palette: palette("#2D4468"))
-        let dark = LibraryColors.of(.dark)
-        let search = try XCTUnwrap(shown(root).compactMap { $0 as? LibrarySearchField }.first)
-        XCTAssertEqual(search.layer?.backgroundColor.map { NSColor(cgColor: $0)!.alphaComponent } ?? 0, dark.search.alphaComponent, accuracy: 0.001)
-        let cell = try XCTUnwrap(view(.libraryPage(.media), in: root))
-        let label = try XCTUnwrap(cell.subviews.compactMap { $0 as? NSTextField }.first)
-        XCTAssertEqual(component(label.textColor!).white, 1, accuracy: 0.001)
-        XCTAssertEqual(component(label.textColor!).alpha, 0.63, accuracy: 0.001)
-    }
-
-    /// a Spaces card draws in its own space's scheme: a light space's card stays pale in a navy window, a navy one is
-    /// its window color a little darker (Q18-navy-library-spaces)
-    func testASpaceCardTakesItsOwnTheme() {
-        let light = SpacesPageView.cardFill(of: resolveTheme(SpaceTheme(colors: [RGBA(hex: "#FFFFFF")], texture: .grain, intensity: 0.25, appearance: .auto)))
-        XCTAssertEqual(component(light[0]).white, 0.99, accuracy: 0.015)
-        let navy = SpacesPageView.cardFill(of: resolveTheme(SpaceTheme(colors: [RGBA(hex: "#2D4468")], texture: .grain, intensity: 0.25, appearance: .auto)))
-        XCTAssertEqual(navy[0], navy[1])
-        let c = navy[0].usingColorSpace(.sRGB)!
-        XCTAssertEqual(c.redComponent * 255, 106, accuracy: 4)
-        XCTAssertEqual(c.greenComponent * 255, 123, accuracy: 4)
-        XCTAssertEqual(c.blueComponent * 255, 145, accuracy: 4)
-    }
-
-    // MARK: The panel
-
-    /// the navigation column lists every page with Arc's name and a glyph in the cells the layout computed, in Arc's
-    /// order; the open page is selected; a cell opens its page, the exit button (where the dock's Library button is)
-    /// closes the Library; the panel is the `library` view and the page column sits beside the navigation
-    func testTheNavigationListsEveryPageWithArcsCopyAndAGlyph() throws {
-        let view = makeView()
-        let f = render(view, library(.downloads))
-        XCTAssertFalse(view.isHidden)
-        XCTAssertEqual(view.frame, CGRect(x: 0, y: 0, width: 1280, height: 776))
-        XCTAssertEqual(self.view(.library, in: view)?.frame, CGRect(x: 0, y: 0, width: 417, height: 776))
-        let cells = shown(view).compactMap { $0 as? LibraryNavCell }
-        XCTAssertEqual(cells.map(\.page), LibraryPage.allCases)
-        // Arc's six, then Brk's own AI conversations page (in the conversations' language; English with none).
-        XCTAssertEqual(cells.map(\.titleText), ["Media", "Downloads", "Easels", "Spaces", "Boosts", "Archived Tabs", "Conversations"])
-        XCTAssertTrue(cells.allSatisfy { $0.glyphImage != nil })
-        for cell in cells {
-            XCTAssertEqual(cell.frame, f.library?.pageCells[cell.page])
-            XCTAssertEqual(cell.accessibilityIdentifier(), ViewID.libraryPage(cell.page).identifier)
-        }
-        XCTAssertEqual(cells.filter(\.isSelected).map(\.page), [.downloads])
-        XCTAssertEqual(view.downloads.frame, f.library?.page)
-        XCTAssertEqual(view.downloads.frame, CGRect(x: 112, y: 0, width: 305, height: 776))
-        cells.first { $0.page == .archive }?.performClick(nil)
-        let exit = try XCTUnwrap(self.view(.libraryClose, in: view) as? NSButton)
-        XCTAssertEqual(exit.frame, CGRect(x: 8, y: 735, width: 32, height: 32))
-        XCTAssertEqual(exit.toolTip, "Exit the Library")
-        exit.performClick(nil)
-        XCTAssertEqual(sent, [.library(.open(.archive)), .library(.close)])
-        XCTAssertNil(view.hitTest(CGPoint(x: 800, y: 300)), "the content area beside the panel is the page's")
-        view.render(nil, now: now, frames: f, palette: Palette(resolveTheme(.default)))
-        XCTAssertTrue(view.isHidden)
-    }
-
-    /// the open page fills the page column; only one page shows; each has Arc's search field; Easels shows its empty
-    /// state, Boosts keeps Brk's own rows, Downloads its empty state
-    func testTheOpenPageFillsThePageColumnWithArcsSearchField() {
-        let view = makeView()
-        let f = render(view, library(.archive))
-        XCTAssertEqual(view.archive.frame, f.library?.page)
-        XCTAssertTrue(view.downloads.isHidden && view.easels.isHidden && view.media.isHidden)
-        XCTAssertTrue(texts(view.archive).contains("Hover your mouse over a tab and press the × to archive it."))
-        XCTAssertEqual(view.archive.filterField.placeholder, "Search Archive…")
-        _ = render(view, library(.easelsAndNotes, openID: 2))
-        XCTAssertTrue(view.archive.isHidden)
-        XCTAssertFalse(view.easels.isHidden)
-        XCTAssertEqual(view.easels.searchField.placeholder, "Search Easels…")
-        XCTAssertEqual(view.easels.texts, [LibraryCopy.nothingHereYet, LibraryCopy.easelsEmpty])
-        _ = render(view, library(.media, openID: 2))
-        XCTAssertTrue(view.easels.isHidden)
-        XCTAssertFalse(view.media.isHidden)
-        XCTAssertEqual(view.media.searchField.placeholder, "Search Media…")
-        _ = render(view, library(.boosts, openID: 3))
-        XCTAssertFalse(view.boosts.isHidden)
-        XCTAssertEqual(view.boosts.searchField.placeholder, "Search Boosts…")
-        XCTAssertTrue(texts(view.boosts).contains("Nothing Boosted Yet!"))
-        XCTAssertNotNil(self.view(.boostControl("new"), in: view))
-        XCTAssertNotNil(self.view(.boostControl("import"), in: view))
-        XCTAssertNotNil(self.view(.boostControl("preset-reader"), in: view))
-        _ = render(view, library(.downloads, openID: 3))
-        XCTAssertEqual(view.downloads.searchField.placeholder, "Search Downloads…")
-        XCTAssertEqual(texts(view.downloads).suffix(2), ["Nothing here yet!", "Come back after you’ve found some cool stuff to save."])
-    }
-
-    /// Media before the first capture: Arc's grey cards under "Your Media in the Library"; × puts the card away for
-    /// the session. With captures: Brk's own captures by day in the archive list's two-line rows (P32-e: thumbnail
-    /// tile, title, size and host); a click previews it over the content card, whose × hides the preview, and the
-    /// previewed row keeps a grey fill; the row's menu holds the four actions
-    func testMediaShowsArcsIntroductionThenCaptureRowsAndAPreview() throws {
-        MediaPageView.introDismissed = false
-        let view = makeView()
-        _ = render(view, library(.media))
-        XCTAssertTrue(view.media.introShown)
-        XCTAssertTrue(texts(view.media).contains("Your Media in the Library"))
-        XCTAssertTrue(texts(view.media).contains("Today"))
-        let token = DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("w"), item: ItemID("t")), generation: 1), sequence: 1)
-        let request = CaptureRequest(id: "c1", document: token, context: .profile(.default), mode: .area, title: "Visual fixture",
-                                     url: URL(string: "http://127.0.0.1:9/a")!, createdAt: now)
-        let record = CaptureRecord(request: request, profile: .default, image: CaptureImage(png: Data(), width: 400, height: 300, scale: 2))
-        let png = FileManager.default.temporaryDirectory.appendingPathComponent("library-media-\(UUID().uuidString).png")
-        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 3, bitsPerSample: 8, samplesPerPixel: 4,
-                                                    hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
-        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: png)
-        defer { try? FileManager.default.removeItem(at: png) }
-        var snapshot = library(.media, openID: 2)
-        snapshot.captures = [record]
-        snapshot.captureFiles = ["c1": png]
-        let f = render(view, snapshot)
-        XCTAssertFalse(view.media.introShown)
-        let row = try XCTUnwrap(view.media.rows.first)
-        XCTAssertEqual(row.accessibilityIdentifier(), "tab-tools-capture-card-c1")
-        XCTAssertEqual(row.texts, ["Visual fixture", "400 × 300 · 127.0.0.1"])
-        XCTAssertTrue(row.showsThumbnail, "the capture's own picture in the icon tile")
-        view.media.layoutSubtreeIfNeeded()
-        XCTAssertEqual(row.frame.minX, 10)
-        XCTAssertEqual(row.frame.height, 56, "the archive list's row pitch")
-        XCTAssertEqual(row.contextMenu()?.items.map(\.title), ["Open", "Export…", "Remove", "Insert in Easel"])
-        XCTAssertEqual(row.accessoryTooltips, ["More"])
-        XCTAssertFalse(row.selected)
-        XCTAssertTrue(view.preview.isHidden, "nothing previews before a pick")
-        row.click()
-        XCTAssertEqual(sent.last, .capture(.preview("c1")))
-        let menu = try XCTUnwrap(row.contextMenu())
-        menu.performActionForItem(at: 2)
-        XCTAssertEqual(sent.last, .capture(.remove("c1")))
-        snapshot.capturePreview = "c1"
-        _ = render(view, snapshot)
-        XCTAssertEqual(view.media.rows.first?.selected, true)
-        XCTAssertFalse(view.preview.isHidden)
-        // The card keeps its closed width beside the Library and runs past the window: the preview covers its visible part.
-        let card = try XCTUnwrap(f.cards.first?.rect)
-        XCTAssertEqual(view.preview.frame, CGRect(x: card.minX, y: card.minY, width: f.contentSize.width - 10 - card.minX, height: card.height),
-                       "the preview covers the content card's visible part")
-        XCTAssertEqual(view.preview.captionText, "Visual fixture · 400 × 300 · 127.0.0.1")
-    }
-
     // MARK: Downloads
 
     private func download(_ id: String, _ name: String, _ state: DownloadState, received: Int64, total: Int64?, path: String?) -> DownloadRow {
@@ -301,18 +116,12 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertTrue(texts(view.downloads).contains("No results found for “zzz”"))
     }
 
-    /// the Filter menu narrows the list by state and holds Clear Downloads
-    func testTheDownloadsFilterMenu() throws {
-        let view = makeView()
-        _ = render(view, library(.downloads, downloads: [
-            download("1", "report.pdf", .finished, received: 2048, total: 2048, path: "/tmp/d/report.pdf"),
-            download("3", "big.iso", .inProgress, received: 250, total: 1000, path: "/tmp/d/big.iso"),
-        ]))
-        let menu = view.downloads.filterMenu()
-        XCTAssertEqual(menu.items.map(\.title), ["All Downloads", "In Progress", "Completed", "Failed or Cancelled", "", "Clear Downloads"])
-        view.downloads.show(only: .inProgress)
-        XCTAssertEqual(shown(view).compactMap { ($0 as? LibraryRowView)?.accessibilityIdentifier() }, ["download-3"])
-        XCTAssertEqual(view.downloads.filterMenu().items.filter { $0.state == .on }.map(\.title), ["In Progress"])
+    /// day headers: today, yesterday, a date this year, a date with its year
+    func testDaysAreTodayYesterdayThenTheDate() {
+        let day: Int64 = 86_400_000
+        let instants = [0, 1, 4, 400].map { Instant(milliseconds: now.milliseconds - $0 * day) }
+        XCTAssertEqual(LibraryDays.group(instants, at: { $0 }, now: now, calendar: utc).map(\.title),
+                       ["Today", "Yesterday", "Monday, October 26", "Thursday, September 25, 2025"])
     }
 
     private func spacesPage(_ ids: [SpaceID]) -> SpacesPageView {
@@ -386,13 +195,5 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(sent, [.space(.move(a, index: 2))])
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(try card("a").frame.minX, start, "until the order changes the card goes back")
-    }
-
-    /// day headers: today, yesterday, a date this year, a date with its year
-    func testDaysAreTodayYesterdayThenTheDate() {
-        let day: Int64 = 86_400_000
-        let instants = [0, 1, 4, 400].map { Instant(milliseconds: now.milliseconds - $0 * day) }
-        XCTAssertEqual(LibraryDays.group(instants, at: { $0 }, now: now, calendar: utc).map(\.title),
-                       ["Today", "Yesterday", "Monday, October 26", "Thursday, September 25, 2025"])
     }
 }

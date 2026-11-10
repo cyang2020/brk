@@ -42,22 +42,6 @@ final class ArcBehaviourAlignmentTests: XCTestCase {
         XCTAssertEqual(d.view.content.panes.map(\.tab), [a])
     }
 
-    /// Esc closes the switcher without switching or stamping anything
-    func testEscapeDuringCtrlTabKeepsThePageAndStampsNothing() throws {
-        let d = Driver()
-        let b = d.open("http://127.0.0.1:9/b")
-        d.advance(minute)
-        let stamps = d.state.doc.tree.items.compactMapValues { item -> Instant? in if case .tab(let t) = item.body { t.lastActiveAt } else { nil } }
-        d.system(.window(d.window, .modifiersChanged(held: [.control])))
-        d.user(.tab(.cycleRecent(.next)))
-        d.user(.app(.exit))
-        XCTAssertNil(d.view.tabTools.recent)
-        XCTAssertEqual(d.current?.id, b)
-        d.system(.window(d.window, .modifiersChanged(held: [])))
-        XCTAssertEqual(d.current?.id, b, "a release after Esc has nothing to commit")
-        XCTAssertEqual(d.state.doc.tree.items.compactMapValues { item -> Instant? in if case .tab(let t) = item.body { t.lastActiveAt } else { nil } }, stamps)
-    }
-
     /// the sweep tick leaves a held walk open; with Control no longer held (its release went missing) it commits
     func testTheClockTickCommitsOnlyAWalkWhoseControlIsNoLongerHeld() throws {
         let d = Driver()

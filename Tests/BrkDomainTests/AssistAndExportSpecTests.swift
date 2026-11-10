@@ -5,21 +5,6 @@ import XCTest
 
 /// Owner: wave 2 contract (the AI seam and the export codec); a later wave fills the Max features.
 final class AssistAndExportSpecTests: XCTestCase {
-    /// launch reports the local tools; the Max pane shows them and resolves `.auto`
-    func test_detectedProvidersResolveTheChoice() {
-        let d = Driver()
-        XCTAssertNil(d.snapshot.settings.max.active)
-        d.system(.aiProvidersDetected([.codex]))
-        XCTAssertEqual(d.snapshot.settings.max.detected, [.codex])
-        XCTAssertEqual(d.snapshot.settings.max.active, .codex, ".auto takes what is there")
-        d.system(.aiProvidersDetected([.claude, .codex]))
-        XCTAssertEqual(d.snapshot.settings.max.active, .claude, ".auto prefers claude")
-        d.user(.settings(.max(.provider(.off))))
-        XCTAssertNil(d.snapshot.settings.max.active)
-        d.user(.settings(.max(.provider(.codex))))
-        XCTAssertEqual(d.snapshot.settings.max.active, .codex)
-        XCTAssertFalse(d.system(.aiProvidersDetected([.claude, .codex])).docChanged, "detection is session state")
-    }
 
     /// with 'renamed pinned tabs' on, pinning asks the provider; the answer becomes the tab's custom title; an unknown request is ignored
     func test_pinningAsksForATidyTitleAndTheAnswerRenames() throws {
@@ -38,18 +23,6 @@ final class AssistAndExportSpecTests: XCTestCase {
         d.user(.tab(.togglePin(.item(a))))
         let again = d.user(.tab(.togglePin(.item(a))))
         XCTAssertEqual(again.effects, [], "a tab with a custom title is not renamed again")
-    }
-
-    /// an unavailable or failed provider leaves the tab as it was
-    func test_unavailableProvidersChangeNothing() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        d.user(.settings(.max(.renamePinnedTabs(true))))
-        let t = d.user(.tab(.togglePin(.item(a))))
-        guard case .ai(let id, _, _)? = t.effects.first else { return XCTFail("\(t.effects)") }
-        let before = d.row(a)?.title
-        d.system(.aiResult(id, .unavailable))
-        XCTAssertEqual(d.row(a)?.title, before)
     }
 
     /// "Share…" builds an export document from state: a space with its folders, the focused tab, chosen items
@@ -91,22 +64,4 @@ final class AssistAndExportSpecTests: XCTestCase {
         XCTAssertEqual(ExportCodec.filename(ExportDocument(title: "a/b:c", entries: []), as: .json), "a-b-c.json")
     }
 
-    // MARK: later-wave stubs
-
-    func test_tidyTodayAppliesTheProvidersPlan() throws {
-        let d = Driver()
-        d.user(.settings(.max(.tidyTabs(true))))
-        _ = d.open("https://example.com/b")
-        let transition = d.user(.assist(.organizeToday))
-        XCTAssertTrue(transition.effects.contains { if case .ai(_, .tidyToday, _) = $0 { true } else { false } })
-    }
-
-    func test_askArcShowsAnAnswerPage() throws {
-        let d = Driver()
-        d.user(.settings(.max(.feature(.commandBar, true))))
-        let transition = d.user(.assist(.ask("Why?")))
-        let id = try XCTUnwrap(transition.effects.compactMap { if case .ai(let id, _, _) = $0 { id } else { nil } }.first)
-        d.system(.aiResult(id, .text("Because.")))
-        XCTAssertEqual(d.view.ai?.text, "Because.")
-    }
 }

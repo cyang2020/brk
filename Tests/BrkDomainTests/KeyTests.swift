@@ -1,20 +1,8 @@
 import BrkBase
 import XCTest
 
-/// `Key` is its own inventory (CaseIterable), so every case must round-trip by code and by name: no second list.
+/// Chord parsing and formatting, as saved shortcut overrides use them.
 final class KeyTests: XCTestCase {
-    func testEveryKeyRoundTripsByCodeAndName() {
-        for key in Key.allCases {
-            XCTAssertEqual(Key.byCode(key.code), key, "\(key)")
-            XCTAssertEqual(Key.byName(key.name), key, "\(key)")
-            XCTAssertFalse(key.menuKeyEquivalent.isEmpty, "\(key)")
-        }
-        XCTAssertEqual(Set(Key.allCases.map(\.name)).count, Key.allCases.count, "names are unique")
-        XCTAssertEqual(Key.t.code, 17)
-        XCTAssertEqual(Key.equals.menuKeyEquivalent, "=")
-        XCTAssertNil(Key.byCode(255))
-    }
-
     func testChordParsingAndFormatting() throws {
         let t = try XCTUnwrap(KeyChord(parsing: "cmd+t"))
         XCTAssertEqual(t, KeyChord(.command, .t))

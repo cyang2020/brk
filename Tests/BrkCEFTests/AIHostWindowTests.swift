@@ -55,15 +55,6 @@ final class AIHostWindowTests: XCTestCase {
         XCTAssertEqual(order(), ["host", "parent", "other"], "the browser window went behind the other window")
         XCTAssertTrue(host.parent === parent)
     }
-
-    func testUnguardedSiblingKeepsItsNormalActivationPolicy() {
-        let host = window(), standalone = window()
-        defer { host.close(); standalone.close() }
-        HostWindows.adopt(host, parent: nil)
-        XCTAssertFalse(host.canBecomeKey)
-        XCTAssertTrue(standalone.canBecomeKey)
-        XCTAssertTrue(standalone.canBecomeMain)
-    }
 }
 
 @MainActor

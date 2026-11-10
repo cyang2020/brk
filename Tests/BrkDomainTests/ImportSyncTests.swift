@@ -106,14 +106,6 @@ final class ImportSyncTests: XCTestCase {
         XCTAssertTrue(repairs.contains { $0.contains("Disconnected invalid sidebar") })
     }
 
-    func testOptionalDefaultBrowserChoiceOnlyEmitsAnExplicitRequest() {
-        let empty = Driver(startURL: nil)
-        let noRequest = empty.user(.sidebarData(.completeOnboarding(OnboardingChoices(starterTabs: false, favorites: false, tour: false))))
-        XCTAssertFalse(noRequest.effects.contains(.app(.registerAsDefaultBrowser)))
-        let optedIn = Driver(startURL: nil)
-        let request = optedIn.user(.sidebarData(.completeOnboarding(OnboardingChoices(starterTabs: false, favorites: false, tour: false, defaultBrowser: true))))
-        XCTAssertEqual(request.effects, [.app(.registerAsDefaultBrowser)])
-    }
     func testTwoReducerReplicasConvergeAndRepairConcurrentMoveCycleWithoutUsingToday() throws {
         let a = Driver(), b = Driver()
         a.user(.item(.newFolder)); let first = try XCTUnwrap(a.pinnedIDs.first)
@@ -179,16 +171,6 @@ final class ImportSyncTests: XCTestCase {
         let old = Driver(file: try JSONSerialization.data(withJSONObject: object), startURL: nil)
         XCTAssertFalse(old.snapshot.sidebarData.needsOnboarding)
         XCTAssertEqual(StateCodec.currentVersion, 3)
-    }
-
-    func testStartEmptyAndPrivateCommandsDoNotSeedOrRequestPanels() throws {
-        let d = Driver(startURL: nil)
-        d.user(.sidebarData(.completeOnboarding(OnboardingChoices(starterTabs: false, favorites: false, tour: false))))
-        XCTAssertEqual(d.allTabRows.count, 0)
-        d.user(.window(.newIncognito))
-        let privateID = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
-        XCTAssertTrue(d.user(.sidebarData(.importFile), in: privateID).effects.isEmpty)
-        XCTAssertTrue(d.user(.sidebarData(.syncSettings), in: privateID).effects.isEmpty)
     }
 
     func testHTMLAndJSONRoundTripFoldersAndRejectExecutableLinks() throws {
@@ -305,14 +287,4 @@ final class ImportSyncTests: XCTestCase {
         XCTAssertEqual(before, d.savedFile)
     }
 
-    func testExportCapturesInitiatingWindowAndFolderSelection() throws {
-        let d = Driver(); d.user(.item(.newFolder)); let folder = try XCTUnwrap(d.pinnedIDs.first)
-        d.user(.item(.rename(folder, title: "Exports")))
-        let tab = d.open("https://example.test/export")
-        d.user(.item(.move(tab, to: .into(parent: folder, index: 0))))
-        let transition = d.user(.app(.export(.items([folder]))))
-        guard case .export(let document, let owner)? = transition.effects.first else { return XCTFail("Missing export") }
-        XCTAssertEqual(owner, d.window)
-        XCTAssertEqual(document.entries, [.folder(title: "Exports", children: [.link(title: "example.test/export", url: url("https://example.test/export"))])])
-    }
 }

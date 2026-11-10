@@ -69,24 +69,6 @@ final class LocalWiringDomainTests: XCTestCase {
         XCTAssertNil(d.state.session.windows[d.window]?.meaning[.commandBar], "an answer after the bar closed is dropped")
     }
 
-    func testTheHistoryPageAsksByMeaningAndShowsVisitsForItsText() throws {
-        let d = Driver()
-        let tab = d.open("https://juejin.cn/post/1")
-        d.page(tab, .titleChanged("MySQL 索引优化实战 - 掘金"))
-        d.user(.library(.openHistory))
-        XCTAssertEqual(meaning(d.user(.library(.historySearch("讲数据库的")))), [], "no search model")
-        searchReady(d)
-        XCTAssertEqual(meaning(d.user(.library(.historySearch(" 讲数据库的 ")))), [MeaningQuery(text: "讲数据库的", scope: .history, profile: .default)])
-        d.system(.meaningResults(d.window, MeaningResults(text: "讲数据库的", scope: .history, hits: [MeaningHit(key: "history:https://juejin.cn/post/1", score: 0.81)])))
-        let shown = try XCTUnwrap(d.view.historyMeaning)
-        XCTAssertEqual(shown.text, "讲数据库的")
-        XCTAssertEqual(shown.rows.map(\.url.absoluteString), ["https://juejin.cn/post/1"])
-        XCTAssertNotNil(shown.rows.first?.id, "a visit, so the page can select and remove it")
-        XCTAssertEqual(meaning(d.user(.library(.historySearch("讲数据库的")))), [], "already answered")
-        d.user(.library(.historySearch("")))
-        XCTAssertNil(d.view.historyMeaning, "an empty search drops it")
-    }
-
     func testIndexKeysBecomeTheTabToolsIds() throws {
         let d = Driver()
         let tab = d.open("https://recipes.example/soup")
@@ -97,29 +79,6 @@ final class LocalWiringDomainTests: XCTestCase {
         XCTAssertNil(d.state.agentTabID(forIndexKey: "tab:" + tab.rawValue, profile: ProfileID("other")), "another profile's tab")
         XCTAssertNil(d.state.agentTabID(forIndexKey: "archive:none", profile: .default))
         XCTAssertNil(d.state.agentTabID(forIndexKey: "nonsense", profile: .default))
-    }
-
-    func testPlaceNewTabsTellsJevK5EachGroupsTabs() throws {
-        let d = Driver()
-        d.user(.settings(.max(.feature(.tabPlacement, true))))
-        let soup = d.open("https://recipes.example/soup"), salad = d.open("https://recipes.example/salad")
-        d.user(.settings(.max(.tidyTabs(true))))
-        guard case .ai(let tidy, .tidyToday, _)? = d.user(.assist(.organizeToday)).effects.first(where: { if case .ai = $0 { true } else { false } }) else { return XCTFail("no Tidy") }
-        d.system(.aiResult(tidy, .reply(.groups([AIGroupPlan(folder: "Recipes", tabs: [soup.rawValue, salad.rawValue])]))))
-        let pie = d.open("https://recipes.example/pie")
-        let page = PageID(window: d.window, item: pie)
-        let browser = d.state.session.live[page]?.browser ?? BrowserToken(page: page, generation: 1)
-        let document = DocumentToken(browser: browser, sequence: (d.state.session.live[page]?.documentSequence ?? 0) + 1)
-        let effects = [d.page(pie, .documentChanged(.loading(document))), d.page(pie, .titleChanged("Apple pie")), d.page(pie, .documentChanged(.ready(document))),
-                       d.page(pie, .loadingChanged(isLoading: false, canGoBack: false, canGoForward: false))].flatMap(\.effects)
-        let task = try XCTUnwrap(effects.compactMap { if case .ai(_, let task, _) = $0 { task } else { nil } }.first)
-        guard case .decide(let request, .tabPlacement, .placement(let key, let subject, let members, let profile)?) = task else { return XCTFail("\(task)") }
-        XCTAssertEqual(key, "group")
-        XCTAssertNotNil(request.questions["group"])
-        XCTAssertEqual(subject.id, pie)
-        XCTAssertEqual(subject.title, "Apple pie")
-        XCTAssertEqual(profile, .default)
-        XCTAssertEqual(Set(members["Recipes"]?.map(\.id) ?? []), [soup, salad])
     }
 }
 

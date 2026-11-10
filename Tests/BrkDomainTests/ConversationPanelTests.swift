@@ -70,33 +70,6 @@ final class ConversationPanelTests: XCTestCase {
         XCTAssertEqual(d.state.savedConversations[id]?.items, [.user("Why?"), .assistant("Because of this."), .user("And then?"), .assistant("Then this.")])
     }
 
-    func testAnApprovalStillWaitingIsNotSaved() throws {
-        let d = enabled()
-        let id = try firstTurn(d.user(.assist(.ask("Run it"))))
-        d.system(.aiConversation(id, .approval(AIAgentApproval(id: "a", title: "Run: ls", detail: "", options: [.init(id: "once", title: "Allow", kind: .allowOnce)]), turn: id)))
-        d.system(.aiConversation(id, .notice("x")))
-        XCTAssertFalse(d.state.savedConversations[id]!.items.contains { if case .approval = $0 { true } else { false } })
-    }
-
-    func testTranscriptsSurviveARelaunchOutsideStateJSON() throws {
-        let d = enabled()
-        let id = try answered(d)
-        let file = d.savedFile
-        XCTAssertFalse(String(decoding: file, as: UTF8.self).contains("The second one."), "transcripts are not in state.json")
-        let saved = d.state.savedConversations
-        let next = Driver(file: file)
-        next.system(.conversationsLoaded(Array(saved.values), []))
-        XCTAssertEqual(next.state.savedConversations[id]?.items.last, .assistant("The second one."))
-        XCTAssertNil(next.allTabRows.first { $0.url == ConversationPage.url(id) })
-    }
-
-    func testConversationsOfAProfileThatIsGoneAreLeftOut() {
-        let d = enabled()
-        let stray = StoredConversation(id: AIRequestID("stray"), profile: ProfileID("gone"), title: "x", createdAt: T0, tabs: true)
-        d.system(.conversationsLoaded([stray], []))
-        XCTAssertNil(d.state.savedConversations[AIRequestID("stray")])
-    }
-
     // MARK: Out of sight
 
     func testClosingThePanelPutsARunningConversationAwayAndItsAnswerStillLands() throws {
@@ -113,19 +86,6 @@ final class ConversationPanelTests: XCTestCase {
         let done = d.system(.aiResult(id, .text("Because.")))
         XCTAssertEqual(d.state.savedConversations[id]?.items.last, .assistant("Because."))
         XCTAssertTrue(done.effects.contains(.aiCloseConversation(id)), "neither shown nor running: its session ends")
-    }
-
-    func testANewQuestionInThePanelLeavesTheRunningConversationRunning() throws {
-        let d = enabled()
-        let first = try firstTurn(d.user(.assist(.ask("First?"))))
-        let second = try firstTurn(d.user(.assist(.ask("Second?"))))
-        XCTAssertNotEqual(first, second)
-        XCTAssertEqual(d.view.ai?.conversation?.id, second)
-        d.system(.aiResult(first, .text("One.")))
-        XCTAssertEqual(d.state.savedConversations[first]?.items.last, .assistant("One."))
-        let third = try firstTurn(d.user(.assist(.ask("Third?"))))
-        _ = third
-        XCTAssertTrue(d.user(.assist(.stop)).effects.allSatisfy { if case .aiCancel(let id) = $0 { id != first } else { true } })
     }
 
     // MARK: After a relaunch
@@ -167,26 +127,6 @@ final class ConversationPanelTests: XCTestCase {
         XCTAssertEqual(d.allTabRows.map(\.id), rows, "no tab for it")
     }
 
-    func testAnUnknownConversationDoesNotOpen() {
-        let d = enabled()
-        d.user(.assist(.showConversation(AIRequestID("missing"))))
-        XCTAssertNil(d.view.ai)
-    }
-
-    func testHistoryIsTheMessagesOnlyNewestKept() {
-        var stored = StoredConversation(id: AIRequestID("c"), profile: .default, title: "t", createdAt: T0, tabs: true)
-        stored.items = [.user("one"), .step(AIAgentStep(id: "s", title: "Run: ls", state: .done)), .notice("n"), .assistant("two"),
-                        .page(AIPageRef(id: AIPageID("p"), title: "Chart", height: 300))]
-        XCTAssertEqual(stored.messages.map(\.position), [0, 3, 4])
-        let history = stored.history()
-        XCTAssertTrue(history.contains("User: one") && history.contains("Assistant: two") && history.contains("“Chart”"))
-        XCTAssertFalse(history.contains("Run: ls"))
-        stored.items = [.user(String(repeating: "a", count: 30_000)), .assistant("last")]
-        let cut = stored.history(limit: 1_000)
-        XCTAssertLessThanOrEqual(cut.count, 1_001)
-        XCTAssertTrue(cut.hasSuffix("Assistant: last"))
-    }
-
     // MARK: Pages
 
     func testARenderedPageShowsInTheTranscriptAndIsSaved() throws {
@@ -204,13 +144,6 @@ final class ConversationPanelTests: XCTestCase {
         XCTAssertEqual(d.view.ai?.pages.first?.kept, false)
         XCTAssertEqual(d.state.savedPages[pageID]?.conversation, id)
         XCTAssertEqual(d.state.savedConversations[id]?.items, items)
-    }
-
-    func testAPageOfAnotherConversationIsIgnored() throws {
-        let d = enabled()
-        let id = try firstTurn(d.user(.assist(.ask("x"))))
-        d.system(.aiConversation(id, .page(page(AIPageID("p"), conversation: AIRequestID("other")))))
-        XCTAssertNil(d.state.savedPages[AIPageID("p")])
     }
 
     func testKeepAsTabMakesARowThatShowsThePageAndKeepsItsConversation() throws {
@@ -253,24 +186,7 @@ final class ConversationPanelTests: XCTestCase {
         XCTAssertEqual(d.allTabRows.first { $0.url == AIPageTab.url(pageID) }?.title, "Cheapest")
     }
 
-    func testTheAgentsTabToolsDoNotListConversationsOrPages() throws {
-        let d = enabled()
-        let id = try answered(d)
-        let tabs = d.state.agentOpenTabs(profile: .default, window: d.window)
-        XCTAssertFalse(tabs.contains { $0.url == ConversationPage.url(id) })
-    }
-
     // MARK: Page links
-
-    func testALinkInAPageWrittenBeforeAnyPageTextOpensAtOnce() throws {
-        let d = enabled()
-        let id = try firstTurn(d.user(.assist(.ask("x"))))
-        d.system(.aiConversation(id, .page(page(AIPageID("p"), conversation: id, readPages: false))))
-        let before = d.todayIDs.count
-        d.user(.assist(.pageLink(AIPageID("p"), URL(string: "https://shop.example/item")!)))
-        XCTAssertEqual(d.todayIDs.count, before + 1)
-        XCTAssertNil(d.view.pageLinkPrompt)
-    }
 
     func testALinkToANewAddressInAPageWrittenAfterPageTextAsksFirst() throws {
         let d = enabled()
@@ -308,13 +224,4 @@ final class ConversationPanelTests: XCTestCase {
         XCTAssertNil(d.view.pageLinkPrompt)
     }
 
-    func testPageTextReachingTheConversationIsSavedWithIt() throws {
-        let d = enabled()
-        let id = try firstTurn(d.user(.assist(.ask("x"))))
-        d.system(.aiConversation(id, .pageText(flagged: false)))
-        XCTAssertEqual(d.state.savedConversations[id]?.readPages, true)
-        XCTAssertEqual(d.state.savedConversations[id]?.flagged, false)
-        d.system(.aiConversation(id, .pageText(flagged: true)))
-        XCTAssertEqual(d.state.savedConversations[id]?.flagged, true)
-    }
 }

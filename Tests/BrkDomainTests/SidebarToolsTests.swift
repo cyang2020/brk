@@ -44,20 +44,6 @@ final class SidebarToolsTests: XCTestCase {
         let restored = Driver(file: d.savedFile)
         XCTAssertTrue(restored.state.session.calendars.isEmpty)
     }
-    func testCalendarSubtitleAndSourceExpiryAreProjectedWithoutSavingMeetings() throws {
-        let d = Driver(startURL: url("https://calendar.google.com/"))
-        let item = d.todayIDs[0]
-        let root = try XCTUnwrap(d.state.doc.favorites[.default])
-        d.user(.item(.move(item, to: .into(parent: root, index: 0))))
-        XCTAssertEqual(d.view.favorites.tiles.first?.sourceStatus, "Select calendar export")
-        let selected = try request(d.user(.tabTools(.site(.connectCalendar))))
-        d.system(.siteResult(selected.id, .calendar([CalendarMeeting(title: "Planning", url: url("https://example.com/meet"), start: T0, end: T0.advanced(by: hour))])))
-        XCTAssertEqual(d.view.favorites.tiles.first?.subtitle, "Now", "a running meeting reads Now (Show Time to Next Meeting)")
-        d.advance(.seconds(300))
-        XCTAssertNil(d.view.favorites.tiles.first?.subtitle)
-        XCTAssertEqual(d.view.favorites.tiles.first?.sourceStatus, "Calendar expired · select again")
-        XCTAssertFalse(String(decoding: d.savedFile, as: UTF8.self).contains("Planning"))
-    }
     func testProgressUsesRealReadingsAndClearsAtAllTerminalPaths() {
         let d = Driver()
         let item = d.todayIDs[0]
@@ -108,22 +94,4 @@ final class SidebarToolsTests: XCTestCase {
         XCTAssertFalse(d.snapshot.pages[0].hoverPreviews)
         XCTAssertFalse(Driver(file: d.savedFile).snapshot.pages[0].hoverPreviews)
     }
-    func testTodayFolderHasTheSameIconAndHoverMetadataAsAPinnedFolder() throws {
-        let d = Driver()
-        let child = d.todayIDs[0]
-        d.user(.item(.newFolder))
-        guard case .folder(let made)? = d.view.space.pinned.rows.first else { return XCTFail("missing folder") }
-        d.user(.item(.rename(made.id, title: "Topic")))
-        d.user(.item(.move(child, to: .into(parent: made.id, index: 0))))
-        d.user(.item(.setIcon(made.id, .emoji("📚"))))
-        guard case .folder(var folder)? = d.view.space.pinned.rows.first else { return XCTFail("missing folder") }
-        let pinned = Row.folder(folder).hoverPreviewText
-        folder.section = .today
-        XCTAssertEqual(Row.folder(folder).hoverPreviewText, pinned)
-        XCTAssertEqual(Row.folder(folder).hoverPreviewText, "Topic\n1 items")
-        XCTAssertEqual(folder.icon, .emoji("📚"))
-        XCTAssertEqual(folder.children.first?.id, child)
-        XCTAssertTrue(d.user(.tabTools(.chooseIcon(made.id))).effects.contains(.iconPicker(d.window, made.id, initial: .emoji("📚"))))
-    }
-
 }

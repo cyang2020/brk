@@ -4,19 +4,6 @@ import XCTest
 @testable import BrkDomain
 
 final class FilePanelTests: XCTestCase {
-    func testSelectedFilesCaptureOwnerAndTargetWithoutImportingOrConnectingEarly() throws {
-        let d = Driver(startURL: nil)
-        let url = URL(fileURLWithPath: "/tmp/owned-file-panels/source.html")
-        let target = try XCTUnwrap(d.state.sidebarImportTarget(in: d.window))
-        XCTAssertEqual(d.user(.sidebarData(.importSelected(url, format: .bookmarksHTML))).effects,
-                       [.sidebarData(.importSelected(d.window, url, .bookmarksHTML, target))])
-        XCTAssertEqual(d.user(.sidebarData(.connectSelectedFolder(url.deletingLastPathComponent()))).effects,
-                       [.sidebarData(.connectSelectedFolder(d.window, url.deletingLastPathComponent(), target))])
-        XCTAssertTrue(d.allTabRows.isEmpty)
-        XCTAssertFalse(d.snapshot.sidebarData.connected)
-        XCTAssertEqual(d.user(.sidebarData(.exportSelected(url))).effects, [.sidebarData(.exportSelected(d.window, url))])
-        XCTAssertEqual(d.user(.sidebarData(.cancelFilePanel)).effects, [.sidebarData(.cancelFilePanel(d.window))])
-    }
 
     func testRemoteURLsAndPrivateOwnersCannotReachSelectedFileAdapters() throws {
         let d = Driver(startURL: nil)

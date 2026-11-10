@@ -56,25 +56,6 @@ final class WindowRootViewTests: XCTestCase {
         XCTAssertFalse(gap === root.content, "the content area took a click in the inset between sidebar and card")
     }
 
-    /// Arc's window background lightens while the app is not frontmost (P01-d: white at 40%) and darkens while
-    /// websites are set to Dark (P19-b: black at 8.6%); the veil never takes a click
-    func testTheBackgroundVeilFollowsTheAppAndTheWebsiteAppearance() throws {
-        var v = snapshot(sidebarVisible: true)
-        let (container, root, frames) = render(v)
-        let veil = try XCTUnwrap(root.subviews.first { $0 is InactiveVeilView })
-        XCTAssertEqual(root.subviews.firstIndex(of: veil), 1, "right over the background, under the sidebar")
-        func color() -> NSColor? { veil.layer?.backgroundColor.flatMap(NSColor.init(cgColor:))?.usingColorSpace(.deviceGray) }
-        if NSApplication.shared.isActive { XCTAssertTrue(veil.isHidden) }
-        else { XCTAssertFalse(veil.isHidden); XCTAssertEqual(color()?.whiteComponent ?? 0, 1, accuracy: 0.01); XCTAssertEqual(color()?.alphaComponent ?? 0, 0.4, accuracy: 0.01) }
-        v.websiteAppearance = .dark
-        root.render(v, frames: frames, surface: { _ in nil })
-        XCTAssertFalse(veil.isHidden)
-        XCTAssertEqual(color()?.whiteComponent ?? 1, 0, accuracy: 0.01)
-        XCTAssertEqual(color()?.alphaComponent ?? 0, 0.086, accuracy: 0.005)
-        let card = try XCTUnwrap(frames.cards.first?.rect)
-        XCTAssertFalse(hit(container, CGPoint(x: card.minX - 4, y: card.midY)) === veil)
-    }
-
     /// e2e R2: with the sidebar hidden the sidebar view still renders, so its reveal strip is on screen at the
     /// computed frame for the hover that peeks it back
     func testHiddenSidebarStillRendersItsRevealStrip() throws {

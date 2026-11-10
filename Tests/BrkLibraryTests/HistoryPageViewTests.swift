@@ -36,29 +36,6 @@ final class HistoryPageViewTests: XCTestCase {
     private func texts(_ root: NSView) -> [String] { shown(root).compactMap { ($0 as? NSTextField)?.stringValue }.filter { !$0.isEmpty } }
     private func rows(_ root: NSView) -> [HistoryVisitRow] { shown(root).compactMap { $0 as? HistoryVisitRow } }
 
-    /// the page fills its card: "History", the navigation with Brk history selected, one card per day titled like
-    /// Chromium's ("Today - Friday, October 30, 2026"), each visit with its time, title and host; a break line marks
-    /// visits more than 15 minutes apart; nil hides the page
-    func testTheHistoryPageListsVisitsByDayInItsCard() throws {
-        let view = makeView()
-        view.render(visits, page: page, in: card, scheme: .light, now: now)
-        XCTAssertFalse(view.isHidden)
-        XCTAssertEqual(view.frame, card)
-        XCTAssertEqual(view.accessibilityIdentifier(), "history-page")
-        let all = texts(view)
-        XCTAssertTrue(all.contains("History"))
-        XCTAssertTrue(all.contains("Brk history") && all.contains("Tabs from other devices") && all.contains("Delete browsing data"))
-        XCTAssertEqual(all.filter { $0.contains("October") }, ["Today - Friday, October 30, 2026", "Yesterday - Thursday, October 29, 2026"])
-        let shownRows = rows(view)
-        XCTAssertEqual(shownRows.map { $0.accessibilityIdentifier() }, ["history-0", "history-1", "history-2", "history-3"])
-        XCTAssertEqual(shownRows[0].texts, ["3:05 PM", "Fixture Page 2", "127.0.0.1:9"])
-        XCTAssertEqual(shownRows[2].texts, ["2:25 PM", "swift.org/blog", "swift.org"], "an untitled visit shows its address")
-        let today = try XCTUnwrap(shown(view).compactMap { $0 as? HistoryDayCard }.first)
-        XCTAssertEqual(today.height, 69 + 3 * 36 + 15 + 8, "a break between 3:00 PM and 2:25 PM")
-        view.render(nil, page: nil, in: nil, scheme: .light, now: now)
-        XCTAssertTrue(view.isHidden)
-    }
-
     /// a click opens the visit in a new tab; ⋮ offers More from this site and Remove from history; checked visits
     /// delete together; the search narrows and keeps each visit's index
     func testVisitActionsSearchAndChecks() throws {

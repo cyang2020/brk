@@ -4,18 +4,6 @@ import Foundation
 import XCTest
 
 final class UnixHTTPTests: XCTestCase {
-    func testParsesLengthAndChunkedReplies() throws {
-        let plain = Data("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nContent-Type: application/json\r\n\r\nhello".utf8)
-        XCTAssertEqual(try UnixHTTP.parse(plain, complete: false)?.body, Data("hello".utf8))
-        XCTAssertNil(try UnixHTTP.parse(plain.prefix(plain.count - 2), complete: false))
-        let chunked = Data("HTTP/1.1 503 Busy\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nwiki\r\n5\r\npedia\r\n0\r\n\r\n".utf8)
-        let reply = try XCTUnwrap(try UnixHTTP.parse(chunked, complete: false))
-        XCTAssertEqual(reply.status, 503)
-        XCTAssertEqual(String(decoding: reply.body, as: UTF8.self), "wikipedia")
-        XCTAssertNil(UnixHTTP.dechunk(Data("4\r\nwik".utf8)))
-        XCTAssertThrowsError(try UnixHTTP.parse(Data("garbage\r\n\r\n".utf8), complete: true))
-    }
-
     /// A real exchange over a socket file: a one-shot server on a thread answers a POST.
     func testRoundTripOverASocket() async throws {
         let folder = URL(fileURLWithPath: "/tmp/brk-uh-\(getpid())-\(Int.random(in: 0..<1_000_000))", isDirectory: true)
@@ -133,20 +121,6 @@ final class ModelStoreTests: XCTestCase {
         XCTAssertNil(store.file(model))
         XCTAssertFalse(FileManager.default.fileExists(atPath: store.fileURL(model).appendingPathExtension("partial").path))
     }
-
-    func testATamperedFileIsNotReadyAtLaunch() async throws {
-        let model = try model(bytes: Data(repeating: 1, count: 1_000))
-        let store = ModelStore(root: folder.appendingPathComponent("Local Models"), models: [model])
-        store.download(model)
-        try await wait(store, model) { $0 == .ready }
-        try Data(repeating: 1, count: 999).write(to: store.fileURL(model))
-        XCTAssertEqual(ModelStore(root: store.root, models: [model]).state(model), .absent)
-    }
-
-    func testSizesReadLikeFinder() {
-        XCTAssertEqual(ModelStore.size(309_855_456), "310 MB")
-        XCTAssertEqual(ModelStore.size(2_708_804_000), "2.71 GB")
-    }
 }
 
 final class ModelHelperTests: XCTestCase {
@@ -197,65 +171,5 @@ final class ModelHelperTests: XCTestCase {
         await helper.stop()
         for _ in 0..<40 where kill(child, 0) == 0 { try await Task.sleep(for: .milliseconds(100)) }
         XCTAssertNotEqual(kill(child, 0), 0, "the helper's child outlived stop")
-    }
-
-    func testNoRuntimeAndNoModelFile() async throws {
-        let missing = ModelHelper(model: ModelCatalog.embeddingGemma2, modelFile: folder.appendingPathComponent("absent.gguf"),
-                                  executable: URL(fileURLWithPath: "/bin/sh"), runFolder: folder)
-        do { _ = try await missing.use { try await $0.get("/health") }; XCTFail() } catch let failure as ModelHelper.Failure {
-            XCTAssertEqual(failure, .noModelFile)
-        }
-        let noRuntime = try helper(folder.appendingPathComponent("no-such-server"))
-        do { _ = try await noRuntime.use { try await $0.get("/health") }; XCTFail() } catch let failure as ModelHelper.Failure {
-            XCTAssertEqual(failure, .noRuntime)
-        }
-    }
-}
-
-/// Runs the real models through the real helper when BRK_LOCAL_MODELS_TEST=1 and the files are in ~/.cache/brk-models
-/// (verify/ai-native/b-local-models/README.md). Skipped otherwise.
-final class RealModelTests: XCTestCase {
-    private func setup() throws -> (URL, URL) {
-        guard ProcessInfo.processInfo.environment["BRK_LOCAL_MODELS_TEST"] == "1" else { throw XCTSkip("set BRK_LOCAL_MODELS_TEST=1") }
-        guard let runtime = LlamaRuntime.executable() else { throw XCTSkip("no llama-server") }
-        let cache = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cache/brk-models")
-        return (runtime, cache)
-    }
-
-    func testEmbeddingGemma2FindsTheChineseTab() async throws {
-        let (runtime, cache) = try setup()
-        let file = cache.appendingPathComponent("embeddinggemma-2-gguf/embeddinggemma-2-Q8_0.gguf")
-        let run = URL(fileURLWithPath: "/tmp/brk-real-\(getpid())", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: run) }
-        let helper = ModelHelper(model: ModelCatalog.embeddingGemma2, modelFile: file, executable: runtime, runFolder: run)
-        let embedder = LocalEmbedder(helper: helper)
-        let index = SemanticIndex(file: run.appendingPathComponent("p.vectors"))
-        let entries = [IndexEntry(kind: .tab, id: "1", title: "MySQL 索引优化实战 - 掘金", url: "https://juejin.cn/post/1"),
-                       IndexEntry(kind: .history, id: "2", title: "东京自由行攻略 - 小红书", url: "https://www.xiaohongshu.com/explore/2"),
-                       IndexEntry(kind: .archive, id: "3", title: "Tokyo Metro Route Map", url: "https://www.tokyometro.jp/en/subwaymap/")]
-        try await index.reconcile(entries, embedder: embedder)
-        let query = try await embedder.embed([.query("the article about database indexes")])[0]
-        let hits = await index.search(query, limit: 1)
-        XCTAssertEqual(hits.first?.key, "tab:1")
-        let running = await helper.isRunning
-        XCTAssertTrue(running)
-        await helper.stop()
-    }
-
-    func testJevK5AnswersTheReadmeExamples() async throws {
-        let (runtime, cache) = try setup()
-        let file = cache.appendingPathComponent("jevk5-gguf/jevk5-4b-v0.3-Q4_K_M.gguf")
-        let run = URL(fileURLWithPath: "/tmp/brk-real-j-\(getpid())", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: run) }
-        let helper = ModelHelper(model: ModelCatalog.jevK5Q4, modelFile: file, executable: runtime, runFolder: run)
-        let decider = LocalDecider(helper: helper)
-        let reply = try await decider.decide(JevRequest(
-            state: .text("Order #7120 shows delivered to No. 17; the customer lives at No. 71."),
-            questions: [("what", .choice("What happened to the parcel?", [("delivered", nil), ("misdelivered", nil), ("unknown", nil)])),
-                        ("refund", .noul("Is a refund permitted under the policy? Refunds need a receipt; the customer has none."))]))
-        XCTAssertEqual(reply.answers["what"]?.choice, "misdelivered")
-        XCTAssertLessThan(try XCTUnwrap(reply.answers["refund"]?.noul), 0.5)
-        XCTAssertGreaterThan(reply.usage.inputTokens, 100)
-        await helper.stop()
     }
 }

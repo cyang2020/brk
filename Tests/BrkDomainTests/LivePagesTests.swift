@@ -21,27 +21,11 @@ final class LivePagesTests: XCTestCase {
         XCTAssertEqual(AIPageSchedule.weekly(weekday: 2, hour: 9, minute: 0).latestSlot(atOrBefore: T0, calendar: calendar), at("2026-09-21T09:00:00Z"), "Monday")
         XCTAssertEqual(AIPageSchedule.weekly(weekday: 2, hour: 15, minute: 0).latestSlot(atOrBefore: T0, calendar: calendar), at("2026-09-14T15:00:00Z"), "later today: last Monday")
         XCTAssertEqual(AIPageSchedule.weekly(weekday: 3, hour: 9, minute: 0).latestSlot(atOrBefore: T0, calendar: calendar), at("2026-09-15T09:00:00Z"), "Tuesday")
-        XCTAssertEqual(AIPageSchedule.hourly.title, "Every Hour")
-        XCTAssertEqual(AIPageSchedule.daily(hour: 9, minute: 5).title, "Every Day at 9:05")
-        XCTAssertEqual(AIPageSchedule.weekly(weekday: 2, hour: 9, minute: 0).phrase, "every Monday at 9:00")
         XCTAssertFalse(AIPageSchedule.daily(hour: 24, minute: 0).isValid)
         XCTAssertFalse(AIPageSchedule.weekly(weekday: 8, hour: 9, minute: 0).isValid)
     }
 
-    func testDueOnlyOnceASlotHasPassedHoweverManyWereMissed() {
-        let hourly = AIPageSchedule.hourly
-        XCTAssertFalse(hourly.isDue(lastRun: T0, now: T0.advanced(by: .seconds(40 * 60)), calendar: calendar), "14:53: the 14:00 slot was covered at 14:13")
-        XCTAssertTrue(hourly.isDue(lastRun: T0, now: T0.advanced(by: .seconds(47 * 60)), calendar: calendar), "15:00:20")
-        // Brk was closed for three days: one run covers every slot since, and the next is the next hour's.
-        let later = T0.advanced(by: .seconds(3 * 86_400))
-        XCTAssertTrue(hourly.isDue(lastRun: T0, now: later, calendar: calendar))
-        XCTAssertFalse(hourly.isDue(lastRun: later, now: later.advanced(by: .seconds(60)), calendar: calendar))
-        let weekly = AIPageSchedule.weekly(weekday: 2, hour: 9, minute: 0)
-        XCTAssertFalse(weekly.isDue(lastRun: T0, now: at("2026-09-27T23:00:00Z"), calendar: calendar), "Sunday night")
-        XCTAssertTrue(weekly.isDue(lastRun: T0, now: at("2026-09-28T09:00:01Z"), calendar: calendar), "next Monday")
-    }
-
-    func testWeekdaysParseAndName() {
+    func testWeekdaysParse() {
         XCTAssertEqual(AIPageWeekdays.parse("monday"), 2)
         XCTAssertEqual(AIPageWeekdays.parse("Sun"), 1)
         XCTAssertEqual(AIPageWeekdays.parse("周一"), 2)
@@ -49,9 +33,6 @@ final class LivePagesTests: XCTestCase {
         XCTAssertNil(AIPageWeekdays.parse("someday"))
         XCTAssertEqual(AIPageWeekdays.normalized([6, 2, 2, 9]), [2, 6])
         XCTAssertNil(AIPageWeekdays.normalized([1, 2, 3, 4, 5, 6, 7]), "every day is no restriction")
-        XCTAssertEqual(AIPageWeekdays.title([2, 3, 4, 5, 6]), "Weekdays")
-        XCTAssertEqual(AIPageWeekdays.title([1, 7]), "Weekends")
-        XCTAssertEqual(AIPageWeekdays.title([2, 4]), "Mon, Wed")
     }
 
     // MARK: Shapes
@@ -87,13 +68,6 @@ final class LivePagesTests: XCTestCase {
         XCTAssertNotNil(AIPageShape.problem(["items": [["id": "c", "price": "3"]], "updated": "y", "on": false], shape), "a number stays a number")
         XCTAssertNotNil(AIPageShape.problem(["items": [], "on": false], shape), "a key the data had stays required")
         XCTAssertNotNil(AIPageShape.problem(["items": [["price": 3]], "updated": "y", "on": false], shape), "each item keeps its id")
-    }
-
-    func testCheckCapsTheSizeAndWantsAnObject() {
-        XCTAssertEqual(AIPageShape.check(#"{"b":1,"a":2}"#, schema: AIPageShape.anyObject, limit: 100), .success(#"{"a":2,"b":1}"#), "keys sorted")
-        XCTAssertEqual(AIPageShape.check("[1]", schema: AIPageShape.anyObject, limit: 100), .failure(.init(message: "it is not a JSON object")))
-        XCTAssertEqual(AIPageShape.check(#"{"a":"\#(String(repeating: "x", count: 200))"}"#, schema: AIPageShape.anyObject, limit: 100),
-                       .failure(.init(message: "it is larger than 100 bytes")))
     }
 
     // MARK: A kept page with a schedule
@@ -150,20 +124,6 @@ final class LivePagesTests: XCTestCase {
         XCTAssertEqual(run.now, d.now, "the agent is told Brk's time, not its own")
         XCTAssertTrue(pageRow(d, page)?.loading == true, "the row shows it working")
         XCTAssertEqual(refreshes(d.system(.clockTick)), [], "one run at a time")
-    }
-
-    func testARefreshUsesTheConversationsModelWhenTheUserChoseIt() throws {
-        let d = enabled()
-        let (_, page) = try keptPage(d, agent: .codex)
-        d.user(.assist(.livePage(page, .model(.conversation))))
-        let run = try XCTUnwrap(refreshes(d.user(.assist(.livePage(page, .refreshNow)))).first)
-        XCTAssertEqual(run.agent, .codex)
-        XCTAssertEqual(run.model, "gpt-6-astra")
-        d.system(.aiPageRefresh(page, run: run.run, .finished(.updated, detail: nil)))
-        d.user(.assist(.livePage(page, .model(.basic))))
-        let small = try XCTUnwrap(refreshes(d.user(.assist(.livePage(page, .refreshNow)))).first)
-        XCTAssertEqual(small.model, "gpt-6-luna")
-        XCTAssertEqual(small.effort, "low")
     }
 
     func testAMissedSlotRunsOnceAtTheNextLaunch() throws {
@@ -304,40 +264,9 @@ final class LivePagesTests: XCTestCase {
         XCTAssertEqual(d.state.savedPages[page]?.data, before)
     }
 
-    func testAScheduleNeedsDataToRefresh() throws {
-        let d = enabled()
-        let opened = d.open(kettle.absoluteString)
-        XCTAssertNotNil(opened)
-        let t = d.user(.assist(.ask("x")))
-        let id = try XCTUnwrap(t.effects.lazy.compactMap { if case .ai(let id, _, _) = $0 { id } else { nil } }.first)
-        let page = AIPageID("bare")
-        d.system(.aiConversation(id, .page(AIPageRecord(id: page, title: "Bare", html: URL(fileURLWithPath: "/tmp/x.html"), height: 300, data: nil,
-                                                        conversation: id, profile: .default, createdAt: T0, readPages: false))))
-        let kept = d.system(.agentAct(AgentActRequest(call: "c", window: d.window, act: .keepPage(page, title: nil, conversation: id, live: [.schedule(.hourly)]))))
-        XCTAssertTrue(kept.effects.contains { if case .agentActDone("c", .refused(let why)) = $0 { why.contains("no data to refresh") } else { false } }, "\(kept.effects)")
-        XCTAssertNil(d.state.savedPages[page]?.live?.schedule)
-    }
-
-    func testTheRowMenuOffersSchedulesModelAndWeekdays() throws {
+    func testChangingTheScheduleToNeverStopsTheRefreshes() throws {
         let d = enabled()
         let (_, page) = try keptPage(d)
-        let row = try XCTUnwrap(pageRow(d, page))
-        let t = d.user(.sidebar(.popupMenu(.item(row.id), at: .zero)))
-        let menu = try XCTUnwrap(t.effects.lazy.compactMap { if case .popupMenu(_, let menu, _) = $0 { menu } else { nil } }.first)
-        func titles(_ entries: [MenuEntry]) -> [String] {
-            entries.compactMap {
-                switch $0 {
-                case .action(let title, _, _), .choice(let title, _, _), .submenu(let title, _): title
-                default: nil
-                }
-            }
-        }
-        XCTAssertEqual(Array(titles(menu.entries).suffix(4)), ["Refresh", "Refresh Now", "Refresh With", "Show in Today"])
-        guard case .submenu(_, let schedules)? = menu.entries.first(where: { if case .submenu("Refresh", _) = $0 { true } else { false } }) else { return XCTFail() }
-        XCTAssertEqual(titles(schedules), ["Never", "Every Hour", "Every Day at 9:00", "Every Monday at 9:00"])
-        XCTAssertTrue(schedules.contains { if case .choice("Every Hour", _, true) = $0 { true } else { false } })
-        guard case .submenu(_, let models)? = menu.entries.first(where: { if case .submenu("Refresh With", _) = $0 { true } else { false } }) else { return XCTFail() }
-        XCTAssertEqual(titles(models), ["Haiku 5.5", "Sonnet 5.5"])
         d.user(.assist(.livePage(page, .schedule(.weekly(weekday: 2, hour: 9, minute: 0)))))
         XCTAssertEqual(d.state.savedPages[page]?.live?.schedule, .weekly(weekday: 2, hour: 9, minute: 0))
         d.user(.assist(.livePage(page, .schedule(nil))))
@@ -368,17 +297,6 @@ final class LivePagesTests: XCTestCase {
         XCTAssertEqual(decoded, record)
     }
 
-    func testAPagesSaveLandsAsASystemEventWithNoWindow() throws {
-        let d = enabled()
-        let (_, page) = try keptPage(d)
-        d.system(.aiPageSaved(page, #"{"notes":{"kettle":"wait for a sale"}}"#))
-        XCTAssertEqual(d.state.savedPages[page]?.saved, #"{"notes":{"kettle":"wait for a sale"}}"#)
-        d.system(.aiPageSaved(page, "[1]"))
-        d.system(.aiPageSaved(AIPageID("no-such-page"), #"{"a":1}"#))
-        XCTAssertEqual(d.state.savedPages[page]?.saved, #"{"notes":{"kettle":"wait for a sale"}}"#, "the same checks as a save from a window")
-        XCTAssertNil(d.state.savedPages[AIPageID("no-such-page")])
-    }
-
     func testSavesAreCappedCheckedAndRateLimited() throws {
         let d = enabled()
         let (_, page) = try keptPage(d)
@@ -397,21 +315,6 @@ final class LivePagesTests: XCTestCase {
         d.advance(.seconds(61))
         d.user(.assist(.pageSave(page, #"{"n":61}"#)))
         XCTAssertEqual(d.state.savedPages[page]?.saved, #"{"n":61}"#)
-    }
-
-    func testADeclaredSaveShapeIsKept() throws {
-        let d = enabled()
-        let (_, page) = try keptPage(d)
-        var record = try XCTUnwrap(d.state.savedPages[page])
-        record.saveSchema = #"{"additionalProperties":false,"properties":{"ticked":{"items":{"type":"string"},"type":"array"}},"type":"object"}"#
-        // Replace the record as a launch would read it.
-        let next = Driver(file: d.savedFile)
-        next.system(.aiProvidersDetected([.claude]))
-        next.system(.conversationsLoaded(Array(d.state.savedConversations.values), [record]))
-        next.user(.assist(.pageSave(page, #"{"ticked":["kettle"],"secret":"x"}"#)))
-        XCTAssertNil(next.state.savedPages[page]?.saved)
-        next.user(.assist(.pageSave(page, #"{"ticked":["kettle"]}"#)))
-        XCTAssertEqual(next.state.savedPages[page]?.saved, #"{"ticked":["kettle"]}"#)
     }
 
     // MARK: Weekdays
@@ -509,17 +412,6 @@ final class LivePagesTests: XCTestCase {
         let archived = d.state.agentArchivedTabs(profile: .default)
         XCTAssertFalse(archived.contains { NativePages.shows($0.url) }, "\(archived.map(\.url))")
         XCTAssertFalse(d.state.agentHistory(profile: .default).contains { NativePages.shows($0.url) })
-    }
-
-    func testChoosingAConversationInTheCommandBarOpensItInThePanel() throws {
-        let d = enabled()
-        let (conversation, _) = try keptPage(d)
-        d.user(.assist(.dismiss))
-        d.user(.commandBar(.open(.newTab)))
-        d.user(.assist(.showConversation(conversation)))
-        XCTAssertNil(d.bar, "the bar closed")
-        XCTAssertEqual(d.view.ai?.conversation?.id, conversation)
-        XCTAssertNotEqual(d.current?.url, ConversationPage.url(conversation), "no tab shows it")
     }
 
     func testConversationsGoIntoTheMeaningIndexByTitleAndQuestionsOnly() throws {

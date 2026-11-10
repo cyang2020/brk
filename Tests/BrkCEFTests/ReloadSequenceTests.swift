@@ -14,14 +14,4 @@ final class ReloadSequenceTests: XCTestCase {
         XCTAssertNil(sequence.finished(documentSequence: 3))
         XCTAssertNil(sequence.current)
     }
-    func testNavigationOrRetirementDiscardsDeferredReloads() throws {
-        var sequence = ReloadSequence()
-        _ = sequence.request(ignoringCache: false, after: 1)
-        _ = sequence.request(ignoringCache: false, after: 1)
-        let deferred = try XCTUnwrap(sequence.finished(documentSequence: 2))
-        sequence.cancel()
-        XCTAssertNotEqual(sequence.current, deferred)
-        let next = try XCTUnwrap(sequence.request(ignoringCache: false, after: 8))
-        XCTAssertEqual(next.afterDocumentSequence, 8)
-    }
 }

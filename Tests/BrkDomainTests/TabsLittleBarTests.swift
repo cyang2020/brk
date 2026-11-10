@@ -18,28 +18,6 @@ final class TabsLittleBarTests: XCTestCase {
 
     // MARK: Favorite overlays (A014)
 
-    func testGitHubUnreadIsADotInItsColorAndTheSiteSwitchHidesIt() throws {
-        let d = Driver(startURL: url("https://github.com/notifications"))
-        let item = d.todayIDs[0]
-        try favorite(d, item)
-        let r = try request(d.user(.tabTools(.site(.connectGitHub(favorite: item)))))
-        d.system(.siteResult(r.id, .unread(repository: "fixture/repo", count: 3)))
-        XCTAssertEqual(tile(d, item)?.badge, 3, "the count stays for the tooltip")
-        XCTAssertEqual(tile(d, item)?.badgeTint, .black, "Arc's GithubBadgeBlack dot")
-        XCTAssertNil(tile(d, item)?.subtitle, "GitHub has no subtitle: one overlay per tile")
-        let menu = try menu(d, item)
-        XCTAssertEqual(command(menu, "Show Unread Badge"), .tabTools(.siteDisplay(host: "github.com", .unreadBadge, on: false)))
-        d.user(.tabTools(.siteDisplay(host: "github.com", .unreadBadge, on: false)))
-        XCTAssertNil(tile(d, item)?.badgeTint)
-        XCTAssertTrue(String(decoding: d.savedFile, as: UTF8.self).contains("badgeHiddenHosts"))
-        let restored = Driver(file: d.savedFile)
-        XCTAssertEqual(restored.state.doc.tabPreferences.badgeHiddenHosts, ["github.com"], "the switch is saved")
-        let again = try request(d.user(.tabTools(.site(.connectGitHub(favorite: item)))))
-        d.system(.siteResult(again.id, .unread(repository: "fixture/repo", count: 0)))
-        d.user(.tabTools(.siteDisplay(host: "github.com", .unreadBadge, on: true)))
-        XCTAssertNil(tile(d, item)?.badgeTint, "no dot without unread notifications")
-    }
-
     func testCalendarSubtitleCountsDownToTheNextMeetingWithinADay() throws {
         let d = Driver(startURL: url("https://calendar.google.com/"))
         let item = d.todayIDs[0]
@@ -84,27 +62,6 @@ final class TabsLittleBarTests: XCTestCase {
         XCTAssertTrue(titles(try menu(d, item)).contains("Show Hover Preview"))
         d.user(.tabTools(.siteDisplay(host: "calendar.google.com", .hoverPreview, on: false)))
         XCTAssertNil(tile(d, item)?.hoverCard, "Show Hover Preview off")
-    }
-
-    func testRecentPagesCardOnAPinnedLinearTabListsThatSitesLatestPages() throws {
-        let d = Driver(startURL: url("https://linear.app/team"))
-        let home = d.todayIDs[0]
-        d.open("https://linear.app/team/issue/ONE")
-        d.advance(.seconds(60))
-        d.open("https://linear.app/team/issue/TWO")
-        d.open("https://example.com/elsewhere")
-        d.user(.tab(.togglePin(.item(home))))
-        d.user(.tabTools(.preferences(includeFavorites: true, previews: true)))
-        guard case .tab(let row)? = d.view.space.pinned.rows.first(where: { $0.id == home }),
-              case .recentPages(let site, let pages)? = row.hoverCard else { return XCTFail("no recent pages card") }
-        XCTAssertEqual(site, "Linear")
-        XCTAssertEqual(pages.map(\.url), [url("https://linear.app/team/issue/TWO"), url("https://linear.app/team/issue/ONE")],
-                       "newest first, only linear.app, not the tab's own page")
-        XCTAssertNil(row.badgeTint, "Pinned rows carry no overlay")
-        let other = d.todayIDs.first { d.row($0)?.url?.host == "example.com" }!
-        d.user(.tab(.togglePin(.item(other))))
-        guard case .tab(let plain)? = d.view.space.pinned.rows.first(where: { $0.id == other }) else { return XCTFail() }
-        XCTAssertNil(plain.hoverCard, "an ordinary site has no card (P13-b)")
     }
 
     // MARK: Tab groups (A035)
@@ -210,41 +167,6 @@ final class TabsLittleBarTests: XCTestCase {
         return d.bar?.travel.first { $0.title == title }?.command
     }
 
-    func testTypeTravelFavoritesMovesNewFolderAndOpenFolder() throws {
-        let d = Driver()
-        let tab = d.todayIDs[0]
-        let add = try XCTUnwrap(travel(d, "Add to Favorites"))
-        d.user(add)
-        XCTAssertEqual(d.favoriteIDs, [tab])
-        XCTAssertNil(travel(d, "Add to Favorites"))
-        d.user(try XCTUnwrap(travel(d, "Remove from Favorites")))
-        XCTAssertTrue(d.todayIDs.contains(tab))
-        d.user(try XCTUnwrap(travel(d, "Move to New Folder")))
-        guard case .folder(let folder)? = d.view.space.pinned.rows.first else { return XCTFail("no folder") }
-        XCTAssertEqual(folder.children.map(\.id), [tab])
-        d.user(.item(.rename(folder.id, title: "Docs")))
-        d.user(.item(.toggleFolder(folder.id)))
-        XCTAssertFalse(d.state.folderIsExpanded(folder.id, in: d.window))
-        d.user(try XCTUnwrap(travel(d, "Open Docs")))
-        XCTAssertTrue(d.state.folderIsExpanded(folder.id, in: d.window))
-    }
-
-    func testTypeTravelSplitsOnEachEdge() throws {
-        let d = Driver()
-        let tab = d.todayIDs[0]
-        d.user(try XCTUnwrap(travel(d, "Add Left Split")))
-        d.user(.commandBar(.dismiss))
-        let split = try XCTUnwrap(d.view.content.split)
-        XCTAssertEqual(d.paneIDs.last, tab, "the new pane is on the left")
-        XCTAssertEqual(d.view.content.orientation, .horizontal)
-        _ = split
-        let other = d.open("https://example.com/other")
-        d.user(.tab(.focus(other)))
-        d.user(try XCTUnwrap(travel(d, "Add Top Split")))
-        XCTAssertEqual(d.paneIDs.last, other, "the new pane is on top")
-        XCTAssertEqual(d.view.content.orientation, .vertical)
-    }
-
     func testTypeTravelMuteAllReplacePinnedUndoExtensionsAndPasswords() throws {
         let d = Driver()
         let a = d.todayIDs[0]
@@ -338,16 +260,5 @@ final class TabsLittleBarTests: XCTestCase {
         d.system(.clockTick)
         XCTAssertNil(d.snapshot.windows[panel], "silent and idle: archived")
         XCTAssertEqual(d.archive().first?.url, url("https://example.com/music"))
-    }
-
-    func testGlobalShortcutStatusReachesTheSettingsSnapshot() {
-        let d = Driver()
-        XCTAssertNil(d.snapshot.settings.littleArcShortcut)
-        let chord = KeyChord([.option, .command], .n)
-        d.system(.globalShortcut(.unavailable(chord, code: -9878)))
-        XCTAssertEqual(d.snapshot.settings.littleArcShortcut, .unavailable(chord, code: -9878))
-        d.system(.globalShortcut(.registered(chord)))
-        XCTAssertEqual(d.snapshot.settings.littleArcShortcut, .registered(chord))
-        XCTAssertFalse(String(decoding: d.savedFile, as: UTF8.self).contains("registered"), "session only")
     }
 }

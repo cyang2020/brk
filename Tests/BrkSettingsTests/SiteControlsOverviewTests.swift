@@ -7,6 +7,26 @@ import XCTest
 /// P36-a: Arc's site control center is 237 pt wide; a web page adds the security row under Developer Mode.
 @MainActor
 final class SiteControlsOverviewTests: XCTestCase {
+    /// The second page's connection note names the reason for Insecure: plain HTTP, the certificate, insecure content,
+    /// or a plain HTTP form.
+    func testConnectionNoteNamesTheReason() throws {
+        let document = DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("w"), item: ItemID("i")), generation: 1), sequence: 1)
+        func target(_ url: String) -> SiteTarget { SiteTarget(document: document, context: .profile(.default), origin: SiteOrigin(URL(string: url)!)!) }
+        func report(certificate: Bool = false, content: Bool = false, form: Bool = false) -> PageSecurity {
+            PageSecurity(document: document, secureConnection: true, certificateError: certificate, insecureContent: content, insecureForm: form)
+        }
+        let https = target("https://127.0.0.1:8781")
+        XCTAssertEqual(SiteControlsHost.connectionNote(target("http://127.0.0.1:8764"), secure: false, security: nil),
+                       "Connection is not secure: this site uses plain HTTP.")
+        XCTAssertEqual(SiteControlsHost.connectionNote(https, secure: true, security: report()), "Connection is secure (HTTPS).")
+        XCTAssertEqual(SiteControlsHost.connectionNote(https, secure: false, security: report(certificate: true, form: true)),
+                       "Connection is not secure: the site's certificate is not valid.")
+        XCTAssertEqual(SiteControlsHost.connectionNote(https, secure: false, security: report(form: true)),
+                       "Connection is not secure: a form on this page sends information over plain HTTP.")
+        XCTAssertEqual(SiteControlsHost.connectionNote(https, secure: false, security: report(content: true, form: true)),
+                       "Connection is not secure: this page loaded content over plain HTTP.")
+    }
+
     private func snapshot(_ url: String?, secure: Bool = false) -> SiteControlSnapshot {
         let page = PageID(window: WindowID("window"), item: ItemID("item"))
         let target = url.flatMap(URL.init(string:)).flatMap(SiteOrigin.init).map {
@@ -46,25 +66,5 @@ final class SiteControlsOverviewTests: XCTestCase {
         // An https page with a certificate error or insecure content (the snapshot's verdict) is the red Insecure.
         host.render(snapshot("https://self-signed.example/", secure: false)) { _ in }
         XCTAssertEqual(try XCTUnwrap(chip(in: host)).accessibilityLabel(), "Insecure")
-    }
-
-    /// The second page's connection note names the reason for Insecure: plain HTTP, the certificate, insecure content,
-    /// or a plain HTTP form.
-    func testConnectionNoteNamesTheReason() throws {
-        let document = DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("w"), item: ItemID("i")), generation: 1), sequence: 1)
-        func target(_ url: String) -> SiteTarget { SiteTarget(document: document, context: .profile(.default), origin: SiteOrigin(URL(string: url)!)!) }
-        func report(certificate: Bool = false, content: Bool = false, form: Bool = false) -> PageSecurity {
-            PageSecurity(document: document, secureConnection: true, certificateError: certificate, insecureContent: content, insecureForm: form)
-        }
-        let https = target("https://127.0.0.1:8781")
-        XCTAssertEqual(SiteControlsHost.connectionNote(target("http://127.0.0.1:8764"), secure: false, security: nil),
-                       "Connection is not secure: this site uses plain HTTP.")
-        XCTAssertEqual(SiteControlsHost.connectionNote(https, secure: true, security: report()), "Connection is secure (HTTPS).")
-        XCTAssertEqual(SiteControlsHost.connectionNote(https, secure: false, security: report(certificate: true, form: true)),
-                       "Connection is not secure: the site's certificate is not valid.")
-        XCTAssertEqual(SiteControlsHost.connectionNote(https, secure: false, security: report(form: true)),
-                       "Connection is not secure: a form on this page sends information over plain HTTP.")
-        XCTAssertEqual(SiteControlsHost.connectionNote(https, secure: false, security: report(content: true, form: true)),
-                       "Connection is not secure: this page loaded content over plain HTTP.")
     }
 }

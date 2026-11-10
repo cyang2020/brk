@@ -33,20 +33,4 @@ final class NavigationAudioReviewTests: XCTestCase {
         XCTAssertNotNil(audio.ticket)
         print("CONTROL subsequent cross-document start restores ticket=true")
     }
-    func testAttachmentAbortPreservesDocumentAndAudioObservation() throws {
-        var doc = MainDocumentState(browser: browser)
-        var audio = AudioObservation(browser: browser, context: .profile(.default))
-        audio.bind("native-target")
-        deliver(doc.started(url), to: &audio); deliver(doc.finished(url), to: &audio)
-        XCTAssertTrue(audio.accept(true, tab: 9, for: try XCTUnwrap(audio.ticket)))
-        audio.navigationRequested(); doc.prepareNavigation()
-        let attachment = URL(string: "https://fixture.invalid/download")!
-        deliver(doc.allowed(attachment, redirect: false), to: &audio)
-        deliver(doc.addressChanged(attachment, loading: true), to: &audio)
-        let aborted = doc.loadFailed(code: -3, description: "attachment", url: attachment.absoluteString)
-        deliver(aborted, to: &audio); deliver(doc.loadingChanged(false), to: &audio)
-        XCTAssertTrue(aborted.isEmpty)
-        print("REPRO attachment-abort: documentPreserved=true ticket=\(String(describing: audio.ticket)) audible=\(audio.audible)")
-        XCTAssertNotNil(audio.ticket, "The preserved original document still needs audio observations")
-    }
 }

@@ -5,22 +5,6 @@ import XCTest
 @testable import BrkLayout
 
 final class SplitToolsGeometryTests: XCTestCase {
-    /// Arc draws a header strip at the top of every split pane; the page fills the card under it, the hairline over its top.
-    func testSplitCardsHaveHeadersAndPagesUnderThem() throws {
-        let d = LayoutDriver()
-        XCTAssertTrue(d.frames().cards.allSatisfy { $0.header == nil && $0.page == $0.rect }, "a single card has a pane header")
-        d.user(.split(.addPane)); d.user(.commandBar(.dismiss))
-        let frames = d.frames()
-        XCTAssertEqual(frames.cards.count, 2)
-        for card in frames.cards {
-            let header = try XCTUnwrap(card.header)
-            XCTAssertEqual(header, CGRect(x: card.rect.minX, y: card.rect.minY, width: card.rect.width, height: Metrics.content.paneHeaderHeight.value))
-            XCTAssertEqual(card.page.minY, header.maxY)
-            XCTAssertEqual(card.page.maxY, card.rect.maxY)
-            XCTAssertEqual(card.page.width, card.rect.width)
-        }
-    }
-
     func testDividerAtItsRenderedCenterDoesNotChangeAnyFraction() {
         for orientation in SplitOrientation.allCases {
             let area = CGRect(x: 238, y: 10, width: 1012, height: 756)

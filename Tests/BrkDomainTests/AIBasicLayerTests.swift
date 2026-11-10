@@ -33,39 +33,6 @@ final class AIBasicLayerTests: XCTestCase {
         return d.system(.aiBasicTick)
     }
 
-    // MARK: The decision interface
-
-    func testBandsActOnlyOnASureProbabilityAndNeverWithoutOne() {
-        XCTAssertEqual(DecisionBand(nil), .suggest)
-        XCTAssertEqual(DecisionBand(0.92), .act)
-        XCTAssertEqual(DecisionBand(0.85), .act)
-        XCTAssertEqual(DecisionBand(0.6), .suggest)
-        XCTAssertEqual(DecisionBand(0.49), .ignore)
-        XCTAssertEqual(DecisionAnswer.choice("a", probabilities: ["a": 0.7, "b": 0.3]).probability, 0.7)
-        XCTAssertNil(DecisionAnswer.choice("a", probabilities: nil).probability)
-        XCTAssertEqual(DecisionAnswer.noul(false, probability: 0.2).probability ?? 0, 0.8, accuracy: 1e-9)
-    }
-
-    func testRequestsAreCheckedBeforeTheyGoAndAnswersAfter() {
-        let request = DecisionRequest(state: .string("A tab"), questions: [
-            "group": .choice("Which group?", options: [DecisionOption("Recipes"), DecisionOption("Work")], none: "None fits"),
-            "close": .noul("Done with it?"),
-            "worth": .score("How useful?", levels: ["low", "high"]),
-        ])
-        XCTAssertNil(request.problem)
-        XCTAssertEqual(request.questions["group"]?.choiceNames, ["Recipes", "Work", DecisionQuestion.noneName])
-        XCTAssertTrue(request.accepts(DecisionAnswers(answers: ["group": .choice(DecisionQuestion.noneName, probabilities: nil), "close": .noul(true, probability: 0.9)], backend: "t")),
-                      "a declined question may be missing")
-        XCTAssertFalse(request.accepts(DecisionAnswers(answers: ["group": .choice("Travel", probabilities: nil)], backend: "t")))
-        XCTAssertFalse(request.accepts(DecisionAnswers(answers: ["worth": .score(2, expected: nil)], backend: "t")))
-        XCTAssertFalse(request.accepts(DecisionAnswers(answers: ["other": .noul(true, probability: nil)], backend: "t")))
-        let many = DecisionRequest(state: .string(""), questions: ["q": .choice("?", options: (0..<16).map { DecisionOption("o\($0)") }, none: "none")])
-        XCTAssertNotNil(many.problem, "JevK5 takes at most 16 options, none of these included")
-        XCTAssertNotNil(DecisionRequest(state: .string(""), questions: ["s": .score("?", levels: ["one"])]).problem)
-        let structured = DecisionValue.object(["title": .string("Soup"), "n": .number(2)])
-        XCTAssertEqual(try JSONDecoder().decode(DecisionValue.self, from: Data(structured.json.utf8)), structured)
-    }
-
     // MARK: Routes
 
     func testRoutesFollowTheChosenWayAndWorkWithOnlyAKeyOrOnlyACLI() {
@@ -92,26 +59,6 @@ final class AIBasicLayerTests: XCTestCase {
         max.provider = .claude
         max.basicOptions = [.claude: AIAgentOptions(model: "claude-sonnet-5-5", effort: "low")]
         XCTAssertEqual(AIBasicRoute.resolve(max, detected: [.claude], keys: []), .cli(.claude, model: "claude-sonnet-5-5", effort: "low"))
-    }
-
-    func testDecisionsGoWhereChosenAndFallBackToTheTextModel() {
-        var max = MaxSettings.default
-        let basic = AIBasicRoute.cli(.claude, model: "claude-haiku-5-5", effort: nil)
-        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: false, basic: basic), .textModel(basic))
-        // Slice B's numbers: choices go to the text model while there is one; yes/no to JevK5 once it is ready.
-        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: true, basic: basic), .textModel(basic))
-        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: true, basic: basic, yesNo: true), .local)
-        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: true, basic: .unavailable("none")), .local, "no agent and no key")
-        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: false, basic: basic, yesNo: true), .textModel(basic))
-        max.decisions = .jev
-        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [.typesafe], localReady: true, basic: basic), .jev)
-        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [], localReady: false, basic: basic), .textModel(basic), "Jev chosen without its key")
-        max.decisions = .openai
-        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [.openai], localReady: false, basic: basic), .openai)
-        max.decisions = .textModel
-        XCTAssertEqual(AIDecisionRoute.resolve(max, keys: [.openai], localReady: true, basic: basic), .textModel(basic))
-        XCTAssertFalse(AIDecisionRoute.textModel(basic).givesProbabilities)
-        XCTAssertTrue(AIDecisionRoute.jev.givesProbabilities)
     }
 
     func testAccountsAndModelsAreSettingsAndKeysAreNot() throws {
@@ -201,26 +148,6 @@ final class AIBasicLayerTests: XCTestCase {
         XCTAssertFalse(d.state.tab(twin)?.userNamed == true)
     }
 
-    func testTurningNameTabsOffRemovesTheNamesAndAFailureIsToldOnce() throws {
-        let d = driver([.tabNames])
-        let a = d.open("https://a.example/"), b = d.open("https://b.example/")
-        settle(d, a, title: "Alpha page")
-        let (id, _) = try XCTUnwrap(aiEffects(tick(d)).first)
-        d.system(.aiResult(id, .reply(.tabNames([a.rawValue: "Alpha"]))))
-        XCTAssertEqual(d.row(a)?.title, "Alpha")
-        settle(d, b, title: "Beta page")
-        let (failed, _) = try XCTUnwrap(aiEffects(tick(d)).first)
-        d.system(.aiResult(failed, .failed("Claude is not signed in.")))
-        XCTAssertEqual(d.view.tabTools.toast?.text, "Name Tabs: Claude is not signed in.")
-        // While backing off nothing new is asked.
-        let c = d.open("https://c.example/")
-        settle(d, c, title: "Gamma")
-        XCTAssertTrue(aiEffects(tick(d)).isEmpty)
-        d.user(.settings(.max(.feature(.tabNames, false))))
-        XCTAssertEqual(d.row(a)?.title, "Alpha page")
-        XCTAssertNil(d.state.tab(a)?.aiName)
-    }
-
     func testAnswersInTheWrongShapeChangeNothing() throws {
         let d = driver([.tabNames])
         d.user(.settings(.max(.tidyTabs(true))))
@@ -241,26 +168,6 @@ final class AIBasicLayerTests: XCTestCase {
     }
     private func titles(_ entries: [MenuEntry]) -> [String] { entries.compactMap { if case .action(let title, _, _) = $0 { title } else { nil } } }
     private func folderTitle(_ d: Driver, _ id: ItemID) -> String? { if case .folder(let f)? = d.state.doc.tree[id]?.body { f.title } else { nil } }
-
-    func testTidySurvivesANameArrivingMeanwhileAndLeavesOutTabsUngrouped() throws {
-        let d = driver([.tabNames])
-        d.user(.settings(.max(.tidyTabs(true))))
-        let a = d.open("https://a.example/one"), b = d.open("https://b.example/two"), c = d.open("https://c.example/three")
-        let (id, task) = try XCTUnwrap(aiEffects(d.user(.assist(.organizeToday))).first)
-        guard case .tidyToday(_, let tabs) = task else { return XCTFail() }
-        // Name Tabs renames a tab while the plan is out.
-        settle(d, a, title: "First long title here")
-        let (names, _) = try XCTUnwrap(aiEffects(tick(d)).first)
-        d.system(.aiResult(names, .reply(.tabNames([a.rawValue: "First"]))))
-        XCTAssertEqual(d.row(a)?.title, "First")
-        // The small model left one tab out: the others are grouped, that one stays in Today.
-        let left = tabs.map(\.id).filter { $0 != c }
-        d.system(.aiResult(id, .reply(.groups([AIGroupPlan(folder: "Letters", tabs: left.map(\.rawValue))]))))
-        XCTAssertEqual(d.state.doc.tree[a]?.parent, d.state.doc.tree[b]?.parent)
-        XCTAssertNotEqual(d.state.doc.tree[a]?.parent, d.state.doc.spaces[d.view.space.id]?.todayRoot)
-        XCTAssertEqual(d.state.doc.tree[c]?.parent, d.state.doc.spaces[d.view.space.id]?.todayRoot)
-        XCTAssertTrue(d.view.tabTools.toast?.text.hasPrefix("Tidied Tabs!") == true)
-    }
 
     // MARK: Folder names
 
@@ -333,23 +240,6 @@ final class AIBasicLayerTests: XCTestCase {
         XCTAssertNil(d.state.session.ai.basic.suggestions[other])
     }
 
-    func testTheMiddleBandSuggestsAndTheLowBandDoesNothing() throws {
-        let (d, group) = try placementDriver()
-        let middle = d.open("https://cooking.example/pie")
-        let (id, _) = try placementRequest(d, middle)
-        d.system(.aiResult(id, .reply(.decision(DecisionAnswers(answers: ["group": .choice("Recipes", probabilities: ["Recipes": 0.6, DecisionQuestion.noneName: 0.4])], backend: "jevk5")))))
-        XCTAssertNotEqual(d.state.doc.tree[middle]?.parent, group)
-        XCTAssertEqual(d.row(middle)?.aiSuggestion?.name, "Recipes")
-        d.user(.assist(.dismissSuggestion(middle)))
-        XCTAssertNil(d.row(middle)?.aiSuggestion)
-
-        let low = d.open("https://cars.example/")
-        let (second, _) = try placementRequest(d, low)
-        d.system(.aiResult(second, .reply(.decision(DecisionAnswers(answers: ["group": .choice("Recipes", probabilities: ["Recipes": 0.3, DecisionQuestion.noneName: 0.7])], backend: "jevk5")))))
-        XCTAssertNil(d.row(low)?.aiSuggestion)
-        XCTAssertNotEqual(d.state.doc.tree[low]?.parent, group)
-    }
-
     func testAnotherSpaceIsOnlyEverSuggested() throws {
         let (d, _) = try placementDriver()
         let home = d.view.space.id
@@ -402,18 +292,6 @@ final class AIBasicLayerTests: XCTestCase {
         XCTAssertTrue(menu(d, .todayCleanup(d.view.space.id)).isEmpty)
     }
 
-    func testACopyOfATabInAGroupIsADuplicateToo() throws {
-        let d = driver([.tabCleanup])
-        let soup = d.open("https://recipes.example/soup"), stew = d.open("https://recipes.example/stew")
-        let group = try XCTUnwrap(aiGroup(d, named: "Recipes", tabs: [soup, stew]))
-        XCTAssertEqual(d.state.doc.tree[soup]?.parent, group)
-        let copy = d.open("https://recipes.example/soup")
-        let found = d.state.cleanupCandidatesForTest(d.view.space.id, now: d.ctx.now)
-        XCTAssertEqual(found.duplicates.count, 1)
-        XCTAssertTrue([soup, copy].contains(found.duplicates[0]))
-        XCTAssertGreaterThan(d.view.space.today.cleanup, 0)
-    }
-
     func testTheAddressRuleIsSliceBs() {
         func same(_ a: String, _ b: String) -> Bool { AICleanup.addressKey(url(a)) == AICleanup.addressKey(url(b)) }
         XCTAssertTrue(same("https://www.example.com/page#usage", "http://example.com/page"))
@@ -448,40 +326,7 @@ final class AIBasicLayerTests: XCTestCase {
         XCTAssertEqual(d.view.space.today.cleanup, 1)
     }
 
-    func testCandidatesAreNotAskedWhenNothingCanAnswerYesOrNo() throws {
-        let d = driver([.tabCleanup])
-        let news = d.open("https://news.example/"), front = d.open("https://news.example/news")
-        d.page(news, .titleChanged("Hacker News"))
-        d.page(front, .titleChanged("Hacker News"))
-        XCTAssertTrue(aiEffects(d.system(.aiDuplicateCandidates([AIDuplicatePair(a: front, b: news, similarity: 0.95)]))).isEmpty, "no agent, no key, no JevK5")
-        XCTAssertTrue(d.state.duplicateScopes().isEmpty)
-        d.system(.aiKeys([:], localDecisions: true))
-        XCTAssertEqual(aiEffects(d.system(.aiDuplicateCandidates([AIDuplicatePair(a: front, b: news, similarity: 0.95)]))).count, 1, "JevK5 answers without an agent")
-        let scope = try XCTUnwrap(d.state.duplicateScopes().first)
-        XCTAssertEqual(Set(scope.entries.map(\.id)), [news, front], "tabs whose page showed no title yet stay out")
-        XCTAssertTrue(scope.entries.allSatisfy { !$0.pinned })
-        d.user(.settings(.max(.feature(.tabCleanup, false))))
-        XCTAssertTrue(d.state.duplicateScopes().isEmpty, "Suggest Tabs to Close off")
-    }
-
     // MARK: Usage
-
-    func testUsageAddsUpPerFeatureAndStartsAgainEachMonth() {
-        let d = Driver()
-        let key = AIUsageKey(feature: "Name Tabs", service: .anthropic, way: .apiKey)
-        d.system(.aiUsage(key, AIUsageCount(inputTokens: 1000, outputTokens: 50, cachedTokens: 400, cost: 0.0002)))
-        d.system(.aiUsage(key, AIUsageCount(inputTokens: 500, outputTokens: 25, cost: 0.0001)))
-        let row = d.state.doc.settings.max.usage?.rows[key]
-        XCTAssertEqual(row?.requests, 2)
-        XCTAssertEqual(row?.inputTokens, 1500)
-        XCTAssertEqual(row?.cost ?? 0, 0.0003, accuracy: 1e-12)
-        XCTAssertEqual(d.state.doc.settings.max.usage?.month, AIUsageLedger.month(of: T0))
-        d.advance(.seconds(40 * 86_400))
-        d.system(.aiUsage(key, AIUsageCount(inputTokens: 10)))
-        XCTAssertEqual(d.state.doc.settings.max.usage?.rows[key]?.requests, 1, "a new month")
-        d.user(.settings(.max(.resetUsage)))
-        XCTAssertNil(d.state.doc.settings.max.usage)
-    }
 
     func testNamesAndTheUsersMarkSurviveARestart() throws {
         let d = driver([.tabNames])

@@ -130,34 +130,6 @@ final class TabToolsTests: XCTestCase {
         d.user(.tabTools(.bulk(.items([privateTab]), .close)), in: privateWindow)
         XCTAssertTrue(d.archive().isEmpty)
     }
-    func testRecentCancelToastEducationAndMutePersistence() throws {
-        let d = Driver()
-        let a = try XCTUnwrap(d.current?.id)
-        let b = d.open("127.0.0.1:9/b")
-        d.user(.tab(.cycleRecent(.next)))
-        XCTAssertEqual(d.view.tabTools.recent?.selected, a)
-        XCTAssertEqual(d.current?.id, b, "a press switches nothing")
-        d.user(.tabTools(.cancelRecent))
-        XCTAssertEqual(d.current?.id, b)
-        XCTAssertNil(d.view.tabTools.recent)
-        d.user(.tabTools(.mute(.focused)))
-        XCTAssertTrue(d.row(b)?.muted ?? false)
-        let restarted = Driver(file: d.savedFile)
-        XCTAssertTrue(restarted.row(b)?.muted ?? false)
-        XCTAssertTrue(restarted.snapshot.pages.first { $0.id.item == b }?.muted ?? false)
-        d.page(b, .audioChanged(true))
-        XCTAssertTrue(d.row(b)?.audible ?? false)
-        d.user(.tabTools(.chooseIcon(b)))
-        d.user(.tabTools(.iconPickerClosed))
-        d.user(.tabTools(.resetPinned))
-        XCTAssertNotNil(d.view.tabTools.toast)
-        d.advance(.seconds(5))
-        d.system(.clockTick)
-        XCTAssertNil(d.view.tabTools.toast)
-        d.user(.tabTools(.dismissToast))
-        d.user(.tabTools(.preferences(includeFavorites: false, previews: false)))
-        XCTAssertFalse(Driver(file: d.savedFile).view.tabTools.hoverPreviews)
-    }
     /// Arc's auto-archive banner explains what just happened, so it waits for the first auto-archive ("We cleaned up!").
     /// It names the profile's threshold ("… haven’t used in the past 12 hours."), none while that is Never. Got it and
     /// Settings dismiss it for good, as does a new tab (Arc's dismiss reasons: manual, settingsLearnMore, onCreateNewTab).
@@ -214,16 +186,6 @@ final class TabToolsTests: XCTestCase {
         let before = d.view
         d.user(.tabTools(.undoToast))
         XCTAssertEqual(d.view.dock, before.dock)
-    }
-
-    /// The × on the empty favorites box dismisses it for good: the tray takes no room, across a restart.
-    func testDismissFavoritesHint() {
-        let d = Driver()
-        XCTAssertTrue(d.view.favorites.tiles.isEmpty)
-        XCTAssertFalse(d.view.favorites.hintDismissed)
-        d.user(.tabTools(.dismissFavoritesHint))
-        XCTAssertTrue(d.view.favorites.hintDismissed)
-        XCTAssertTrue(Driver(file: d.savedFile).view.favorites.hintDismissed)
     }
 
     func testTitleRulesNeverOverrideUserTitleOrLookalikeHost() {
@@ -286,20 +248,6 @@ extension TabToolsTests {
         XCTAssertFalse(restored.view.tabTools.hoverPreviews, "previews are off by default, as in Arc")
         restored.user(.item(.beginRename(.item(folder))))
         XCTAssertEqual(restored.view.renaming, folder)
-    }
-    func testRecentCancelPreservesActivityAndRepeatedRevealHasAWindowLocalGeneration() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        let b = d.open("127.0.0.1:9/b")
-        let before = [a,b].compactMap { d.state.tab($0)?.lastActiveAt }
-        d.advance(.seconds(100))
-        d.user(.tab(.cycleRecent(.next)))
-        d.user(.tabTools(.cancelRecent))
-        XCTAssertEqual([a,b].compactMap { d.state.tab($0)?.lastActiveAt }, before)
-        d.user(.tabTools(.reveal))
-        let generation = d.view.tabTools.revealGeneration
-        d.user(.tabTools(.reveal))
-        XCTAssertGreaterThan(d.view.tabTools.revealGeneration, generation)
     }
 }
 

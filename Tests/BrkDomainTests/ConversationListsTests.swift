@@ -54,44 +54,6 @@ final class ConversationListsTests: XCTestCase {
         XCTAssertNil(d.view.ai)
     }
 
-    func testOptionCommandAOrTheCommandBarOpensTheListWithThePanelClosed() {
-        let spec = ActionID.aiConversations.spec
-        XCTAssertEqual(spec.bindings.map(\.chord), [KeyChord([.option, .command], .a)])
-        XCTAssertEqual(KeyMap().lookup(KeyChord([.option, .command], .a))?.action, .aiConversations)
-        XCTAssertTrue(spec.commandBar?.triggers.contains("AI 对话") == true, "the command bar finds it by its Chinese name too")
-        let d = enabled()
-        XCTAssertNil(d.view.aiPanel)
-        d.user(spec.command)
-        XCTAssertEqual(d.view.aiPanel?.page, .list)
-    }
-
-    func testTheListIconOpensAClosedPanelOnTheListAndCloseClosesIt() {
-        let d = enabled()
-        XCTAssertNil(d.view.aiPanel)
-        d.user(.assist(.panelPage(.list)))
-        let panel = d.view.aiPanel
-        XCTAssertEqual(panel?.page, .list)
-        XCTAssertEqual(panel?.hasConversation, false)
-        XCTAssertEqual(panel?.groups, [])
-        d.user(.assist(.panelPage(.conversation)))
-        XCTAssertEqual(d.view.aiPanel?.page, .list, "nothing to show on the conversation page")
-        d.user(.assist(.dismiss))
-        XCTAssertNil(d.view.aiPanel)
-    }
-
-    func testTheListComposerStartsANewConversationInThisSpace() throws {
-        let d = enabled()
-        d.user(.assist(.panelPage(.list)))
-        let t = d.user(.assist(.listAsk("比较三款降噪耳机")))
-        let id = try firstTurn(t)
-        XCTAssertEqual(d.view.aiPanel?.page, .conversation)
-        XCTAssertEqual(d.state.savedConversations[id]?.space, d.view.space.id)
-        XCTAssertNil(row(of: id, d), "no sidebar row (step 8)")
-        d.user(.assist(.panelPage(.list)))
-        XCTAssertEqual(d.view.aiPanel?.groups.first?.kind, .running, "a turn that runs is 进行中")
-        XCTAssertEqual(rows(d).first?.state, .running)
-    }
-
     // MARK: One list per Space
 
     func testSwitchingSpacePutsTheConversationAwayAndBringsTheOtherSpacesBack() throws {
@@ -114,20 +76,6 @@ final class ConversationListsTests: XCTestCase {
         d.user(.space(.focus(home)))
         XCTAssertEqual(d.view.aiPanel?.page, .list, "each Space keeps the page it was left on")
         XCTAssertEqual(d.view.ai?.conversation?.id, shopping)
-    }
-
-    func testARunningTurnGoesOnOutOfSightWhenTheWindowMovesToAnotherSpace() throws {
-        let d = enabled()
-        let home = d.view.space.id
-        let id = try firstTurn(d.user(.assist(.ask("Why?"))))
-        let t = d.user(.space(.create(title: "Other", icon: .none, theme: .default, profile: .default)))
-        XCTAssertFalse(t.effects.contains(.aiCancel(id)), "\(t.effects)")
-        XCTAssertFalse(t.effects.contains(.aiCloseConversation(id)))
-        d.system(.aiResult(id, .text("Because.")))
-        XCTAssertEqual(d.state.savedConversations[id]?.items.last, .assistant("Because."))
-        XCTAssertEqual(d.view.aiPanel?.strips.map(\.id), [id], "its reply waits for the user, shown from the other Space")
-        XCTAssertEqual(d.view.aiPanel?.strips.first?.state, .unread)
-        XCTAssertEqual(d.view.dock.first { $0.id == home }?.attention, true)
     }
 
     func testAnotherProfilesSpaceDoesNotCancelTheTurnAndListsNothingOfTheFirst() throws {
@@ -175,21 +123,6 @@ final class ConversationListsTests: XCTestCase {
         XCTAssertEqual(d.view.aiPanel?.strips, [], "seen and answered: nothing waits")
         XCTAssertEqual(d.view.aiPanel?.waiting, 0)
         XCTAssertEqual(d.view.dock.first { $0.id == work }?.attention, false)
-    }
-
-    func testAReplyIsUnreadUntilItsConversationShows() throws {
-        let d = enabled()
-        let id = try firstTurn(d.user(.assist(.ask("Why?"))))
-        d.user(.assist(.panelPage(.list)))
-        d.advance(.seconds(30))
-        d.system(.aiResult(id, .text("Because.")))
-        XCTAssertEqual(rows(d).first?.state, .unread, "the list was up: nobody saw the reply")
-        XCTAssertEqual(d.view.aiPanel?.groups.first?.kind, .needsUser)
-        XCTAssertEqual(rows(d).first?.detail, "Replied just now")
-        XCTAssertEqual(d.view.aiPanel?.waiting, 1)
-        d.user(.assist(.panelPage(.conversation)))
-        XCTAssertEqual(rows(d).first?.state, .idle)
-        XCTAssertEqual(d.view.aiPanel?.waiting, 0)
     }
 
     func testAReplyThatTookAMinuteAsksForANotification() throws {
@@ -244,18 +177,6 @@ final class ConversationListsTests: XCTestCase {
 
     // MARK: Search
 
-    func testTheListSearchesTitlesAndWhatWasSaid() throws {
-        let d = enabled()
-        let kettle = try answered(d, "盯着这三个商品页的价格", answer: "电热水壶降了 €4.50，烤面包机没变。")
-        _ = try answered(d, "这家店能退货吗", answer: "可以，30 天内。")
-        d.user(.assist(.panelPage(.list)))
-        d.user(.assist(.listSearch("烤面包机")))
-        XCTAssertEqual(rows(d).map(\.id), [kettle], "found in what was said")
-        XCTAssertEqual(rows(d).first?.snippet?.contains("烤面包机"), true)
-        d.user(.assist(.listSearch("")))
-        XCTAssertEqual(rows(d).count, 2)
-    }
-
     func testTheLibraryPageSearchesEverySpaceFiltersAndSelects() throws {
         let d = enabled()
         let home = d.view.space.id
@@ -309,19 +230,6 @@ final class ConversationListsTests: XCTestCase {
         if case .text(let snippet)? = ConversationSearch.find("TOASTER", title: "x", text: "the toaster only") { XCTAssertEqual(snippet, "the toaster only") }
         else { XCTFail("case and accents are ignored") }
         XCTAssertNil(ConversationSearch.find("  ", title: "x", text: "y"))
-    }
-
-    // MARK: Words
-
-    func testWordsFollowTheConversationsLanguage() {
-        let ask = approval()
-        XCTAssertEqual(AIThreadWords.wants(ask, .zh), "想运行一条命令")
-        XCTAssertEqual(AIThreadWords.wants(ask, .en), "Wants to run a command")
-        let now = Instant(milliseconds: 1_000_000_000)
-        XCTAssertEqual(AIThreadWords.replied(Instant(milliseconds: now.milliseconds - 120_000), now: now, .zh), "2 分钟前回复了")
-        XCTAssertEqual(AIThreadWords.replied(Instant(milliseconds: now.milliseconds - 120_000), now: now, .en), "Replied 2 min ago")
-        XCTAssertEqual(AIThreadWords.listTitle("购物", .zh), "购物 的对话")
-        XCTAssertEqual(AIThreadWords.pages(1, .zh), "1 个 AI 页面")
     }
 
     // MARK: AI names

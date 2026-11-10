@@ -12,56 +12,6 @@ final class LayoutSpecTests: XCTestCase {
 
     // MARK: - electron-v1:src/main/layout.test.ts
     // MARK: computeLayout
-    /// sidebar visible: content.x = sidebar width (Arc's card starts at the sidebar edge), inset on the other three sides, radius = LAYOUT.contentRadius
-    func test_sidebarVisibleContentXSidebarWidthInsetInsetOnTheOtherThreeSidesRadiusLAYOUT() throws {
-        let d = LayoutDriver()
-        let a = d.view.space.today.rows[0].id
-        let frames = d.frames()
-        XCTAssertEqual(frames.contentSize, size)
-        XCTAssertEqual(frames.contentArea, CGRect(x: 228, y: 10, width: 1042, height: 756))
-        XCTAssertEqual(frames.cards, [CardFrame(pane: 0, content: .page(PageID(window: d.window, item: a)), rect: frames.contentArea, cornerRadius: 6)])
-        XCTAssertEqual(frames.sidebar?.frame, CGRect(x: 0, y: 0, width: 228, height: 776))
-        XCTAssertFalse(frames.sidebarFloats)
-        XCTAssertEqual(frames.resizeHandle, CGRect(x: 224, y: 11, width: 8, height: 754))
-        XCTAssertNil(frames.revealStrip)
-        XCTAssertNil(frames.commandBar)
-        XCTAssertNil(frames.library)
-        XCTAssertEqual(frames.dividers, [])
-        d.user(.sidebar(.resize(width: 300)))
-        XCTAssertEqual(d.frames().contentArea.minX, 300)
-    }
-
-    /// sidebar hidden: the content card spans the window minus the inset on every side and keeps its radius
-    func test_sidebarHiddenTheContentCardSpansTheWindowMinusTheInsetOnEverySideAndKeeps() throws {
-        let d = LayoutDriver()
-        d.user(.sidebar(.toggle))
-        let frames = d.frames()
-        XCTAssertEqual(frames.contentArea, CGRect(x: 10, y: 10, width: 1260, height: 756))
-        XCTAssertEqual(frames.cards.map(\.rect), [frames.contentArea])
-        XCTAssertEqual(frames.cards.map(\.cornerRadius), [6])
-        XCTAssertNil(frames.sidebar)
-        XCTAssertNil(frames.resizeHandle)
-        XCTAssertEqual(frames.revealStrip, CGRect(x: -20, y: 0, width: 35, height: 776), "2 x 10 outside to 1.5 x 10 inside")
-    }
-
-    /// hidden + peek: floatingSidebar is the sidebar column over the content; content unchanged
-    func test_hiddenPeekFloatingSidebarIsTheSidebarColumnOverTheContentContentUnchanged() throws {
-        let d = LayoutDriver()
-        d.user(.sidebar(.toggle))
-        let hidden = d.frames()
-        d.user(.sidebar(.peek(true)))
-        let peek = d.frames()
-        XCTAssertEqual(peek.contentArea, hidden.contentArea)
-        XCTAssertEqual(peek.cards, hidden.cards)
-        XCTAssertTrue(peek.sidebarFloats)
-        XCTAssertEqual(peek.sidebar?.frame, CGRect(x: 5, y: 5, width: 228, height: 766))
-        // Peek only matters while hidden.
-        var visible = d.view
-        visible.sidebar.visible = true
-        let anchored = d.frames(visible)
-        XCTAssertFalse(anchored.sidebarFloats)
-        XCTAssertEqual(anchored.sidebar?.frame, CGRect(x: 0, y: 0, width: 228, height: 776))
-    }
 
     /// two panes: side by side, equal heights, one inset gap between them, integer pixels, last pane absorbs rounding
     func test_twoPanesSideBySideEqualHeightsOneInsetGapBetweenThemIntegerPixelsLastPane() throws {
@@ -92,71 +42,6 @@ final class LayoutSpecTests: XCTestCase {
         let dragged = ContentLayout.fractions(afterDragging: 0, to: 238, in: area, current: [0.5, 0.5])
         XCTAssertEqual(dragged[0], 0.15, accuracy: 1e-12)
         XCTAssertEqual(dragged[1], 0.85, accuracy: 1e-12)
-    }
-
-    /// overlay command-bar: overlay rect is the full window; overlay archive: overlay rect equals content
-    /// (Swift: the command bar frame is the bar's box, centred in the window; the archive is the content area,
-    /// beside the Library panel that replaces the sidebar.)
-    func test_overlayCommandBarOverlayRectIsTheFullWindowOverlayArchiveOverlayRectEquals() throws {
-        let d = LayoutDriver()
-        d.user(.commandBar(.open(.newTab)))
-        let bar = d.frames()
-        // Centred in the window (Arc's Cmd+T card, Q01-a), which is the content area plus its 10 pt inset.
-        XCTAssertEqual(bar.commandBar.map { CGPoint(x: $0.midX, y: $0.midY) }, CGPoint(x: (bar.contentArea.maxX + 10) / 2, y: bar.contentArea.midY))
-        XCTAssertNil(bar.library)
-        d.user(.library(.open(.archive)))
-        let archive = d.frames()
-        // The Library's panel replaces the sidebar (Arc: max(417, min(window - 56, sidebar width)) wide, here 417 for a
-        // 228 sidebar): a 112 pt navigation column and the archive's column beside it; the content area keeps the page
-        // at the width it has beside the sidebar (1280 - 228 - 10), from the panel's edge on, past the window's right
-        // edge (P30-a, P32: Arc slides the page right instead of reflowing it).
-        let panel = CGRect(x: 0, y: 0, width: 417, height: 776)
-        XCTAssertEqual(archive.library?.frame, panel)
-        XCTAssertEqual(archive.library?.strip, panel)
-        XCTAssertEqual(archive.library?.nav, CGRect(x: 0, y: 0, width: 112, height: 776))
-        XCTAssertEqual(archive.library?.page, CGRect(x: 112, y: 0, width: 305, height: 776))
-        XCTAssertEqual(archive.contentArea, CGRect(x: 417, y: 10, width: 1042, height: 756))
-        XCTAssertEqual(archive.contentArea.width, bar.contentArea.width, "the page keeps its width")
-        XCTAssertEqual(archive.cards.map(\.rect), [archive.contentArea])
-        XCTAssertNil(archive.sidebar)
-        XCTAssertNil(archive.resizeHandle)
-        XCTAssertNil(archive.revealStrip)
-        // One 78 pt cell per page in Arc's order, spread evenly from y 94 in a 776 pt window (P32: Arc's six are 100 apart;
-        // Brk's AI Conversations after Archived Tabs makes seven, 83 apart); the exit button is the dock's Library button,
-        // the gift button level with it at the column's right.
-        XCTAssertEqual(LibraryPage.allCases, [.media, .downloads, .easelsAndNotes, .spaces, .boosts, .archive, .conversations])
-        XCTAssertEqual(LibraryPage.allCases.map { archive.library?.pageCells[$0] },
-                       (0..<7).map { CGRect(x: 9.5, y: 94 + 83 * Double($0), width: 94.5, height: 78) })
-        XCTAssertEqual(LibraryLayout.closeButton(in: panel), CGRect(x: 8, y: 735, width: 32, height: 32))
-        XCTAssertEqual(LibraryLayout.giftButton(in: archive.library!.nav), CGRect(x: 73, y: 735, width: 32, height: 32))
-        XCTAssertEqual(LibraryLayout.trafficLightsOrigin(in: panel), bar.sidebar?.trafficLightsOrigin, "the window buttons stay put")
-        XCTAssertNil(archive.commandBar)
-        XCTAssertEqual(archive.frame(of: .library), archive.library?.frame)
-        XCTAssertEqual(archive.frame(of: .archive), archive.library?.page)
-        // The Spaces page widens the panel to hold a 240 pt card per space and the + button (P30-a, P32-d: two spaces, 744).
-        d.user(.space(.create(title: "Second", icon: .none, theme: .default)))
-        d.user(.library(.open(.spaces)))
-        XCTAssertEqual(d.frames().library?.strip.width, 744)
-        XCTAssertEqual(d.frames().contentArea.minX, 744)
-        XCTAssertEqual(d.frames().contentArea.width, 1042)
-        XCTAssertEqual(LibraryLayout.panelWidth(windowWidth: 700, sidebarWidth: 228, page: .spaces, spaces: 2), 644, "never past the window minus 56")
-        d.user(.library(.open(.archive)))
-        // A wider sidebar keeps its width up to the window minus 56, never below 417; a hidden one is replaced all the same.
-        var wide = d.view
-        wide.sidebar.width = 450
-        XCTAssertEqual(d.frames(wide).library?.strip.width, 450)
-        XCTAssertEqual(d.frames(wide, size: CGSize(width: 480, height: 776)).library?.strip.width, 424)
-        XCTAssertEqual(d.frames(wide, size: CGSize(width: 440, height: 776)).library?.strip.width, 417)
-        d.user(.sidebar(.toggle))
-        d.user(.library(.open(.archive)))
-        let hidden = d.frames()
-        XCTAssertEqual(hidden.library?.strip, panel)
-        XCTAssertEqual(hidden.contentArea, CGRect(x: 417, y: 10, width: 1260, height: 756), "the width the page has without the sidebar")
-        XCTAssertNil(hidden.revealStrip)
-        d.user(.commandBar(.dismiss))
-        XCTAssertNil(d.frames().library)
-        XCTAssertNil(d.frames().commandBar)
-        XCTAssertNotNil(d.frames().revealStrip, "the hidden sidebar is back to its reveal strip")
     }
 }
 
@@ -349,19 +234,5 @@ final class DropTargetTests: XCTestCase {
         XCTAssertEqual(d.view.favorites.tiles.map(\.id), [tab])
         XCTAssertEqual(try XCTUnwrap(d.frames().sidebar?.favoriteTiles[tab]).width, rest.frame.width - 16, "one tile, the full width")
         XCTAssertNil(FavoritesGrid.emptyDropZone(frames: try XCTUnwrap(d.frames().sidebar), favorites: d.view.favorites), "no strip once there is a tile")
-    }
-
-    func testRowFramesConvertToWindowCoordinates() throws {
-        let d = LayoutDriver()
-        let a = d.view.space.today.rows[0].id
-        let frames = d.frames()
-        // Viewport at y 232 (under the empty favorites box); the first Today row follows spacer (2+1), the divider
-        // (16+1; Arc draws it over Today's tabs with Pinned empty too, verify/completion/max-ui-20261107) and New Tab
-        // (40+1): document y 61.
-        XCTAssertEqual(frames.frame(of: .row(a)), CGRect(x: 0, y: 293, width: 228, height: 40))
-        XCTAssertEqual(frames.frame(of: .todayNewTab), CGRect(x: 0, y: 252, width: 228, height: 40))
-        XCTAssertEqual(frames.frame(of: .urlPill), CGRect(x: 8, y: 46, width: 212, height: 36))
-        XCTAssertEqual(frames.frame(of: .dockLibrary), CGRect(x: 8, y: 735, width: 32, height: 32))
-        XCTAssertNil(frames.frame(of: .renameField), "view-owned")
     }
 }

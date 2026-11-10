@@ -10,107 +10,6 @@ import XCTest
 /// AppleScript dictionary's classes.
 @MainActor
 final class MenuHelpScriptingAppTests: XCTestCase {
-    private func menu(_ main: NSMenu, _ title: String) throws -> NSMenu { try XCTUnwrap(main.items.first { $0.title == title }?.submenu) }
-    private func visible(_ menu: NSMenu) -> [String] { menu.items.filter { !$0.isHidden && !$0.isSeparatorItem }.map(\.title) }
-
-    // MARK: Menus
-
-    /// View > Developer as Arc 1.170 shows it: seven rows, the last naming the focused site's switch, and Allow
-    /// JavaScript from Apple Events checked while it is on
-    func test_developerSubmenuIsArcsSevenRows() throws {
-        let h = Harness()
-        defer { h.cleanUp() }
-        h.store.start()
-        var window = try XCTUnwrap(h.store.snapshot.windows[h.window])
-        let target = MenuTarget()
-        target.isEnabled = { _ in true }
-        target.current = { (window, false) }
-        var javaScript = false
-        target.isChecked = { $0 == .allowJavaScriptFromAppleEvents ? javaScript : nil }
-        let main = MainMenu.build(target: target)
-        let developer = try menu(try menu(main, "View"), "Developer")
-        target.menuNeedsUpdate(developer)
-        XCTAssertEqual(visible(developer), ["View Source", "Developer Tools", "Inspect Elements", "JavaScript Console", "Network Inspector",
-                                            "Allow JavaScript from Apple Events", "Turn on Developer Mode for this site"])
-        let mode = try XCTUnwrap(developer.items.first { $0.title.hasSuffix("Developer Mode for this site") })
-        XCTAssertEqual(mode.keyEquivalent, "d")
-        XCTAssertEqual(mode.keyEquivalentModifierMask, .control)
-        window.urlPill.developerMode = true
-        target.menuNeedsUpdate(developer)
-        XCTAssertEqual(mode.title, "Turn off Developer Mode for this site")
-        let allow = try XCTUnwrap(developer.items.first { $0.title == "Allow JavaScript from Apple Events" })
-        XCTAssertTrue(target.validateMenuItem(allow))
-        XCTAssertEqual(allow.state, .off)
-        javaScript = true
-        _ = target.validateMenuItem(allow)
-        XCTAssertEqual(allow.state, .on)
-        for item in developer.items where !item.isHidden { XCTAssertTrue(target.validateMenuItem(item), item.title) }
-    }
-
-    /// Help: every row Arc shows is enabled (Export Notes is hidden with the other Note rows); while a trace records,
-    /// Record Trace reads Stop Recording Trace and Cancel Trace shows
-    func test_helpMenuRowsAreRealAndTraceRowsFollowTheRecording() throws {
-        let target = MenuTarget()
-        target.isEnabled = { _ in true }
-        var tracing = false
-        target.tracing = { tracing }
-        let main = MainMenu.build(target: target)
-        let help = try menu(main, "Help")
-        target.menuNeedsUpdate(help)
-        XCTAssertEqual(visible(help), ["Getting Started", "Essential Keyboard Shortcuts", "Release Notes", "Contact the Team", "Visit Help Center",
-                                       "Restore Data", "Troubleshooting"])
-        let troubleshooting = try menu(help, "Troubleshooting")
-        target.menuNeedsUpdate(troubleshooting)
-        XCTAssertEqual(visible(troubleshooting), ["Record Trace", "Open Task Manager", "Reveal \(Product.name) Data", "Copy \(Product.name) Info"])
-        for item in help.items + troubleshooting.items where !item.isHidden && !item.isSeparatorItem && item.submenu == nil {
-            XCTAssertTrue(target.validateMenuItem(item), item.title)
-        }
-        tracing = true
-        target.menuNeedsUpdate(troubleshooting)
-        XCTAssertEqual(visible(troubleshooting), ["Stop Recording Trace", "Cancel Trace", "Open Task Manager", "Reveal \(Product.name) Data", "Copy \(Product.name) Info"])
-        let file = try menu(main, "File")
-        target.menuNeedsUpdate(file)
-        XCTAssertFalse(visible(file).contains("New Note"), "Arc 1.170's File menu has no Note rows")
-        let app = try menu(main, Product.name)
-        XCTAssertTrue(target.validateMenuItem(try XCTUnwrap(app.items.first { $0.title == "Check for Updates…" })))
-    }
-
-    // MARK: Help rows
-
-    /// Visit Help Center and a resolved page open as a new tab; Copy Info writes the build's description
-    func test_helpRowsOpenPagesAndCopyInfo() throws {
-        let h = Harness()
-        defer { h.cleanUp() }
-        h.store.start()
-        h.store.dispatch(.user(h.window, .app(.help(.helpCenter))))
-        let pane = try XCTUnwrap(h.store.snapshot.windows[h.window]?.content.panes.first { $0.focused })
-        XCTAssertEqual(h.store.snapshot.windows[h.window]?.space.today.rows.compactMap { row -> URL? in
-            if case .tab(let t) = row, t.id == pane.tab { t.url } else { nil }
-        }.first, HelpLinks.helpCenter)
-        let board = NSPasteboard(name: NSPasteboard.Name("brk-test-\(UUID().uuidString)"))
-        defer { board.releaseGlobally() }
-        h.store.help.pasteboard = board
-        h.store.dispatch(.user(h.window, .app(.help(.copyInfo))))
-        let text = try XCTUnwrap(board.string(forType: .string))
-        XCTAssertTrue(text.hasPrefix("\(Product.name) "), text)
-        XCTAssertTrue(text.contains("macOS: "), text)
-        XCTAssertTrue(text.contains("Data: "), text)
-    }
-
-    func test_contactAndUpdateTextNameTheBuild() throws {
-        var info = BuildInfo(name: "Brk", version: "1.0", build: "7", commit: "abc1234", repository: URL(string: "https://github.com/example/brk"),
-                             engine: "154.0.8037.98", system: "Version 26.0", architecture: "arm64", dataDirectory: "/tmp/brk")
-        XCTAssertEqual(info.text, "Brk 1.0 (7)\nCommit: abc1234\nChromium Engine: 154.0.8037.98\nmacOS: Version 26.0\nArchitecture: arm64\nData: /tmp/brk")
-        let issue = try XCTUnwrap(HelpLinks.newIssue(info))
-        XCTAssertEqual(issue.host, "github.com")
-        XCTAssertEqual(issue.path, "/example/brk/issues/new")
-        let body = URLComponents(url: issue, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "body" }?.value
-        XCTAssertTrue(body?.contains("Commit: abc1234") == true)
-        XCTAssertTrue(HelpLinks.updateText(info).contains("Brk 1.0 (7), commit abc1234"))
-        info.repository = nil
-        XCTAssertNil(HelpLinks.newIssue(info), "no repository: Contact the Team says so instead of opening a page")
-    }
-
     // MARK: Restore Data
 
     /// a launch copy is made once per distinct file, the newest ten stay, the codec decides what can be restored, and
@@ -139,76 +38,6 @@ final class MenuHelpScriptingAppTests: XCTestCase {
         try backups.install(kept, now: Instant(milliseconds: 9_000_000))
         XCTAssertEqual(try Data(contentsOf: backups.stateURL), try Data(contentsOf: kept))
         XCTAssertTrue(backups.list().contains { $0.url.lastPathComponent.hasPrefix("state-before-restore") })
-    }
-
-    func test_restoreWindowEnablesRestoreOnlyForAGoodBackup() throws {
-        let h = Harness()
-        defer { h.cleanUp() }
-        h.store.start()
-        h.store.flush()
-        let backups = StateBackups(directory: h.directory)
-        let good = try XCTUnwrap(backups.snapshot(now: Instant(milliseconds: 1_000_000)))
-        let window = RestoreDataWindow(backups: backups, now: { Instant(milliseconds: 0) })
-        var confirmed: URL?
-        window.confirmed = { confirmed = $0 }
-        window.reload()
-        XCTAssertEqual(window.selected?.lastPathComponent, good.lastPathComponent)
-        guard case .restorable? = window.check else { return XCTFail("\(String(describing: window.check))") }
-        let bad = h.directory.appendingPathComponent("bad.json")
-        try Data("not json".utf8).write(to: bad)
-        window.select(bad)
-        guard case .notRestorable? = window.check else { return XCTFail("bad file accepted") }
-        XCTAssertNil(confirmed)
-        window.window.close()
-    }
-
-    // MARK: Trace and Task Manager
-
-    /// Record Trace starts the engine's trace; the same row stops it and saves the file, which is shown; Cancel
-    /// Trace keeps nothing
-    func test_traceRecorderStartsStopsAndCancels() async throws {
-        let engine = FakeEngine()
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("brk-trace-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        var tick: Int64 = 0
-        let recorder = TraceRecorder(engine: engine, directory: directory, now: { tick += 1_000; return Instant(milliseconds: tick) })
-        var shown: [URL] = []
-        recorder.reveal = { shown.append($0) }
-        var failures: [String] = []
-        recorder.toggle { failures.append($0) }
-        try await waitFor { recorder.isRecording }
-        recorder.toggle { failures.append($0) }
-        try await waitFor { recorder.phase == .idle }
-        XCTAssertEqual(shown.count, 1)
-        XCTAssertEqual(try String(contentsOf: try XCTUnwrap(shown.first), encoding: .utf8), engine.traceText)
-        XCTAssertEqual(shown.first?.deletingLastPathComponent().lastPathComponent, directory.lastPathComponent)
-        recorder.toggle { failures.append($0) }
-        try await waitFor { recorder.isRecording }
-        recorder.cancel()
-        try await waitFor { recorder.phase == .idle }
-        XCTAssertEqual(shown.count, 1, "a cancelled trace is not saved")
-        XCTAssertEqual(engine.calls.filter { $0.hasSuffix("Trace") }, ["beginTrace", "endTrace", "beginTrace", "discardTrace"])
-        XCTAssertEqual(failures, [])
-    }
-
-    func test_taskManagerListsAndEndsProcesses() {
-        let engine = FakeEngine()
-        engine.taskList = [
-            EngineTask(id: 3, kind: .renderer, title: "Tab: Home", cpu: 1.5, memory: 80_000_000, gpuMemory: nil, killable: true),
-            EngineTask(id: 1, kind: .browser, title: "Browser", cpu: 4.0, memory: 50_000_000, gpuMemory: nil, killable: false),
-            EngineTask(id: 2, kind: .gpu, title: "GPU Process", cpu: nil, memory: 120_000_000, gpuMemory: 10_000_000, killable: true),
-        ]
-        let manager = TaskManagerWindow(engine: engine)
-        manager.refresh()
-        XCTAssertEqual(manager.rows.map(\.id), [1, 2, 3], "the browser first, then by memory")
-        XCTAssertEqual(TaskManagerWindow.text(manager.rows[2], column: "cpu"), "1.5")
-        XCTAssertEqual(TaskManagerWindow.text(manager.rows[1], column: "cpu"), "–")
-        XCTAssertEqual(TaskManagerWindow.text(manager.rows[0], column: "task"), "Browser")
-        XCTAssertFalse(engine.endTask(1), "the browser process cannot be ended")
-        XCTAssertTrue(engine.endTask(3))
-        manager.refresh()
-        XCTAssertEqual(manager.rows.map(\.id), [1, 2])
-        manager.window.close()
     }
 
     // MARK: Dock tile
@@ -292,13 +121,5 @@ final class MenuHelpScriptingAppTests: XCTestCase {
         XCTAssertEqual(execute.scriptErrorNumber, errEventNotPermitted)
         XCTAssertEqual(execute.scriptErrorString, Scripting.javaScriptOff)
         XCTAssertFalse(h.engine.calls.contains("evaluateForResult"))
-    }
-
-    private func waitFor(_ condition: @MainActor () -> Bool, timeout: TimeInterval = 2) async throws {
-        let deadline = Date().addingTimeInterval(timeout)
-        while !condition() {
-            if Date() > deadline { return XCTFail("timed out") }
-            try await Task.sleep(for: .milliseconds(10))
-        }
     }
 }

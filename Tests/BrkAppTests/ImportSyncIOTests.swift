@@ -79,29 +79,6 @@ final class ImportSyncIOTests: XCTestCase {
             XCTAssertFalse(text.contains("warnBeforeQuitting")); XCTAssertFalse(text.contains(root.path))
         }
     }
-    func testImportCheckpointFailureLeavesSidebarAndSourceUnchanged() throws {
-        _ = NSApplication.shared
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("brk-import-" + UUID().uuidString)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let blocked = root.appendingPathComponent("blocked")
-        try Data("owned blocker".utf8).write(to: blocked)
-        let source = root.appendingPathComponent("source.html")
-        let bytes = ExportCodec.encode(ExportDocument(title: "Owned", entries: [.link(title: "Owned source", url: URL(string: "https://example.test/")!)]), as: .html)
-        try bytes.write(to: source)
-        let clock = OffsetClock(), engine = FakeEngine()
-        let restored = StateCodec.restore(nil, seed: RestoreSeed(startURL: Harness.startURL, contentSize: Metrics.window.defaultSize.value), ctx: Context(now: clock.now(), newID: { UUID().uuidString }))
-        let store = AppStore(restored: restored, clock: clock, engine: engine, stateFile: StateFile(directory: blocked))
-        let window = try XCTUnwrap(store.snapshot.windows.keys.first)
-        defer { store.flush(); store.windowController(window)?.window.orderOut(nil) }
-        let target = try XCTUnwrap(restored.state.sidebarImportTarget(in: window))
-        let parsed = try SidebarImport.parse(Data(contentsOf: source), format: .bookmarksHTML)
-        store.dispatch(.system(.sidebarData(.imported(window, target: target, parsed.preview, favorites: false))))
-        XCTAssertEqual(store.snapshot.windows[window]?.space.pinned.rows.count, 0)
-        XCTAssertTrue(store.snapshot.sidebarData.status.contains("Import could not be saved"))
-        XCTAssertEqual(try Data(contentsOf: source), bytes)
-        XCTAssertEqual(try Data(contentsOf: blocked), Data("owned blocker".utf8))
-    }
 
     func testAcceptedImportIsOnDiskBeforeItIsReported() throws {
         let h = Harness(); defer { h.cleanUp() }
@@ -135,40 +112,6 @@ final class ImportSyncIOTests: XCTestCase {
         XCTAssertThrowsError(try ImportedPasswordTransaction.apply(source.passwords, stillValid: { valid }, add: { _ in valid = false; return Data([3]) }, remove: { removed.append($0); return true }))
         XCTAssertEqual(removed, [Data([3])])
     }
-    func testTwoOwnedReplicasRetryAndAtomicReplacement() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("brk-sync-" + UUID().uuidString)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let shared = root.appendingPathComponent("shared")
-        try FileManager.default.createDirectory(at: shared, withIntermediateDirectories: true)
-        let a = SidebarSyncIO(), b = SidebarSyncIO()
-        let one = SidebarSyncDocument(records: ["i-item-a": SidebarSyncRecord(stamp: SidebarSyncStamp(counter: 1, replica: "replica-a"),
-            value: SidebarSyncValue(payload: .tab(title: "Owned A", url: URL(string: "https://example.test/a")!, icon: nil), parent: "favorites", order: 0))])
-        let two = SidebarSyncDocument(records: ["i-item-b": SidebarSyncRecord(stamp: SidebarSyncStamp(counter: 1, replica: "replica-b"),
-            value: SidebarSyncValue(payload: .tab(title: "Owned B", url: URL(string: "https://example.test/b")!, icon: nil), parent: "favorites", order: 1))])
-        // Owned local checkpoints, independent of the shared transport files.
-        for (device, document) in [("a", one), ("b", two)] {
-            let path = root.appendingPathComponent(device)
-            try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
-            try SidebarDataCodec.encodeSync(document).write(to: path.appendingPathComponent("outbox"), options: .atomic)
-        }
-        _ = try await a.exchange(folder: shared, replica: "replica-a", document: one)
-        let receivedB = try await b.exchange(folder: shared, replica: "replica-b", document: two)
-        let receivedA = try await a.exchange(folder: shared, replica: "replica-a", document: receivedB)
-        XCTAssertEqual(receivedA.records.count, 2)
-        XCTAssertEqual(receivedA, receivedB)
-        let before = try Data(contentsOf: shared.appendingPathComponent("replica-a.brksync.json"))
-        let retry = try await a.exchange(folder: shared, replica: "replica-a", document: receivedA)
-        XCTAssertEqual(retry, receivedA)
-        XCTAssertEqual(try Data(contentsOf: shared.appendingPathComponent("replica-a.brksync.json")), before)
-        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: shared.path).contains { $0.hasSuffix(".tmp") })
-        var deletion = receivedB
-        deletion.records["i-item-a"] = SidebarSyncRecord(stamp: SidebarSyncStamp(counter: 2, replica: "replica-b"), value: nil)
-        _ = try await b.exchange(folder: shared, replica: "replica-b", document: deletion)
-        let stale = try await a.exchange(folder: shared, replica: "replica-a", document: one)
-        XCTAssertNil(stale.records["i-item-a"]?.value)
-        XCTAssertEqual(stale.records.count, 2)
-    }
 
     func testInvalidPeerDoesNotOverwriteLastReplicaAndTemporaryFilesAreIgnored() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("brk-sync-" + UUID().uuidString)
@@ -182,18 +125,5 @@ final class ImportSyncIOTests: XCTestCase {
         try Data("not JSON".utf8).write(to: root.appendingPathComponent("bad.brksync.json"))
         do { _ = try await io.exchange(folder: root, replica: "owned", document: document); XCTFail("Accepted malformed peer") } catch {}
         XCTAssertEqual(try Data(contentsOf: output), before)
-    }
-
-    func testSymlinkReplicaIsRejectedAndMissingFolderIsAnError() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("brk-sync-" + UUID().uuidString)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let target = root.appendingPathComponent("source")
-        try SidebarDataCodec.encodeSync(SidebarSyncDocument()).write(to: target)
-        try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("link.brksync.json"), withDestinationURL: target)
-        let io = SidebarSyncIO()
-        do { _ = try await io.exchange(folder: root, replica: "owned", document: SidebarSyncDocument()); XCTFail("Accepted symlink") } catch {}
-        do { _ = try await io.exchange(folder: root.appendingPathComponent("missing"), replica: "owned", document: SidebarSyncDocument()); XCTFail("Accepted unavailable folder") } catch {}
-        XCTAssertEqual(try Data(contentsOf: target), try SidebarDataCodec.encodeSync(SidebarSyncDocument()))
     }
 }

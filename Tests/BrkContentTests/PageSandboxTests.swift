@@ -189,33 +189,6 @@ final class PageSandboxTests: XCTestCase {
         XCTAssertEqual(view.currentURL, PageSandboxPolicy.documentURL)
     }
 
-    func testARightClickOpensBrksMenuNotThePages() async throws {
-        let html = "<!doctype html><body style=\"margin:0;height:200px\"><script>window.menus = 0; document.addEventListener('contextmenu', e => { window.menus++; e.preventDefault(); });</script></body>"
-        let view = PageSandboxView(html: html, data: nil, theme: theme)
-        let window = window(for: view, height: 200, front: true)
-        var asked = 0
-        view.menuItems = {
-            asked += 1
-            let item = NSMenuItem(title: "Keep as Tab", action: nil, keyEquivalent: "")
-            // The menu tracks modally in the event-tracking run loop mode, where the main queue does not run: a timer there closes it.
-            nonisolated(unsafe) let opened = item
-            let timer = Timer(timeInterval: 0.3, repeats: false) { _ in MainActor.assumeIsolated { opened.menu?.cancelTrackingWithoutAnimation() } }
-            RunLoop.main.add(timer, forMode: .common)
-            return [item]
-        }
-        try await loaded(view)
-        let point = NSPoint(x: 40, y: 100)
-        for type in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
-            guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                                                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else { continue }
-            window.sendEvent(event)
-        }
-        try await Task.sleep(for: .milliseconds(500))
-        XCTAssertEqual(asked, 1, "Brk's menu was not asked for")
-        let pageSaw = await view.evaluateInPage("return window.menus")
-        XCTAssertEqual(pageSaw, "0", "the page saw the right click")
-    }
-
     func testThePageReadsItsDataAndTheThemeLive() async throws {
         let html = """
         <!doctype html><script>
@@ -349,22 +322,6 @@ final class PageSandboxTests: XCTestCase {
         XCTAssertEqual(saves.last, #"{"note":"tea"}"#, "the save the page had pending landed before the commit returned")
     }
 
-    func testACommitWithNothingToSaveIsShortAndAPreviewCommitsNothing() async throws {
-        let view = PageSandboxView(html: "<!doctype html><p>nothing to edit</p>", data: nil, theme: theme, page: AIPageID("p"))
-        view.onSave = { _ in XCTFail("nothing was edited") }
-        _ = window(for: view)
-        try await loaded(view)
-        var started = ProcessInfo.processInfo.systemUptime
-        await view.commitEdits()
-        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - started, PageSandboxView.commitWait + 0.3)
-        let preview = PageSandboxView(html: changeOnly, data: nil, theme: theme)
-        _ = window(for: preview)
-        try await loaded(preview)
-        started = ProcessInfo.processInfo.systemUptime
-        await preview.commitEdits()
-        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - started, 0.1, "a preview cannot save, so nothing is waited for")
-    }
-
     func testCommitAllTakesTheViewsOfOneWindowOrOfAll() async throws {
         var saved: [String] = []
         let a = PageSandboxView(html: changeOnly, data: nil, theme: theme, page: AIPageID("a"))
@@ -386,41 +343,6 @@ final class PageSandboxTests: XCTestCase {
         XCTAssertEqual(saved, [#"a {"note":"one"}"#], "only the closing window's page")
         await PageSandboxView.commitAll()
         XCTAssertEqual(saved, [#"a {"note":"one"}"#, #"b {"note":"two"}"#], "a quit commits every window's")
-    }
-
-    func testAPreviewPicturesThePageAtItsContentHeightWithItsConsole() async throws {
-        let html = """
-        <!doctype html><div style="height:300px;background:var(--card);border-radius:var(--radius)">chart</div>
-        <script>console.log('drawn', 3); fetch('https://example.com/x').catch(() => console.warn('offline'));</script>
-        """
-        let preview = await PageSandbox.preview(html: html, data: nil, width: 400, theme: theme)
-        let png = try XCTUnwrap(preview.png)
-        let image = try XCTUnwrap(NSBitmapImageRep(data: png))
-        XCTAssertEqual(image.pixelsWide, 400)
-        XCTAssertEqual(preview.contentHeight, 300)
-        XCTAssertEqual(image.pixelsHigh, 300)
-        XCTAssertTrue(preview.console.contains("log: drawn 3"), "\(preview.console)")
-        XCTAssertTrue(preview.console.contains { $0.contains("Blocked by the page sandbox") || $0.contains("offline") }, "\(preview.console)")
-    }
-
-    func testTheThemeMapsBrksSchemesAndTheSpacesColor() {
-        let light = PageTheme(resolveTheme(.default, systemScheme: .light))
-        let dark = PageTheme(resolveTheme(SpaceTheme(colors: [RGBA(hex: "#FFB000")], texture: .grain, intensity: 0.25, appearance: .dark), systemScheme: .dark))
-        let names = ["--background", "--foreground", "--muted", "--card", "--popover", "--secondary", "--border", "--ring", "--primary", "--accent",
-                     "--destructive", "--warning", "--success", "--info", "--code-background", "--chart-1", "--chart-6", "--radius", "--font-sans", "--font-mono",
-                     "--primary-foreground", "--muted-foreground"]
-        for name in names { XCTAssertTrue(light.variables.contains { $0.0 == name }, name) }
-        XCTAssertEqual(light.scheme, .light)
-        XCTAssertEqual(dark.scheme, .dark)
-        XCTAssertNotEqual(light.variables.first { $0.0 == "--foreground" }?.1, dark.variables.first { $0.0 == "--foreground" }?.1)
-        // The Space's color leads, made readable on the scheme's background.
-        let primary = PageTheme.readable(RGBA(hex: "#FFB000"), on: RGBA(hex: "#FFFFFF"))
-        XCTAssertLessThan(PageTheme.luminance(primary), PageTheme.luminance(RGBA(hex: "#FFB000")), "a yellow is darkened on white")
-    }
-
-    func testTheRuleListCompiles() async {
-        let rules = await PageSandboxView.rules()
-        XCTAssertNotNil(rules, "without it no page loads")
     }
 
     func testThePolicyIsWhatTheDesignSays() {

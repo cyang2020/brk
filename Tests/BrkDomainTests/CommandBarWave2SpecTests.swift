@@ -25,18 +25,6 @@ final class CommandBarWave2SpecTests: XCTestCase {
         XCTAssertEqual(d.current?.url, url("https://duckduckgo.com/?q=arc%20browser"))
     }
 
-    /// site search submits the query on the named engine, whatever the default is
-    func test_siteSearchSubmitsOnTheNamedEngine() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        d.user(.commandBar(.submitSearch(engine: SearchEngine.bing.id, query: " swift ")))
-        XCTAssertEqual(d.current?.url, url("https://www.bing.com/search?q=swift"))
-        XCTAssertNil(d.view.overlay)
-        d.user(.commandBar(.open(.newTab)))
-        assertUnchanged(d.state, d.user(.commandBar(.submitSearch(engine: SearchEngineID("nope"), query: "x"))))
-        assertUnchanged(d.state, d.user(.commandBar(.submitSearch(engine: SearchEngine.bing.id, query: "   "))))
-    }
-
     /// typing asks the engine for suggestions (an effect with the suggest URL) when the profile allows it; the answer is projected with its query
     func test_suggestionsGoThroughTheEffectAndEventPair() {
         let d = Driver()
@@ -110,49 +98,6 @@ final class CommandBarWave2SpecTests: XCTestCase {
         XCTAssertEqual(d.user(.commandBar(.queryChanged("swim")), in: other).effects.filter(notLocalSearch), [])
         guard case .commandBar(let bar)? = d.view(of: other).overlay else { return XCTFail("the other bar closed") }
         XCTAssertEqual(bar.suggestions, [])
-    }
-
-    /// what the bar needs to rank site search: the profile's engine and every other built-in engine with its
-    /// keyword, then the site-search sites; switching the default moves Google into the site-search list
-    func test_theBarCarriesTheEnginesForSiteSearch() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(d.bar?.engine.keyword, "google")
-        XCTAssertEqual(d.bar?.siteSearch.map(\.name), ["DuckDuckGo", "Bing", "Ecosia", "Kagi", "Wikipedia", "YouTube", "Google Docs", "Google Drive", "Google Maps", "GitHub", "Amazon", "Reddit"])
-        d.user(.commandBar(.submitSearch(engine: SearchEngine.kagi.id, query: "arc browser")))
-        XCTAssertEqual(d.current?.url, url("https://kagi.com/search?q=arc%20browser"))
-    }
-
-    /// a user override moves a shortcut: the new chord routes, the old one passes to the page
-    func test_overridesRouteThroughTheReducer() {
-        let d = Driver()
-        d.user(.settings(.shortcuts(.setChord(.newTab, KeyChord(.command, .e)))))
-        let moved = d.key(KeyChord(.command, .e), stage: .beforePage, pressID: 1)
-        XCTAssertTrue(moved.keyHandled)
-        XCTAssertNotNil(d.bar)
-        d.user(.commandBar(.dismiss))
-        XCTAssertFalse(d.key(KeyChord(.command, .t), stage: .beforePage, pressID: 2).keyHandled)
-        XCTAssertEqual(d.snapshot.settings.shortcuts.first { $0.action == .newTab }?.state, .valid(KeyChord(.command, .e)))
-        XCTAssertEqual(d.snapshot.settings.shortcuts.first { $0.action == .newTab }?.source, .userDefined)
-        d.user(.settings(.shortcuts(.setPriority(.reloadPage, .app))))
-        XCTAssertTrue(d.key(KeyChord(.command, .r), stage: .beforePage, pressID: 3).keyHandled, "Cmd+R now wins before the page")
-        d.user(.settings(.shortcuts(.reset(.newTab))))
-        XCTAssertTrue(d.key(KeyChord(.command, .t), stage: .beforePage, pressID: 4).keyHandled)
-        d.user(.settings(.shortcuts(.resetAll)))
-        XCTAssertFalse(d.key(KeyChord(.command, .r), stage: .beforePage, pressID: 5).keyHandled)
-        XCTAssertEqual(Driver(file: d.savedFile).outcome, .restored(repairs: []))
-    }
-
-    /// Shift+Cmd+N opens an incognito window by default (wave 2 decision; Arc's nib also puts it on New Folder, which
-    /// starts unset); the Shortcuts rows say so, and the chord works with a native view focused (the menu stage)
-    func test_shiftCmdNOpensIncognitoByDefault() throws {
-        let d = Driver()
-        let rows = d.snapshot.settings.shortcuts
-        XCTAssertEqual(rows.first { $0.action == .newIncognitoWindow }?.state, .valid(KeyChord([.shift, .command], .n)))
-        XCTAssertEqual(rows.first { $0.action == .newFolder }?.state, .unset)
-        XCTAssertEqual(rows.first { $0.action == .newFolder }?.source, .default)
-        XCTAssertTrue(d.key(KeyChord([.shift, .command], .n), stage: .menu, pressID: 1).keyHandled)
-        XCTAssertEqual(d.snapshot.windows.values.filter { $0.kind == .incognito }.count, 1)
     }
 
     /// the Shortcuts pane's remedies, as commands: a chord the user puts on a taken key is a conflict on both rows

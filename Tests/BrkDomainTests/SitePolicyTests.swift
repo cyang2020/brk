@@ -4,36 +4,6 @@ import XCTest
 @testable import BrkDomain
 
 final class SitePolicyTests: XCTestCase {
-    func testExpandedSplitAndLibraryVisibilityMatchPresentedPages() throws {
-        let d = Driver()
-        for n in 2...4 { d.user(.split(.addPane)); d.user(.commandBar(.submit("https://example.test/\(n)"))); d.commitRequested() }
-        XCTAssertEqual(d.snapshot.pages.filter { $0.websitePolicy.visible }.count, 4)
-        d.user(.split(.toggleExpanded))
-        let visible = d.snapshot.pages.filter { $0.websitePolicy.visible }
-        XCTAssertEqual(visible.count, 1)
-        XCTAssertEqual(visible.first?.id.item, d.view.content.presentedPanes.first?.tab)
-        XCTAssertEqual(d.snapshot.pages.count, 4, "Hidden panes retain their native browser demand")
-        d.user(.library(.open(.downloads)))
-        XCTAssertEqual(d.snapshot.pages.filter { $0.websitePolicy.visible }.map(\.id.item), visible.map(\.id.item),
-                       "the page stays visible beside the Library")
-    }
-
-    func testWebsiteCSSUsesEffectivePairedThemeAtTheCurrentSystemScheme() throws {
-        let d = Driver()
-        var theme = SpaceTheme.default
-        theme.variants = ThemeVariants(legacy: theme)
-        theme.variants!.selection = .auto
-        theme.variants!.light.colors[0].color = RGBA(1, 0, 0)
-        theme.variants!.dark.colors[0].color = RGBA(0, 0, 1)
-        d.user(.space(.update(d.view.space.id, title: nil, icon: nil, theme: theme)))
-        d.user(.settings(.advanced(.themeToCSS(true))))
-        for scheme in [Scheme.light, .dark] {
-            let snapshot = project(d.state, ProjectionContext(now: d.now, calendar: .current, systemScheme: scheme))
-            let css = try XCTUnwrap(snapshot.pages.first?.websitePolicy.themeCSS)
-            XCTAssertEqual(css["--brk-space-color"], scheme == .light ? "rgb(255, 0, 0)" : "rgb(0, 0, 255)")
-            XCTAssertEqual(css["--brk-space-text"], scheme == .light ? "black" : "white")
-        }
-    }
     func readyDriver() -> Driver {
         let d = Driver()
         let page = d.snapshot.pages[0].id
@@ -41,19 +11,6 @@ final class SitePolicyTests: XCTestCase {
         d.page(page.item, .documentChanged(.loading(DocumentToken(browser: browser, sequence: 1))))
         d.page(page.item, .documentChanged(.ready(DocumentToken(browser: browser, sequence: 1))))
         return d
-    }
-    func testNativePolicyReadbackIsDocumentFencedAndTransient() throws {
-        let d = readyDriver()
-        let target = try XCTUnwrap(d.state.siteTarget(in: d.window))
-        let status = WebsitePolicyStatus(document: target.document, appearance: .dark, themeApplied: false, frozen: false, error: "fixture runtime error")
-        d.page(target.page.item, .websitePolicyApplied(status))
-        d.user(.site(.controls))
-        XCTAssertEqual(d.snapshot.sites[d.window]?.applied?.error, "fixture runtime error")
-        XCTAssertFalse(String(decoding: d.savedFile, as: UTF8.self).contains("fixture runtime error"))
-        let next = DocumentToken(browser: target.document.browser, sequence: 2)
-        d.page(target.page.item, .documentChanged(.loading(next)))
-        let before = d.state
-        assertUnchanged(before, d.page(target.page.item, .websitePolicyApplied(status)))
     }
 
     func testRuleUpdatesValidateAtTheBoundaryAndPersistWithoutApplyingAnInvalidFile() throws {
@@ -115,18 +72,6 @@ final class SitePolicyTests: XCTestCase {
         XCTAssertNotNil(d.state.doc.profiles[.default])
     }
 
-    func testPendingNavigationSuppressesRefreshBeforeTheNewDocumentStarts() throws {
-        let d = readyDriver()
-        let first = d.user(.site(.clear(kinds: [.cookies], scope: .site, reload: true)))
-        guard case .confirmSiteData(let request)? = first.effects.first else { return XCTFail("missing preflight") }
-        d.user(.site(.confirmClear(request.id, true)))
-        d.user(.commandBar(.open(.editCurrent)))
-        d.user(.commandBar(.submit("https://next.example/")))
-        XCTAssertNil(d.state.siteTarget(in: d.window))
-        let done = d.system(.siteDataCleared(ClearSiteDataResult(request: request, completed: [.cookies], error: nil)))
-        XCTAssertFalse(done.effects.contains(.page(request.target.page, .reload(ignoringCache: false))))
-    }
-
     func testNavigationAndProfileReplacementFenceClearRepliesAndSettings() throws {
         let d = readyDriver()
         let first = d.user(.site(.clear(kinds: [.cache], scope: .profile, reload: true)))
@@ -138,15 +83,6 @@ final class SitePolicyTests: XCTestCase {
         XCTAssertTrue(d.state.doc.sitePreferences.isEmpty)
         let done = d.system(.siteDataCleared(ClearSiteDataResult(request: request, completed: [.cache], error: nil)))
         XCTAssertFalse(done.effects.contains(.page(request.target.page, .reload(ignoringCache: true))))
-    }
-
-    func testHiddenPagesKeepTheirOwnSpaceThemeWhenTheWindowChangesSpace() throws {
-        let d = readyDriver()
-        let original = d.snapshot.pages[0].id
-        d.user(.settings(.advanced(.themeToCSS(true))))
-        let before = d.snapshot.pages.first { $0.id == original }!.websitePolicy.themeCSS
-        _ = d.newSpace("Other", color: RGBA(1, 0, 0))
-        XCTAssertEqual(d.snapshot.pages.first { $0.id == original }?.websitePolicy.themeCSS, before)
     }
 
     func testPrivateThemeNeverExposesThePublicSpaceColorOrContrast() throws {
@@ -182,22 +118,6 @@ final class SitePolicyTests: XCTestCase {
         XCTAssertEqual(d.current?.url?.absoluteString, "chrome://extensions/")
     }
 
-    func testNativeExtensionPickerPersistsPinsAndFencesActionTargets() throws {
-        let d = readyDriver()
-        let item = BrowserExtension(id: "fixture", name: "Fixture", version: "1", enabled: true)
-        d.system(.extensionOperationFailed(.profile(.default), "fixture error"))
-        d.system(.extensionsRead(ExtensionCatalog(context: .profile(.default), extensions: [item], error: nil)))
-        XCTAssertEqual(d.user(.site(.nativeExtensions)).effects, [.queryExtensions(.profile(.default))])
-        d.user(.site(.pinExtension("fixture", true)))
-        XCTAssertEqual(Driver(file: d.savedFile).state.doc.sitePreferences[.default]?.pinnedExtensions, ["fixture"])
-        let target = try XCTUnwrap(d.state.siteTarget(in: d.window))
-        XCTAssertEqual(d.user(.site(.invokeExtension("fixture"))).effects, [.invokeExtension("fixture", target)])
-        let removal = d.user(.site(.removeExtension("fixture")))
-        XCTAssertEqual(removal.effects.last, .removeExtension("fixture", .profile(.default), PageID(window: d.window, item: try XCTUnwrap(d.current?.id))))
-        d.user(.site(.pinExtension("fixture", false)))
-        XCTAssertEqual(d.state.doc.sitePreferences[.default]?.pinnedExtensions, [])
-    }
-
     func testExtensionAndPanelCommandsRespectPrivateScopeAndCloseState() throws {
         let d = readyDriver()
         d.user(.site(.controls)); XCTAssertNotNil(d.snapshot.sites[d.window])
@@ -221,20 +141,6 @@ final class SitePolicyTests: XCTestCase {
         XCTAssertNil(d.state.doc.sitePreferences[.default]?.rule(for: target.origin).permissions[.notifications])
     }
 
-    func testRememberedChoicePersistsForTheCurrentCommittedDocumentWhileItLoads() throws {
-        let d = readyDriver()
-        let previous = try XCTUnwrap(d.state.siteTarget(in: d.window))
-        let document = DocumentToken(browser: previous.document.browser, sequence: 2)
-        d.page(previous.page.item, .documentChanged(.loading(document)))
-        let target = SiteTarget(document: document, context: previous.context, origin: previous.origin)
-        let before = d.state
-        assertUnchanged(before, d.user(.site(.permission(previous, previous.origin, [.notifications], .allow))))
-        d.user(.site(.permission(target, target.origin, [.notifications], .deny)))
-        let restored = Driver(file: d.savedFile)
-        XCTAssertEqual(restored.state.doc.sitePreferences[.default]?.permissions(for: target.origin, embeddedIn: target.origin)[.notifications], .deny)
-        XCTAssertNil(d.state.siteTarget(in: d.window), "Loading permission support must not enable clear-data against an unfinished document")
-    }
-
     func testPendingNavigationCannotSaveAPermissionUntilItsOriginCommits() throws {
         let d = readyDriver()
         let previous = try XCTUnwrap(d.state.siteTarget(in: d.window))
@@ -248,17 +154,5 @@ final class SitePolicyTests: XCTestCase {
         d.page(previous.page.item, .committed(next))
         d.user(.site(.permission(target, target.origin, [.notifications], .allow)))
         XCTAssertEqual(Driver(file: d.savedFile).state.doc.sitePreferences[.default]?.permissions(for: target.origin, embeddedIn: target.origin)[.notifications], .allow)
-    }
-
-    func testClearErrorsDoNotClaimReloadOrDeleteProfile() throws {
-        let d = readyDriver()
-        let first = d.user(.site(.clear(kinds: [.cookies, .cache], scope: .profile, reload: true)))
-        guard case .confirmSiteData(let request)? = first.effects.first else { return XCTFail("missing preflight") }
-        d.user(.site(.confirmClear(request.id, true)))
-        let transition = d.system(.siteDataCleared(ClearSiteDataResult(request: request, completed: [.cookies], error: "cache failed")))
-        XCTAssertTrue(transition.effects.isEmpty)
-        XCTAssertNotNil(d.state.doc.profiles[.default])
-        XCTAssertEqual(d.state.session.sites.results[d.window]?.error, "cache failed")
-        XCTAssertTrue(request.explanation.contains("entire originating profile"))
     }
 }

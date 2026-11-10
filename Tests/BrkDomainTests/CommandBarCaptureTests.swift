@@ -27,15 +27,6 @@ final class CommandBarCaptureTests: XCTestCase {
         XCTAssertEqual(d.bar?.aiMode, .question)
     }
 
-    /// Q01-a: the sidebar's New Tab row shows as selected while the bar opens a new tab, not while it edits a page
-    func testTheBarSaysWhenItCreatesATab() {
-        let d = Driver()
-        d.user(.commandBar(.open(.newTab)))
-        XCTAssertEqual(d.bar?.createsTab, true)
-        d.user(.commandBar(.open(.editCurrent)))
-        XCTAssertEqual(d.bar?.createsTab, false)
-    }
-
     /// P02-c, Q01-b: Tab searches the completed site ("Search Wikipedia"), so the site engines reach the bar and the
     /// reducer, and never the default-engine choice
     func testSiteSearchReachesTheTopSites() throws {

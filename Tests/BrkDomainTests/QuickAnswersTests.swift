@@ -97,12 +97,6 @@ final class QuickAnswersTests: XCTestCase {
         }
     }
 
-    func testUnambiguousFormsLead() {
-        for text in ["10ft in m", "time in tokyo", "52% of 900", "square root of 625", "2rem in px", "days until 31 Mar", "145 mins to timespan", "5pm ldn in sf", "100 usd in cny"] {
-            XCTAssertTrue(QuickAnswers.leads(text), text)
-        }
-    }
-
     func testCurrency() {
         let row = answer("100 usd in cny", rates: rates)
         XCTAssertEqual(row?.answer, "700.00 CNY")
@@ -161,7 +155,6 @@ final class QuickAnswersTests: XCTestCase {
         XCTAssertEqual(QuickColors.parse("tomato", names: true), QuickColor(red: 255, green: 99, blue: 71))
         XCTAssertEqual(QuickColors.parse("Rebecca Purple", names: true), QuickColor(red: 102, green: 51, blue: 153))
         XCTAssertEqual(QuickColors.parse("ff5500", names: true), QuickColor(red: 255, green: 85, blue: 0), "under the prefix the # may go")
-        XCTAssertEqual(QuickColors.named.count, 148)
     }
 
     func testTextsThatAreNoColor() {

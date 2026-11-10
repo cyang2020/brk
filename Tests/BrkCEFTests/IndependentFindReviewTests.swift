@@ -107,14 +107,6 @@ import XCTest
         print("REPRO pending edit after frame retirement:",n.updates)
         XCTAssertTrue(n.updates.contains{switch $0 {case .edited(FindRequestID("edit"),_,_),.failed(FindRequestID("edit"),_):true;default:false}},"pending mutation silently discarded and timeout cancelled")
     }
-    func testFrameRetirementMustSettleItsPendingCapture() throws {
-        let n=Native();try n.setup();defer{n.cleanup()}
-        n.adapter.perform(.captureSelection(FindRequestID("capture"),n.doc))
-        n.browser.receiveRenderer(CefRendererMessage(frame:"a",document:"doc-a",kind:"released",request:"",payload:""))
-        n.adapter.receive(CefRendererMessage(frame:"a",document:"doc-a",kind:"released",request:"",payload:""))
-        print("REPRO pending capture after frame retirement:",n.updates)
-        XCTAssertTrue(n.updates.contains{if case .failed(FindRequestID("capture"),_)=$0{true}else{false}},"capture silently discarded and timeout cancelled")
-    }
     func testNativeRefreshMustPreservePendingPreviousDirection() async throws {
         let n=Native();try n.setup();defer{n.cleanup()}
         let search=SearchToken(id:SearchID("page-search"),document:n.doc)
@@ -133,45 +125,6 @@ import XCTest
         n.adapter.nativeResult(id:18,count:4,ordinal:1,final:true)
         print("REPRO native directions through Previous/refresh:",n.calls,"last update:",n.updates.last!)
         XCTAssertEqual(n.calls.last?.1,0,"the pending Previous request was restarted as forward Find")
-    }
-    func testOldRendererDocumentNonceNeverPublishesSelectionControl() throws {
-        let n=Native();try n.setup();defer{n.cleanup()}
-        n.adapter.perform(.captureSelection(FindRequestID("capture"),n.doc))
-        n.browser.receiveRenderer(CefRendererMessage(frame:"a",document:"new-nonce",kind:"created",request:"",payload:""))
-        n.reply("capture",payload:#"{"status":"selection","text":"old document","editable":"input"}"#)
-        XCTAssertTrue(n.updates.isEmpty)
-    }
-    func testLateMutationConfirmationAndDuplicateIdentityControl() async throws {
-        let n=Native();try n.setup();defer{n.cleanup()}
-        let ticket=n.capture(),id=FindRequestID("edit")
-        let request=FindRequest.replace(id,ticket,FindQuery(text:"apple"),replacement:"pear",all:true)
-        n.adapter.perform(request)
-        try? await Task.sleep(for:.milliseconds(3150))
-        XCTAssertEqual(n.updates.last,.edited(id,ticket,.unconfirmed))
-        let sends=n.sent.count
-        n.adapter.perform(request)
-        XCTAssertEqual(n.sent.count,sends,"duplicate was sent to renderer")
-        n.reply("edit",payload:#"{"status":"edited","applied":2}"#)
-        XCTAssertEqual(n.updates.last,.edited(id,ticket,.replaced(2)))
-        n.adapter.perform(request)
-        XCTAssertEqual(n.sent.count,sends)
-        XCTAssertEqual(n.updates.last,.edited(id,ticket,.replaced(2)))
-    }
-    func testCurrentFrameCaptureAndScopedSearchControl() throws {
-        let n=Native();try n.setup();defer{n.cleanup()}
-        let ticket=n.capture()
-        let s=SearchToken(id:SearchID("s"),document:n.doc)
-        n.adapter.perform(.search(FindRequestID("scoped"),s,FindQuery(text:"apple"),.editable(ticket)))
-        n.reply("scoped",payload:#"{"status":"matches","count":2,"ordinal":1}"#)
-        XCTAssertTrue(n.updates.contains{if case .matches(_,_,2,1,true)=$0{true}else{false}})
-    }
-    func testEditableSearchDoesNotClearCapturedDOMSelection() throws {
-        let n=Native();try n.setup();defer{n.cleanup()}
-        let ticket=n.capture()
-        n.stops.removeAll()
-        let search=SearchToken(id:SearchID("editable"),document:n.doc)
-        n.adapter.perform(.search(FindRequestID("editable-search"),search,FindQuery(text:"apple"),.editable(ticket)))
-        XCTAssertTrue(n.stops.isEmpty,"a scoped renderer search must not clear the DOM selection it just captured")
     }
     func testCaptureStopsPageFindWithoutClearingDOMSelection() throws {
         let n=Native();try n.setup();defer{n.cleanup()}

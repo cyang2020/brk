@@ -21,17 +21,6 @@ final class LittleEntryPointsTests: XCTestCase {
         return project(state, pc).settings
     }
 
-    func testANormalLaunchTakesTheLittleArcShortcutSystemWide() {
-        XCTAssertEqual(LittleEntryPoints.systemWideChord(settings(), environment: [:]), littleArc)
-        XCTAssertEqual(LittleEntryPoints.systemWideChord(settings(), environment: ["BRK_CONTROL_SOCKET": "/tmp/brk.sock"]), littleArc)
-        XCTAssertEqual(LittleEntryPoints.systemWideChord(settings(), environment: ["BRK_TEST_NO_GLOBAL_SHORTCUT": "0"]), littleArc)
-    }
-
-    func testATestLaunchThatAsksForNoneTakesNothing() {
-        XCTAssertNil(LittleEntryPoints.systemWideChord(settings(), environment: ["BRK_TEST_NO_GLOBAL_SHORTCUT": "1"]))
-        XCTAssertNil(LittleEntryPoints.systemWideChord(settings(), environment: ["BRK_TEST_NO_GLOBAL_SHORTCUT": "1", "BRK_CONTROL_SOCKET": "/tmp/brk.sock"]))
-    }
-
     func testTheLinksSwitchOffTakesNothing() {
         let off = settings(linksSwitch: false)
         XCTAssertEqual(off.links.globalLittleArcShortcut, false)

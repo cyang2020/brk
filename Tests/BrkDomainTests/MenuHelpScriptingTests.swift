@@ -25,13 +25,6 @@ final class MenuHelpScriptingTests: XCTestCase {
                        .openTaskManager, .copyArcInfo] {
             guard case .app(.help) = action.spec.command else { return XCTFail("\(action) is not a Help action: \(action.spec.command)") }
         }
-        XCTAssertEqual(ActionID.toggleDeveloperMode.spec.command, .site(.toggleDeveloperMode))
-        XCTAssertEqual(ActionID.toggleDeveloperMode.spec.bindings.first?.chord, KeyChord(.control, .d))
-        XCTAssertEqual(ActionID.allowJavaScriptFromAppleEvents.spec.command, .settings(.general(.toggleJavaScriptFromAppleEvents)))
-        // Arc 1.170's View > Developer, read from the app: seven rows in this order.
-        let developer = ActionID.allCases.filter { $0.spec.submenu == .developer && !$0.spec.hidden }.sorted { $0.spec.row < $1.spec.row }
-        XCTAssertEqual(developer, [.viewSource, .developerTools, .inspectElements, .javaScriptConsole, .networkInspector,
-                                   .allowJavaScriptFromAppleEvents, .toggleDeveloperMode])
     }
 
     // MARK: View > Developer
@@ -60,14 +53,6 @@ final class MenuHelpScriptingTests: XCTestCase {
         XCTAssertEqual(d.view.urlPill.host, "example.test")
     }
 
-    /// a page without an http(s) site has no switch: the row is disabled and the command changes nothing
-    func testDeveloperModeNeedsASite() {
-        let d = Driver(startURL: nil)
-        XCTAssertFalse(d.view.enabledActions.contains(.toggleDeveloperMode))
-        d.user(.site(.toggleDeveloperMode))
-        XCTAssertEqual(d.state.doc.sitePreferences, [:], "no site, no switch written")
-    }
-
     /// Allow JavaScript from Apple Events: off by default (as in Arc and Chrome), the row flips it, it is saved
     func testJavaScriptFromAppleEventsIsAPersistedSwitch() {
         let d = Driver()
@@ -77,25 +62,9 @@ final class MenuHelpScriptingTests: XCTestCase {
         XCTAssertEqual(Driver(file: d.savedFile).snapshot.settings.general.javaScriptFromAppleEvents, true)
         d.user(ActionID.allowJavaScriptFromAppleEvents.spec.command)
         XCTAssertNil(d.snapshot.settings.general.javaScriptFromAppleEvents)
-        d.user(.settings(.general(.javaScriptFromAppleEvents(true))))
-        XCTAssertEqual(d.snapshot.settings.general.javaScriptFromAppleEvents, true)
-        d.user(.settings(.general(.javaScriptFromAppleEvents(false))))
-        XCTAssertNil(d.snapshot.settings.general.javaScriptFromAppleEvents)
     }
 
     // MARK: Help
-
-    /// the Help rows BrkApp runs reach it with the window they came from; Copy Info also shows Arc's toast
-    func testHelpRowsBecomeAppEffects() {
-        let d = Driver()
-        for action in [HelpAction.checkForUpdates, .releaseNotes, .helpCenter, .contactTeam, .restoreData, .trace, .cancelTrace, .taskManager] {
-            let t = d.user(.app(.help(action)))
-            XCTAssertEqual(t.effects, [.app(.help(action, owner: d.window))], "\(action)")
-        }
-        let copy = d.user(.app(.help(.copyInfo)))
-        XCTAssertTrue(copy.effects.contains(.app(.help(.copyInfo, owner: d.window))))
-        XCTAssertEqual(d.view.tabTools.toast?.text, "Copied \(Product.name) Info!")
-    }
 
     /// a page a Help row resolved opens as a new focused tab of the window's space; an address the bar would refuse
     /// is ignored

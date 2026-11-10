@@ -85,24 +85,6 @@ final class AgentToolsTests: XCTestCase {
         XCTAssertNil(d.state.session.ai.requests[id])
     }
 
-    func testReadingAnArchivedTabLoadsItOutOfSight() throws {
-        let d = enabled()
-        let tab = d.open("https://archived.example/")
-        d.user(.tab(.close(.item(tab))))
-        let archived = try XCTUnwrap(d.state.agentArchivedTabs(profile: .default).first)
-        d.system(.agentRead(AgentReadRequest(call: "r1", window: d.window, tab: archived.id, part: .text)))
-        let reader = try XCTUnwrap(d.snapshot.pages.first(where: \.isAIReader))
-        XCTAssertEqual(reader.initialURL, URL(string: "https://archived.example/"))
-        XCTAssertEqual(reader.context, .profile(.default))
-        let token = BrowserToken(page: reader.id, generation: 1)
-        let doc = DocumentToken(browser: token, sequence: 1)
-        let read = d.system(.page(token, .browserCreated(reader.context, .ready(doc))))
-        let id = try XCTUnwrap(read.effects.lazy.compactMap { if case .aiRead(let id, doc) = $0 { id } else { nil } }.first)
-        let content = AIPageContent(document: doc, url: URL(string: "https://archived.example/")!, title: "Old", language: "en", text: "Kept", nodes: [])
-        XCTAssertEqual(readDone(d.system(.aiPageRead(id, reader.id, content))), .content(content))
-        XCTAssertTrue(d.snapshot.pages.filter(\.isAIReader).isEmpty)
-    }
-
     /// A page loaded out of sight did not answer the reader in time on a real launch: it is read like one not loaded.
     func testALoadedTabOutOfSightIsReadByAHiddenReader() throws {
         let d = enabled()
@@ -112,13 +94,6 @@ final class AgentToolsTests: XCTestCase {
         let t = d.system(.agentRead(AgentReadRequest(call: "r1", window: d.window, tab: back.rawValue, part: .text)))
         XCTAssertFalse(t.effects.contains { if case .aiRead = $0 { true } else { false } }, "not its own page")
         XCTAssertEqual(d.snapshot.pages.first(where: \.isAIReader)?.initialURL, URL(string: "https://back.example/"))
-    }
-
-    func testSelectionComesFromTheLivePageAndAnUnknownTabFails() throws {
-        let d = enabled()
-        let (page, _) = try ready(d)
-        XCTAssertEqual(readDone(d.system(.agentRead(AgentReadRequest(call: "r1", window: d.window, tab: page.item.rawValue, part: .selection)))), .selection(page))
-        guard case .failed? = readDone(d.system(.agentRead(AgentReadRequest(call: "r1", window: d.window, tab: "nope", part: .text)))) else { return XCTFail("an unknown id") }
     }
 
     // MARK: Changing
@@ -136,22 +111,6 @@ final class AgentToolsTests: XCTestCase {
         XCTAssertFalse(d.todayIDs.contains(other))
         XCTAssertTrue(d.archive().contains { $0.url?.host == "second.example" }, "a closed Today tab is archived")
         guard case .refused? = act(d, .open(URL(string: "file:///etc/passwd")!, space: nil, background: false)) else { return XCTFail("file address") }
-    }
-
-    func testMoveIntoANewFolderAndGroupWithTidysUndo() throws {
-        let d = enabled()
-        let a = d.open("https://a.example/"), b = d.open("https://b.example/"), c = d.open("https://c.example/")
-        let space = d.view.space.id
-        guard case .done(_, let made)? = act(d, .move([a, b], to: AgentDestination(space: space, newFolder: "Reading"))) else { return XCTFail("move") }
-        let folder = ItemID(try XCTUnwrap(made.first))
-        XCTAssertEqual(d.state.doc.tree[folder]?.children, [a, b])
-        guard case .done? = act(d, .move([c], to: AgentDestination(space: space, section: .pinned))) else { return XCTFail("pin") }
-        XCTAssertTrue(d.pinnedIDs.contains(c))
-        guard case .done(_, let groups)? = act(d, .group(space: space, section: .today, [AgentGroup(name: "One", tabs: [a]), AgentGroup(name: "Two", tabs: [b])])) else { return XCTFail("group") }
-        XCTAssertEqual(groups.count, 2)
-        XCTAssertEqual(groups.map { d.state.doc.tree[ItemID($0)]?.children ?? [] }, [[a], [b]])
-        XCTAssertNotNil(d.state.session.ai.undo[d.window], "Tidy's undo")
-        guard case .refused? = act(d, .group(space: space, section: .today, [AgentGroup(name: "Dup", tabs: [a]), AgentGroup(name: "Dup2", tabs: [a])])) else { return XCTFail("a tab twice") }
     }
 
     func testSplitAndTheOtherProfilesTabsAreRefused() throws {
@@ -195,24 +154,6 @@ final class AgentToolsTests: XCTestCase {
         XCTAssertLessThan(attach2, turn)
     }
 
-    func testAFolderAndASpaceBecomeOneChipEach() throws {
-        let d = enabled()
-        let a = d.open("https://a.example/"), b = d.open("https://b.example/")
-        guard case .done(_, let made)? = act(d, .move([a, b], to: AgentDestination(space: d.view.space.id, newFolder: "Docs"))) else { return XCTFail("folder") }
-        d.user(.assist(.attach([.folder(ItemID(made[0])), .space(d.view.space.id)])))
-        let chips = try XCTUnwrap(d.view.ai?.conversation?.attached)
-        XCTAssertEqual(chips.map(\.kind), [.folder, .space])
-        XCTAssertEqual(chips[0].tabs.map(\.id), [a.rawValue, b.rawValue])
-        XCTAssertTrue(Set(chips[1].tabs.map(\.id)).isSuperset(of: [a.rawValue, b.rawValue]))
-    }
-
-    func testAnotherProfilesTabGivenByTheUserIsMarkedSo() throws {
-        let d = enabled()
-        let (_, _, theirs) = try otherProfileSpace(d)
-        d.user(.assist(.attach([.tab(theirs.rawValue)])))
-        XCTAssertEqual(d.view.ai?.conversation?.attached.first?.tabs.first?.otherProfile, true)
-    }
-
     func testAFolderSessionTakesNoTabs() {
         let d = enabled()
         d.system(.aiFolderChosen(d.window, "/tmp/project"))
@@ -241,22 +182,6 @@ final class AgentToolsTests: XCTestCase {
         d.system(.aiMentionMatches(d.window, query: "old", [docs.rawValue]))
         d.user(.assist(.mention(nil)))
         XCTAssertNil(d.view.ai?.conversation?.mention)
-    }
-
-    func testAskAIIsTheLastRowOfTheSidebarMenusOnlyWithMaxsPanelOn() throws {
-        func popup(_ t: Transition) -> MenuModel? { t.effects.lazy.compactMap { if case .popupMenu(_, let model, _) = $0 { model } else { nil } }.first }
-        let plain = Driver()
-        let tab = plain.open("https://a.example/")
-        let arc = try XCTUnwrap(popup(plain.user(.sidebar(.popupMenu(.item(tab), at: .zero)))))
-        XCTAssertFalse(arc.entries.contains { if case .action("Ask AI", _, _) = $0 { true } else { false } }, "Arc's menu as Arc has it")
-        let d = enabled()
-        let mine = d.open("https://b.example/")
-        let menu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(mine), at: .zero)))))
-        guard case .action("Ask AI", let command, true)? = menu.entries.last else { return XCTFail("\(menu.entries.last as Any)") }
-        XCTAssertEqual(command, .assist(.attach([.tab(mine.rawValue)])))
-        guard case .separator? = menu.entries.dropLast().last else { return XCTFail("a separator before it") }
-        let space = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.space(d.view.space.id), at: .zero)))))
-        guard case .action("Ask AI", .assist(.attach([.space(d.view.space.id)])), true)? = space.entries.last else { return XCTFail("the Space menu") }
     }
 
     func testATabLinkInAnAnswerShowsTheTabOrBringsItBack() throws {

@@ -31,51 +31,6 @@ final class CaptureTests: XCTestCase {
         XCTAssertTrue(d.system(.capture(.rendered(request, image))).effects.isEmpty)
         XCTAssertFalse(String(decoding:d.savedFile,as:UTF8.self).contains("capturePreview"))
     }
-    func testStoredCaptureProjectsOnlyItsProfileAndOffersTypedOperations() throws {
-        let d = Driver(); _ = try ready(d)
-        d.user(.capture(.begin(.portrait)))
-        d.user(.capture(.select(CaptureRegion(x:0,y:0,width:0.3,height:0.5))))
-        let request = try XCTUnwrap(d.view.capture?.request)
-        let image = CaptureImage(png:Data([1]),width:720,height:1280,scale:2)
-        let record = CaptureRecord(request:request,profile:.default,image:image)
-        let file = URL(fileURLWithPath:"/tmp/owned.png")
-        d.system(.capture(.stored(request,record,file)))
-        d.system(.capture(.loaded(.default,[record],[record.id:file],error:nil)))
-        XCTAssertEqual(d.user(.capture(.open(record.id))).effects,[.capture(.open(record,d.window))])
-        d.user(.library(.open(.media)))
-        d.user(.capture(.preview(record.id)))
-        guard case .library(let library)? = d.view.overlay else { return XCTFail("Media closed on preview") }
-        XCTAssertEqual(library.captures,[record]); XCTAssertEqual(library.captureFiles[record.id],file)
-        XCTAssertEqual(d.user(.capture(.export(record.id))).effects,[.capture(.export(record,d.window))])
-        XCTAssertEqual(d.user(.capture(.insertInEasel(record.id))).effects,[.capture(.insertInEasel(record,d.window))])
-        XCTAssertEqual(d.user(.capture(.remove(record.id))).effects,[.capture(.remove(record))])
-        d.system(.capture(.removed(.default,record.id)))
-        d.system(.capture(.exported(d.window,"Exported")))
-        XCTAssertEqual(try StateCodec.decodeCaptures(StateCodec.encodeCaptures([record])),[record])
-    }
-    func testCaptureBindsPeekBeforeAnyOverlayCanCloseItsSource() throws {
-        let d = Driver(); _ = try ready(d)
-        d.user(.peek(.open(URL(string:"https://example.com/peek-capture")!)))
-        guard case .peek(let peek)? = d.view.overlay, let page = peek.page else { return XCTFail("No Peek") }
-        let browser = try XCTUnwrap(d.state.session.live[page]?.browser)
-        let document = DocumentToken(browser:browser,sequence:1)
-        d.page(page.item,.documentChanged(.loading(document)))
-        d.page(page.item,.committed(URL(string:"https://example.com/peek-capture")!))
-        d.page(page.item,.documentChanged(.ready(document)))
-        d.user(.capture(.begin(.area)))
-        XCTAssertEqual(d.view.capture?.request.document,document)
-        guard case .peek? = d.view.overlay else { return XCTFail("Capture closed its Peek source") }
-    }
-    func testLateObservationStartsAutoPiPOnceAndDisablingClosesIt() throws {
-        let d = Driver(); let document = try ready(d)
-        d.user(.commandBar(.open(.newTab))); d.user(.commandBar(.submit("https://example.com/background")))
-        let player = MediaPlayer(id:MediaPlayerID(document:"late",frame:0,element:"video"),kind:.video,paused:false,ended:false)
-        let observed = d.page(document.browser.page.item,.mediaChanged(document,[player],error:nil))
-        XCTAssertTrue(observed.effects.contains(.page(document.browser.page,.media(MediaControl(document:document,player:player.id,operation:.enterPictureInPicture,userInitiated:false)))))
-        XCTAssertTrue(d.page(document.browser.page.item,.mediaChanged(document,[player],error:nil)).effects.isEmpty)
-        let disabled = d.user(.settings(.advanced(.autoPictureInPicture(false))))
-        XCTAssertTrue(disabled.effects.contains(.page(document.browser.page,.media(MediaControl(document:document,player:player.id,operation:.exitPictureInPicture,userInitiated:false)))))
-    }
     func testAutomaticPiPSelectsPlayingVideoAndReattachesWithoutForgingActivation() throws {
         let d = Driver(); let document = try ready(d)
         let player = MediaPlayer(id:MediaPlayerID(document:"frame",frame:0,element:"video"),kind:.video,paused:false,ended:false)

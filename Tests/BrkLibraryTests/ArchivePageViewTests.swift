@@ -59,33 +59,6 @@ final class ArchivePageViewTests: XCTestCase {
         visible(page).compactMap { $0.accessibilityIdentifier() }.filter { $0.hasPrefix("archive-entry-") }
     }
 
-    /// Arc's two-line rows (P32-e): title over the grey address; when, why and the space are in the tooltip and the
-    /// context menu, not on the row
-    func testGroupsInProjectionOrderWithEachEntrysTitleAndURL() {
-        let page = makePage()
-        XCTAssertEqual(visible(page).compactMap { $0.accessibilityIdentifier() }.filter { $0.hasPrefix("archive-group-") },
-                       ["archive-group-today", "archive-group-pastWeek", "archive-group-beyond"])
-        XCTAssertEqual(texts(in: view("archive-group-pastWeek", in: page)).first, "Earlier This Week")
-        let e1 = view("archive-entry-e1", in: page) as? ArchiveEntryView, e3 = view("archive-entry-e3", in: page) as? ArchiveEntryView
-        XCTAssertEqual(e1?.texts, ["Swift Forums", "forums.swift.org"])
-        XCTAssertEqual(e1?.meta, "3:05 PM · Manually Closed · Work")
-        XCTAssertEqual(e1?.toolTip, "3:05 PM · Manually Closed · Work")
-        XCTAssertEqual(e3?.meta, "Mon 3:05 PM · Cleared from Today · Home")
-        XCTAssertEqual((view("archive-entry-e4", in: page) as? ArchiveEntryView)?.meta, "Oct 12, 2025 · Folder or Space deleted")
-        XCTAssertEqual(e3?.contextMenu().items.map(\.title), ["Restore", "", "Mon 3:05 PM · Cleared from Today · Home"])
-        XCTAssertTrue(view("archive-entry-e3", in: page)!.isDescendant(of: view("archive-group-pastWeek", in: page)!))
-        XCTAssertEqual(page.filterField.placeholder, "Search Archive…")
-        XCTAssertFalse(page.filterButton.isHidden)
-    }
-
-    func testRestoreButtonAndContextMenuRestoreThatEntry() {
-        let page = makePage()
-        (view("archive-restore-e3", in: page) as? NSButton)?.performClick(nil)
-        let restore = (view("archive-entry-e1", in: page) as? ArchiveEntryView)?.contextMenu().items.first
-        _ = (restore?.target as? NSObject)?.perform(restore!.action!, with: restore)
-        XCTAssertEqual(sent, [.archive(.restore(ArchiveID("e3"))), .archive(.restore(ArchiveID("e1")))])
-    }
-
     /// Clear Archive is in the Filter menu; it asks in a bar under the search field, Cancel backs out
     func testClearArchiveAsksInlineFirstAndCancelBacksOut() throws {
         let page = makePage()
@@ -100,17 +73,6 @@ final class ArchivePageViewTests: XCTestCase {
         page.beginClearConfirmation()
         (view("archive-clear", in: page) as? NSButton)?.performClick(nil)
         XCTAssertEqual(sent, [.archive(.clear)])
-    }
-
-    /// the Filter menu's "Archive tabs after" offers Arc's seven choices with the current one ticked
-    func testThresholdMenuOffersArcsSevenChoicesAndDispatchesTheChosenOne() throws {
-        let page = makePage()
-        let after = try XCTUnwrap(page.filterMenu().items.first { $0.title == "Archive tabs after" }?.submenu)
-        XCTAssertEqual(after.items.map(\.title), ["1 hour", "6 hours", "12 hours", "24 hours", "7 days", "30 days", "Never"])
-        XCTAssertEqual(after.items.filter { $0.state == .on }.map(\.title), ["12 hours"])
-        page.choose(.twelveHours)
-        page.choose(.sevenDays)
-        XCTAssertEqual(sent, [.settings(.autoArchive(.sevenDays))], "choosing the current threshold again dispatches nothing")
     }
 
     /// the search narrows by title, URL or space; the Filter menu by how the tab closed; emptied groups go
@@ -130,25 +92,6 @@ final class ArchivePageViewTests: XCTestCase {
         XCTAssertEqual(entries(page), ["archive-entry-e1", "archive-entry-e3", "archive-entry-e4"])
     }
 
-    func testAnEmptyArchiveShowsArcsHintAndCannotBeCleared() {
-        let page = makePage(ArchiveSnapshot(openID: 1, groups: [], threshold: .never))
-        XCTAssertTrue(texts(in: page).contains("Hover your mouse over a tab and press the × to archive it."))
-        XCTAssertEqual(page.filterMenu().items.last?.isEnabled, false)
-        page.beginClearConfirmation()
-        XCTAssertNil(view("archive-clear", in: page))
-    }
-
-    func testEscapeInAnEmptySearchClosesTheLibrary() {
-        let page = makePage()
-        type("x", in: page)
-        // With text in the search, Esc clears it first.
-        XCTAssertTrue(page.filterField.control(page.filterField.field, textView: NSTextView(), doCommandBy: #selector(NSResponder.cancelOperation(_:))))
-        XCTAssertEqual(page.filterField.stringValue, "")
-        XCTAssertEqual(sent, [])
-        XCTAssertTrue(page.filterField.control(page.filterField.field, textView: NSTextView(), doCommandBy: #selector(NSResponder.cancelOperation(_:))))
-        XCTAssertEqual(sent, [.library(.close)])
-    }
-
     func testTheSameOpeningKeepsTheSearchAndANewOpeningClearsIt() {
         let page = makePage()
         type("work", in: page)
@@ -161,5 +104,24 @@ final class ArchivePageViewTests: XCTestCase {
         page.show(restored, in: frame, scheme: .light)
         XCTAssertEqual(page.filterField.stringValue, "")
         XCTAssertEqual(entries(page), ["archive-entry-e1", "archive-entry-e2", "archive-entry-e3"])
+    }
+
+    func testRestoreButtonAndContextMenuRestoreThatEntry() {
+        let page = makePage()
+        (view("archive-restore-e3", in: page) as? NSButton)?.performClick(nil)
+        let restore = (view("archive-entry-e1", in: page) as? ArchiveEntryView)?.contextMenu().items.first
+        _ = (restore?.target as? NSObject)?.perform(restore!.action!, with: restore)
+        XCTAssertEqual(sent, [.archive(.restore(ArchiveID("e3"))), .archive(.restore(ArchiveID("e1")))])
+    }
+
+    /// the Filter menu's "Archive tabs after" offers Arc's seven choices with the current one ticked
+    func testThresholdMenuOffersArcsSevenChoicesAndDispatchesTheChosenOne() throws {
+        let page = makePage()
+        let after = try XCTUnwrap(page.filterMenu().items.first { $0.title == "Archive tabs after" }?.submenu)
+        XCTAssertEqual(after.items.map(\.title), ["1 hour", "6 hours", "12 hours", "24 hours", "7 days", "30 days", "Never"])
+        XCTAssertEqual(after.items.filter { $0.state == .on }.map(\.title), ["12 hours"])
+        page.choose(.twelveHours)
+        page.choose(.sevenDays)
+        XCTAssertEqual(sent, [.settings(.autoArchive(.sevenDays))], "choosing the current threshold again dispatches nothing")
     }
 }

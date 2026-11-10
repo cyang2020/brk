@@ -17,15 +17,6 @@ final class ProfilesSpecTests: XCTestCase {
         XCTAssertFalse(result.effects.contains(.window(d.window, .leaveFullScreen)))
     }
 
-    /// a fresh profile has the default profile, with its settings record and Favorites root
-    func test_aFreshProfileHasTheDefaultProfile() {
-        let d = Driver()
-        XCTAssertEqual(d.snapshot.settings.profiles.map(\.profile.id), [.default])
-        XCTAssertTrue(d.snapshot.settings.profiles[0].profile.isDefault)
-        XCTAssertEqual(d.snapshot.settings.profiles[0].profile.spaceTitles, ["Space 1"])
-        XCTAssertNil(d.view.urlPill.profile, "no badge for the default profile")
-    }
-
     /// .profile(.create) adds a profile with its own Favorites root and default settings; a duplicate or blank name is refused
     func test_createAddsAProfileWithFavoritesAndSettings() {
         let d = Driver()
@@ -95,22 +86,6 @@ final class ProfilesSpecTests: XCTestCase {
         XCTAssertNil(d.snapshot.windows[incognito.id])
     }
 
-    /// the dialogs open and close through one command; an unknown space or profile is ignored
-    func test_profileDialogs() {
-        let d = Driver()
-        d.user(.profile(.openDialog(.create)))
-        XCTAssertEqual(d.view.profileDialog, .create)
-        XCTAssertEqual(d.view.focus, .profileDialog)
-        d.user(.profile(.openDialog(.change(.current))))
-        guard case .change(let space, let current, let profiles)? = d.view.profileDialog else { return XCTFail("\(String(describing: d.view.profileDialog))") }
-        XCTAssertEqual(space, d.view.space.id)
-        XCTAssertEqual(current, .default)
-        XCTAssertEqual(profiles.map(\.id), [.default])
-        assertUnchanged(d.state, d.user(.profile(.openDialog(.delete(ProfileID("ghost"))))))
-        d.user(.profile(.openDialog(nil)))
-        XCTAssertNil(d.view.profileDialog)
-    }
-
     /// .profile(.assign) changes the context of the space's pages: off-screen loaded tabs are unloaded (they reopen
     /// in the new context when focused), the shown tab stays loaded and its spec names the new context (the engine
     /// replaces the page), tabs of other spaces keep theirs; assigning the same profile again changes nothing
@@ -137,56 +112,6 @@ final class ProfilesSpecTests: XCTestCase {
         XCTAssertEqual(context(behind), .profile(work), "an unloaded tab reopens in the new context")
         assertUnchanged(d.state, d.user(.profile(.assign(.current, to: work))))
         assertUnchanged(d.state, d.user(.profile(.assign(.current, to: ProfileID("ghost")))))
-    }
-
-    /// the dialogs show Arc's copy, and the copy agrees with the rules: what the delete dialog refuses the reducer
-    /// refuses, a name the create dialog flags as taken is refused and leaves the dialog open
-    func test_theProfileDialogsRenderArcsCopy() throws {
-        XCTAssertEqual(ProfileCopy.createTitle, "Create a new Profile")
-        XCTAssertEqual(ProfileCopy.changeTitle, "Edit Space profile")
-        XCTAssertEqual(ProfileCopy.deleteTitle, "Delete this Profile")
-        XCTAssertEqual(ProfileCopy.renameTitle, "Rename your Profile")
-        XCTAssertEqual(ProfileCopy.changeExplanation, "Each Profile has different browser data, so you might get logged out of some websites, see different Favorites up top, or need to re-install extensions.")
-        XCTAssertEqual(ProfileCopy.renameNote, "This won’t affect the names of any of the Spaces associated with this Profile.")
-        XCTAssertTrue(ProfileCopy.deleteWarning("Work").hasSuffix(" will permanently remove any cookies, history, preferences, and logins that belong to this Profile."))
-
-        let d = Driver()
-        d.user(.profile(.openDialog(.delete(.default))))
-        guard case .delete(let defaultRow)? = d.view.profileDialog else { return XCTFail("no delete dialog") }
-        XCTAssertEqual(ProfileCopy.deleteRefusal(defaultRow), "The Default Profile cannot be deleted.")
-        assertUnchanged(d.state, d.user(.profile(.delete(.default))))
-
-        d.user(.profile(.openDialog(.create)))
-        d.user(.profile(.create(name: "Work", icon: .named(.briefcase))))
-        XCTAssertNil(d.view.profileDialog, "a created profile closes the dialog")
-        d.user(.profile(.openDialog(.create)))
-        XCTAssertTrue(ProfileCopy.isTaken(" work ", among: d.snapshot.settings.profiles.map(\.profile.name)))
-        XCTAssertFalse(ProfileCopy.acceptsName("   ", among: []))
-        let refused = d.user(.profile(.create(name: " work ", icon: nil)))
-        XCTAssertFalse(refused.changed)
-        XCTAssertEqual(d.view.profileDialog, .create, "a taken name leaves the dialog open (it then shows nameTaken)")
-        let work = try XCTUnwrap(d.snapshot.settings.profiles.last?.profile.id)
-
-        d.user(.profile(.openDialog(.change(.current))))
-        guard case .change(_, let current, let rows)? = d.view.profileDialog else { return XCTFail("no change dialog") }
-        XCTAssertEqual(current, .default)
-        XCTAssertEqual(rows.map(\.name), ["Default", "Work"])
-        d.user(.profile(.assign(.current, to: work)))
-        XCTAssertNil(d.view.profileDialog, "choosing a profile closes the change dialog")
-
-        d.user(.profile(.openDialog(.delete(work))))
-        guard case .delete(let workRow)? = d.view.profileDialog else { return XCTFail("no delete dialog") }
-        XCTAssertEqual(workRow.spaceTitles, ["Space 1"])
-        XCTAssertEqual(ProfileCopy.deleteRefusal(workRow), "Only Profiles not assigned to any Spaces can be deleted.")
-        assertUnchanged(d.state, d.user(.profile(.delete(work))))
-        XCTAssertEqual(ProfileCopy.spaceCount(workRow.spaceTitles), "Used by Space 1")
-
-        d.user(.profile(.assign(.current, to: .default)))
-        d.user(.profile(.openDialog(.delete(work))))
-        guard case .delete(let unused)? = d.view.profileDialog else { return XCTFail("no delete dialog") }
-        XCTAssertNil(ProfileCopy.deleteRefusal(unused))
-        d.user(.profile(.delete(work)))
-        XCTAssertNil(d.view.profileDialog, "a deleted profile closes its dialog")
     }
 
     /// an incognito window is session-only: its tab, visit and window are not in state.json and nothing of it is

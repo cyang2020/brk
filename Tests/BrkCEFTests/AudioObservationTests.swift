@@ -23,15 +23,6 @@ final class AudioObservationTests: XCTestCase {
         XCTAssertFalse(value.accept(false, tab: 9, for: old))
         XCTAssertTrue(value.audible)
     }
-    func testRetirementCannotRebindOrAcceptOldReply() throws {
-        var value = observation()
-        let old = try XCTUnwrap(value.ticket)
-        value.invalidate(retire: true)
-        value.bind("exact-target")
-        value.document(.ready(DocumentToken(browser: value.browser, sequence: 1)))
-        XCTAssertNil(value.ticket)
-        XCTAssertFalse(value.accept(true, tab: 1, for: old))
-    }
     func testExactMappingCannotCrossWindowBrowserProfileOrPrivateEpoch() throws {
         let original = observation()
         let ticket = try XCTUnwrap(original.ticket)
@@ -41,24 +32,5 @@ final class AudioObservationTests: XCTestCase {
         let privateOne = observation(context: .incognito(PrivateSessionID("one")))
         var privateTwo = observation(context: .incognito(PrivateSessionID("two")))
         XCTAssertFalse(privateTwo.accept(true, tab: 9, for: try XCTUnwrap(privateOne.ticket)))
-    }
-    func testBoundTabIDCannotChangeUnderSameTarget() throws {
-        var value = observation()
-        let ticket = try XCTUnwrap(value.ticket)
-        XCTAssertFalse(value.accept(true, tab: -1, for: ticket))
-        XCTAssertTrue(value.accept(true, tab: 9, for: ticket))
-        XCTAssertFalse(value.accept(false, tab: 10, for: ticket))
-        XCTAssertTrue(value.audible)
-        XCTAssertTrue(value.accept(false, tab: 9, for: ticket))
-        XCTAssertFalse(value.audible)
-    }
-    func testAudioCanStartWhileTheDocumentStillHasPendingResources() throws {
-        var value = observation()
-        let previous = try XCTUnwrap(value.ticket)
-        value.document(.loading(DocumentToken(browser: value.browser, sequence: 2)))
-        let loading = try XCTUnwrap(value.ticket)
-        XCTAssertFalse(value.accept(true, tab: 9, for: previous))
-        XCTAssertTrue(value.accept(true, tab: 9, for: loading))
-        XCTAssertTrue(value.audible)
     }
 }

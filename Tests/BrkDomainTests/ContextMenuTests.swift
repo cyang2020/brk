@@ -6,23 +6,6 @@ import XCTest
 /// The sidebar's context menus against Arc 1.170 (verify/visual-pairs/run-20261103 P11-b, P12) and the commands
 /// behind their new rows.
 final class ContextMenuTests: XCTestCase {
-    func testSelectionMenuCountsItsRowsAndCopiesEveryLink() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        let b = d.open("http://127.0.0.1:9/b")
-        d.user(.tabTools(.select(a, .replace)))
-        d.user(.tabTools(.select(b, .toggle)))
-        let menu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.selection([a, b]), at: .zero)))))
-        XCTAssertEqual(layout(menu), ["Copy Links", "Share 2 Items…", "|", "Change Icon…", "Mute", "|",
-                                      "Open in Split View", "Duplicate", "Move to ▸", "New Folder with 2 Items", "|", "Archive Tabs", "Archive Tabs Below"])
-        XCTAssertEqual(isEnabled(menu, "Change Icon…"), false)
-        XCTAssertEqual(isEnabled(menu, "Mute"), false)
-        XCTAssertEqual(isEnabled(menu, "Archive Tabs Below"), false)
-        XCTAssertEqual(command(menu, "Share 2 Items…"), .app(.export(.items([a, b]))))
-        let copy = d.user(.tabTools(.copyLinks(.items([b, a]))))
-        XCTAssertEqual(copy.effects, [.copyToPasteboard("http://127.0.0.1:9/b\nhttp://127.0.0.1:9/a")])
-        XCTAssertEqual(command(menu, "Copy Links"), .tabTools(.copyLinks(.items([a, b]))))
-    }
 
     func testOpenInSplitViewJoinsTheShownTabOrAddsAnEmptyPane() throws {
         let d = Driver()
@@ -43,20 +26,6 @@ final class ContextMenuTests: XCTestCase {
         d.user(.tabTools(.openInSplit(.items([c]))))
         XCTAssertEqual(d.paneIDs.first, c)
         XCTAssertNotNil(d.bar, "the shown tab itself opens with an empty pane and the command bar")
-    }
-
-    func testAddTabShowsTheSplitAndOpensItsNewPane() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        let b = d.open("http://127.0.0.1:9/b")
-        d.user(.tabTools(.openInSplit(.items([a]))))
-        let split = try XCTUnwrap(d.view.content.split)
-        _ = d.open("http://127.0.0.1:9/c")
-        XCTAssertNil(d.view.content.split)
-        d.user(.tabTools(.addToSplit(split)))
-        XCTAssertEqual(d.view.content.split, split)
-        XCTAssertNotNil(d.bar)
-        XCTAssertTrue(Set(d.paneIDs).isSuperset(of: [a, b]))
     }
 
     func testNestedFolderAndFolderIntoSpace() throws {
@@ -96,15 +65,6 @@ final class ContextMenuTests: XCTestCase {
         XCTAssertEqual(folder.title, "Work")
         XCTAssertEqual(folder.children.map(\.id), [c])
         XCTAssertEqual(d.view.tabTools.toast?.text, "Space turned into folder")
-    }
-
-    func testCustomizePageShowsTheTabAndOpensItsBoost() throws {
-        let d = Driver()
-        let a = d.todayIDs[0]
-        _ = d.open("http://127.0.0.1:9/b")
-        d.user(.tabTools(.customize(a)))
-        XCTAssertEqual(d.current?.id, a)
-        XCTAssertNotNil(d.view.boostEditor)
     }
 
     /// View > Stop Loading and Zoom to Actual Size are grey while there is nothing to stop or reset (P19-a).

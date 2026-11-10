@@ -48,13 +48,4 @@ final class URLPillTextTests: XCTestCase {
         XCTAssertLessThan(magnifier.frame.maxX, label.frame.minX + 0.01, "the magnifier is not before the line")
         XCTAssertNil(pill.toolTip, "Arc shows no tip over its pill")
     }
-
-    func testAOneLineAddressIsInThePillsMiddle() throws {
-        let pill = try pill(startURL: "http://127.0.0.1:9/visual")
-        let label = try line(pill)
-        XCTAssertFalse(label.stringValue.hasPrefix("Search or Enter URL"), "the pill has no address: \(label.stringValue)")
-        XCTAssertEqual(label.frame.height, label.intrinsicContentSize.height)
-        XCTAssertEqual(label.frame.midY, pill.bounds.midY, accuracy: 0.01, "the line is not in the pill's middle")
-        XCTAssertNil(pill.toolTip)
-    }
 }

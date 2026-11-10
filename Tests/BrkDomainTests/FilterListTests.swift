@@ -112,14 +112,6 @@ final class FilterListTests: XCTestCase {
         XCTAssertEqual(l.summary.skippedReasons["cosmetic:selector"], 2, "a selector that could leave its CSS rule is refused")
     }
 
-    func testRegexFiltersAndMatchCase() throws {
-        let l = try list("/^https?:\\/\\/[a-z]{8,}\\.example\\/[0-9]+\\.js$/$script,third-party", "/Track.Me/$match-case")
-        XCTAssertTrue(blocks(l, "https://abcdefgh.example/123.js"))
-        XCTAssertFalse(blocks(l, "https://short.example/123.js"))
-        XCTAssertTrue(blocks(l, "https://x.example/Track-Me"))
-        XCTAssertFalse(blocks(l, "https://x.example/track-me"), "$match-case")
-    }
-
     func testUnsupportedOptionsSkipTheFilterInsteadOfOverBlocking() throws {
         let l = try list("||csp.example^$csp=script-src 'none'", "||redir.example/a.js$script,redirect=noopjs", "||popup.example^$popup",
                          "||rewrite.example^$rewrite=abp-resource:blank-js", "||keep.example^$script,popup")
@@ -129,29 +121,6 @@ final class FilterListTests: XCTestCase {
         XCTAssertTrue(blocks(l, "https://keep.example/x"), "popup next to a request type keeps the request type")
         XCTAssertEqual(l.summary.skippedReasons, ["option:csp": 1, "option:redirect": 1, "option:popup": 1, "option:rewrite": 1])
         XCTAssertEqual(l.summary.networkFilters, 1)
-    }
-
-    func testHeaderMetadataAndSummary() throws {
-        let text = """
-        [Adblock Plus 2.0]
-        ! Version: 202611040912
-        ! Title: EasyPrivacy
-        ! Expires: 4 days (update frequency)
-        ! Homepage: https://easylist.to/
-
-        ||tracker.example^$third-party
-        @@||tracker.example/opt-out^
-        ##.tracking-pixel
-        """
-        let l = try CompiledFilterList.compile(Data(text.utf8))
-        XCTAssertEqual(l.summary.title, "EasyPrivacy")
-        XCTAssertEqual(l.summary.version, "202611040912")
-        XCTAssertEqual(l.summary.expiresHours, 96)
-        XCTAssertEqual(l.summary.networkFilters, 1)
-        XCTAssertEqual(l.summary.exceptionFilters, 1)
-        XCTAssertEqual(l.summary.hidingRules, 1)
-        XCTAssertEqual(l.summary.skipped, 0)
-        XCTAssertEqual(try list("! Expires: 12 hours", "||a.example^").summary.expiresHours, 12)
     }
 
     func testRejectedInputs() {

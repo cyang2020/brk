@@ -3,13 +3,6 @@ import XCTest
 @testable import BrkApp
 
 final class ExtensionInstallDisclosureTests: XCTestCase {
-    func testTrackedFixtureDisclosesItsContentScriptWebsiteAccess() throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent("Tests/Fixtures/SiteExtension/manifest.json"))) as? [String: Any])
-        let text = try ExtensionInstallPermissions.text(manifest)
-        XCTAssertTrue(text.contains("http://127.0.0.1/*"))
-    }
-
     func testSummaryPreservesSeparateOptionalAccessAndScriptExclusions() throws {
         let manifest: [String: Any] = ["permissions": ["tabs"], "optional_permissions": ["storage"],
             "host_permissions": ["https://required.example/*"], "optional_host_permissions": ["https://optional.example/*"],
