@@ -251,6 +251,8 @@ struct Session: Sendable, Equatable {
     var boostErrors: [ProfileID: String] = [:]
     var automaticPiPCandidates: [PageID: DocumentToken] = [:]
     var captures = CaptureLibrary()
+    /// The item each profile's Library button shows as its badge (Arc: `HomeBadgingItemsState.visibleBadgeItemID`); not saved.
+    var libraryBadges: [ProfileID: LibraryItemKey] = [:]
     var sidebarDataStatus = "Not connected."
     var sites = SiteSession()
     /// Incremented by every reduce that changes state; becomes the snapshot's `rev`.
@@ -301,6 +303,8 @@ struct WindowSession: Sendable, Equatable {
     /// The last copied capture, kept for its toast's Save.
     var copiedCapture: CaptureSnapshot? = nil
     var capturePreview: String? = nil
+    /// The Library item the window previews over its page (the flyout's click, Arc's `ItemPreviewPresenter`).
+    var itemPreview: LibraryItemKey? = nil
     var captureMessage: String? = nil
     var find: FindSession?
     var lastFind: [BrowsingContext: FindQuery] = [:]

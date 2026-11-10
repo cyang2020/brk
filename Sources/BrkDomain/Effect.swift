@@ -122,6 +122,8 @@ public enum Effect: Hashable, Sendable {
     case cancelDownload(DownloadID)
     /// Reveal a downloaded file in the Finder.
     case revealFile(String)
+    /// Move a downloaded file to the Trash (the flyout's Move to Trash).
+    case trashFile(String)
 }
 
 /// What "Share…" produces: a title and a tree of entries (folders keep their children). `ExportCodec` (Codec.swift)

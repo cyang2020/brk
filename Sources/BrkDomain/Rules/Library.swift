@@ -87,6 +87,8 @@ extension Work {
             state.doc.history.removeAll { $0.profile == profile }
         case .conversationQuery, .selectConversation, .moveConversation, .requestDeleteConversation, .confirmDeleteConversation:
             libraryConversations(command, in: window)
+        case .flyout(let flyout):
+            libraryFlyout(flyout, in: window)
         case .historySearch(let text):
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard case .profile(let profile) = state.libraryContext(in: window), state.searchModelReady,
@@ -148,6 +150,7 @@ extension Work {
                                                 path: nil, received: 0, total: nil, state: .choosingDestination,
                                                 startedAt: ctx.now, profile: profile), at: 0)
             index = 0
+            offerLibraryBadge(.download(update.id), profile: profile, date: ctx.now)
         }
         state.session.downloadRevisions[update.id] = update.revision
         switch update.stage {
@@ -173,6 +176,7 @@ extension Work {
                 state.doc.downloads[index].filename = receipt.url.lastPathComponent
                 state.doc.downloads[index].received = receipt.bytes
                 state.doc.downloads[index].total = receipt.bytes
+                offerLibraryBadge(.download(update.id), profile: profile, date: state.doc.downloads[index].startedAt)
                 if state.doc.settings.max.enabled(.downloadRename) { requestAI(.renameDownload(update.id, original: receipt.url.lastPathComponent), from: page.window) }
             case .cancelled: state.doc.downloads[index].state = .cancelled
             case .interrupted: state.doc.downloads[index].state = .interrupted

@@ -68,6 +68,7 @@ public struct MetricsTable: MetricGroup {
     public let littleArc = LittleArcMetrics()
     public let peek = PeekMetrics()
     public let library = LibraryMetrics()
+    public let libraryFlyout = LibraryFlyoutMetrics()
     public let settings = SettingsMetrics()
     public let persistence = PersistenceMetrics()
     public let keys = KeyMetrics()
@@ -501,6 +502,86 @@ public struct SettingsMetrics: MetricGroup {
     public let routeListMaxHeight = Metric(180.0, .guess("the route list scrolls past this height so the Links pane stays on screen"))
     /// The Shortcuts pane's list scrolls inside a fixed height (the table has more than a hundred actions).
     public let shortcutsListHeight = Metric(360.0, .guess("height of the Shortcuts pane's scrolling list"))
+}
+
+/// The Library button's flyout and badge (Arc: `HomeBadging`, `HomeButton`, `HomeButtonHoverRegionTracker`), read from
+/// Arc 1.170's binary and measured on real Arc; docs/arc-anatomy/library-flyout.md has every probe and address.
+public struct LibraryFlyoutMetrics: MetricGroup {
+    /// The flyout lists the newest items only: its frame is `rows x rowPitch + button` tall.
+    public let rows = Metric(4, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026a9ff0 and 0x1026ab75c: the expanded frame is 256 = 4 x 56 + 32; seven recent items in Arc listed the newest four"))
+    /// A new or finished item becomes the button's badge only when it is younger than this.
+    public let badgeFreshness = Metric(300.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x10269fb4c: HomeBadgingItemsState compares the item's age with 300 s before it shows it"))
+    /// The pointer must rest on the button this long before the flyout opens.
+    public let openDwell = Metric(0.3, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026b5fe8: the button and flyout regions each wait 0.15 s; on Arc a 0.28 s rest never opened it, 0.32 s did, and it showed 0.29 to 0.30 s after the pointer arrived"))
+    /// Resting on the strip right of the button (the Space dots) this long closes an open flyout.
+    public let dockCollapse = Metric(0.5, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026b5fa4: HomeDockRegion waits 0.5 s; on Arc the flyout closed 0.6 s after the pointer moved onto the dots"))
+    /// The hover area over the open flyout: the sidebar's width, this tall from the button's bottom.
+    public let regionHeight = Metric(256.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026ab75c, 0x1026b64b4: the flyout region is the whole expanded frame; on Arc the flyout stayed open at y 600 and closed at y 560 with the button's bottom at 836"))
+    /// The button's own hover square.
+    public let buttonRegion = Metric(32.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026b54c0: HomeButtonRegion is 32 x 32 at the frame's corner"))
+    public let rowPitch = Metric(56.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026aa004: the flyout is n x 56 + 32 tall; rows on Arc sit 56 apart"))
+    public let rowHeight = Metric(48.0, .anatomy("docs/arc-anatomy/library-flyout.md: a hovered row's fill spans y 755 to 803 on Arc"))
+    /// Between the newest row's fill and the button's top.
+    public let rowBottomGap = Metric(1.0, .anatomy("docs/arc-anatomy/library-flyout.md: the newest row's fill ends at y 803, the button starts at 804"))
+    public let rowLeading = Metric(4.0, .anatomy("docs/arc-anatomy/library-flyout.md: the fill starts 4 pt into the 228 pt sidebar (x 324)"))
+    /// A row is the sidebar's width less this.
+    public let rowWidthInset = Metric(16.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026afaa0: a cell is min(width, 1000) - 16 wide; Arc's fill spans x 324 to 536"))
+    public let rowRadius = Metric(12.0, .anatomy("docs/arc-anatomy/library-flyout.md: the fill's corner follows a 12 pt circle (x 331, 329.5, 328, 327, 326.5 at 1 to 5 pt below its top)"))
+    public let iconSize = Metric(40.0, .anatomy("docs/arc-anatomy/library-flyout.md: a document icon's page spans 29 x 37.5 pt, the page of a 40 pt Finder icon; centred 24 pt into the row"))
+    public let iconLeading = Metric(4.0, .anatomy("docs/arc-anatomy/library-flyout.md: the icon's 40 pt box starts at x 328, 4 pt into the row"))
+    public let textLeading = Metric(57.0, .anatomy("docs/arc-anatomy/library-flyout.md: the title and the subtitle start at x 381, 57 pt into the row"))
+    public let titleFont = Metric(14.0, .anatomy("docs/arc-anatomy/library-flyout.md: report.pdf, photo.png and sunset.png read 64.0, 64.5 and 70.5 pt wide, SF 14 regular"))
+    public let subtitleFont = Metric(12.0, .anatomy("docs/arc-anatomy/library-flyout.md: 20 seconds ago, 14 seconds ago and 9 seconds ago read 88.5, 87.5 and 82 pt wide, SF 12 regular"))
+    /// From the row's top to the title's and the subtitle's baselines.
+    public let titleBaseline = Metric(21.8, .anatomy("docs/arc-anatomy/library-flyout.md: in the row at y 587 the title's ascenders start at 598.5 (SF 14's are 10.3 tall)"))
+    public let subtitleBaseline = Metric(36.5, .anatomy("docs/arc-anatomy/library-flyout.md: the subtitle's digits start at 615 (SF 12's are 8.5 tall)"))
+    /// The title and subtitle colours: label and secondary label black (white on a dark theme).
+    public let titleInk = Metric(0.85, .anatomy("docs/arc-anatomy/library-flyout.md: the title's darkest pixels read #262728 on #F1F8FA"))
+    public let subtitleInk = Metric(0.5, .anatomy("docs/arc-anatomy/library-flyout.md: the subtitle's darkest pixels read #787B7D on #F1F8FA"))
+    public let subtitleInkDark = Metric(0.55, .guess("secondaryLabelColor's white in a dark appearance; no dark Space exists in the user's Arc"))
+    /// A running download's ring in its row, and the × that cancels it.
+    public let rowRing = Metric(24.0, .anatomy("docs/arc-anatomy/library-flyout.md: the ring of big-download.bin spans x 336 to 360 on Arc"))
+    public let cancelGlyph = Metric(11.0, .anatomy("docs/arc-anatomy/library-flyout.md: the × beside a running download is 11 pt across, centred 18 pt before the row's right end"))
+    public let cancelTrailing = Metric(18.0, .anatomy("docs/arc-anatomy/library-flyout.md: the × beside a running download is centred at x 518 in the row ending at 536"))
+    /// The backdrop behind the rows: the sidebar's colour, opaque at the top row, fading out above it. Pairs of
+    /// (distance above the top row, opacity), measured from how much of the rows above still shows.
+    public let backdropFade = Metric([140.0, 0.0, 116.0, 0.2, 86.0, 0.36, 50.0, 0.69, 32.0, 0.83, 26.0, 0.89, 0.0, 1.0],
+                                     .anatomy("docs/arc-anatomy/library-flyout.md: with four rows (top row at y 580) the selected tab above shows 100, 80, 64, 31, 17 and 11 percent of its rest contrast at y 440, 464, 494, 530, 548 and 554"))
+    public let fadeIn = Metric(0.1, .anatomy("docs/arc-anatomy/library-flyout.md: the rows go from nothing to 60, 94 and 100 percent in three 1/60 s frames"))
+    public let fadeOut = Metric(0.06, .anatomy("docs/arc-anatomy/library-flyout.md: the rows go to 30, 5 and 0 percent in three 1/60 s frames"))
+    /// A running download's badge: a disc over the button's top-right corner.
+    public let progressBadge = Metric(20.0, .anatomy("docs/arc-anatomy/library-flyout.md: the disc spans x 344 to 364 and y 799 to 819 over the button centred at 344, 820"))
+    public let badgeCenter = Metric([10.0, -11.0], .anatomy("docs/arc-anatomy/library-flyout.md: the disc's centre sits 10 pt right of and 11 pt above the button's centre; a file badge's (a 32 pt icon) 10 right and 10 above"))
+    public let fileBadge = Metric(32.0, .anatomy("docs/arc-anatomy/library-flyout.md: notes.txt's page spans 22 x 30 pt over the button, the page of a 32 pt icon"))
+    public let progressRingWidth = Metric(2.0, .anatomy("docs/arc-anatomy/library-flyout.md: the badge's ring is 2 pt wide in its 20 pt disc"))
+    /// The download blue (`DownloadProgressBarBackground` is the track), sampled on Arc.
+    public let progressBlue = Metric("#1828F8", .anatomy("docs/arc-anatomy/library-flyout.md: the ring and arrow read #1828F8, the disc #E8E8F8, the track #B8C0F8"))
+    public let progressDisc = Metric("#E8E8F8", .anatomy("docs/arc-anatomy/library-flyout.md: the badge disc's fill"))
+    public let progressTrack = Metric("#B8C0F8", .anatomy("docs/arc-anatomy/library-flyout.md: the ring's unfilled part"))
+    /// A new badge springs in (`interpolatingSpring(mass: 1, stiffness: 500, damping: 25, initialVelocity: 10)`) from
+    /// this scale and height above, while the one it replaces fades in `badgeOut`.
+    public let badgeSpring = Metric([1.0, 500.0, 25.0, 10.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026b0b30: Animation.interpolatingSpring(mass:stiffness:damping:initialVelocity:)"))
+    public let badgeEnterScale = Metric(1.5, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026b1510: the badge's insertion scales from 1.5"))
+    public let badgeEnterLift = Metric(16.0, .guess("height the new badge drops from; Arc's transition offsets -80 (bin:0x1026b1528) but the video shows the icon entering just above the button"))
+    public let badgeOut = Metric(0.14, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x1026ada9c: Animation.linear(duration: 0.14)"))
+    /// The preview a row's click opens (Arc: `ItemPreviewPresenter`, measured on p15 and p16 of docs/arc-anatomy/library-flyout.md).
+    public let previewDim = Metric(0.7, .anatomy("docs/arc-anatomy/library-flyout.md: behind the card the page's white reads #4C4C4C"))
+    public let previewCardWhite = Metric(0.86, .guess("the card behind Quick Look's own view; Arc's reads #DCDCDC to #8A8A8A from a radial shade we do not draw"))
+    /// The card's inset from the window: these fractions of its width and height.
+    public let previewInsets = Metric([0.12, 0.133], .anatomy("docs/arc-anatomy/library-flyout.md: in the 1280 x 776 window the card spans x 153 to 1127 and y 103 to 674, for an image and for a PDF alike"))
+    public let previewRadius = Metric(12.0, .guess("the card's corner; Arc's reads about 12 at 2x"))
+    public let previewToolbar = Metric(46.0, .anatomy("docs/arc-anatomy/library-flyout.md: the toolbar spans y 173 to 219 on the screen"))
+    public let previewPadding = Metric(16.0, .anatomy("docs/arc-anatomy/library-flyout.md: the 320 x 200 image is fitted 15 below the toolbar and 17 above the card's bottom"))
+    public let previewGlyph = Metric(14.0, .guess("× ‹ › … symbol size in the toolbar"))
+    public let previewButton = Metric(28.0, .guess("hit size of the toolbar's glyph buttons"))
+    /// Centres of ×, ‹ and ›, then where the name starts, from the card's left edge.
+    public let previewButtons = Metric([25.0, 61.0, 93.0, 113.0], .anatomy("docs/arc-anatomy/library-flyout.md: × at x 178, ‹ at 214, › at 246 and the name from 266 in the window, the card at 153"))
+    public let previewNameGap = Metric(8.0, .anatomy("docs/arc-anatomy/library-flyout.md: '2 minutes ago' starts 8 pt after 'photo.png'"))
+    public let previewOpenTrailing = Metric(9.0, .anatomy("docs/arc-anatomy/library-flyout.md: 'Open in Preview ↗' spans x 972 to 1118, 9 before the card's right edge"))
+    public let previewOpenHeight = Metric(30.0, .anatomy("docs/arc-anatomy/library-flyout.md: the Open button spans y 111 to 141"))
+    public let previewOpenPadding = Metric(13.0, .anatomy("docs/arc-anatomy/library-flyout.md: the button is 146 wide around a 120 pt label"))
+    public let previewOpenRadius = Metric(8.0, .guess("the Open button's corner"))
+    public let previewMoreGap = Metric(22.0, .anatomy("docs/arc-anatomy/library-flyout.md: the … is centred 22 pt left of the Open button"))
 }
 
 public struct PersistenceMetrics: MetricGroup {

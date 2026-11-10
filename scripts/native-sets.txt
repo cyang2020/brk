@@ -63,6 +63,8 @@ downloads T1
 downloads T2
 downloads T7
 downloads LibraryDownload-Cancel
+downloads LibraryFlyout-Hover
+downloads LibraryFlyout-Running
 
 # pages：页面右键菜单、页面身份、缩放、复制粘贴、存储打印、弹窗、历史
 pages T12

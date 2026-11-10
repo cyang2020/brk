@@ -806,6 +806,11 @@ public final class AppStore {
                 sounds.play(event)
             case .revealFile(let path):
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+            case .trashFile(let path):
+                // The flyout's Move to Trash (Arc logs "Failed to trash item" and keeps going).
+                NSWorkspace.shared.recycle([URL(fileURLWithPath: path)]) { _, error in
+                    if let error { NSLog("[library-flyout] could not trash %@: %@", path, error.localizedDescription) }
+                }
             }
         }
     }

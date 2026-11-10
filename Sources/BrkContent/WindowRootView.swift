@@ -44,6 +44,8 @@ public final class WindowRootView: NSView {
     private let aiPreview: AIPreviewCardView
     private let linkStatus = LinkStatusCapsule()
     private let captureOverlay: CaptureOverlayView
+    /// A Library item's preview over the window (the flyout's click).
+    private let itemPreview: LibraryItemPreviewView
     private let tabTools: TabToolsOverlayView
     private var lastTheme: ResolvedTheme?
     private var libraryProgress: Double?
@@ -72,6 +74,7 @@ public final class WindowRootView: NSView {
         linkPrompt = PageLinkPromptView(dispatch: dispatch)
         aiPreview = AIPreviewCardView(dispatch: dispatch)
         captureOverlay = CaptureOverlayView(dispatch: dispatch)
+        itemPreview = LibraryItemPreviewView(dispatch: dispatch)
         tabTools = TabToolsOverlayView(dispatch: dispatch)
         self.dispatch = dispatch
         toolbar = AddressToolbarView(dispatch: dispatch)
@@ -86,7 +89,7 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, libraryConversation, peek, findBar, aiAnswer, panelHandle, edgeDrop, linkPrompt, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay] as [NSView] { addSubview(view) }
+        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, libraryConversation, peek, findBar, aiAnswer, panelHandle, edgeDrop, linkPrompt, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay, itemPreview] as [NSView] { addSubview(view) }
         pageCards.parent = self
         pageCards.below = toolbar
         for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
@@ -276,6 +279,8 @@ public final class WindowRootView: NSView {
         })
         captureOverlay.frame = bounds
         captureOverlay.render(snapshot.capture, frames: frames, peek:peekSnapshot)
+        itemPreview.frame = bounds
+        itemPreview.render(snapshot.libraryFlyout?.preview, sequence: snapshot.libraryFlyout?.previewSequence ?? [], now: snapshot.now)
         thumbnails.afterRender(snapshot, frames: frames, in: self)
     }
 
