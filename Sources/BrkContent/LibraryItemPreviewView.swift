@@ -13,8 +13,8 @@ import QuickLookUI
 final class LibraryItemPreviewView: NSView {
     private let dispatch: Dispatch
     private let dim = NSView()
-    private let card = NSView()
-    private let toolbar = NSView()
+    private let card = TopDownView()
+    private let toolbar = TopDownView()
     private let close = NSButton()
     private let previous = NSButton()
     private let next = NSButton()
@@ -223,4 +223,9 @@ enum LibraryPreviewCopy {
         formatter.locale = Locale(identifier: "en_US")
         return formatter.localizedString(fromTimeInterval: -max(1, Double(now.since(date).components.seconds)))
     }
+}
+
+/// A plain view whose y runs down, like the window's root (the card lays its toolbar out from its top).
+private final class TopDownView: NSView {
+    override var isFlipped: Bool { true }
 }
