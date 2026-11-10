@@ -312,7 +312,7 @@ public enum LibraryCopy {
         case .spaces: "Search Spaces…"
         case .boosts: "Search Boosts…"
         case .archive: "Search Archive…"
-        case .conversations: "Search Conversations…"
+        case .conversations: "Search Chats…"
         }
     }
     static let filter = "Filter"

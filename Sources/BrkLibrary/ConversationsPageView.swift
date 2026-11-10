@@ -256,6 +256,7 @@ final class LibraryChipView: NSView {
         super.layout()
         layer?.cornerRadius = bounds.height / 2
         let h = ceil(label.intrinsicContentSize.height)
-        label.frame = CGRect(x: 10, y: ((bounds.height - h) / 2).rounded(), width: bounds.width - 20, height: h)
+        // The field draws its text 2 pt inside its frame, so the frame starts 2 pt before the text's 10 pt inset.
+        label.frame = CGRect(x: 8, y: ((bounds.height - h) / 2).rounded(), width: bounds.width - 16, height: h)
     }
 }

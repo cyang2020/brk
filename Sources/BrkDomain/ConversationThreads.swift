@@ -234,7 +234,8 @@ public enum AIThreadWords {
     public static func search(_ language: AILanguage) -> String { language == .zh ? "搜索这个 Space 的对话" : "Search this Space's conversations" }
     /// The Library's page name: short enough for its 78 pt cell ("AI Conversations" is cut there).
     public static func libraryTitle(_ language: AILanguage) -> String { language == .zh ? "AI 对话" : "Conversations" }
-    public static func librarySearch(_ language: AILanguage) -> String { language == .zh ? "搜索对话内容…" : "Search Conversations…" }
+    /// "Search Conversations…" does not fit beside the Filter button at Arc's 15 pt (TextLayout, 2026-11-10), so English says Chats.
+    public static func librarySearch(_ language: AILanguage) -> String { language == .zh ? "搜索对话内容…" : "Search Chats…" }
     public static func composer(_ language: AILanguage) -> String { language == .zh ? "在这个 Space 开一个新对话" : "Start a new conversation in this Space" }
     public static func empty(_ language: AILanguage) -> String {
         language == .zh ? "这个 Space 还没有对话。在下面输入，开一个新对话。" : "No conversations in this Space yet. Type below to start one."
