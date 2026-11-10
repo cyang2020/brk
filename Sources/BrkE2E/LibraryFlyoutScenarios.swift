@@ -241,12 +241,14 @@ enum LibraryFlyoutScenarios {
             throw Check(description: "no planned path from \(link)")
         }
         let started = try throwOne(app, link: link)
+        // The page without its bottom strip, where the link's address capsule shows while the pointer rests on the link.
+        let watched = CGRect(x: area.minX + 4, y: area.minY + 4, width: area.width - 8, height: area.height - 64)
         var seen: [(t: Double, at: CGPoint)] = []
         var index = 0
         while ProcessInfo.processInfo.systemUptime - started < 1.3 {
             let shot = try picture(app, "LFF-\(index)")
             index += 1
-            if let at = icon(shot, base: base, in: CGRect(x: area.minX + 4, y: area.minY + 4, width: area.width - 8, height: area.height - 8)) {
+            if let at = icon(shot, base: base, in: watched) {
                 seen.append((ProcessInfo.processInfo.systemUptime - started, at))
             }
         }
@@ -269,7 +271,7 @@ enum LibraryFlyoutScenarios {
         try expect(seen.last.map { $0.at.x < link.x - 150 } ?? false, "the icon did not cross the page towards the Library button: \(seen.last!)")
         app.sleep(max(0, 2.6 - (ProcessInfo.processInfo.systemUptime - started)))
         let after = try picture(app, "LFF-after")
-        try expect(icon(after, base: base, in: area.insetBy(dx: 4, dy: 4)) == nil, "the icon is still on the page 2.6 s after it started")
+        try expect(icon(after, base: base, in: watched) == nil, "the icon is still on the page 2.6 s after it started")
         app.passed("a real click on a download link throws the icon from the pointer up and across the page into the Library button, then it is gone")
 
         // Sidebar hidden: Arc's bin slides in at the bottom left corner and the icon lands on its corner.
