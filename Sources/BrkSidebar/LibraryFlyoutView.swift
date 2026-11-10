@@ -145,6 +145,9 @@ final class LibraryFlyoutView: NSView {
         if case .download(let row) = item.content, row.state.isActive {
             return LibraryFlyoutCopy.progress(received: row.received, total: row.total, remaining: remaining(row))
         }
+        // Arc's flyout reads "Cancelled" under a cancelled download (seen 2026-11-10), "Failed to Download" under a
+        // failed one (its DownloadsUI subtitle, bin:0x101cdbfe0).
+        if case .download(let row) = item.content, let ended = DownloadText.ended(row.state) { return ended }
         return LibraryFlyoutCopy.relative(item.date, now: now)
     }
 
@@ -385,22 +388,8 @@ enum LibraryFlyoutCopy {
         return formatter.localizedString(fromTimeInterval: -seconds)
     }
 
-    /// "2.8/8.4 MB · 29s" (Arc's running row); "2.8 MB" without a size.
+    /// "2.8/8.4 MB · 29s" (Arc's running row); "2.8 MB" without a size (`DownloadText.progress`, Arc's DownloadsUI).
     static func progress(received: Int64, total: Int64?, remaining: TimeInterval?) -> String {
-        guard let total, total > 0 else { return ByteCountFormatter.string(fromByteCount: received, countStyle: .file) }
-        let whole = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
-        let parts = whole.split(separator: " ")
-        let unit = parts.count == 2 ? String(parts[1]) : ""
-        let scale: Double = switch unit { case "KB": 1e3; case "MB": 1e6; case "GB": 1e9; case "TB": 1e12; default: 1 }
-        let done = String(format: scale == 1 ? "%.0f" : "%.1f", Double(received) / scale)
-        var text = "\(done)/\(whole)"
-        if let remaining, remaining.isFinite {
-            let formatter = DateComponentsFormatter()
-            formatter.unitsStyle = .abbreviated
-            formatter.allowedUnits = remaining >= 3600 ? [.hour, .minute] : remaining >= 60 ? [.minute, .second] : [.second]
-            formatter.maximumUnitCount = 2
-            if let left = formatter.string(from: max(1, remaining.rounded())) { text += " · " + left }
-        }
-        return text
+        DownloadText.progress(received: received, total: total, remaining: remaining)
     }
 }

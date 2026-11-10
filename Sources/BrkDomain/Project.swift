@@ -594,6 +594,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     }
     snapshot.plusMenu = PlusMenu.rows(kind: doc.kind, overrides: state.doc.keyOverrides)
     snapshot.libraryFlyout = state.libraryFlyout(in: id)
+    snapshot.littleDownloads = state.littleDownloads(in: id)
     return snapshot
 }
 

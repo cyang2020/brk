@@ -121,6 +121,19 @@ import XCTest
         XCTAssertTrue(f.leases.isEmpty)
     }
 
+    /// Chromium names a download after the path it writes to: a staging name ("payload") showed in Chromium's
+    /// download card. The staged file carries the real name, shortened only past the file system's limit.
+    func testStagedFileCarriesTheDestinationName() throws {
+        let f = Fixture(); defer { f.dispose() }
+        let staged = try XCTUnwrap(f.decide(f.item()).resolutions[0])
+        XCTAssertEqual(staged.lastPathComponent, "file.bin")
+        XCTAssertTrue(staged.path.contains("/.brk-transfer-"))
+        let long = String(repeating: "é", count: 120) + ".txt"
+        let short = TransferFiles.stagingName(long)
+        XCTAssertLessThanOrEqual(short.utf8.count, 200)
+        XCTAssertTrue(short.hasSuffix("é.txt"))
+    }
+
     func testCollisionsAndConfirmedReplacementPreserveUnownedFiles() throws {
         let f = Fixture(); defer { f.dispose() }
         try FileManager.default.createDirectory(at: f.directory, withIntermediateDirectories: true)

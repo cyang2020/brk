@@ -30,6 +30,8 @@ public final class LittleWindowController: WindowController {
     let closeButton = LittleCloseButton()
     /// The first Little window's tip over the page's top right (P21-b); the × dismisses it for good.
     let tip = LittleFirstRunTip()
+    /// The download pills over the page's bottom (Arc: `LittleBrowserDownloadsTrayViewController`).
+    let downloads: LittleDownloadsTray
     private let container = FlippedContainer(frame: .zero)
     private var titledFor: String?
     /// Whether the last render had a page (nil before the first): the panel resizes when this changes.
@@ -53,12 +55,16 @@ public final class LittleWindowController: WindowController {
         let dispatch: Dispatch = { command in send(.user(id, command)) }
         header = LittleHeaderView(dispatch: dispatch)
         picker = LittleSpacePicker(dispatch: dispatch)
+        downloads = LittleDownloadsTray { dispatch(.library(.littleDownload($0))) }
         super.init(id: id, kind: .little, engine: engine, send: send, routeKey: routeKey, window: panel)
         container.frame = CGRect(origin: .zero, size: panel.contentRect(forFrameRect: panel.frame).size)
         container.autoresizesSubviews = true
         root.frame = container.bounds
         root.autoresizingMask = [.width, .height]
         container.addSubview(root)
+        downloads.isHidden = true
+        downloads.autoresizingMask = [.width, .minYMargin]
+        container.addSubview(downloads)
         header.autoresizingMask = [.width]
         container.addSubview(header)
         container.addSubview(closeButton)
@@ -137,6 +143,9 @@ public final class LittleWindowController: WindowController {
         closeButton.render(palette: palette)
         if !hasPage { picker.isHidden = true }
         picker.render(spaces: snapshot.dock, current: snapshot.space.id, palette: palette, width: width)
+        let trayHeight = Metrics.littleDownloads.trayHeight.value
+        downloads.frame = CGRect(x: 0, y: container.bounds.height - trayHeight, width: width, height: trayHeight)
+        downloads.render(hasPage ? snapshot.littleDownloads : [], dark: palette.scheme == .dark)
     }
 
     private func togglePicker() {

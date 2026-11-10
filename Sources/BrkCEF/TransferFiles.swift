@@ -2,6 +2,10 @@ import BrkBase
 import Foundation
 
 /// The entire staging directory belongs to one operation, including Chromium's partial file.
+///
+/// The staged file carries the destination's own name, in a folder of its own: Chromium names a download after the
+/// path it writes to, and any surface that reads Chromium's download (its download bubble, chrome://downloads,
+/// Finder's progress) would otherwise show the staging name.
 struct TransferFiles {
     struct CommitCleanupError: Error {
         let receipt: FileReceipt
@@ -31,7 +35,10 @@ struct TransferFiles {
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         directory = parent.appendingPathComponent(".brk-transfer-" + UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        staging = directory.appendingPathComponent("payload")
+        // A folder below the backup's name ("replaced"), so no download name can collide with it.
+        let folder = directory.appendingPathComponent("file", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        staging = folder.appendingPathComponent(Self.stagingName(destination.lastPathComponent))
         self.destination = destination
         self.chooseUnused = chooseUnused
         replacing = chooseUnused ? nil : Identity(destination)
@@ -40,6 +47,18 @@ struct TransferFiles {
     static func safeName(_ value: String) -> String {
         let name = (value as NSString).lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines)
         return name.isEmpty || [".", "..", "/"].contains(name) ? "download" : name
+    }
+
+    /// The destination's name, shortened (extension kept) to leave room for Chromium's ".crdownload" within the
+    /// file system's 255-byte name limit.
+    static func stagingName(_ name: String) -> String {
+        let limit = 200
+        guard name.utf8.count > limit else { return name }
+        let ext = (name as NSString).pathExtension
+        let suffix = ext.isEmpty || ext.utf8.count > 20 ? "" : "." + ext
+        var base = Substring(suffix.isEmpty ? name : String(name.dropLast(suffix.count)))
+        while base.utf8.count + suffix.utf8.count > limit { base = base.dropLast() }
+        return String(base) + suffix
     }
 
     func commit() throws -> FileReceipt {

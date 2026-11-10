@@ -81,7 +81,7 @@ enum CommandInventory {
         .library(.removeHistoryVisit(HistoryVisitID("ghost"))), .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory), .library(.historySearch("x")),
         .library(.conversationQuery(ConversationLibraryQuery(text: "x"))), .library(.selectConversation(AIRequestID("ghost"))), .library(.moveConversation(AIRequestID("ghost"), space)),
         .library(.requestDeleteConversation(AIRequestID("ghost"))), .library(.confirmDeleteConversation(AIRequestID("ghost"), token: "t", confirmed: false)),
-        .library(.flyout(.expanded)),
+        .library(.flyout(.expanded)), .library(.littleDownload(.dismiss(download))),
         .window(.openInFolder(item)), .window(.newBlank), .window(.toggleStayOnTop), .window(.new), .window(.newIncognito), .window(.newLittle(example)), .window(.openIn(.current)),
         .peek(.email), .peek(.open(example)), .peek(.close), .peek(.openAsTab), .peek(.openInSplit),
         .profile(.create(name: "Work", icon: nil)), .profile(.rename(profile, name: "x")), .profile(.delete(profile)),
@@ -497,6 +497,7 @@ enum CommandInventory {
             case .requestDeleteConversation: "requestDeleteConversation"
             case .confirmDeleteConversation: "confirmDeleteConversation"
             case .flyout: "flyout"
+            case .littleDownload: "littleDownload"
             }
         case .window(let c):
             switch c {

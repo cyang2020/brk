@@ -89,6 +89,8 @@ extension Work {
             libraryConversations(command, in: window)
         case .flyout(let flyout):
             libraryFlyout(flyout, in: window)
+        case .littleDownload(let pill):
+            littleDownload(pill, in: window)
         case .historySearch(let text):
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard case .profile(let profile) = state.libraryContext(in: window), state.searchModelReady,
@@ -152,6 +154,7 @@ extension Work {
             index = 0
             offerLibraryBadge(.download(update.id), profile: profile, date: ctx.now)
             startDownloadFlight(update.id, in: page.window)
+            addLittleDownload(update.id, in: page.window)
         }
         state.session.downloadRevisions[update.id] = update.revision
         switch update.stage {

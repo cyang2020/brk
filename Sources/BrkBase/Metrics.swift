@@ -77,6 +77,7 @@ public struct MetricsTable: MetricGroup {
     public let capture = CaptureMetrics()
     public let siteControls = SiteControlsMetrics()
     public let downloadFlight = DownloadFlightMetrics()
+    public let littleDownloads = LittleDownloadsMetrics()
 }
 
 public struct WindowMetrics: MetricGroup {
@@ -873,4 +874,38 @@ public struct CaptureMetrics: MetricGroup {
     public let menuRadius = Metric(9.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card corners"))
     public let menuGap = Metric(3.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c menu card starts 6 px right of the selection"))
     public let menuRowPitch = Metric(40.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P33 capture shots: P33-c rows 80 px apart"))
+}
+
+/// Little Arc's download pills (Arc: `LittleBrowserDownloadsTrayViewController`, `LittleBrowserDownloadsTrayItemView`):
+/// a row of cards at the window's bottom left, one per download its page started.
+public struct LittleDownloadsMetrics: MetricGroup {
+    /// Each pill, and the gaps: a horizontal collection view inset this much on every side, pills this far apart.
+    public let pillSize = Metric(CGSize(width: 250, height: 56), .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022ae95c: sizeForItemAt returns (250, 56); Arc's pill reads 250 x 56 points"))
+    public let inset = Metric(20.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022ae998: insetForSectionAt returns 20 on all four sides; the pill sits 20 from the window's left and bottom"))
+    public let spacing = Metric(10.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022ae9ac: minimumInteritemSpacing 10; Arc's pills start 260 points apart"))
+    /// The tray's height: one pill and its insets.
+    public let trayHeight = Metric(96.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022ad540: the tray view's height constraint is 96"))
+    /// Inside a pill: icon, title over subtitle, ×, in a row inset this much, this far apart.
+    public let contentInset = Metric(10.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a95bc: the item's stack view has edge insets 10 on all sides"))
+    public let contentSpacing = Metric(10.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a95b0: the item's stack view spacing is 10"))
+    public let lineSpacing = Metric(5.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a9394: the title and subtitle stack has spacing 5"))
+    public let icon = Metric(32.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a8fe8: IconWithProgressIndicatorView constrained to 32 x 32"))
+    public let ringWidth = Metric(2.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a9014: ringWidth = 2"))
+    /// The file's icon shows through a circle this much inside the ring's outer edge.
+    public let imageInset = Metric(2.0, .guess("Arc's pictures: the icon's circle is 28 points across inside the 32 point ring, with and without the ring"))
+    public let titleSize = Metric(14.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a913c: the title's font withSize 14"))
+    public let subtitleSize = Metric(12.0, .guess("Arc's pictures: the subtitle's x-height and width match SF 12 regular; its font comes from a font manager call that was not decoded"))
+    public let closeSymbol = Metric(14.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a9404: the × button's symbol image at point size 14"))
+    public let cornerRadius = Metric(8.0, .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a96a4: the pill's ShadowView cornerRadius 8"))
+    /// Shadow: black at this opacity, blur radius, offset down.
+    public let shadow = Metric([0.25, 3.0, 1.0], .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a9630: ShadowConfiguration(color: .black, opacity: 0.25, offset: (0, 1), radius: 3)"))
+    /// Light then dark: the pill, the pill under the pointer (ARC_LittleBrowser asset catalog).
+    public let background = Metric(["#FFFFFF", "#0D0D0D"], .anatomy("docs/arc-anatomy/little-arc-downloads.md, asset DownloadItemBackground: white; dark 0.05 grey"))
+    public let hoverBackground = Metric(["#F5F5F5", "#1F1F1F"], .anatomy("docs/arc-anatomy/little-arc-downloads.md, asset DownloadItemBackgroundHovered: 0.96 grey; dark 0.12 grey"))
+    /// Light then dark: title and ×, subtitle (ARCClients_BaseAssets ForegroundPrimary and ForegroundSecondary).
+    public let title = Metric(["#0E0F10E6", "#FFFFFFCC"], .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a918c: ForegroundPrimary, light (0.055, 0.059, 0.063, 0.9), dark white 0.8"))
+    public let subtitle = Metric(["#00000080", "#FFFFFF80"], .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a9290: ForegroundSecondary, black 0.5, dark white 0.5"))
+    /// Light then dark: the ring's track and its progress (ARCClients_BaseAssets).
+    public let ringTrack = Metric(["#CED7E7", "#717782"], .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a9044: progressRingBottomColor = DownloadProgressBarBackground, (0.808, 0.843, 0.906); dark (0.443, 0.467, 0.51)"))
+    public let ringProgress = Metric(["#0C50FF", "#2AB6F6"], .anatomy("docs/arc-anatomy/little-arc-downloads.md, bin:0x1022a901c: progressRingTopColor = LoadingPageBorder, (0.047, 0.314, 1); dark (0.165, 0.714, 0.965)"))
 }

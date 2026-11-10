@@ -107,6 +107,8 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var miniPlayers: [MiniPlayerSnapshot] = []
     /// The Library button's flyout and badge (`AppState.libraryFlyout(in:)`); nil in an incognito or Little Arc window.
     public var libraryFlyout: LibraryFlyoutSnapshot? = nil
+    /// A Little Arc window's download pills, oldest first (`AppState.littleDownloads(in:)`); empty in other windows.
+    public var littleDownloads: [DownloadRow] = []
     public var boostEditor: BoostEditor? = nil
     public var ai: AIAnswerSnapshot? = nil
     /// The agents ready on this Mac and their models, for the + menu's agent list (docs/design/ai-threads.md).

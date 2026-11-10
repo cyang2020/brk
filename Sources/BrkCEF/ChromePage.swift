@@ -646,12 +646,26 @@ final class ChromePage: CefBrowserDelegate {
 
     func browser(_ b: CefBrowser, download: CefDownload, suggestedName: String, decision: CefDownloadDecisionCallback) {
         guard !isAIReader else { decision.resolve(nil); return }
+        Self.turnOffDownloadBubble(b)
         if b !== browser { auxiliaryEvents.append("download:" + suggestedName) }
         engine.download(self, item: download, name: suggestedName, decision: decision)
     }
     func browser(_ b: CefBrowser, download: CefDownload, control: CefDownloadControl?) {
         guard !isAIReader else { control?.cancel(); control?.release(); return }
         engine.download(self, item: download, control: control)
+    }
+
+    /// Chromium's "Show downloads when they're done" (chrome/browser/download/bubble/download_bubble_prefs.cc).
+    static let downloadBubblePreference = "download_bubble.partial_view_enabled"
+    /// When a download finishes, Chromium's download bubble shows a card with the file ("report.pdf · 900 B · Done");
+    /// in Brk's frameless Chrome window it sits at the window's top left. Arc 1.170 shows no such card (its Library
+    /// badge, the flight and Little Arc's pill tell about downloads), so the preference is turned off in the
+    /// request context of every browser that starts a download, before that download can finish.
+    static func turnOffDownloadBubble(_ b: CefBrowser) {
+        guard b.boolPreference(downloadBubblePreference) != false else { return }
+        if let failure = b.setBoolPreference(downloadBubblePreference, false) {
+            Logger(subsystem: "brk", category: "page").error("download bubble left on: \(failure, privacy: .public)")
+        }
     }
 
     /// CEF's two key callbacks. Before the page (`OnPreKeyEvent`) the id is minted from the event being dispatched;

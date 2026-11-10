@@ -69,7 +69,7 @@ import XCTest
         try f.render()
         XCTAssertEqual(try Data(contentsOf: f.destination), original)
         guard case .failed(_, .retained(let directory, _))? = f.terminals.first else { return XCTFail("Missing recovery result") }
-        XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("payload")), Fixture.bytes)
+        XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("file").appendingPathComponent(f.destination.lastPathComponent)), Fixture.bytes)
     }
 
     func testContextRevocationDrainsWithoutWritingDestination() throws {

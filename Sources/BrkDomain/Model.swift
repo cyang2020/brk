@@ -331,6 +331,8 @@ struct WindowSession: Sendable, Equatable {
     /// Downloads that started in this window in the last few seconds: its view throws each one's icon into the
     /// Library button once (Arc's `DownloadToLibrary`).
     var downloadFlights: [DownloadFlight] = []
+    /// A Little Arc window's download pills, oldest first: the downloads its pages started that have no × yet.
+    var littleDownloads: [DownloadID] = []
     var captureMessage: String? = nil
     var find: FindSession?
     var lastFind: [BrowsingContext: FindQuery] = [:]

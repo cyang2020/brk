@@ -70,6 +70,7 @@ downloads LibraryDownload-Cancel
 downloads LibraryFlyout-Hover
 downloads LibraryFlyout-Running
 downloads LibraryFlyout-Flight
+downloads LittleDownloads-Pill
 
 # pages：页面右键菜单、页面身份、缩放、复制粘贴、存储打印、弹窗、历史
 pages T12

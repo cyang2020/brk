@@ -571,6 +571,16 @@ public enum LibraryCommand: Hashable, Sendable, Codable {
     case confirmDeleteConversation(AIRequestID, token: String, confirmed: Bool)
     /// The Library button's flyout (Arc: `HomeBadging`): the pointer on the button, the flyout opening, a row's menu.
     case flyout(LibraryFlyoutCommand)
+    /// A Little Arc window's download pills (Arc: `LittleBrowserDownloadsTrayItemAction`).
+    case littleDownload(LittleDownloadCommand)
+}
+
+/// What a Little Arc download pill reports (docs/arc-anatomy/little-arc-downloads.md).
+public enum LittleDownloadCommand: Hashable, Sendable, Codable {
+    /// A click: a finished file opens with its default app; a running download ignores it.
+    case open(DownloadID)
+    /// The ×: the pill goes; a running download is cancelled, a finished file stays where it is.
+    case dismiss(DownloadID)
 }
 
 /// What the Library button's flyout reports (docs/arc-anatomy/library-flyout.md).
