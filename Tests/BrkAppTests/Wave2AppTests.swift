@@ -56,7 +56,11 @@ final class Wave2AppTests: XCTestCase {
         defer { h.store.windowController(little.id)?.window.orderOut(nil) }
         let controller = try XCTUnwrap(h.store.windowController(little.id) as? LittleWindowController)
         XCTAssertTrue(controller.window is NSPanel)
-        XCTAssertEqual(controller.root.bounds.size, Metrics.littleArc.defaultSize.value, "a Little Arc with a page is Arc's default size")
+        // GitHub's macOS runners have a 1024x768 screen, too small for Arc's default size; the panel is then fitted to
+        // the screen, so the size and cascade checks need a screen that holds two cascaded panels.
+        let step = Metrics.littleArc.cascade.value, size = Metrics.littleArc.defaultSize.value
+        let roomy = NSScreen.main.map { $0.visibleFrame.width >= size.width + 2 * step && $0.visibleFrame.height >= size.height + 2 * step } ?? false
+        if roomy { XCTAssertEqual(controller.root.bounds.size, size, "a Little Arc with a page is Arc's default size") }
         XCTAssertEqual(controller.window.title, "Little \(Product.name) — example.com/little", "the page has no title yet, so its display URL")
         XCTAssertFalse(controller.header.isHiddenOrHasHiddenAncestor)
         XCTAssertEqual(controller.header.accessibilityIdentifier(), "little-hint")
@@ -79,8 +83,7 @@ final class Wave2AppTests: XCTestCase {
         h.store.dispatch(.user(h.window, .window(.newLittle(URL(string: "https://example.com/second")!))))
         let second = try XCTUnwrap(h.store.snapshot.windows.values.first { $0.kind == .little && $0.id != little.id })
         defer { h.store.windowController(second.id)?.window.orderOut(nil) }
-        let step = Metrics.littleArc.cascade.value
-        XCTAssertEqual(h.store.windowController(second.id)?.window.frame, first.offsetBy(dx: step, dy: -step))
+        if roomy { XCTAssertEqual(h.store.windowController(second.id)?.window.frame, first.offsetBy(dx: step, dy: -step)) }
         // "Open in <space>" moves the tab out and the panel goes.
         controller.header.openIn.onOpen?()
         XCTAssertNil(h.store.snapshot.windows[little.id], "Open in closed the Little Arc")
