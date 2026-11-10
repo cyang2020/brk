@@ -75,9 +75,9 @@ public struct DownloadFlightPath: Equatable, Sendable {
         if bin, let last = frames.last {
             // The bounce: a spring from the landing point to the bin's corner, starting with the landing speed.
             let corner = CGPoint(x: m.binTarget.value[0], y: m.binTarget.value[1])
-            let spring = Spring(response: m.bounceSpring.value[0], dampingRatio: m.bounceSpring.value[1])
-            let x = spring.samples(from: target.x - corner.x, velocity: vx, step: step)
-            let y = spring.samples(from: target.y - corner.y, velocity: vy - g * duration, step: step)
+            let spring = MotionSpring(response: m.bounceSpring.value[0], dampingRatio: m.bounceSpring.value[1])
+            let x = spring.samples(from: target.x - corner.x, velocity: vx, step: step, start: step)
+            let y = spring.samples(from: target.y - corner.y, velocity: vy - g * duration, step: step, start: step)
             for i in 0..<max(x.count, y.count) {
                 let dx = i < x.count ? x[i] : 0, dy = i < y.count ? y[i] : 0
                 frames.append(DownloadFlightFrame(position: CGPoint(x: corner.x + dx, y: corner.y + dy), scale: last.scale))
@@ -90,35 +90,41 @@ public struct DownloadFlightPath: Equatable, Sendable {
     public var length: Double { Double(frames.count) / Metrics.downloadFlight.frameRate.value }
 }
 
-/// A damped spring of mass 1 given as SwiftUI's (response, damping ratio): stiffness (2 pi / response)^2, damping
-/// 4 pi ratio / response, which is how Arc's Motion library configures one.
-struct Spring {
-    let stiffness: Double
-    let damping: Double
+/// A damped spring of mass 1, as Arc's Motion library and SwiftUI run one. Given as (response, damping ratio) it has
+/// stiffness (2 pi / response)^2 and damping 4 pi ratio / response.
+public struct MotionSpring: Sendable {
+    public let stiffness: Double
+    public let damping: Double
 
-    init(response: Double, dampingRatio: Double) {
-        stiffness = pow(2 * .pi / response, 2)
-        damping = 4 * .pi * dampingRatio / response
+    public init(stiffness: Double, damping: Double) {
+        self.stiffness = stiffness
+        self.damping = damping
     }
 
-    /// Displacements from the rest point, one per `step` after the start, until the spring is at rest (within 0.01
-    /// point and 0.01 point per second, invisible on screen); the last sample is 0.
-    func samples(from x0: Double, velocity v0: Double, step: Double) -> [Double] {
+    public init(response: Double, dampingRatio: Double) {
+        self.init(stiffness: pow(2 * .pi / response, 2), damping: 4 * .pi * dampingRatio / response)
+    }
+
+    /// Displacement from the rest point and speed `t` seconds after it started at `x0` moving at `v0`.
+    public func state(at t: Double, from x0: Double, velocity v0: Double) -> (x: Double, v: Double) {
         let omega = stiffness.squareRoot(), zeta = damping / (2 * omega)
+        if zeta < 1 {
+            let wd = omega * (1 - zeta * zeta).squareRoot(), decay = exp(-zeta * omega * t)
+            let b = (v0 + zeta * omega * x0) / wd
+            return (decay * (x0 * cos(wd * t) + b * sin(wd * t)),
+                    decay * ((b * wd - zeta * omega * x0) * cos(wd * t) - (x0 * wd + zeta * omega * b) * sin(wd * t)))
+        }
+        let decay = exp(-omega * t), b = v0 + omega * x0
+        return (decay * (x0 + b * t), decay * (b - omega * (x0 + b * t)))
+    }
+
+    /// Displacements one `step` apart from `start` seconds in, until the spring is at rest (within 0.01 and 0.01 per
+    /// second, invisible on screen); the last sample is 0.
+    public func samples(from x0: Double, velocity v0: Double, step: Double, start: Double) -> [Double] {
         var out: [Double] = []
-        var t = step
+        var t = start
         while out.count < 600 {
-            let (x, v): (Double, Double)
-            if zeta < 1 {
-                let wd = omega * (1 - zeta * zeta).squareRoot(), decay = exp(-zeta * omega * t)
-                let b = (v0 + zeta * omega * x0) / wd
-                x = decay * (x0 * cos(wd * t) + b * sin(wd * t))
-                v = decay * ((b * wd - zeta * omega * x0) * cos(wd * t) - (x0 * wd + zeta * omega * b) * sin(wd * t))
-            } else {
-                let decay = exp(-omega * t), b = v0 + omega * x0
-                x = decay * (x0 + b * t)
-                v = decay * (b - omega * (x0 + b * t))
-            }
+            let (x, v) = state(at: t, from: x0, velocity: v0)
             if abs(x) < 0.01 && abs(v) < 0.01 { break }
             out.append(x)
             t += step

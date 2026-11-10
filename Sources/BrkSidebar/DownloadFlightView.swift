@@ -23,6 +23,10 @@ public final class DownloadFlightView: NSView {
     private var endTimer: Timer?
     private var clearTimer: Timer?
     private var scheme: Scheme = .light
+    /// The window's last mouse press (y up from the bottom left corner) and when: Arc's download event carries where
+    /// the click that started it happened.
+    private var press: (point: CGPoint, at: TimeInterval)?
+    private var monitor: Any?
 
     public override init(frame: NSRect) {
         super.init(frame: frame)
@@ -40,6 +44,22 @@ public final class DownloadFlightView: NSView {
 
     public override var isFlipped: Bool { true }
     public override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    public override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+        guard window != nil else { return }
+        // Presses on the page reach Chromium's views, not this one: a local monitor sees them all first.
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+            MainActor.assumeIsolated {
+                guard let self, let window = self.window, event.window === window else { return }
+                let local = self.convert(event.locationInWindow, from: nil)
+                self.press = (CGPoint(x: local.x, y: self.bounds.height - local.y), ProcessInfo.processInfo.systemUptime)
+            }
+            return event
+        }
+    }
 
     /// `flights` are the window's recent downloads; each one not thrown yet, and not older than a second (a view
     /// made after the fact does not replay it), flies now.
@@ -59,9 +79,11 @@ public final class DownloadFlightView: NSView {
     private func launch(bin useBin: Bool) {
         guard let window else { return }
         let m = Metrics.downloadFlight
-        // The pointer in the window, y up from the bottom left corner (Arc reads NSEvent.mouseLocation).
+        // Where the click that started it happened (r8), else the pointer now (Arc's NSEvent.mouseLocation), y up from
+        // the bottom left corner.
         let local = convert(window.mouseLocationOutsideOfEventStream, from: nil)
-        let pointer = CGPoint(x: local.x, y: bounds.height - local.y)
+        var pointer = CGPoint(x: local.x, y: bounds.height - local.y)
+        if let press, ProcessInfo.processInfo.systemUptime - press.at < m.pressMemory.value { pointer = press.point }
         guard let path = DownloadFlightPath.plan(pointer: pointer, window: bounds.size, bin: useBin), !path.frames.isEmpty else { return }
         clearTimer?.invalidate(); clearTimer = nil
         // The first flight of a run: Arc's springs have run `firstFlightLead` when its overlay draws its first frame.
@@ -71,55 +93,44 @@ public final class DownloadFlightView: NSView {
             if useBin { showBin(lead: lead) }
         }
         let icon = makeIcon()
-        layer?.addSublayer(icon)
-        icons.append(icon)
         let flipped = layer?.contentsAreFlipped() ?? true
-        let begin = icon.convertTime(CACurrentMediaTime(), from: nil)
         let point = { (p: CGPoint) in CGPoint(x: p.x, y: self.bounds.height - p.y) }
         let last = path.frames[path.frames.count - 1]
+        let degrees = m.rotation.value.map { $0 * .pi / 180 * (flipped ? 1 : -1) }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         icon.position = point(last.position)
         icon.setValue(last.scale.width, forKeyPath: "transform.scale.x")
         icon.setValue(last.scale.height, forKeyPath: "transform.scale.y")
-        let degrees = m.rotation.value.map { $0 * .pi / 180 * (flipped ? 1 : -1) }
         icon.setValue(degrees[1], forKeyPath: "transform.rotation.z")
         icon.opacity = 1
+        layer?.addSublayer(icon)
+        icons.append(icon)
+        // Every animation starts when this transaction reaches the screen (begin time 0), so the path's first frame
+        // is the first one drawn; the springs are sampled from `lead` on the same clock.
+        Self.keyframes(icon, "position", path.frames.map { NSValue(point: point($0.position)) })
+        Self.keyframes(icon, "transform.scale.x", path.frames.map { $0.scale.width })
+        Self.keyframes(icon, "transform.scale.y", path.frames.map { $0.scale.height })
+        let turn = MotionSpring(response: m.rotationSpring.value[0], dampingRatio: m.rotationSpring.value[1])
+        Self.keyframes(icon, "transform.rotation.z", turn.samples(from: degrees[0] - degrees[1], velocity: 0, step: 1 / m.frameRate.value, start: lead).map { degrees[1] + $0 })
+        let fade = MotionSpring(response: m.fadeSpring.value[0], dampingRatio: m.fadeSpring.value[1])
+        Self.keyframes(icon, "opacity", fade.samples(from: -1, velocity: 0, step: 1 / m.frameRate.value, start: lead).map { 1 + $0 })
         CATransaction.commit()
-        let span = Double(path.frames.count - 1) / m.frameRate.value
-        let times = path.frames.indices.map { NSNumber(value: path.frames.count > 1 ? Double($0) / Double(path.frames.count - 1) : 0) }
-        func keyframes(_ key: String, _ values: [Any]) {
-            let animation = CAKeyframeAnimation(keyPath: key)
-            animation.values = values
-            animation.keyTimes = times
-            animation.calculationMode = .linear
-            animation.duration = max(span, 1 / m.frameRate.value)
-            animation.beginTime = begin
-            animation.fillMode = .backwards
-            icon.add(animation, forKey: key)
-        }
-        keyframes("position", path.frames.map { NSValue(point: point($0.position)) })
-        keyframes("transform.scale.x", path.frames.map { $0.scale.width })
-        keyframes("transform.scale.y", path.frames.map { $0.scale.height })
-        icon.add(spring("transform.rotation.z", from: degrees[0], to: degrees[1], response: m.rotationSpring.value, begin: begin - lead), forKey: "turn")
-        icon.add(spring("opacity", from: 0, to: 1, response: m.fadeSpring.value, begin: begin - lead), forKey: "fade")
         // Each flight keeps the overlay `hold` after it lands; the last one to finish ends the run.
         holdUntil = max(holdUntil, CACurrentMediaTime() + path.duration + m.hold.value)
         scheduleEnd()
     }
 
-    /// A spring given as SwiftUI's (response, damping ratio): mass 1, stiffness (2 pi / response)^2, damping 4 pi ratio / response.
-    private func spring(_ key: String, from: Double, to: Double, response: [Double], begin: CFTimeInterval) -> CASpringAnimation {
-        let animation = CASpringAnimation(keyPath: key)
-        animation.mass = 1
-        animation.stiffness = pow(2 * .pi / response[0], 2)
-        animation.damping = 4 * .pi * response[1] / response[0]
-        animation.fromValue = from
-        animation.toValue = to
-        animation.duration = animation.settlingDuration
-        animation.beginTime = begin
+    /// One value per frame (`Metrics.downloadFlight.frameRate`), from when the transaction is committed.
+    private static func keyframes(_ layer: CALayer, _ key: String, _ values: [Any]) {
+        let rate = Metrics.downloadFlight.frameRate.value
+        let animation = CAKeyframeAnimation(keyPath: key)
+        animation.values = values
+        animation.keyTimes = values.indices.map { NSNumber(value: values.count > 1 ? Double($0) / Double(values.count - 1) : 0) }
+        animation.calculationMode = .linear
+        animation.duration = Double(max(1, values.count - 1)) / rate
         animation.fillMode = .backwards
-        return animation
+        layer.add(animation, forKey: key)
     }
 
     /// The thrown icon: SF Symbol arrow.down.circle in Arc's ink on a disc, with a blue shadow below it.
@@ -181,23 +192,16 @@ public final class DownloadFlightView: NSView {
         bin.isHidden = false
         // Arc draws the bin first; the icons fly over it.
         bin.zPosition = -1
-        CATransaction.commit()
         // Arc springs it in from x -80, but its window shows only once that spring has run `lead`.
-        let slide = binSpring(from: m.binHiddenX.value, to: center[0])
-        slide.beginTime = bin.convertTime(CACurrentMediaTime(), from: nil) - lead
-        bin.add(slide, forKey: "slide")
+        slideBin(from: m.binHiddenX.value, to: center[0], start: lead)
+        CATransaction.commit()
     }
 
-    private func binSpring(from: Double, to: Double) -> CASpringAnimation {
+    /// The bin's slide on Arc's Motion spring, sampled from `start` seconds in.
+    private func slideBin(from: Double, to: Double, start: Double) {
         let k = Metrics.downloadFlight.binSpring.value
-        let animation = CASpringAnimation(keyPath: "position.x")
-        animation.mass = 1
-        animation.stiffness = k[0]
-        animation.damping = k[1]
-        animation.fromValue = from
-        animation.toValue = to
-        animation.duration = animation.settlingDuration
-        return animation
+        let spring = MotionSpring(stiffness: k[0], damping: k[1])
+        Self.keyframes(bin, "position.x", spring.samples(from: from - to, velocity: 0, step: 1 / Metrics.downloadFlight.frameRate.value, start: start).map { to + $0 })
     }
 
     // MARK: The end of a run
@@ -218,8 +222,8 @@ public final class DownloadFlightView: NSView {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             bin.position.x = m.binHiddenX.value
+            slideBin(from: x, to: m.binHiddenX.value, start: 0)
             CATransaction.commit()
-            bin.add(binSpring(from: x, to: m.binHiddenX.value), forKey: "slide")
         }
         clearTimer = Timer.scheduledTimer(withTimeInterval: m.clearDelay.value, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.clear() }

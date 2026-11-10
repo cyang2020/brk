@@ -603,6 +603,8 @@ public struct DownloadFlightMetrics: MetricGroup {
     public let launch = Metric([1600.0, -1100.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce23a8: vy0 = (source.y / windowHeight) * -1100 + 1600"))
     /// The flight starts this far from the pointer (right, and down).
     public let startOffset = Metric([15.0, -15.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce4e7c and 0x101ce5120: source = (pointer.x + 15, pointer.y - 15) for the first and every later flight; the icon's first frames on Arc sit 12 left of and 7 above that point after 1/60 s"))
+    /// A press in the window this recent is where the flight starts; older, the pointer's place when the download starts.
+    public let pressMemory = Metric(5.0, .guess("Arc's download event carries where the click happened (r8: the flight starts 15 and 15 from an off-centre click, not from the link's middle; r1: not from the pointer, which had moved 100 points away); how long it is kept is not known"))
     /// Where the icon goes while the sidebar shows: above and right of the Library button, which it falls into.
     public let sidebarTarget = Metric([32.0, 40.0], .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce2a84: without the bin the destination is (32, 40)"))
     /// Where it goes while the sidebar is hidden: the bin's corner. It lands `binLanding` short of it and springs in.
