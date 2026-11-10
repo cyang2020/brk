@@ -6569,7 +6569,7 @@
       "description": "Open tabs, history, search suggestions, top domains, calculator, bookmarks",
       "historical_status": "partial",
       "status": "verified",
-      "acceptance": "Rank and execute open-tab, history, search-engine, top-domain, calculator and bookmark suggestions with exact URL precedence.",
+      "acceptance": "Command bar suggestions: open and saved tabs, visited pages, the text as typed, the engine's suggestions, Arc's popular sites and commands, ordered by a port of Arc 1.170's ASE2 scorer (Arc's features, weights and boosts), five rows, one per page or search; the inline completion follows row 1; learns typed visits, visit counts, site engagement, command runs and tab switches per profile.",
       "owner": "batch-browser-basic",
       "required_checks": [
         "unit",
@@ -6646,6 +6646,13 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "e95954b0f0:verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
           "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/run-native.py cbr-merge-1 --set smoke,commandbar",
+          "artifact": "docs/checks/2026-11-10-command-bar-ranking.md",
+          "scope": "Ranking-CmdT with real keys in Cmd+T and Cmd+L; ArcRankingTests table of 9 queries in the real Arc's order; 39 probes against the real Arc 1.170. Remaining differences are listed in the note and are being closed."
         }
       ],
       "remaining": [
