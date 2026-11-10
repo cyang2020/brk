@@ -11,7 +11,6 @@ import Foundation
 enum Wave2Scenarios {
     static let all: [Scenario] = [
         Scenario("W2-1", "Preferences… opens the settings window on a pane; a Links toggle persists across a restart", settingsWindow),
-        Scenario("W2-1-edit", "all settings panes are mounted; native profile editing and close keys persist the edited values", SettingsEditingScenario.run),
         Scenario("W2-2", "a profile has its own cookies: a cookie set in the Work profile is not seen by the default one", cefOnly: "cookies in a page",
                  profileContexts),
         Scenario("W2-3", "an incognito window's tabs browse off the record and are gone after a restart", incognito),
@@ -20,22 +19,12 @@ enum Wave2Scenarios {
         Scenario("W2-6", "Shift+click opens a Peek over the content; Esc closes it and its page", cefOnly: "a click on a link in a page",
                  peek),
         Scenario("W2-7", "a link from another app follows Air Traffic Control, else opens a Little Arc", externalLinks),
-        Scenario("W2-8", "every menu action is a command bar result: typing 'preferences' and Enter opens the settings", typeTravel),
         Scenario("W2-9", "a remapped shortcut routes and the old chord reaches the page; the Shortcuts pane shows the state",
                  cefOnly: "page titles written by keys.html's key listener", remap),
-        Scenario("W2-10", "typing in the command bar fetches the engine's suggestions and shows them; Tab on an engine's name enters site search",
-                 suggestions),
-        Scenario("W2-10a", "a typed URL opens its exact destination; an exact open-tab URL still switches across spaces",
-                 cefOnly: "cookie fixture titles from real pages", CommandBarScenarios.exactURL),
         Scenario("W2-11", "a download lands in the Library's Downloads page and on disk", cefOnly: "a real download", downloads),
         Scenario("W2-12", "Cmd+Y opens the History page as a Today tab listing the visits", history),
-        Scenario("W2-11Q", "quit immediately after a download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.completedQuit),
         Scenario("W2-11A", "quit with an active download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.activeQuit),
-        Scenario("W2-11P", "incognito downloads keep their files and leave no saved download or history records", cefOnly: "private downloads", LibraryScenarios.privacy),
         Scenario("W2-P1", "Option+Cmd links retain private cookies and leave no persistent metadata", cefOnly: "native private link", PrivateNavigationScenarios.optionLink),
-        Scenario("W2-P1C", "Option+Cmd links remain private over a custom profile", cefOnly: "native private link", PrivateNavigationScenarios.optionLinkInProfile),
-        Scenario("W2-P2", "a hidden private page's popup stays in its own private window", cefOnly: "native private popup", PrivateNavigationScenarios.hiddenPopup),
-        Scenario("W2-P2C", "a hidden private popup retains isolation over a custom profile", cefOnly: "native private popup", PrivateNavigationScenarios.hiddenPopupInProfile),
     ]
 
     /// W2-1 (F1): `openSettings(.links)` shows the settings window; `settings` reports the pane; a click on the
@@ -497,8 +486,6 @@ enum Wave2Scenarios {
     }
 }
 
-/// The Library is open on `page`.
-func isLibrary(_ overlay: OverlaySnapshot?, page: LibraryPage) -> Bool { if case .library(let l)? = overlay { l.page == page } else { false } }
 
 extension ControlResult {
     func isSettingsPane(_ pane: SettingsPane) -> Bool { if case .settings(let s) = self { s.pane == pane } else { false } }

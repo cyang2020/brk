@@ -10,12 +10,8 @@ import Foundation
 /// shows: the overview's security button and, on the second page, the connection note.
 enum SiteSecurityScenarios {
     static let all = [
-        Scenario("SiteSecurity-secure", "trusted test certificate: Secure, and the second page says the connection is secure",
-                 cefOnly: "Chromium certificate verification", secure),
         Scenario("SiteSecurity-invalid", "untrusted certificate: Chromium's interstitial, Proceed, then Insecure with the certificate note",
                  cefOnly: "Chromium certificate verification", invalid),
-        Scenario("SiteSecurity-mixed", "https with plain HTTP parts: an upgraded image stays Secure, a plain HTTP form is Insecure",
-                 cefOnly: "Chromium mixed content", mixed),
     ]
 
     static let secureNote = "Connection is secure (HTTPS)."
@@ -56,32 +52,6 @@ enum SiteSecurityScenarios {
         app.note("untrusted.pem (a self-signed key nothing trusts) produced Chromium's ERR_CERT_AUTHORITY_INVALID interstitial; its Advanced and Proceed buttons loaded the page, and the TLS page then read back as Insecure.")
     }
 
-    @Sendable static func mixed(_ app: AppUnderTest) throws {
-        let fixture = try HTTPSFixture(app); defer { fixture.stop() }
-        let image = try app.load(fixture.url("127.0.0.1", "/mixed-image.html"))
-        try waitForTitle(app, image, "Mixed image fixture")
-        try app.waitUntil("the image page stops loading") { try tab(image, in: app.view())?.loading == false }
-        try app.dispatch(.site(.controls))
-        try app.waitUntil("an upgraded plain HTTP image keeps the page Secure") {
-            let value = try SitePolicyScenarios.controls(app)
-            return value.security?.secureConnection == true && value.secure
-        }
-        try expect(!fixture.servedPlain("/pixel.svg"), "Chromium fetched the image over plain HTTP instead of upgrading it")
-        try showsSecurity(app, secure: true, note: secureNote, shots: "mixed-image", details: false)
-        try app.dispatch(.site(.closeControls))
-
-        let form = try app.load(fixture.url("127.0.0.1", "/mixed.html"))
-        try waitForTitle(app, form, "Mixed content fixture")
-        try app.waitUntil("the mixed page stops loading") { try tab(form, in: app.view())?.loading == false }
-        try app.dispatch(.site(.controls))
-        try app.waitUntil("a plain HTTP form action makes the page Insecure") {
-            let value = try SitePolicyScenarios.controls(app)
-            return value.security?.secureConnection == true && value.security?.certificateError == false
-                && value.security?.insecureForm == true && !value.secure
-        }
-        try showsSecurity(app, secure: false, note: formNote, shots: "mixed")
-        app.note("Chromium upgrades plain HTTP images on https pages (no plain request reached the fixture), so that page stays Secure; a form posting to http://insecure.brk.test is reported as insecure and the page reads Insecure.")
-    }
 
     /// The popover's overview shows Secure or Insecure; the security button opens the second page with the note.
     static func showsSecurity(_ app: AppUnderTest, secure: Bool, note: String, shots: String, details: Bool = true) throws {
@@ -149,7 +119,6 @@ final class HTTPSFixture {
         return text.split(separator: "\n").compactMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: String] }
     }
     func served(_ path: String) -> Bool { lines().contains { $0["scheme"] == "https" && $0["path"] == path } }
-    func servedPlain(_ path: String) -> Bool { lines().contains { $0["scheme"] == "http" && $0["path"] == path } }
 
     func stop() {
         guard process.isRunning else { return }

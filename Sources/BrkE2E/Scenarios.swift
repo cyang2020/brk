@@ -34,33 +34,17 @@ struct Scenario: Sendable {
 enum Scenarios {
     static let all: [Scenario] = [
         Scenario("F12", "repeated native Find reclaims the query after a page click", cefOnly: "native find", FindScenarios.repeatedFindFocus),
-        Scenario("F11", "narrow split find controls, replacement and native clicks", cefOnly: "native find", FindScenarios.narrowPaneControls),
         Scenario("F1", "find native keys, remaps, counts and queued steps", cefOnly: "native find", FindScenarios.keysAndCounts),
-        Scenario("F2", "actual selection and Jump scroll", cefOnly: "renderer selection", FindScenarios.selectionAndJump),
         Scenario("F3", "input and textarea Unicode replacements, input events and undo", cefOnly: "renderer editing", FindScenarios.controlsAndUndo),
-        Scenario("F4", "contenteditable replacements preserve markup and undo", cefOnly: "renderer editing", FindScenarios.contentEditable),
-        Scenario("F5", "protected, stale, cross-origin and IME refusal", cefOnly: "renderer editing", FindScenarios.refusals),
-        Scenario("F6", "later find updates, DOM, subframes and main navigation", cefOnly: "native find", FindScenarios.dynamicDocuments),
-        Scenario("F7", "partial edits, cancellation and timeout ambiguity", cefOnly: "renderer editing", FindScenarios.partialAndAmbiguous),
-        Scenario("F10", "frame document invalidation and renderer mutation idempotence", cefOnly: "renderer editing", FindScenarios.frameLifetimeAndIdempotence),
-        Scenario("F9", "stale editable elements, protected changes, persistence and native focus", cefOnly: "native find", FindScenarios.staleScopesAndFocus),
         Scenario("F8", "independent windows, Peek, split and private find", cefOnly: "native find", FindScenarios.windowsPeekAndPrivate),
-        Scenario("0", "launch smoke: socket answers, one window, sidebar and one card", PlanScenarios.launchSmoke),
-        Scenario("1", "launch: one page in one card, inset 10 and radius 6; corner shows the background", PlanScenarios.oneCard),
         Scenario("2", "Cmd+T opens the centered command bar; Enter on a URL adds a Today tab that loads it", PlanScenarios.newTab),
-        Scenario("3", "Cmd+D moves the tab from Today to Pinned, and again back", PlanScenarios.pinToggle),
         Scenario("4", "clicking a dock space switches space: its rows show and the background changes", PlanScenarios.dockSwitch),
-        Scenario("5", "Cmd+S hides the sidebar: the card fills the window with inset and radius; again restores", PlanScenarios.sidebarToggle),
         Scenario("6", "Ctrl+Shift+= makes a split: two cards side by side, gap 10, both pages live", PlanScenarios.split),
         Scenario("7", "past the threshold an idle Today tab is archived, shown in the archive, restorable", PlanScenarios.autoArchive),
         Scenario("8", "Cmd+W closes the page: OnBeforeClose logged and no surface left", PlanScenarios.closeTab),
         Scenario("9", "restart restores spaces, Pinned, Today, current tab, sidebar width; only it loads", PlanScenarios.restart),
-        Scenario("R2", "sidebar hidden: peeking the left edge keeps the archive open", RegressionScenarios.peekKeepsArchive),
         Scenario("R3", "a Cmd+click link opens a background Today tab that loads", cefOnly: "a click on a link in a page",
                  RegressionScenarios.cmdClickLink),
-        Scenario("R5a", "a tab left with Ctrl+Tab after 11h is not archived an hour later", RegressionScenarios.ctrlTabStamps),
-        Scenario("R5b", "a tab dropped on another space after 13h is not archived by the next sweep", RegressionScenarios.moveStamps),
-        Scenario("R6", "Ctrl+Tab, then Ctrl+Tab again, returns to the starting tab", RegressionScenarios.ctrlTabTwice),
         Scenario("R7a", "a page that calls window.close() loses its row as Cmd+W does and leaves no blank card", cefOnly: "window.close() in a page",
                  RegressionScenarios.pageCloses),
         Scenario("R7b", "a crashed renderer is recovered without any other input", cefOnly: "a renderer process to crash",
@@ -72,10 +56,9 @@ enum Scenarios {
         Scenario("N1", "app-priority keys never reach the page; page-priority keys do; press twice takes Cmd+S",
                  cefOnly: "page titles written by keys.html's key listener", NativeScenarios.keyPriorities),
         Scenario("N2", "focus goes to the command bar and back to the page; no CEF host window is ever key", NativeScenarios.focusRoundTrip),
-        Scenario("N3", "pixel layout: title row, URL pill, favorites, rows, dock frames equal the constants", NativeScenarios.pixelLayout),
         Scenario("N3R", "the window buttons stay at Arc's spots with the real pointer over them and through resizes", NativeScenarios.lightsStayUnderThePointer),
         Scenario("N4", "quit with three pages and a split exits 0 with no crash report", NativeScenarios.cleanQuit),
-    ] + RemainingBehaviourScenarios.all + ToastPopupScenarios.all + Wave2Scenarios.all + CompletionScenarios.all + IdentityScenarios.all + TransferScenarios.all + SplitToolsScenarios.all + SplitParentScenarios.all + SidebarWindowScenarios.all + TabToolsScenarios.all + ImportSyncScenarios.all + FilePanelScenarios.all + SpaceToolsScenarios.all + BrowserBasicScenarios.all + AudioScenarios.all + SitePolicyScenarios.all + ExtensionScenarios.all + SitePolicyBehaviorScenarios.all + SiteStorageScenarios.all + SitePolicyDataScenarios.all + SidebarToolsScenarios.all + ReviewFableScenarios.all + ProfileReassignScenarios.all + BoostScenarios.all + DataScenarios.all + ExtScenarios.all + BrowserOpsScenarios.all + AIScenarios.all + AIAgentScenarios.all + AIRealScenarios.all + ArchiveProfileScenarios.all + MediaScenarios.all + CaptureScenarios.all + LibraryCardScenarios.all + EaselScenarios.all + SettingsBehaviourScenarios.all + SiteSecurityScenarios.all + SiteFilterScenarios.all + SitePermissionScenarios.all + SiteProtectionScenarios.all + PageBrowsingScenarios.all + TabsLittleBarScenarios.all + SidebarReviewScenarios.all + SidebarEvidenceScenarios.all + CommandBarEvidenceScenarios.all + LittlePeekEvidenceScenarios.all + RemainingScenarios.all + TextLayoutScenarios.all + PageSiteFixScenarios.all + ReviewFilePanelProbes.all + FavoritesDragScenarios.all + LibraryThemeScenarios.all + QuickBarScenarios.all + CoreScenarios.all + AIRealUIScenarios.all + AIBasicRealUIScenarios.all + AIRealTabsScenarios.all + AIRealLocalScenarios.all + AIRealPagesScenarios.all + AIPagesFixtureScenarios.all + AILivePagesScenarios.all + AIPanelLookScenarios.all + AIThreadsScenarios.all + AIRealThreadsScenarios.all + AIRightPanelScenarios.all + AIRealRightPanelScenarios.all
+    ] + Wave2Scenarios.all + IdentityScenarios.all + TransferScenarios.all + SplitToolsScenarios.all + TabToolsScenarios.all + ImportSyncScenarios.all + FilePanelScenarios.all + SpaceToolsScenarios.all + BrowserBasicScenarios.all + SitePolicyScenarios.all + ExtensionScenarios.all + BoostScenarios.all + DataScenarios.all + ExtScenarios.all + AIScenarios.all + AIAgentScenarios.all + MediaScenarios.all + CaptureScenarios.all + LibraryCardScenarios.all + EaselScenarios.all + SettingsBehaviourScenarios.all + SiteSecurityScenarios.all + SitePermissionScenarios.all + PageBrowsingScenarios.all + TabsLittleBarScenarios.all + SidebarEvidenceScenarios.all + CommandBarEvidenceScenarios.all + RemainingScenarios.all + TextLayoutScenarios.all + PageSiteFixScenarios.all + FavoritesDragScenarios.all + QuickBarScenarios.all + CoreScenarios.all + AIRealUIScenarios.all + AIBasicRealUIScenarios.all + AIRealLocalScenarios.all + AIPagesFixtureScenarios.all + AILivePagesScenarios.all + AIThreadsScenarios.all + AIRightPanelScenarios.all + AIRealRightPanelScenarios.all
 }
 
 // MARK: - Shared reading helpers

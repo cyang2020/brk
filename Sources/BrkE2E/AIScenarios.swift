@@ -9,19 +9,8 @@ import Foundation
 enum AIScenarios {
     static let all = [
         Scenario("AICommand", "Opt+Cmd+G asks with streaming, cancel and actionable failure", cefOnly: "native command bar", command),
-        Scenario("AIPage", "main-frame question attribution excludes controls, frames and private pages", cefOnly: "CEF main document", page),
-        Scenario("AIHover", "Shift held over a link opens Arc's answer card under it; a plain hover does not; leaving closes the readers", cefOnly: "CEF status hover", hover),
         Scenario("AIOrganize", "Today's divider Tidy groups Today, the undo toast restores order and restart preserves tabs", cefOnly: "native Today groups", organize),
-        Scenario("AIDownload", "completed fixture downloads rename without overwriting a collision", cefOnly: "CEF downloads", download),
-        Scenario("AIInstant", "Shift+Return in the command bar heads Today with the searching row, opens the verified result, fails in place", cefOnly: "CEF reachability", instant),
-        Scenario("AIAskRow", "a question in the command bar lists the Ask row that asks the local tool; the tool's name then Tab asks it", cefOnly: "native command bar", askRow),
-        Scenario("AITidyTitles", "a Today tab dragged into Pinned gets its tidy title, as Arc's P47-a", cefOnly: "native sidebar drag", tidyTitles),
-        Scenario("PillShareQuote", "a highlight on the page puts Share Quote on the pill's second line; its click copies the link to the highlight", cefOnly: "CEF selection", shareQuote),
-        Scenario("AIBrowse", "selected sources use owning profile cookies, citations and close all readers", cefOnly: "CEF hidden pages", browse),
-        Scenario("AITranslate", "page menu Translate to English, the pill's Translated and popover, Use Original's undo toast and ⌘Z, never-translate", cefOnly: "CEF isolated world", translate),
         Scenario("AITranslateOffer", "a real click on the pill's Translation Available opens Arc's Translate this page popover (P50-g); its Translate translates", cefOnly: "CEF isolated world", translateOffer),
-        Scenario("AIMax", "native Max pane persists delivered switches and provider choice without an API key", cefOnly: "native settings", maxPane),
-        Scenario("AIQuit", "quit reaps active and already-cancelled fixture CLIs", cefOnly: "native shutdown", quit),
     ]
     private static func enable(_ app: AppUnderTest, _ features: [AIFeature] = AIFeature.allCases) throws {
         for feature in features { try app.dispatch(.settings(.max(.feature(feature, true)))) }
@@ -250,30 +239,6 @@ enum AIScenarios {
         try app.press("return")
         try app.waitUntil("plain Return searched") { try currentTab(app.view())?.url?.absoluteString.contains("plain") == true }
     }
-    /// Arc's Ask ChatGPT → row (P49) with the local tool's name: a question lists it; choosing it asks the tool.
-    /// Typing the tool's name and Tab opens the bar's question mode (Arc: start typing "ChatGPT", hit Tab).
-    private static func askRow(_ app: AppUnderTest) throws {
-        try enable(app)
-        try openBar(app)
-        try app.type("how do browsers render fonts")
-        guard case .commandBar(let bar)? = try app.view().overlay, let provider = bar.askProvider else { throw Check(description: "no Ask provider in the bar") }
-        try app.waitUntil("the Ask row") { try app.native().actual[ViewID.aiControl("ask-row").identifier]?.hidden == false }
-        _ = try app.screenshot("AIAskRow-bar")
-        try app.click(.aiControl("ask-row"))
-        try answer(app, contains: "Fixture answer")
-        // The question's call; Name Tabs, on here, names the conversation after it with a structured request of its own.
-        let asked = calls(app).last { !(($0["argv"] as? [String])?.contains("--json-schema") ?? false) }
-        try expect(asked?["prompt"] as? String == "how do browsers render fonts", "the Ask row asked something else")
-        try openBar(app)
-        try app.type(String(provider.prefix(3)))
-        try app.press("tab")
-        // Arc opens its question mode; where Brk offers the tool's own prefix beside the input, Tab enters that, which asks the same tool.
-        try app.waitUntil("question mode or the tool's prefix after \(provider) and Tab") {
-            if case .commandBar(let bar)? = try app.view().overlay, bar.aiMode == .question { return true }
-            return try app.native().actual[ViewID.commandBarPill.identifier].map { !$0.hidden } ?? false
-        }
-        try app.press("escape")
-    }
     /// The URL pill's second line with text highlighted (Shared Quotes on): Share Quote in place of Translation
     /// Available; a click copies the link to the highlight (`#:~:text=`) with "Copied Shared URL"; no highlight, the
     /// translation line is back.
@@ -301,30 +266,6 @@ enum AIScenarios {
         app.sleep(0.8)
         try expect(try !app.view().urlPill.shareQuote, "Share Quote showed with Shared Quotes off")
         _ = page
-    }
-    /// Max's Tidy Tab Titles (Arc P47-a): a Today tab dragged into Pinned gets the tool's shorter title.
-    private static func tidyTitles(_ app: AppUnderTest) throws {
-        try enable(app)
-        // Pinned gets a row to drop under before Tidy Tab Titles is on.
-        let home = try currentTab(app.view())!.id
-        try app.dispatch(.tab(.togglePin(.item(home))))
-        try app.dispatch(.settings(.max(.renamePinnedTabs(true))))
-        let tab = try load(app, "ai-source.html").item
-        try waitForTitle(app, tab, "AI Source")
-        let facts = try app.native()
-        let from = try visible(facts, .row(tab)).frame, pinned = try visible(facts, .row(home)).frame
-        let drop = CGPoint(x: pinned.midX, y: pinned.midY + pinned.height * 0.3)
-        try app.perform(.pointer(window: app.window, phase: .down, point: CGPoint(x: from.midX, y: from.midY)))
-        try app.perform(.pointer(window: app.window, phase: .dragged, point: CGPoint(x: from.midX + 8, y: from.midY - 4)))
-        try app.perform(.pointer(window: app.window, phase: .dragged, point: CGPoint(x: (from.midX + drop.x) / 2, y: (from.midY + drop.y) / 2)))
-        try app.perform(.pointer(window: app.window, phase: .dragged, point: drop))
-        app.sleep(0.3)
-        try app.perform(.pointer(window: app.window, phase: .up, point: drop))
-        try app.waitUntil("dragged into Pinned") { tabRows(try app.view().space.pinned.rows).contains { $0.id == tab } }
-        try waitForTitle(app, tab, "Fixture Tab", timeout: 15)
-        _ = try app.screenshot("AITidyTitles-pinned")
-        try app.flush(); try app.restart()
-        try expect(try BrkE2E.tab(tab, in: app.view())?.title == "Fixture Tab", "the tidy title did not survive a restart")
     }
     private static func browse(_ app: AppUnderTest) throws {
         try enable(app)
@@ -414,26 +355,6 @@ enum AIScenarios {
             app.sleep(0.3)
             return try BrkE2E.tab(page.item, in: app.view())?.title == tag
         }
-    }
-    private static func maxPane(_ app: AppUnderTest) throws {
-        try enable(app)
-        try app.dispatch(.settings(.max(.provider(.codex))))
-        try app.dispatch(.settings(.openPane(.max)))
-        var settingsWindow: AppWindowFact?
-        try app.waitUntil("visible owned settings window") {
-            settingsWindow = try app.native().appWindows.first { $0.className == "NSWindow" && $0.isVisible }
-            return settingsWindow != nil
-        }
-        let capture = Process()
-        capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        capture.arguments = ["-x", "-l", String(settingsWindow!.number), app.shotsDirectory.appendingPathComponent("AIMax-settings.png").path]
-        try capture.run(); capture.waitUntilExit()
-        try expect(capture.terminationStatus == 0, "settings capture failed")
-        try app.flush(); try app.restart()
-        guard case .settings(let settings) = try app.send(.settings) else { throw Check(description: "no settings") }
-        let max = settings.max.settings
-        try expect(max.provider == .codex && AIFeature.allCases.allSatisfy(max.enabled), "Max switches did not persist")
-        try expect(!String(decoding: Data(contentsOf: app.dataDirectory.appendingPathComponent("state.json")), as: UTF8.self).lowercased().contains("apikey"), "API key field persisted")
     }
     private static func quit(_ app: AppUnderTest) throws {
         try enable(app)

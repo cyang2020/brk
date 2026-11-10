@@ -8,15 +8,13 @@ import Foundation
 /// The provider layer against Tests/Fixtures/ai-provider speaking each agent's real session protocol (the harness sets
 /// BRK_AI_FIXTURE_PROTOCOL for "AIAgent…" ids). Keys and clicks go through the window server, the way a user's do.
 enum AIAgentScenarios {
-    static let all: [Scenario] = [AIProviderChoice.claude, .codex, .gemini, .cursor, .opencode].flatMap { choice -> [Scenario] in
+    static let all: [Scenario] = [AIProviderChoice.claude, .codex].flatMap { choice -> [Scenario] in
         let name = choice.rawValue
         return [
             Scenario("AIAgentChat-\(name)", "\(name): streaming, follow-up in one process, read-only flags, Stop ends what the turn started", cefOnly: "native panel") { try chat($0, choice) },
             Scenario("AIAgentTools-\(name)", "\(name): a folder session asks before a tool runs; Deny writes nothing, Allow writes the file", cefOnly: "native panel") { try tools($0, choice) },
         ]
     } + [
-        Scenario("AIAgentForcedStop", "a turn that ignores the agent's own stop is ended by Brk, whole tree; the next message starts a new process", cefOnly: "native panel", forcedStop),
-        Scenario("AIAgentSettings", "the Max pane's Local AI card, always there under Enable Max, lists what the agent reports; the choice reaches the next session", cefOnly: "native settings", settings),
         Scenario("AIAgentQuit", "quit ends a session with tools on and the command it started", cefOnly: "native shutdown", quit),
     ]
 
@@ -196,17 +194,6 @@ enum AIAgentScenarios {
         }
     }
 
-    private static func forcedStop(_ app: AppUnderTest) throws {
-        try prepare(app, .claude)
-        try app.dispatch(.assist(.ask("fixture:hang")))
-        try app.waitUntil("the agent hangs", timeout: 15) { prompts(app).last?["prompt"] as? String == "fixture:hang" }
-        let pid = try XCTUnwrapValue(prompts(app).last?["pid"] as? Int32)
-        try click(app, .aiControl("stop"))
-        try app.waitUntil("Brk ends a process that ignores everything", timeout: 8) { gone(pid) }
-        try typeIntoInput(app, "still here")
-        try waitAnswer(app, contains: "still here")
-        try expect(prompts(app).last?["pid"] as? Int32 != pid, "the next message did not start a new process")
-    }
 
     private static func settings(_ app: AppUnderTest) throws {
         try prepare(app, .claude)

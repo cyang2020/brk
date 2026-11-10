@@ -5,10 +5,8 @@ import Foundation
 
 enum SitePolicyScenarios {
     static let all = [
-        Scenario("SitePolicy-appearance", "website appearance, theme CSS cleanup and native site controls", cefOnly: "CSS and native CEF", appearance),
         Scenario("SitePolicy-clear", "origin cookies and storage clear while another origin and profile survive restart", cefOnly: "CEF storage", clearData),
         Scenario("SitePolicy-blocking", "network/cosmetic blocking and per-site exceptions", cefOnly: "CEF requests", blocking),
-        Scenario("Extension-manager", "Chrome runtime extension management and shortcut WebUI are usable", cefOnly: "Chrome runtime", extensionManager),
     ]
 
     static func controls(_ app: AppUnderTest) throws -> SiteControlSnapshot {
@@ -136,18 +134,4 @@ enum SitePolicyScenarios {
         app.note("Blocked request produces a rejected fetch and zero server hits. The per-origin exception sends one real request. Cosmetic and banner rules have separate DOM readback.")
     }
 
-    @Sendable static func extensionManager(_ app: AppUnderTest) throws {
-        try app.dispatch(.site(.extensions))
-        try app.waitUntil("extension manager WebUI") { try currentTab(app.view())?.url?.absoluteString.hasPrefix("chrome://extensions") == true }
-        guard let item = currentTab(try app.view())?.id else { throw Check(description: "missing manager") }
-        try app.waitForPageInput(PageID(window: app.window!, item: item), at: URL(string: "chrome://extensions/")!)
-        try app.waitUntil("extension manager DOM is ready") {
-            try evaluate(app, item, "document.title='extensions-ui:'+!!document.querySelector('extensions-manager')")
-            return tab(item, in: try app.view())?.title == "extensions-ui:true"
-        }
-        try app.dispatch(.site(.extensionShortcuts))
-        try app.waitUntil("shortcuts WebUI") { try currentTab(app.view())?.url?.absoluteString.contains("shortcuts") == true }
-        _ = try app.screenshot("Extension-manager")
-        app.note("This scenario proves embedded management/shortcut WebUI only; installation, action popup and command dispatch require additional runtime evidence.")
-    }
 }

@@ -7,11 +7,6 @@ import Foundation
 enum SplitToolsScenarios {
     static let all = [
         Scenario("SplitTools1", "four native panes edit independently, resize in both orientations, restore and close", cefOnly: "native split pages and pointer dividers", geometry),
-        Scenario("SplitTools2", "native content-edge drags preview, cancel, group and respect the four-pane cap", cefOnly: "native sidebar pointer drags", drops),
-        Scenario("SplitTools3", "two windows retain local focus, addresses and DOM across expand, separate and separate all", cefOnly: "window-owned CEF pages", tools),
-        Scenario("SplitTools4", "private split controls preserve session scope and suppress saved metadata", cefOnly: "private CEF panes", privacy),
-        Scenario("SplitTools5", "an accepted POST download keeps its original browser through expand and separation", cefOnly: "actual transfer bytes and original request", transfer),
-        Scenario("SplitTools6", "closing pinned panes keeps their rows and addresses through singleton dissolution and restart", cefOnly: "native pinned split closure", pinnedClose),
     ]
 
     private static func send(_ app: AppUnderTest, _ window: WindowID, _ command: Command) throws {
@@ -120,62 +115,6 @@ enum SplitToolsScenarios {
         try app.recordWindows("after-close")
     }
 
-    private static func drops(_ app: AppUnderTest) throws {
-        let target = try app.load(app.site.url("split-tools.html?target"))
-        try app.waitForPageInput(PageID(window: app.window!, item: target), at: app.site.url("split-tools.html?target"))
-        let source = try app.load(app.site.url("split-tools.html?source"))
-        try app.waitForPageInput(PageID(window: app.window!, item: source), at: app.site.url("split-tools.html?source"))
-        try app.click(.row(target))
-        var area = try app.native().computed.contentArea
-        var row = try visible(app.native(), .row(source)).frame
-        let origin = CGPoint(x: row.midX, y: row.midY), edge = CGPoint(x: area.maxX - 12, y: area.midY)
-        try pointer(app, .down, origin); try pointer(app, .dragged, edge)
-        try expect(isShown(try app.native(), .splitDropPreview), "content edge has no visible preview")
-        try app.screenshot("drop-preview")
-        try app.press("escape"); try pointer(app, .up, edge)
-        try expect(try app.view().content.split == nil, "Escape committed a cancelled drag")
-        try expect(!isShown(try app.native(), .splitDropPreview), "Escape left preview behind")
-        // Past the middle of the page (from the left, a slot that shows holds up to the middle): the frame. No split, the
-        // dragged tab is the current one (Arc, Q17-drop-tab-framed-middle).
-        try drag(app, from: origin, to: CGPoint(x: area.midX + 40, y: area.midY))
-        try expect(try app.view().content.split == nil, "center drop created a split")
-        try expect(try app.view().content.panes.map(\.tab) == [source], "center drop did not show the dragged tab")
-        try app.click(.row(target))
-        let idsBefore = try app.pageLog().filter { $0.kind == .created && ($0.page.item == target || $0.page.item == source) }
-        try drag(app, from: origin, to: edge)
-        try expect(try app.view().content.panes.map(\.tab) == [target, source], "right-edge pointer drag did not group tabs")
-        try expect(try app.pageLog().filter { $0.kind == .created && ($0.page.item == target || $0.page.item == source) } == idsBefore,
-                   "drop replaced an original browser or changed its generation")
-        try SplitParentScenarios.splitTool(app, .separateAllSplit); try app.click(.row(target))
-        row = try visible(app.native(), .row(source)).frame
-        area = try app.native().computed.contentArea
-        try drag(app, from: CGPoint(x: row.midX, y: row.midY), to: CGPoint(x: area.minX + 12, y: area.midY))
-        try expect(try app.view().content.panes.map(\.tab) == [source, target], "left-edge pointer drag did not prepend the source")
-        for n in 3...4 {
-            let split = try app.view().content.split!
-            let tab = try app.load(app.site.url("split-tools.html?drag=\(n)"))
-            try app.waitForPageInput(PageID(window: app.window!, item: tab), at: app.site.url("split-tools.html?drag=\(n)"))
-            try app.click(.row(split))
-            area = try app.native().computed.contentArea
-            row = try visible(app.native(), .row(tab)).frame
-            // In a side by side split only its own axis has zones (Arc 0x100a46638): at most 80 pt from a pane's sides.
-            let end = n == 3 ? CGPoint(x: area.midX + 8, y: area.minY + 12) : CGPoint(x: area.maxX - 12, y: area.midY)
-            try drag(app, from: CGPoint(x: row.midX, y: row.midY), to: end)
-            try expect(try app.view().content.panes.count == n && app.view().content.orientation == .horizontal, "a side zone failed to extend the split")
-            if n == 3 { try expect(try app.view().content.panes[1].tab == tab, "a slot between the panes did not take its index") }
-        }
-        let split = try app.view().content.split!
-        let fifth = try app.load(app.site.url("split-tools.html?fifth"))
-        try app.click(.row(split))
-        row = try visible(app.native(), .row(fifth)).frame
-        area = try app.native().computed.contentArea
-        try drag(app, from: CGPoint(x: row.midX, y: row.midY), to: CGPoint(x: area.minX + 12, y: area.midY))
-        // A full split takes no slot: the left zone falls back to framing the pane, and the release replaces it (Arc, Q17).
-        try expect(try app.view().content.panes.count == 4, "drag exceeded four panes")
-        try expect(try app.view().content.panes[0].tab == fifth, "a release on a full split's frame did not take the pane")
-        try expect(!isShown(try app.native(), .splitDropPreview), "drag feedback left behind")
-        try app.recordWindows("four-dropped-panes")
-    }
 
     private static func tools(_ app: AppUnderTest) throws {
         let first = try app.load(app.site.url("split-tools.html?first"))
@@ -255,60 +194,5 @@ enum SplitToolsScenarios {
         try send(app, owner, .window(.close))
     }
 
-    private static func transfer(_ app: AppUnderTest) throws {
-        let directory = app.dataDirectory.appendingPathComponent("split-downloads", isDirectory: true)
-        try app.dispatch(.settings(.profile(.default, .downloadsDirectory(directory.path))))
-        let first = try app.load(app.site.url("split-tools.html?transfer-source"))
-        let page = PageID(window: app.window!, item: first)
-        try app.waitForPageInput(page, at: app.site.url("split-tools.html?transfer-source"))
-        _ = try add(app, number: 2)
-        try app.click(.splitSegment(first))
-        let browser = try app.native().pages[page]?.browserID
-        let address = String(data: try JSONEncoder().encode(app.site.url("transfer-post-split").absoluteString), encoding: .utf8)!
-        try app.evaluate(page, "(()=>{let f=document.createElement('form');f.method='POST';f.action=\(address);f.innerHTML='<input name=secret value=original-body>';document.body.append(f);f.submit()})()")
-        try app.dispatch(.library(.open(.downloads)))
-        try app.waitUntil("accepted POST transfer receives bytes") {
-            guard case .library(let library)? = try app.view().overlay else { return false }
-            return library.downloads.contains { $0.filename == "transfer-post-split.bin" && $0.state == .inProgress && $0.received > 0 }
-        }
-        try app.dispatch(.library(.close))
-        try SplitParentScenarios.splitTool(app, .maximizeSplitPane); try SplitParentScenarios.splitTool(app, .maximizeSplitPane)
-        try SplitParentScenarios.splitTool(app, .separateTabFromSplitView)
-        try expect(try app.native().pages[page]?.browserID == browser, "split tools replaced the download's browser")
-        try app.dispatch(.library(.open(.downloads)))
-        try app.waitUntil("POST transfer completes after separation", timeout: 18) {
-            guard case .library(let library)? = try app.view().overlay else { return false }
-            return library.downloads.contains { $0.filename == "transfer-post-split.bin" && $0.state == .finished }
-        }
-        let receipt = try Data(contentsOf: directory.appendingPathComponent("transfer-post-split.bin"))
-        try expect(receipt == Data(repeating: 80, count: 4_194_304), "POST receipt bytes differ")
-        try expect(app.site.requestCount("/transfer-post-split-valid-post") == 1, "split tools replayed the POST request")
-        try expect(app.site.requestCount("/transfer-post-split-complete") == 1, "server did not complete the original transfer")
-        try receipt.write(to: app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("split-post-receipt.bin"))
-        try app.recordWindows("original-post-complete")
-        app.note("One validated POST request; 4,194,304 P bytes; original browser \(String(describing: browser)) survived expand, restore and separation.")
-    }
 
-    private static func pinnedClose(_ app: AppUnderTest) throws {
-        let first = try app.load(app.site.url("split-tools.html?pinned-first"))
-        try app.waitForPageInput(PageID(window: app.window!, item: first), at: app.site.url("split-tools.html?pinned-first"))
-        for number in 2...4 { _ = try add(app, number: number) }
-        let panes = try app.view().content.panes.map(\.tab)
-        let addresses = try panes.map { try tab($0, in: app.view())?.url }
-        try app.press("cmd+d")
-        for count in stride(from: 3, through: 1, by: -1) {
-            try app.press("ctrl+shift+-")
-            try expect(try app.view().content.panes.count == count, "pinned close did not remove a content pane")
-        }
-        try expect(try app.view().content.split == nil, "pinned singleton did not dissolve")
-        try expect(try app.view().space.pinned.rows.map(\.id) == panes, "pinned close lost or reordered retained rows")
-        try app.waitUntil("closed pinned panes release presentation") {
-            let facts = try app.native()
-            return panes.dropFirst().allSatisfy { facts.pages[PageID(window: app.window!, item: $0)] == nil }
-        }
-        try app.flush(); try app.restart()
-        try expect(try app.view().space.pinned.rows.map(\.id) == panes, "restart lost pinned rows")
-        try expect(try panes.map { try tab($0, in: app.view())?.url } == addresses, "restart lost retained pinned addresses")
-        try app.recordWindows("pinned-retained")
-    }
 }

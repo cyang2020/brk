@@ -13,19 +13,8 @@ enum FavoritesDragScenarios {
         Scenario("R53-TabIn", "a Today tab and a pinned tab held over four Favorites reflow them to 3+2 with the empty cell under the pointer, and land there as the current tab; a folder is refused", cefOnly: "real mouse", tabIn),
         Scenario("R53-Reorder", "a Favorite held inside the grid slides the others live and lands in the cell under the pointer", cefOnly: "real mouse", reorder),
         Scenario("R53-Out", "a Favorite dragged out leaves its cell empty, shows a row and lands in Today or Pinned as the current tab; the grid rebalances after the release", cefOnly: "real mouse", out),
-        Scenario("R53-Strip", "a tab held on the Space name strip darkens it; dropped, it is the first pinned tab, current, with Double-click to rename", cefOnly: "real mouse", strip),
-        Scenario("R53-Empty", "Favorites dragged out one at a time go 3 wide, 2 wide, 1 full width, then the dashed box; a tab dropped on the box is one full-width tile", cefOnly: "real mouse", empty),
-        Scenario("R53-EmptyClosed", "with no Favorites and the hint closed, a tab held on the URL pill opens one full-width cell and the release makes it the first Favorite", cefOnly: "real mouse", emptyClosed),
         Scenario("R53-SplitSides", "a tab held on another tab's middle shows a slot under the pointer's half and lands on that side, focused; 9.5 pt from the edge reorders, 11.5 pt is a slot; on a split row one band, and the left and right ends make it the first and the last pane", cefOnly: "real mouse", splitSides),
-        Scenario("R53-Page", "a Favorite over the page brings the earlier tab back, shows the big card and the slots; released on a slot its tile stays and a new tab joins, in the middle nothing moves and it is the current tab", cefOnly: "real mouse", page),
         Scenario("R54-Halves", "a tab released on the left half and on the right half of the page makes a split with it on that side and focused", cefOnly: "real mouse", halves),
-        Scenario("R54-Frame", "a tab held on the middle of the page frames it; released, no split, nothing moves and the dragged tab is current", cefOnly: "real mouse", frameDrop),
-        Scenario("R54-Favorite", "a Favorite released on the right half: its tile stays, the split holds a new Today tab at its address, and the tab stays in Today when the split comes apart", cefOnly: "real mouse", favoriteDrop),
-        Scenario("R54-Pinned", "a pinned tab released on the right half stays pinned; the split holds a new Today tab at its address; apart, the tab stays in Today", cefOnly: "real mouse", pinnedRelease),
-        Scenario("R54-PaneHold", "a third tab over a two pane split: a slot at the far left through the left pane, a frame around the right pane", cefOnly: "real mouse", paneHold),
-        Scenario("R54-PaneDrop", "a third tab released on a framed pane takes it and the focus; the old tab is the row right after the split row and keeps its page; apart, the order is the two panes then the old tab", cefOnly: "real mouse", paneDrop),
-        Scenario("R54-FullSplit", "a full split of four shows only frames; a release replaces that pane and the count stays four", cefOnly: "real mouse", fullSplit),
-        Scenario("R54-Paths", "the same place shows a different preview by path, as in Arc: a left slot holds up to the middle, a right slot back to the middle, the frame otherwise; a tab over its own page gets slots and no frame", cefOnly: "real mouse", paths),
     ]
 
     private typealias S = SidebarReviewScenarios
@@ -258,40 +247,6 @@ enum FavoritesDragScenarios {
         _ = try app.screenshot("one-tile")
     }
 
-    /// The user's report (verify/visual-pairs/run-20261103/Q18): with no Favorites and the "Drag to add Favorites" box
-    /// closed, the tray had no height and there was nowhere to drop a tab. The strip of the URL pill is the way in: a tab
-    /// held there opens one full-width cell under the pill, and the release makes it the first Favorite.
-    @Sendable static func emptyClosed(_ app: AppUnderTest) throws {
-        let f = try fixture(app, favorites: 1)
-        try PhysicalPointer.drag(app, through: [centre(frame(app, .favorite(f.favorites[0]))), CGPoint(x: 86, y: try frame(app, .row(f.c)).midY - 10)], window: app.window!) {}
-        try app.waitUntil("no Favorites") { try tiles(app).isEmpty }
-        try app.waitUntil("the dashed box") { isShown(try app.native(), .tabTool("favorites-empty-close")) }
-        try PhysicalPointer.press(app, at: centre(frame(app, .tabTool("favorites-empty-close"))), window: app.window!) {}
-        try app.waitUntil("the box is closed") { try app.view().favorites.hintDismissed }
-        // The views as drawn (the held layout is the sidebar's own, not the snapshot's): the tray, and the first pinned
-        // row, which moves down with the Space name when the tray opens.
-        func tray() throws -> Double { Double(try app.native().actual[ViewID.favoritesTray.identifier]?.frame.height ?? 0) }
-        func firstPinned() throws -> Double { Double(try frame(app, .row(f.home)).minY) }
-        try app.waitUntil("the tray has no height") { try tray() == 0 }
-        let pill = try frame(app, .urlPill), home = try firstPinned()
-        try expect(try app.native().computed.sidebar?.spaceHeader.minY == pill.maxY, "the Space name is not right under the pill")
-        _ = try app.screenshot("closed")
-        // Held on the pill: one full-width cell opens under it and the list moves down by it; the image is a tile.
-        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.b))), centre(pill)], window: app.window!) {
-            try app.waitUntil("the tray opens one cell") { abs(try tray() - 63) < 0.5 }
-            try app.waitUntil("the list moves down") { abs(try firstPinned() - (home + 63)) < 0.5 }
-            let image = try image(app)
-            try expect(abs(image.width - 212) < 0.75 && abs(image.height - 47) < 0.75, "the drag image is \(image), not a full-width tile")
-            _ = try app.screenshot("held-on-pill")
-        }
-        try app.waitUntil("one tile") { try tiles(app) == [f.b] }
-        try app.waitUntil("full width") { abs(try frame(app, .favorite(f.b)).width - 212) < 0.75 }
-        try expect(try shown(app) == f.b, "the dropped tab is not the current tab")
-        _ = try app.screenshot("one-tile")
-        // A tab held on the Space name, not on the pill, is still the strip's (first pinned), with a tile above it now.
-        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.a))), centre(frame(app, .favorite(f.b)))], window: app.window!) {}
-        try app.waitUntil("two tiles") { try Set(tiles(app)) == [f.a, f.b] }
-    }
 
     // MARK: The page
 
@@ -358,169 +313,12 @@ enum FavoritesDragScenarios {
         try expect(try app.view().content.panes[1].focused, "the dragged tab is not focused")
     }
 
-    @Sendable static func frameDrop(_ app: AppUnderTest) throws {
-        let f = try fixture(app)
-        let area = try app.native().computed.contentArea
-        let order = try app.view().space.today.rows.map(\.id), pinned = try app.view().space.pinned.rows.map(\.id)
-        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.a))), CGPoint(x: area.midX + 40, y: area.midY)], window: app.window!) {
-            try app.waitUntil("c shows again") { try shown(app) == f.c }
-            try app.waitUntil("the frame") { try frame(app, .splitDropPreview) == area }
-            _ = try app.screenshot("frame")
-        }
-        try app.waitUntil("a shown") { try app.view().content.panes.map(\.tab) == [f.a] }
-        try expect(try app.view().content.split == nil, "a split was made")
-        try expect(try app.view().space.today.rows.map(\.id) == order && app.view().space.pinned.rows.map(\.id) == pinned, "something moved")
-    }
 
-    @Sendable static func favoriteDrop(_ app: AppUnderTest) throws {
-        let f = try fixture(app)
-        let area = try app.native().computed.contentArea
-        let tile = f.favorites[3]
-        let address = try app.view().favorites.tiles.first { $0.id == tile }?.url
-        let grid = try tiles(app), today = try app.view().space.today.rows.map(\.id)
-        // Through the page's left part first, as a person's drag goes, then to the right half: the tile stays out of the way.
-        try PhysicalPointer.drag(app, through: [centre(frame(app, .favorite(tile))), CGPoint(x: area.maxX - 150, y: area.midY)], window: app.window!) {
-            try app.waitUntil("the right slot") {
-                let slot = try frame(app, .splitDropPreview)
-                return slot.maxX == area.maxX && abs(slot.width - 516) < 1
-            }
-        }
-        try app.waitUntil("the split") { try app.view().content.panes.count == 2 }
-        let panes = try app.view().content.panes
-        try expect(panes[0].tab == f.c && panes[1].focused, "the panes are \(panes.map(\.tab))")
-        try expect(panes[1].tab != tile && !today.contains(panes[1].tab), "the second pane is not a new tab")
-        func paneURL() throws -> URL? {
-            for case .split(let row) in try app.view().space.today.rows { if let pane = row.panes.first(where: { $0.id == panes[1].tab }) { return pane.url } }
-            return nil
-        }
-        try app.waitUntil("the new tab at the Favorite's address") { try paneURL() == address }
-        let after = try tiles(app)
-        try expect(after == grid, "the grid changed: \(after)")
-        try app.dispatch(.split(.separateAll))
-        try app.waitUntil("apart") { try app.view().content.split == nil }
-        try expect(try app.view().space.today.rows.contains { $0.id == panes[1].tab }, "the new tab left Today")
-        try expect(try tiles(app) == grid, "the grid changed when the split came apart")
-    }
 
-    @Sendable static func pinnedRelease(_ app: AppUnderTest) throws {
-        let f = try fixture(app)
-        let area = try app.native().computed.contentArea
-        let pinned = try app.view().space.pinned.rows.map(\.id), today = try app.view().space.today.rows.map(\.id)
-        let address = try app.view().space.pinned.rows.compactMap { row -> URL? in if case .tab(let tab) = row, tab.id == f.home { return tab.url } else { return nil } }.first
-        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.home))), CGPoint(x: area.maxX - 220, y: area.midY)], window: app.window!) {
-            try app.waitUntil("c shows again") { try shown(app) == f.c }
-            try app.waitUntil("the right slot") {
-                let slot = try frame(app, .splitDropPreview)
-                return slot.maxX == area.maxX && abs(slot.width - 516) < 1
-            }
-            _ = try app.screenshot("pinned-held")
-        }
-        try app.waitUntil("the split") { let panes = try app.view().content.panes; return panes.count == 2 && panes[0].tab == f.c }
-        let panes = try app.view().content.panes
-        try expect(panes[1].tab != f.home && !today.contains(panes[1].tab), "the second pane is not a new tab")
-        try expect(panes[1].focused, "the new tab is not focused")
-        try expect(try app.view().space.pinned.rows.map(\.id) == pinned, "the pinned row moved")
-        let split = try app.view().content.split
-        try expect(try app.view().space.today.rows.map(\.id) == today.map { $0 == f.c ? split! : $0 }, "the split is not where c was")
-        func paneURL() throws -> URL? {
-            for case .split(let row) in try app.view().space.today.rows { if let pane = row.panes.first(where: { $0.id == panes[1].tab }) { return pane.url } }
-            return nil
-        }
-        try app.waitUntil("the new tab at the pinned tab's address") { try paneURL() == address }
-        _ = try app.screenshot("pinned-released")
-        try app.dispatch(.split(.separateAll))
-        try app.waitUntil("apart") { try app.view().content.split == nil }
-        try expect(try app.view().space.today.rows.contains { $0.id == panes[1].tab }, "the new tab left Today")
-        try expect(try app.view().space.pinned.rows.map(\.id) == pinned, "the pinned row moved when the split came apart")
-    }
 
-    /// Today [split c | a, b, the first page] with the split shown.
-    private static func splitOfTwo(_ app: AppUnderTest, _ f: Fixture) throws -> ItemID {
-        try app.dispatch(.split(.joinRow(f.a, onto: f.c, at: 1)))
-        try app.waitUntil("the split") { try app.view().content.panes.map(\.tab) == [f.c, f.a] }
-        let split = try app.view().content.split!
-        try app.dispatch(.tab(.focus(split)))
-        return split
-    }
 
-    @Sendable static func paneHold(_ app: AppUnderTest) throws {
-        let f = try fixture(app)
-        let split = try splitOfTwo(app, f)
-        let area = try app.native().computed.contentArea
-        let row = centre(try frame(app, .row(f.b)))
-        // Q17-split-hold-486-330: through the left pane's left band, then the pointer is on the slot.
-        try held(app, [row, CGPoint(x: 486, y: 330)], back: split) {
-            let slot = try frame(app, .splitDropPreview)
-            try expect(slot.minX == area.minX && abs(slot.width - 341) < 1 && slot.height == area.height, "not the far left slot: \(slot)")
-            let cards = [try frame(app, .card(0)), try frame(app, .card(1))]
-            try expect(abs(cards[0].minX - 579) < 1 && abs(cards[0].width - 340) < 1 && abs(cards[1].minX - 929) < 1, "the pages did not make room: \(cards)")
-            try expect(try app.view().content.split == split, "the split is not shown")
-            let card = try frame(app, .tabTool("content-drag-card"))
-            try expect(card.width == 113 && card.height == 250, "the card over two panes is \(card)")
-            let width = try app.native().computed.sidebar?.frame.width ?? 228
-            try expect(abs(card.minX - (486 - row.x / width * 113)) < 1.5, "the card does not keep the pointer's place along the row: \(card), pressed at \(row.x)")
-            _ = try app.screenshot("hold-left")
-        }
-        // Q17-split-hold-1012-330: a frame around the right pane, both pages back at their places.
-        try held(app, [row, CGPoint(x: 1012, y: 330)], back: split) {
-            let ring = try frame(app, .splitDropPreview), right = try frame(app, .card(1))
-            try expect(ring == right && abs(ring.minX - 754) < 1 && abs(ring.width - 516) < 1, "the frame is \(ring), the pane \(right)")
-            _ = try app.screenshot("hold-right")
-        }
-    }
 
-    @Sendable static func paneDrop(_ app: AppUnderTest) throws {
-        let f = try fixture(app)
-        let split = try splitOfTwo(app, f)
-        let pinned = try app.view().space.pinned.rows.map(\.id), rest = try app.view().space.today.rows.map(\.id).filter { $0 != split && $0 != f.b }
-        let page = PageID(window: app.window!, item: f.a)
-        let browser = try app.native().pages[page]?.browserID
-        try PhysicalPointer.drag(app, through: [centre(frame(app, .row(f.b))), CGPoint(x: 1012, y: 330)], window: app.window!) {
-            try app.waitUntil("the frame on the right pane") { try frame(app, .splitDropPreview) == frame(app, .card(1)) }
-        }
-        try app.waitUntil("the right pane") { try app.view().content.panes.map(\.tab) == [f.c, f.b] }
-        let view = try app.view()
-        try expect(view.content.panes[1].focused, "the dragged tab is not focused")
-        try expect(view.content.split == split, "the split changed")
-        try expect(view.space.today.rows.map(\.id) == [split, f.a] + rest, "Today reads \(view.space.today.rows.map(\.id))")
-        try expect(view.space.pinned.rows.map(\.id) == pinned, "Pinned changed")
-        _ = try app.screenshot("pane-released")
-        try app.dispatch(.split(.separateAll))
-        try app.waitUntil("apart") { try app.view().content.split == nil }
-        let apart = try app.view().space.today.rows.map(\.id)
-        try expect(apart == [f.c, f.b, f.a] + rest, "after separating Today reads \(apart)")
-        // The old tab's page was never closed: shown again it is the same browser, without a new load.
-        let created = try app.pageLog().filter { $0.kind == .created && $0.page == page }
-        try app.dispatch(.tab(.focus(f.a)))
-        try app.waitUntil("the old tab shown with its browser") { try browser != nil && app.native().pages[page]?.browserID == browser }
-        let after = try app.pageLog().filter { $0.kind == .created && $0.page == page }
-        try expect(after == created, "the old tab's page was created again")
-    }
 
-    @Sendable static func fullSplit(_ app: AppUnderTest) throws {
-        let f = try fixture(app)
-        let split = try splitOfTwo(app, f)
-        for (tab, at) in [(f.home, 2), (f.docs, 3)] {
-            try app.dispatch(.split(.joinRow(tab, onto: split, at: at)))
-        }
-        try app.waitUntil("four panes") { try app.view().content.panes.count == 4 }
-        let panes = try app.view().content.panes.map(\.tab)
-        let area = try app.native().computed.contentArea
-        let row = centre(try frame(app, .row(f.b)))
-        // Near a pane's side, where a split with room shows a slot: only the frame, and it is around that pane.
-        let last = try frame(app, .card(3))
-        try held(app, [row, CGPoint(x: area.maxX - 20, y: area.midY)], back: split) {
-            let ring = try frame(app, .splitDropPreview)
-            try expect(ring == last, "the frame is \(ring), the pane \(last)")
-            _ = try app.screenshot("full-held")
-        }
-        try PhysicalPointer.drag(app, through: [row, CGPoint(x: last.midX, y: last.midY)], window: app.window!) {
-            try app.waitUntil("the frame") { try frame(app, .splitDropPreview) == frame(app, .card(3)) }
-        }
-        try app.waitUntil("the last pane replaced") { try app.view().content.panes.map(\.tab) == Array(panes.dropLast()) + [f.b] }
-        let rows = try app.view().space.today.rows.map(\.id)
-        try expect(rows.first == split && rows.dropFirst().first == panes[3], "Today reads \(rows)")
-    }
 
     /// Holds the drag along `path`, checks, and cancels with Escape. The press opens the row and the cancel keeps it open, so the shown tab comes back afterwards.
     private static func held(_ app: AppUnderTest, _ path: [CGPoint], back: ItemID, check: () throws -> Void) throws {

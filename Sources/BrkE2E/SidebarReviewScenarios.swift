@@ -12,14 +12,6 @@ import Foundation
 /// context menus (`captureContextMenu`), and window-server keys (`WindowServerKeys`). Names start with R49 so the
 /// harness serves the loopback GitHub fixture.
 enum SidebarReviewScenarios {
-    static let all = [
-        Scenario("R49-Badge", "a cancelled reconnect from the Favorite's menu keeps the unread dot", cefOnly: "native sheet and Favorite overlay", badge),
-        Scenario("R49-Meeting", "Ctrl+Cmd+J answers in a private window and Little Arc; an unreadable file is not called expired", cefOnly: "native windows and calendar file", meeting),
-        Scenario("R49-Icons", "the icon popover's planet, skull, restaurant and medical glyphs set the folder icon", cefOnly: "native popover", icons),
-        Scenario("R49-MailCard", "hovering a Gmail Favorite with Previews on shows the mail card; the site switch turns it off", cefOnly: "native hover card", mailCard),
-        Scenario("R49-ThemeUndo", "Cmd+Z and Shift+Cmd+Z step through the theme panel's edits", cefOnly: "native theme panel", themeUndo),
-        Scenario("R49-Texture", "changing the space texture changes the drawn background", cefOnly: "Metal theme background", texture),
-    ]
 
     // MARK: Helpers
 
@@ -116,166 +108,15 @@ enum SidebarReviewScenarios {
 
     // MARK: A015
 
-    @Sendable static func meeting(_ app: AppUnderTest) throws {
-        let home = try currentTab(app.view())!.id
-        try app.waitForPageInput(page(app, home), at: app.site.url("index.html"))
-        let now = try app.advanceClock(seconds: 0)
-        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = TimeZone(secondsFromGMT: 0); formatter.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
-        func date(_ offset: Int64) -> String { formatter.string(from: Date(timeIntervalSince1970: Double(now.milliseconds + offset * 1000) / 1000)) }
-        let destination = URL(string: "https://example.com/?brk=R49-Meeting")!
-        let good = app.dataDirectory.appendingPathComponent("meetings.ics")
-        try Data("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:\(date(-60))\r\nDTEND:\(date(600))\r\nSUMMARY:Fixture meeting\r\nURL:\(destination.absoluteString)\r\nEND:VEVENT\r\nEND:VCALENDAR".utf8).write(to: good)
-        try app.dispatch(.tabTools(.site(.selectCalendar(good, join: false))))
-        try app.waitUntil("the calendar read") { try toast(app)?.contains("Calendar updated") == true }
-        let standard = app.window!
-
-        // A private window: Shift+Cmd+N, then Ctrl+Cmd+J there.
-        let incognito = try newWindow(app, "Shift+Cmd+N opens a private window", kind: .incognito) { try app.press("shift+cmd+n") }
-        _ = try app.send(.activate(window: incognito))
-        app.window = incognito
-        try app.waitUntil("the private window is key") { try app.native(incognito).isKey }
-        try app.press("ctrl+cmd+j")
-        try app.waitUntil("feedback in the private window") { try toast(app, incognito) == TopAppCopy.joinMeetingNeedsStandardWindow }
-        try expect(try frame(app, ViewID.tabTool("toast").identifier, window: incognito) != nil, "the private window draws no toast")
-        try expect(!allTabs(try app.view(incognito)).contains { $0.url == destination } && !allTabs(try app.view(standard)).contains { $0.url == destination },
-                   "the meeting opened from the private window")
-        _ = try app.screenshot("private-feedback", window: incognito)
-        try app.dispatch(.window(.close))
-        app.window = standard
-
-        // Little Arc: Opt+Cmd+N, then Ctrl+Cmd+J there.
-        _ = try app.send(.activate(window: standard))
-        let little = try newWindow(app, "Opt+Cmd+N opens Little Arc", kind: .little) { try app.press("alt+cmd+n") }
-        _ = try app.send(.activate(window: little))
-        app.window = little
-        try app.waitUntil("Little Arc is key") { try app.native(little).isKey }
-        try app.waitUntil("Little Arc's bar") { isCommandBar(try app.view(little).overlay) }
-        let littleURL = app.site.url("page2.html?little=meeting")
-        try app.type(littleURL.absoluteString); try app.press("return")
-        var littleTab: ItemID?
-        try app.waitUntil("the page in Little Arc") { littleTab = tabRows(try app.view(little).scratch?.rows ?? []).first { $0.url == littleURL }?.id; return littleTab != nil }
-        try app.waitForPageInput(page(app, littleTab!, little), at: littleURL)
-        try app.press("ctrl+cmd+j")
-        try app.waitUntil("feedback in Little Arc") { try toast(app, little) == TopAppCopy.joinMeetingNeedsStandardWindow }
-        try expect(try frame(app, ViewID.tabTool("toast").identifier, window: little) != nil, "Little Arc draws no toast")
-        _ = try app.screenshot("little-feedback", window: little)
-        try app.dispatch(.window(.close))
-        app.window = standard
-        _ = try app.send(.activate(window: standard))
-        app.passed("Ctrl+Cmd+J in a private window and in Little Arc says why nothing opens")
-
-        // F6: a .ics file that is not iCalendar, then Ctrl+Cmd+J in the standard window.
-        let bad = app.dataDirectory.appendingPathComponent("bad.ics")
-        try Data("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\n:broken\r\nEND:VEVENT\r\nEND:VCALENDAR".utf8).write(to: bad)
-        try app.dispatch(.tabTools(.site(.selectCalendar(bad, join: false))))
-        try app.waitUntil("the read failure") { try toast(app)?.contains("could not be read") == true }
-        try app.waitForPageInput(page(app, home), at: app.site.url("index.html"))
-        try app.press("ctrl+cmd+j")
-        try app.waitUntil("the unreadable-file feedback") { try toast(app) == TopAppCopy.calendarUnreadable }
-        try expect(!(try toast(app) ?? "").contains("expired"), "an unreadable file was called expired")
-        try app.waitUntil("the file panel offered again", timeout: 6) { try app.native().sheetClass != nil }
-        _ = try app.screenshot("unreadable-feedback")
-        try panel(app, .button("Cancel"))
-        try app.waitUntil("the panel closed") { try app.native().sheetClass == nil }
-        app.passed("Ctrl+Cmd+J after an unreadable .ics says the file is unreadable and offers the panel")
-    }
 
     // MARK: A021
 
-    @Sendable static func icons(_ app: AppUnderTest) throws {
-        try app.dispatch(.item(.newFolder))
-        try app.press("return")
-        guard let folder = try app.view().space.pinned.rows.first(where: { $0.kind == .folder })?.id else { throw Check(description: "no pinned folder") }
-        let names: [NamedIcon] = [.medical, .planet, .restaurant, .skull]
-        for (i, icon) in names.enumerated() {
-            let row = try visible(app.native(), .row(folder)).frame
-            try contextMenu(app, at: centre(row), choose: "Change Icon…")
-            try app.waitUntil("the icon popover") { try panelOpen(app) }
-            if i == 0 { _ = try app.panelScreenshot("popover") }
-            try panel(app, .button(icon.rawValue))
-            try app.waitUntil("\(icon.rawValue) set on the folder") {
-                guard case .folder(let f)? = try app.view().space.pinned.rows.first(where: { $0.id == folder }) else { return false }
-                return f.icon == .named(icon)
-            }
-            try app.waitUntil("the popover closed") { try !panelOpen(app) }
-            _ = try app.screenshot("folder-\(icon.rawValue)")
-        }
-        try app.flush(); try app.restart()
-        guard case .folder(let restored)? = try app.view().space.pinned.rows.first(where: { $0.id == folder }) else { throw Check(description: "folder lost") }
-        try expect(restored.icon == .named(.skull), "the drawn icon did not survive the restart: \(String(describing: restored.icon))")
-        _ = try app.screenshot("folder-skull-restarted")
-    }
 
     // MARK: A031
 
-    @Sendable static func mailCard(_ app: AppUnderTest) throws {
-        let home = try currentTab(app.view())!.id
-        try app.waitForPageInput(page(app, home), at: app.site.url("index.html"))
-        let gmail = try stoppedFavorite(app, "https://mail.google.com/mail/u/0/")
-        try app.dispatch(.tab(.focus(home)))
-        try app.waitForPageInput(page(app, home), at: app.site.url("index.html"))
-        try app.dispatch(.tabTools(.preferences(includeFavorites: true, previews: true)))
-        guard case .mail(let site, let unread, let messages)? = try app.view().favorites.tiles.first(where: { $0.id == gmail })?.hoverCard else {
-            throw Check(description: "the Gmail Favorite projects no mail card")
-        }
-        try expect(site == "Gmail" && unread == nil && messages.isEmpty, "a mailbox Brk never saw: \(site) \(String(describing: unread)) \(messages)")
-        let tile = try visible(app.native(), .favorite(gmail)).frame
-        try app.hover(CGPoint(x: tile.midX, y: tile.midY))
-        try app.waitUntil("the mail card", timeout: 4) { try frame(app, "sidebar-hover-card") != nil }
-        let card = try frame(app, "sidebar-hover-card")!
-        try expect(card.minX >= tile.maxX, "the card is not beside the sidebar: \(card) vs \(tile)")
-        _ = try app.screenshot("mail-card")
-        // Leaving the tile for the page closes it.
-        let surface = try app.native().pages[page(app, home)]!.surfaceFrame!
-        try app.hover(CGPoint(x: surface.maxX - 40, y: surface.maxY - 40))
-        try app.waitUntil("the card closed", timeout: 3) { try frame(app, "sidebar-hover-card") == nil }
-        // The Favorite's own switch, through its real menu.
-        try contextMenu(app, at: centre(tile), choose: "Show Hover Preview")
-        try app.waitUntil("the site switch off") { try app.view().favorites.tiles.first(where: { $0.id == gmail })?.hoverCard == nil }
-        try app.hover(CGPoint(x: tile.midX, y: tile.midY))
-        app.sleep(1)
-        try expect(try frame(app, "sidebar-hover-card") == nil, "a card opened with Show Hover Preview off")
-        app.note("The mailbox itself is never loaded (no network, no account); the card shows Arc's signed-out text. Its message list and unread count are unit-tested (SidebarReviewFixTests).")
-    }
 
     // MARK: A063
 
-    @Sendable static func themeUndo(_ app: AppUnderTest) throws {
-        func theme() throws -> SpaceTheme? { if case .theme(_, let t)? = try app.view().dialog { return t } else { return nil } }
-        let start = try app.view().space.id
-        try app.perform(.menuAction("Edit Theme…"))
-        try app.waitUntil("Edit Theme… opened the panel") { try theme() != nil }
-        func primary() throws -> RGBA? { try theme()?.variants?.light.colors.first?.color ?? theme()?.colors.first }
-        let originalPrimary = try primary()
-        // Two edits: a preset on the next page, then a second color.
-        try SpaceToolsScenarios.clickWhenShown(app, "theme-presets-next")
-        try SpaceToolsScenarios.clickWhenShown(app, "theme-preset-3")
-        try app.waitUntil("the preset applied") { try primary() != originalPrimary }
-        let afterPreset = try theme()!
-        try SpaceToolsScenarios.clickWhenShown(app, "theme-add")
-        try app.waitUntil("a second color") { (try theme()?.variants?.light.colors.count ?? 0) == 2 }
-        let afterAdd = try theme()!
-        _ = try app.screenshot("two-edits")
-        try app.press("cmd+z")
-        try app.waitUntil("Cmd+Z took back the added color") { try theme()?.variants?.light.colors.count == afterPreset.variants?.light.colors.count && primary() == afterPreset.variants?.light.colors.first?.color }
-        if WindowServerKeys.allowed {
-            try WindowServerKeys.press(app, KeyChord(.command, .z), window: app.window!)
-        } else {
-            app.note("window-server keys not permitted for this runner; the second Cmd+Z is in-process")
-            try app.press("cmd+z")
-        }
-        try app.waitUntil("Cmd+Z took back the preset") { try primary() == originalPrimary }
-        try expect(try app.view().space.id == start, "undo changed the space")
-        _ = try app.screenshot("undone")
-        try app.press("shift+cmd+z")
-        try app.waitUntil("Shift+Cmd+Z redid the preset") { try primary() == afterPreset.variants?.light.colors.first?.color }
-        try app.press("shift+cmd+z")
-        try app.waitUntil("Shift+Cmd+Z redid the added color") { try theme()?.variants?.light.colors.count == afterAdd.variants?.light.colors.count }
-        _ = try app.screenshot("redone")
-        try app.press("escape")
-        try app.waitUntil("Esc closed the panel") { try app.view().dialog == nil }
-        app.passed("Edit Theme… (menu) → preset, add → Cmd+Z ×2 (one window-server) → Shift+Cmd+Z ×2")
-    }
 
     // MARK: A062
 

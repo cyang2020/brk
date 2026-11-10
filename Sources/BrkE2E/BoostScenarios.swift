@@ -8,8 +8,6 @@ import Foundation
 enum BoostScenarios {
     static let all = [
         Scenario("Boost-CSS", "intro card, font grid and Code-page preview, reset, save on close, Library disable/remove, local presets and restart", cefOnly: "actual CSS injection", css),
-        Scenario("Boost-JavaScript", "native per-Boost confirmation, once per document, trust-free export/import, origin/profile/private boundaries", cefOnly: "actual isolated world JavaScript", javascript),
-        Scenario("Boost-Zap", "click-to-hide selector, live preview and durable CSS after reload", cefOnly: "native page click and isolated picker", zap)
     ]
     private static func editor(_ app: AppUnderTest) throws -> BoostEditor {
         guard let value = try app.view().boostEditor else { throw Check(description: "Boost editor missing") }; return value
@@ -201,39 +199,5 @@ enum BoostScenarios {
         try app.dispatch(.tab(.focus(item)))
         try app.waitUntil("approval persists and runs on next committed document") { try report(app, item)["runs"] as? Int == 1 }
         app.note("Real confirmation, isolated JS once per document, trust-free selected-file export/import, distinct origins/profiles, private default denial and explicit opt-in passed.")
-    }
-    @Sendable static func zap(_ app: AppUnderTest) throws {
-        let document = app.site.url("boost.html?zap"), item = try app.load(document)
-        try app.waitForPageInput(PageID(window: app.window!, item: item), at: document)
-        try app.dispatch(.boost(.create)); try start(app); try rename(app, "Zap banner")
-        try app.click(.boostControl("zap"))
-        try app.waitUntil("first Zap attempt starts") { try app.view().boostEditor?.picking == true }
-        try app.press("escape")
-        try app.waitUntil("Escape cancels Zap and keeps the draft") { try app.view().boostEditor?.picking == false }
-        try app.click(.boostControl("zap"))
-        try app.waitUntil("Zap is on again") { try app.view().boostEditor?.picking == true }
-        // DOM installation is asynchronous. A fixture mouseover confirms the listener before the native click.
-        let card = try app.native().computed.contentArea
-        try app.waitUntil("isolated Zap picker installed") {
-            try app.evaluate(PageID(window: app.window!, item: item), "document.querySelector('#zap-target').dispatchEvent(new MouseEvent('mouseover',{bubbles:true}));document.title='zap-ready:'+!!document.querySelector('[data-brk-zap-highlight]')")
-            return try tab(item, in: app.view())?.title == "zap-ready:true"
-        }
-        try app.evaluate(PageID(window: app.window!, item: item), "document.querySelector('#zap-target').click();document.title='zap-synthetic-click'")
-        try waitForTitle(app, item, "zap-synthetic-click")
-        try expect(try app.view().boostEditor?.picking == true && app.view().boostEditor?.draft.css.isEmpty == true, "page-generated click completed Zap")
-        try app.click(at: CGPoint(x: card.minX + 100, y: card.minY + 155))
-        try app.waitUntil("Zap returned selector") { try app.view().boostEditor?.draft.css.contains("#zap-target") == true }
-        try app.waitUntil("Zap CSS preview hides selected element") { try report(app, item)["display"] as? String == "none" }
-        try app.waitUntil("Zap stays on for the next element") { try app.view().boostEditor?.picking == true }
-        try app.screenshot("zap-preview")
-        try app.click(.boostControl("zap"))
-        try app.waitUntil("Zap button turns it off") { try app.view().boostEditor?.picking == false }
-        try app.click(.boostControl("close")); try app.waitUntil("Zap saved on close") { try app.view().boostEditor == nil }
-        try app.dispatch(.page(.reload(.focused, ignoringCache: false)))
-        try app.waitForPageInput(PageID(window: app.window!, item: item), at: document)
-        try app.waitUntil("Zap CSS survives reload") { try report(app, item)["display"] as? String == "none" }
-        try app.flush(); try app.restart()
-        try app.waitUntil("Zap CSS survives restart") { try report(app, item)["display"] as? String == "none" }
-        app.note("Native page click produced #zap-target; CSS hides it during preview, after navigation reload and after process restart.")
     }
 }

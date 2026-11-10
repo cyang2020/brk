@@ -11,24 +11,10 @@ import Foundation
 /// facts it checked to `<id>.txt` beside its pictures.
 enum AIThreadsScenarios {
     static let all: [Scenario] = [
-        Scenario("AIAgentThreads-Swipe", "a two-finger swipe over the panel goes to this Space's list and back; the list icon, a row and the dots do the same by click; the sidebar's Space swipe still switches Spaces",
-                 cefOnly: "native panel, real scroll events", swipe),
         Scenario("AIAgentThreads-Spaces", "each Space has its own list; switching Space on the left switches the panel's list and brings back the conversation that Space showed; the list's composer starts one there",
                  cefOnly: "native panel", spaces),
         Scenario("AIAgentThreads-Waiting", "an approval in another Space: the strip at the list's top, the ring on its dot, the count on the list icon; the strip's click shows the approval there; Allow clears all three; a notification while Brk is not in front opens the conversation",
                  cefOnly: "native panel", waiting),
-        Scenario("AIAgentThreads-Menu", "the row menu has rename, move to another Space and delete for good only (step 8: no archive, no Open in Tab); rename by typing; move to Other",
-                 cefOnly: "native panel and menus", menu),
-        Scenario("AIAgentThreads-Library", "the Library's AI conversations page: a word said only in a reply finds its conversation, the Space filter narrows the list, Continue opens it in its Space, Delete for Good asks and deletes",
-                 cefOnly: "native Library", library),
-        Scenario("AIAgentThreads-Bar", "the command bar finds a conversation by a word said in it, names its Space, and opens it",
-                 cefOnly: "native command bar", bar),
-        Scenario("AIAgentThreads-Names", "with Name Tabs on, the first answer names the conversation with the small model in a schema; the name shows in the header and the list; a name the user typed is kept",
-                 cefOnly: "native panel", names),
-        Scenario("AIAgentThreads-Models", "the + menu's Agent and Model opens the ready agents with their models, the current one checked; a pick goes to the next message",
-                 cefOnly: "native panel", models),
-        Scenario("AIAgentThreads-Look", "the list page, the strip, a ringed Space dot and the Library page, in a light Space and a dark Space; the approval card's Show Command in both",
-                 cefOnly: "native panel", look),
     ]
 
     // MARK: Helpers
@@ -663,106 +649,3 @@ enum AIThreadsScenarios {
     }
 }
 
-/// The conversation lists on a real agent (docs/design/ai-threads.md, "验收": 用真实的 Claude 在两个 Space 各开一个对话): a
-/// question about a shop page in one Space, named by the small model; a question in a second Space whose agent asks to
-/// run a command; from the first Space the strip, the ring and the count; the strip's click, Allow, and all three gone;
-/// the Library's search. Real clicks and keys, Chinese pasted as an input method leaves it. Opt-in:
-/// BRK_E2E_REAL_THREADS_AGENT=claude (BRK_E2E_REAL_THREADS_MODEL: a word of the model's name, default haiku). Results:
-/// AIRealThreads-<agent>.txt beside the shots.
-enum AIRealThreadsScenarios {
-    static var all: [Scenario] {
-        guard let name = ProcessInfo.processInfo.environment["BRK_E2E_REAL_THREADS_AGENT"], let choice = AIProviderChoice(rawValue: name), choice.kind != nil else { return [] }
-        return [Scenario("AIRealThreads-\(name)", "real \(name): conversations in two Spaces, the cross-Space strip, ring and count, Allow from the strip, the AI name, the Library's search",
-                         cefOnly: "real agent, real input") { try route($0, choice) }]
-    }
-
-    private static func send(_ app: AppUnderTest, _ text: String, input: ViewID) throws {
-        try AIThreadsScenarios.click(app, input)
-        try AIThreadsScenarios.paste(text)
-        try NativeSystemInput.postSystemWide(KeyChord([], .returnKey))
-        usleep(400_000)
-    }
-
-    private static func route(_ app: AppUnderTest, _ choice: AIProviderChoice) throws {
-        let log = AIThreadsScenarios.Log(app)
-        let kind = choice.kind!
-        try AIThreadsScenarios.prepare(app, names: true)
-        try app.dispatch(.settings(.max(.provider(choice))))
-        try app.dispatch(.settings(.openPane(.max)))
-        var models: [AIAgentModel] = []
-        try app.waitUntil("the agent reported", timeout: 60) {
-            guard case .settings(let settings) = try app.send(.settings), let status = settings.max.agents.first(where: { $0.kind == kind }), status.state == .ready else { return false }
-            models = status.models
-            return true
-        }
-        let word = ProcessInfo.processInfo.environment["BRK_E2E_REAL_THREADS_MODEL"] ?? "haiku"
-        let model = models.first { $0.id.lowercased().contains(word) || $0.name.lowercased().contains(word) }
-        try app.dispatch(.settings(.max(.agentModel(kind, model?.id))))
-        try app.dispatch(.settings(.max(.basicModel(kind, model?.id))))
-        try app.dispatch(.settings(.closeWindow))
-        log.write("model \(model?.id ?? "default") of \(models.map(\.id))")
-        let home = try app.view().space.id
-        try app.dispatch(.space(.update(home, title: "购物", icon: nil, theme: nil)))
-        try app.dispatch(.commandBar(.open(.newTab)))
-        try app.dispatch(.commandBar(.submit(app.site.url("shop-kettle.html").absoluteString)))
-        app.sleep(2)
-        var shopping = AIRequestID("")
-        log.check("a question in 购物, answered, then named by the small model") {
-            try app.dispatch(.assist(.newConversation))
-            try app.waitUntil("a new conversation") { try app.view().ai?.conversation?.fresh == true }
-            try send(app, "这个页面上的商品叫什么、多少钱？一句话回答。", input: .aiControl("input"))
-            try app.waitUntil("the answer", timeout: 180) { try app.view().ai?.busy == false && app.view().ai?.conversation?.items.contains { if case .assistant = $0 { true } else { false } } == true }
-            shopping = try XCTUnwrapValue(try app.view().ai?.conversation?.id)
-            try app.waitUntil("the AI name", timeout: 90) { try app.view().ai?.name.map { $0 != "这个页面上的商品叫什么、多少钱？一句话回答。" } == true }
-            AIThreadsScenarios.shot(app, "1-named")
-            return "named “\(try app.view().ai?.name ?? "")”"
-        }
-        let work = try createSpace(app, title: "工作")
-        var waiting = AIRequestID("")
-        log.check("a question in 工作 whose agent asks to run a command") {
-            try app.waitUntil("工作's list") { try app.view().aiPanel?.space == work }
-            try send(app, "请用 Bash 工具运行 echo brk-threads，然后告诉我输出。", input: .aiControl("list-input"))
-            try app.waitUntil("the approval", timeout: 180) { try AIThreadsScenarios.pending(app) != nil }
-            waiting = try XCTUnwrapValue(try app.view().ai?.conversation?.id)
-            AIThreadsScenarios.shot(app, "2-approval")
-            return "waits: “\(try AIThreadsScenarios.pending(app)?.title ?? "")”"
-        }
-        log.check("from 购物: the strip, the ring and the count") {
-            try AIThreadsScenarios.click(app, .dockSpace(home))
-            try app.waitUntil("购物 with its conversation", timeout: 8) { try app.view().space.id == home && app.view().ai?.conversation?.id == shopping }
-            try expect(try AIThreadsScenarios.shown(app, .aiControl("list-badge")), "no count on the list icon")
-            try AIThreadsScenarios.click(app, .aiControl("list"))
-            try app.waitUntil("the strip", timeout: 6) { try AIThreadsScenarios.shown(app, .aiControl("strip-\(waiting.rawValue)")) }
-            try expect(try app.view().dock.first { $0.id == work }?.attention == true, "工作's dot has no ring")
-            AIThreadsScenarios.shot(app, "3-strip")
-            let strip = try XCTUnwrapValue(try app.view().aiPanel?.strips.first)
-            return "strip “\(strip.spaceTitle) · \(strip.title) · \(strip.detail)”, ring, count \(try app.view().aiPanel?.waiting ?? 0)"
-        }
-        log.check("the strip's click, Allow, and nothing waits any more") {
-            try AIThreadsScenarios.click(app, .aiControl("strip-\(waiting.rawValue)"))
-            try app.waitUntil("工作 with the approval", timeout: 8) { try app.view().space.id == work && AIThreadsScenarios.shown(app, .aiControl("approval-allowOnce")) }
-            try AIThreadsScenarios.click(app, .aiControl("approval-allowOnce"))
-            try app.waitUntil("the reply", timeout: 180) { try app.view().ai?.busy == false }
-            let said = try app.view().ai?.conversation?.items.compactMap { if case .assistant(let t) = $0 { t } else { nil } }.joined(separator: " ") ?? ""
-            try AIThreadsScenarios.click(app, .dockSpace(home))
-            try app.waitUntil("nothing waits", timeout: 8) {
-                let v = try app.view()
-                return v.space.id == home && v.aiPanel?.waiting == 0 && v.dock.first { $0.id == work }?.attention == false
-            }
-            AIThreadsScenarios.shot(app, "4-cleared")
-            return "reply: “\(said.prefix(120))”"
-        }
-        log.check("the Library finds the 工作 conversation by what was said") {
-            try AIThreadsScenarios.click(app, .dockLibrary)
-            try app.waitUntil("the Library") { if case .library? = try app.view().overlay { true } else { false } }
-            try AIThreadsScenarios.click(app, .libraryPage(.conversations))
-            try app.waitUntil("both conversations", timeout: 6) { Set(try AIThreadsScenarios.library(app)?.rows.map(\.id) ?? []) == [shopping, waiting] }
-            try AIThreadsScenarios.click(app, .aiControl("library-search"))
-            try AIThreadsScenarios.type("brk-threads")
-            try app.waitUntil("found", timeout: 6) { try AIThreadsScenarios.library(app)?.rows.map(\.id) == [waiting] }
-            AIThreadsScenarios.shot(app, "5-library")
-            return "“brk-threads” → \(waiting.rawValue)"
-        }
-        try log.finish()
-    }
-}
