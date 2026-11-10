@@ -1364,7 +1364,7 @@
       "description": "Opt+Cmd+Down and Up walk the sidebar",
       "historical_status": "done",
       "status": "verified",
-      "acceptance": "Opt+Cmd+Up and Down traverse sidebar units in order, skip collapsed children and treat a split as one stop.",
+      "acceptance": "Opt+Cmd+Up and Down traverse sidebar units in order, skip collapsed children and treat a split as one stop. Shift-Cmd-] and Shift-Cmd-[ also step to the next and previous tab.",
       "owner": "native-grounding",
       "required_checks": [
         "unit",
@@ -1398,6 +1398,13 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
           "artifact": "e95954b0f0:verify/completion/review-r4/sidebar-windows-fixes/parent-rerun/swift-test-main-9633b81b.log",
           "scope": "合并后 main 的完整单元测试 1073 个、0 失败、1 个原本就跳过（station2 干净工作树）。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/run-native.py gate-batch2 --set keys",
+          "artifact": "docs/checks/2026-11-10-library-flyout-and-input.md",
+          "scope": "Input-TabKeys: Shift-Cmd-] and Shift-Cmd-[ step to the next and previous tab with a page focused (Chrome's reserved tab keys, as in Arc)."
         }
       ],
       "remaining": [
@@ -2486,6 +2493,13 @@
           "command": "scripts/station/station.sh main /tmp/station-parent/final-4f152cd5 P12",
           "artifact": "3729a8d2ff:verify/visual-pairs/run-20261103/final/main-4f152cd5-sheet.tsv",
           "scope": "Paired capture against the real Arc 1.170 (build 89123) on main 4f152cd5, scene P12: P12-f 3.9% 已修（一致）; P12-a 1.0% 已修（一致）; P12-b 1.0% 已修（一致）; P12-c 0.9% 已修（一致）; P12-d 0.9% 已修（一致）; P12-g 1.1% 已修（一致）; P12-e 4.7% 已修（一致）. References in 8887d105a3:verify/visual-pairs/run-20261103/P12/. Differing-pixel share after the nine fix groups; pairs marked 已修（一致） were checked item by item by the parent."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/run-native.py gate-batch2 --set keys",
+          "artifact": "docs/checks/2026-11-10-library-flyout-and-input.md",
+          "scope": "Input-MiddleClick: a middle-click on a sidebar tab row closes that tab like its x (Arc archives it)."
         }
       ],
       "remaining": [
@@ -3343,7 +3357,7 @@
       "description": "Page navigation with Arc's key priorities",
       "historical_status": "done",
       "status": "verified",
-      "acceptance": "Back, forward, normal/forced reload and stop target the focused loaded page, including split and Peek, honor shortcut priorities, and preserve focus after navigation.",
+      "acceptance": "Back, forward, normal/forced reload and stop target the focused loaded page, including split and Peek, honor shortcut priorities, and preserve focus after navigation. The mouse's buttons 4 and 5 and the navigation swipe go back and forward over a page and beside it, and step Spaces over the sidebar.",
       "owner": "platform-grounding",
       "required_checks": [
         "unit",
@@ -3387,6 +3401,13 @@
           "command": "Reviewer hands-on session on an instance the reviewer launched (dist/Brk.app from cb5ffb7d, own data folder and control socket); every step and reply is in manual/session.log",
           "artifact": "9d3e5878bc:verify/completion/review-r4/page-sites/manual/session.log",
           "scope": "Reviewer probe site counting requests per path (a script with Cache-Control max-age=3600). Menu Reload: page +1, script +0 (served from cache); menu Force Reload: page +1, script +1; window-server Cmd+R: script +0; window-server Cmd+Shift+R: script +1. Menu Back/Forward after Cmd+L in the same tab returned to a.html then b.html (canGoForward true after Back). Stop on a page whose image takes 30 s: loading true before, false 1 s after menu Stop (a036-after-stop.png). Split: Reload with the right pane focused hit only b.html; after menu Split Pane 1, Force Reload hit only a.html and its script, focus stayed on the left page. Peek over the split: Reload hit only the Peek page (md.html), focus stayed in Peek (a036-peek-reload.png). Private windows were not probed."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/run-native.py gate-batch2 --set keys",
+          "artifact": "docs/checks/2026-11-10-library-flyout-and-input.md",
+          "scope": "Input-SideButtons: mouse buttons 4 and 5 and a mouse driver's navigation swipe go back and forward over a page and beside it, and step Spaces over the sidebar, as in Arc 1.170."
         }
       ],
       "remaining": [
@@ -4679,6 +4700,13 @@
           "command": "Read 565e496989:verify/completion/browser-basic-parent/integration-final-2/shots/<capture>.png",
           "artifact": "bdb14d5fc3:verify/completion/batch2-parent/VISUAL.md",
           "scope": "Parent inspected the named captures for layout and readability. No authenticated Arc pixel comparison; A148 remains blocked."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/run-native.py gate-batch2 --set downloads",
+          "artifact": "docs/checks/2026-11-10-library-flyout-and-input.md",
+          "scope": "Downloads also show in the Library button's hover list (LibraryFlyout-Hover, LibraryFlyout-Running)."
         }
       ],
       "remaining": [
@@ -7857,7 +7885,7 @@
       "description": "One place for Downloads, Archive, Easels and Notes, Media, Boosts, Spaces",
       "historical_status": "not started",
       "status": "verified",
-      "acceptance": "Provide working Downloads, Archive, Easels and Notes, Media, Boosts and Spaces workflows in one Library.",
+      "acceptance": "Provide working Downloads, Archive, Easels and Notes, Media, Boosts and Spaces workflows in one Library. Resting 0.3 s on the Library button lists the profile's newest four downloads and captures above it, with Arc's row menu, click preview and the badge for items younger than 300 s (Arc: HomeBadging).",
       "owner": "native-grounding",
       "required_checks": [
         "unit",
@@ -7913,6 +7941,13 @@
           "command": "scripts/station/station.sh main /tmp/station-parent/r4-234 P30,P32",
           "artifact": "2ad76ff753:verify/visual-pairs/run-20261103/final/main-79c2212f-sheet.tsv",
           "scope": "Arc 1.170 对照在合并后 main 上的站台数字：P30-a 0.99%, P30-c 0.83%, P32-a 2.11%, P32-b 1.34%, P32-c 1.04%, P32-d 1.31%, P32-e 1.35%, P32-f 1.82%, P32-i 2.08%；剩余差异见 results.tsv。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/run-native.py gate-batch2 --set smoke,downloads,keys,library",
+          "artifact": "docs/checks/2026-11-10-library-flyout-and-input.md",
+          "scope": "LibraryFlyout-Hover and LibraryFlyout-Running with the real pointer and real downloads; LibraryFlyoutTests (4 unit tests)."
         }
       ],
       "remaining": [
