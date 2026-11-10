@@ -108,13 +108,14 @@ media R55-Row
 media R55-Card
 media CaptureProduct
 
-# library：Easel、Boost、文件面板导入导出、首次启动
+# library：Easel、Boost、文件面板导入导出、首次启动、所有画面没有文字被截断
 library EaselDraw
 library EaselReopen
 library Boost-CSS
 library FP-OpenGesture
 library FP-SaveGesture
 library ImportSync-Onboarding
+library TextLayout
 
 # ai：夹具 agent 的 AI 功能（不花额度）
 ai AICommand

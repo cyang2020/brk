@@ -16,6 +16,9 @@
 #   press   <x> <y> <hold> <signal>                                              mouse down without moving, held for a capture
 #   dropzone <png>...                                                            which drop preview a 1280 x 776 pt window capture shows (Q17)
 #   gest    <x> <y> <ms> [--may] [--began dx,dy] <steps> [--wait s] [--shot png winid] ... [--end]  a two-finger gesture on the real path; real Arc takes it when the first event has sideways travel (Q19)
+# compile next to this script whatever folder the caller is in (the station runs it from a station worktree)
+cd "$(dirname "$0")"
+mkdir -p bin
 for src in mouse key wins-any scan pair compose sheet dragback scroll moddrag regions bands pathdrag press cut topwin dropzone gest; do
   out="bin/${src%-any}"
   # rebuild only when the source content changed (git checkouts touch mtimes without changing anything)
