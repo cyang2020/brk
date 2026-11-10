@@ -323,7 +323,7 @@ public enum Suggest {
     }
 
     /// Every source's candidates for `text`, each with its row. Archetypes: open tabs and saved Pinned and Favorites
-    /// (Brk's bookmarks, which are tabs in Arc) are `tab`; the typed row is Chromium's search or address as typed;
+    /// (Brk's bookmarks, which are tabs in Arc) are `tab`, kept AI pages among them `document` (Arc's notes); the typed row is Chromium's search or address as typed;
     /// visited pages are `chromiumHistory`; the engine's suggestions `chromiumSearchSuggestion`; Arc's popular sites
     /// `topDomain`; commands, settings panes, Spaces, folders, apps, files and the window places `typeTravel`; saved
     /// conversations `assistantHistory`; Max's Ask row Arc's `askGPTWhatYouTyped`. A page the search model found by meaning
@@ -495,10 +495,24 @@ public enum Suggest {
         // any tab but shows as Arc shows it, its title and address with the history clock (choosing it stays on it); an
         // address typed in full takes its place.
         // Editing the page's address (Cmd+L) Arc offers no tab at all, open or saved: its pages come as visited pages.
+        // A kept AI page ranks as Arc ranks its notes (`ArcRanking.Archetype.document`): matched on its title and address with
+        // no title words, its title what the default and title boosts compare, one row per page (Arc's DedupKey.document).
+        // Its last visit, save level and Favorite come as a tab's.
         let editsPage = !bar.createsTab && !bar.fillsPane && !bar.initialQuery.isEmpty
+        func sidebarItem(_ url: URL, title: String, customTitle: String?) -> ArcRanking.Candidate {
+            guard AIPageTab.shows(url) else {
+                var candidate = page(.tab, url: url, title: title, hotWords: words(title))
+                candidate.customTitle = customTitle
+                return candidate
+            }
+            var candidate = page(.document, url: url, title: title)
+            candidate.autocompleteText = title
+            candidate.customTitle = title
+            candidate.dedupKey = "document:" + ArcRanking.readable(url)
+            return candidate
+        }
         for tab in matching(editsPage ? [] : bar.tabs, needle, texts: { [$0.title, $0.url.absoluteString] }).prefix(tabCandidates) {
-            var candidate = page(.tab, url: tab.url, title: tab.title, hotWords: words(tab.title))
-            candidate.customTitle = tab.customTitle
+            var candidate = sidebarItem(tab.url, title: tab.title, customTitle: tab.customTitle)
             candidate.isFavorite = tab.isFavorite
             candidate.features[.lastNavigated] = since(bar.commandUsage[switchKey(tab.tab)]?.lastRun)
             candidate.features[.saveLevel] = tab.saveLevel.map(Double.init)
@@ -514,7 +528,7 @@ public enum Suggest {
             out.append(Built(candidate: candidate, row: row))
         }
         for saved in matching(editsPage ? [] : bar.bookmarks, needle, texts: { [$0.title, $0.url.absoluteString] }).prefix(tabCandidates) {
-            var candidate = page(.tab, url: saved.url, title: saved.title, hotWords: words(saved.title))
+            var candidate = sidebarItem(saved.url, title: saved.title, customTitle: nil)
             candidate.isFavorite = saved.isFavorite
             candidate.features[.saveLevel] = saved.saveLevel.map(Double.init)
             let row = Suggestion(kind: .bookmark, title: saved.title, subtitle: nil, symbol: "bookmark", favicon: nil, hint: nil,
@@ -582,7 +596,9 @@ public enum Suggest {
                     continue
                 }
                 let open = found.tab.flatMap { id in bar.tabs.first { $0.tab == id } }
-                let candidate = page(open != nil ? .tab : .chromiumHistory, url: found.url, title: title)
+                // An open kept AI page is its document, so it is one row with the page's own.
+                let candidate = open == nil ? page(.chromiumHistory, url: found.url, title: title)
+                    : AIPageTab.shows(found.url) ? sidebarItem(found.url, title: title, customTitle: nil) : page(.tab, url: found.url, title: title)
                 out.append(Built(candidate: candidate, row: Suggestion(kind: .meaning, title: title, subtitle: nil, symbol: "sparkle.magnifyingglass", favicon: nil,
                                                                        hint: open != nil ? OverlayCopy.switchToTab : found.place == .archive ? OverlayCopy.archived : nil,
                                                                        command: open.map { .tab(.focus($0.tab)) } ?? .commandBar(.submit(found.url.absoluteString)))))

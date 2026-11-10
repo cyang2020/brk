@@ -46,6 +46,11 @@ final class ArcRankingTests: XCTestCase {
                                        customTitle: "Fixtures", isFavorite: true, dedupKey: "t")
         XCTAssertEqual(Set(ArcRanking.boosts(tab, query: "fixture")), [.exactHotWord, .customTitlePrefix, .veryRecentTabOrDocumentBoost, .topApp])
         XCTAssertEqual(Set(ArcRanking.boosts(tab, query: "visual fix")), [.veryRecentTabOrDocumentBoost, .topApp], "part of a word: no word boost")
+        // A document (Arc's note, Brk's kept AI page): its title is the default boosts' text and the title boost's.
+        let document = ArcRanking.Candidate(archetype: .document, features: [.lastNavigated: 120], url: AIPageTab.url(AIPageID("price-watch")),
+                                            autocompleteText: "Price Watch (fixture)", customTitle: "Price Watch (fixture)", isFavorite: true, dedupKey: "d")
+        XCTAssertEqual(Set(ArcRanking.boosts(document, query: "price watch")), [.autocompleteDefault, .customTitlePrefix, .veryRecentTabOrDocumentBoost, .topApp])
+        XCTAssertEqual(Set(ArcRanking.boosts(document, query: "watch")), [.veryRecentTabOrDocumentBoost, .topApp], "no hot words")
         let command = ArcRanking.Candidate(archetype: .typeTravel, autocompleteText: "New Space…", hotWords: ["New Space"],
                                            customTitle: "New Space…", runs: 2, dedupKey: "c")
         XCTAssertEqual(Set(ArcRanking.boosts(command, query: "new space")),
@@ -181,15 +186,21 @@ final class ArcRankingTests: XCTestCase {
 
     /// Typing every word of a tab's title does not lift the tab over the typed search: the real Arc on 2026-11-11, with a
     /// fixture tab "Quillfen Marrowby" open behind the current one, listed the search and then the tab for
-    /// "quillfen marrowby", and the tab first for "quillfen" and for "marrowby". The search stays first for an AI page
-    /// kept as a tab too, which is why AIAgentLivePages steps down to "Price Watch (fixture)" before Return.
+    /// "quillfen marrowby", and the tab first for "quillfen" and for "marrowby".
+    /// A kept AI page ranks as Arc's note (archetype document: its title starts with the text, so the title and default
+    /// boosts; no title words). With a tab "Price Watch (fixture)" the real Arc listed for "price watch" the search, the
+    /// tab, then six Google suggestions in this order (its visited page merges into the tab); the AI page, never visited,
+    /// sits on the same row. As a plain tab it fell under the first suggestion.
     func testEveryWordOfATabTitleLeavesTheSearchFirst() {
         let fixture = candidate("quillfen", "Quillfen Marrowby", "http://127.0.0.1:54640/qm.html")
         let page = SwitchCandidate(tab: ItemID("page"), title: "Price Watch (fixture)", url: AIPageTab.url(AIPageID("price-watch")), favicon: nil,
                                    spaceTitle: nil, inCurrentSpace: true, isFocused: false)
         for (query, expected) in [("quillfen marrowby", ["search", "Quillfen Marrowby"]), ("quillfen", ["Quillfen Marrowby", "search"]),
-                                  ("marrowby", ["Quillfen Marrowby", "search"]), ("Price Watch", ["search", "Price Watch (fixture)"])] {
+                                  ("marrowby", ["Quillfen Marrowby", "search"])] {
             XCTAssertEqual(Array(order(query, bar(query, tabs: [fixture, page])).prefix(2)), expected, query)
         }
+        let google = ["price watcher", "price watch flights", "price watching website", "price watch on amazon", "price watch google", "price watch app"]
+        let priceWatch = bar("price watch", tabs: [fixture, page], google: google.enumerated().map { ($0.element, 601 - $0.offset) }, verbatim: 1300)
+        XCTAssertEqual(Array(order("price watch", priceWatch).prefix(4)), ["search", "Price Watch (fixture)", "price watcher", "price watch flights"])
     }
 }

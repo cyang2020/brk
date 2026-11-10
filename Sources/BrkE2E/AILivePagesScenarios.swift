@@ -604,9 +604,8 @@ enum AILivePagesScenarios {
     }
 
     /// The row is out of Today, so its menu is reached through the command bar: show it, then tick the day again.
-    /// Typing a tab's title word for word leaves the typed search on the first row and the tab right under it, as in
-    /// Arc 1.170 (a fixture tab "Quillfen Marrowby": "quillfen marrowby" lists the search, then the tab; "quillfen" alone
-    /// lists the tab first). So a person steps down to the page's row and presses Return there.
+    /// The kept page ranks as Arc's note, in the first two rows (Arc 1.170 lists a tab "Price Watch (fixture)" second for
+    /// "price watch", under the search), so a person steps down to the page's row and presses Return there.
     private static func rowMenuOnHidden(_ app: AppUnderTest, _ day: Int) throws -> (Int, [[String]]) {
         try key(.command, .t)
         try app.waitUntil("the command bar") { if case .commandBar? = try app.view().overlay { true } else { false } }

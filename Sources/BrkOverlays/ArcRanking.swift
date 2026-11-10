@@ -87,8 +87,14 @@ public enum ArcRanking {
     }
 
     /// The archetypes Brk's rows use, with Arc's base values. The base value is the `archetype` feature.
+    ///
+    /// `document` is Arc's note (`ASE2.Archetype.document`, a sidebar `arcDocument`); Brk gives it to its kept AI pages,
+    /// which are drawn natively and never enter history, as Arc's notes. Arc's sidebar provider builds a note's
+    /// candidate the way it builds a tab's (0x102b591d4 calls 0x101d4fc34 for both: last visit and save level), it is
+    /// matched on its title and its address (0x101d5236c, case 5) and has no hot words (0x101d53854). Its boosts are in
+    /// `boosts`. Arc's Easel archetype has the same base and the same rules except the title boost; Brk has no Easels.
     public enum Archetype: String, CaseIterable, Sendable {
-        case tab, typeTravel, topDomain, memoryStore, askAssistant, assistantHistory
+        case tab, document, typeTravel, topDomain, memoryStore, askAssistant, assistantHistory
         case chromiumSearchWhatYouTyped, chromiumNavigateWhatYouTyped, chromiumHistory, chromiumSearchHistory, chromiumNavigateSuggestion,
              chromiumSearchOtherEngine, chromiumSearchSuggestion, chromiumSearchCalculatorAnswer
         case askGPTWhatYouTyped
@@ -96,6 +102,7 @@ public enum ArcRanking {
         public var base: Double {
             switch self {
             case .tab: 101
+            case .document: 103.5
             case .typeTravel: 104
             case .topDomain: 96.1
             case .memoryStore: 105
@@ -181,11 +188,11 @@ public enum ArcRanking {
         /// The address the row opens, for the domain boosts and the duplicate key.
         public var url: URL?
         /// What the default boosts compare with the query: the readable address of a row that opens a page, a search's
-        /// text, a command's title (the jump table at 0x101d574dc).
+        /// text, a document's title, a command's title (the jump table at 0x101d574dc).
         public var autocompleteText: String
         /// A tab's title words, a command's title and trigger phrases.
         public var hotWords: [String]
-        /// A tab's own title, a command's title (customTitlePrefix, typeTravelPrefixForLongQuery).
+        /// A tab's own title, a document's title, a command's title (customTitlePrefix, typeTravelPrefixForLongQuery).
         public var customTitle: String?
         public var isFavorite: Bool
         /// How often a command was run from the bar (`typeTravelUsage.frequency`).
@@ -409,8 +416,11 @@ public enum ArcRanking {
     ///   typed and every row that starts with it do (fitted on 60 probes of the real Arc: the binary's own test against the
     ///   completed input matched best).
     /// - chromiumSpecialSearchFunction: Chromium's second row, for a `word:word` query.
-    /// - customTitlePrefix: a tab's own title starts with the query.
-    /// - veryRecentTabOrDocumentBoost: a tab used in the last hour. topApp: a Favorite.
+    /// - customTitlePrefix: a tab's own title, or a document's title, starts with the query (case 7: TabInfo.customTitle,
+    ///   DocumentInfo.title).
+    /// - veryRecentTabOrDocumentBoost: a tab or document used in the last hour. topApp: a tab or document that is a
+    ///   Favorite (savedContext .global). A document's other boosts are those of a row that opens a page: the domain
+    ///   boosts on its address as for a row that is not a tab, autocompleteDefault on its title.
     /// - recentlyUseTypeTravel: a command run more than once. typeTravelPrefixForLongQuery: a command whose title or a
     ///   trigger starts with a query of three characters or more (the binary's test, case 0xb).
     /// - highFuzzySearchConfidence: fuzzySearchConfidence above 0.8. No code in Arc 1.170 sets that feature, so it never
@@ -433,9 +443,10 @@ public enum ArcRanking {
             out.append(candidate.archetype.isSearch ? .autocompleteSearchOnly : .autocompleteDefault)
         }
         if candidate.features[.chromiumRank] == 1, isSpecialSearch(q) { out.append(.chromiumSpecialSearchFunction) }
-        if isTab, let title = candidate.customTitle?.lowercased(), title.hasPrefix(q) { out.append(.customTitlePrefix) }
-        if isTab, let seconds = candidate.features[.lastNavigated], seconds < 3600 { out.append(.veryRecentTabOrDocumentBoost) }
-        if isTab, candidate.isFavorite { out.append(.topApp) }
+        let isSidebarItem = isTab || candidate.archetype == .document
+        if isSidebarItem, let title = candidate.customTitle?.lowercased(), title.hasPrefix(q) { out.append(.customTitlePrefix) }
+        if isSidebarItem, let seconds = candidate.features[.lastNavigated], seconds < 3600 { out.append(.veryRecentTabOrDocumentBoost) }
+        if isSidebarItem, candidate.isFavorite { out.append(.topApp) }
         if candidate.archetype == .typeTravel {
             if candidate.runs > 1 { out.append(.recentlyUseTypeTravel) }
             if q.count > 2, ([candidate.customTitle].compactMap { $0 } + candidate.hotWords).contains(where: { $0.lowercased().hasPrefix(q) }) {

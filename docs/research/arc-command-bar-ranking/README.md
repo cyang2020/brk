@@ -213,11 +213,18 @@ Because z-scores are usually between −2 and +2, a boost's score of 3 or 15 at 
 | chromiumSpecialSearchFunction | 40 / 3 | a Chromium row whose chromiumRank is 1, and the query looks like `word:word` but is not a known URL scheme (regex built at `0x101d67f20`, 1004 characters, `^(?!aaas?|about|…|z39\.50[rs])\w+:\w+$`): known |
 | customTitlePrefix | 15 / 3 | a tab whose custom title, or a document whose title, starts with the query (lower-cased `hasPrefix`): known |
 | veryRecentTabOrDocumentBoost | 15 / 3 | a tab, document or easel whose lastNavigated is under 3600 s: known |
-| topApp | 15 / 3 | a tab/document/easel with a "global" saved context, which is a Favorite (Arc's code name for Favorites is "Top Apps"); the field reading is a guess |
+| topApp | 15 / 3 | a tab, document or easel whose `savedContext` is `.global`, which is a Favorite (Arc's code name for Favorites is "Top Apps"): known (TabInfo +0x41, DocumentInfo +0x40, EaselInfo +0x38; read 2026-11-11) |
 | recentlyUseTypeTravel | 15 / 3 | a command whose `typeTravelUsage` entry has more than one recorded run: known |
 | typeTravelPrefixForLongQuery | 40 / 3 | a command, query longer than 2 characters, and the command's title or trigger starts with the query: known in outline |
 | unboxingPromotedAction | 40 / 3 | a command whose menu item id is in `menuItemIDsToBoost` (onboarding): known in outline |
 | highFuzzySearchConfidence | 100 / 15 | fuzzySearchConfidence above a threshold (threshold not read) |
+
+**Notes and Easels (read 2026-11-11).** Arc's notes are the archetype `document` and its Easels `easel`, base 103.5 each. The payloads are `DocumentInfo { documentID, url, title, isOwned, sidebarItemID, savedContext }` and `EaselInfo { easelID, url, title, sidebarItemID, savedContext }`.
+- **Features.** A note or Easel in the sidebar is built by the sidebar provider (`0x102b591d4`), which calls `0x101d4fc34` for tabs, notes and Easels alike: the last visit (`lastNavigated`) and the save level. The match features use the title and the address (`0x101d5236c`, cases 5 and 6); there are no hot words (`0x101d53854`). The most-visited rank and site engagement are looked up by the address, as for every row with one.
+- **Boosts** (`0x101d65bd8`). The domain boosts on the address, with the rules for a row that is not a tab. `autocompleteDefault` when the title, lowercased (`0x101d5741c`, cases 5 and 6), is or starts with the input. `customTitlePrefix` when a note's title starts with the query (case 7 reads `DocumentInfo.title`; an Easel never gets it). `veryRecentTabOrDocumentBoost` (last visit under an hour) and `topApp` (a Favorite) for both. No `exactHotWord`, no command boosts.
+- **Duplicates.** `DedupKey.document(id)` and `.easel(id)`: one row per note, never merged with a page.
+
+Brk ranks its kept AI pages as notes (`ArcRanking.Archetype.document`).
 
 **Overrides and the fallback order (known).** The weights come from `ASE2.ASEConfigurationClient`, read in `0x101d35c38`.
 1. If `StorableASEConfiguration.json` loads and its version matches, it is used.
