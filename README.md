@@ -55,7 +55,7 @@ Inspired by Raycast, the command bar does much more than open pages. Type, and t
 | --- | --- |
 | `2^10 * 3`, `15% of 240` | The answer in the bar. Return copies it. |
 | `100 usd in eur`, `5 km in miles`, `time in tokyo` | Currency, unit and time-zone conversions. |
-| `file` + Tab, then a name | Files on your Mac by name, from the Spotlight index in about a tenth of a second. Return opens, ⌘Return reveals in Finder, ⌥Return copies the path. |
+| `file` + Tab, then a name or what the file is about | Files on your Mac, by name or by meaning, from a local index: a query takes about 20 ms. Return opens, ⌘Return reveals in Finder, ⌥Return copies the path. |
 | `app` + Tab, or just the app's name | Open any app. |
 | `emoji` + Tab | Find an emoji and copy it. |
 | `translate` + Tab | Translate text, or the whole page. |
@@ -113,7 +113,7 @@ The ordinary results (open tabs, history, suggestions, top sites) are ranked by 
   <img src="docs/media/search-by-meaning.png" width="700" alt="The command bar finding a tab by what it is about">
 </p>
 
-**Search by meaning.** Type what a page was about, not its title, and the command bar finds the tab or the page you visited. The index lives on your Mac.
+**Search by meaning, in milliseconds.** Type what a page or a file is about, not its name, and the command bar finds it: the tab, the page you visited, or the document on your Mac. A local embedding model (EmbeddingGemma) answers in about 20 ms, and the index never leaves your Mac.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
