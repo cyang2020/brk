@@ -7892,7 +7892,7 @@
       "description": "One place for Downloads, Archive, Easels and Notes, Media, Boosts, Spaces",
       "historical_status": "not started",
       "status": "verified",
-      "acceptance": "Provide working Downloads, Archive, Easels and Notes, Media, Boosts and Spaces workflows in one Library. Resting 0.3 s on the Library button lists the profile's newest four downloads and captures above it, with Arc's row menu, click preview and the badge for items younger than 300 s (Arc: HomeBadging).",
+      "acceptance": "Provide working Downloads, Archive, Easels and Notes, Media, Boosts and Spaces workflows in one Library. Resting 0.3 s on the Library button lists the profile's newest four downloads and captures above it, with Arc's row menu, click preview and the badge for items younger than 300 s (Arc: HomeBadging). A download's icon flies from the click into the Library button on Arc's arc, or into Arc's corner bin with the sidebar hidden; the item preview has Arc's radial grey, toolbar wash and … menu.",
       "owner": "native-grounding",
       "required_checks": [
         "unit",
@@ -7955,6 +7955,13 @@
           "command": "python3 scripts/run-native.py gate-batch2 --set smoke,downloads,keys,library",
           "artifact": "docs/checks/2026-11-10-library-flyout-and-input.md",
           "scope": "LibraryFlyout-Hover and LibraryFlyout-Running with the real pointer and real downloads; LibraryFlyoutTests (4 unit tests)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/run-native.py gate-flight --set smoke,downloads",
+          "artifact": "92b2e4954662:docs/arc-anatomy/library-flyout.md",
+          "scope": "LibraryFlyout-Flight: a real click on a download link; the flying icon found within 2 pt of Arc's measured arc, then the sidebar-hidden bin; DownloadFlightTests (3). Arc facts with binary addresses in docs/arc-anatomy/library-flyout.md."
         }
       ],
       "remaining": [
