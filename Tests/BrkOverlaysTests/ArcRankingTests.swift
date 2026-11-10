@@ -49,22 +49,21 @@ final class ArcRankingTests: XCTestCase {
         let command = ArcRanking.Candidate(archetype: .typeTravel, autocompleteText: "New Space…", hotWords: ["New Space"],
                                            customTitle: "New Space…", runs: 2, dedupKey: "c")
         XCTAssertEqual(Set(ArcRanking.boosts(command, query: "new space")),
-                       [.exactHotWord, .recentlyUseTypeTravel, .typeTravelPrefixForLongQuery])
+                       [.exactHotWord, .autocompleteDefault, .recentlyUseTypeTravel, .typeTravelPrefixForLongQuery])
+        // The default boosts: the row's text is or starts with the input, as completed inline.
         let suggestion = ArcRanking.Candidate(archetype: .chromiumSearchSuggestion, autocompleteText: "visual fixation", dedupKey: "s")
-        XCTAssertEqual(ArcRanking.boosts(suggestion, query: "visual fix"), [], "a suggestion that starts with the query keeps the engine's order")
-        // "time" completed to "time.com" by the input: the completed site gets the default boost; without the completion
-        // it does not, since the query does not start with its address.
+        XCTAssertEqual(ArcRanking.boosts(suggestion, query: "visual fix"), [.autocompleteSearchOnly])
         let site = ArcRanking.Candidate(archetype: .topDomain, url: URL(string: "https://time.com")!, autocompleteText: "time.com", dedupKey: "t")
         XCTAssertTrue(ArcRanking.boosts(site, query: "time", input: "time.com").contains(.autocompleteDefault))
-        XCTAssertFalse(ArcRanking.boosts(site, query: "time").contains(.autocompleteDefault))
-        let ets = ArcRanking.Candidate(archetype: .chromiumSearchSuggestion, autocompleteText: "ETS", dedupKey: "e")
-        XCTAssertEqual(ArcRanking.boosts(ets, query: "etsy", input: "etsy.com"), [], "a suggestion never")
         let typed = ArcRanking.Candidate(archetype: .chromiumSearchWhatYouTyped, autocompleteText: "etsy", dedupKey: "t")
-        XCTAssertEqual(ArcRanking.boosts(typed, query: "etsy", input: "etsy.com"), [.autocompleteSearchOnly], "the search as typed, completed or not")
-        XCTAssertFalse(ArcRanking.boosts(ArcRanking.Candidate(archetype: .typeTravel, customTitle: "Switch to Dark Mode", runs: 1, dedupKey: "c"), query: "swi")
-            .contains(.typeTravelPrefixForLongQuery), "one word is not a long query (the real Arc leaves the search first)")
-        XCTAssertTrue(ArcRanking.boosts(ArcRanking.Candidate(archetype: .typeTravel, customTitle: "Switch to Dark Mode", runs: 1, dedupKey: "c"), query: "switch to d")
-            .contains(.typeTravelPrefixForLongQuery))
+        XCTAssertEqual(ArcRanking.boosts(typed, query: "etsy"), [.autocompleteSearchOnly])
+        XCTAssertEqual(ArcRanking.boosts(typed, query: "etsy", input: "etsy.com"), [], "completed to a site, the text as typed no longer gets it")
+        // A command whose title or a trigger starts with three characters or more of the text (the binary's test).
+        let dark = ArcRanking.Candidate(archetype: .typeTravel, hotWords: ["Switch to Dark Mode", "Dark Mode"], customTitle: "Switch to Dark Mode", dedupKey: "c")
+        XCTAssertTrue(ArcRanking.boosts(dark, query: "swi").contains(.typeTravelPrefixForLongQuery))
+        XCTAssertTrue(ArcRanking.boosts(dark, query: "dark m").contains(.typeTravelPrefixForLongQuery))
+        XCTAssertFalse(ArcRanking.boosts(dark, query: "sw").contains(.typeTravelPrefixForLongQuery), "two characters")
+        XCTAssertFalse(ArcRanking.boosts(dark, query: "mode").contains(.typeTravelPrefixForLongQuery), "inside a phrase")
     }
 
     /// Arc's fuzzy score: per word, 1² + … + n² for the longest run of the word's start anywhere and at a word start; the
@@ -100,50 +99,83 @@ final class ArcRankingTests: XCTestCase {
         HistoryCandidate(url: URL(string: "http://127.0.0.1:62846/" + path)!, title: title, visitedAt: ago(seconds), visitCount: visits, typedCount: typed)
     }
 
-    private func bar(_ query: String, tabs: [SwitchCandidate] = [], history: [HistoryCandidate] = [], suggestions: [String] = []) -> CommandBarSnapshot {
-        let current = SwitchCandidate(tab: ItemID("current"), title: "Visual fixture", url: URL(string: "http://127.0.0.1:8764/visual.html")!, favicon: nil,
-                                      spaceTitle: nil, inCurrentSpace: true, isFocused: true)
-        var bar = commandBar([current] + tabs, history, actions: listedActions, suggestions: suggestions, suggestedFor: query)
+    /// Arc's state on 2026-11-10: `current` is the tab on screen; Google's answer in Chromium's form, fetched with the probe.
+    private func bar(_ query: String, tabs: [SwitchCandidate] = [], history: [HistoryCandidate] = [], google: [(String, Int)] = [], verbatim: Int? = nil,
+                     spaces: [SpaceCandidate] = [], usage: [String: CommandUsageRow] = [:], current: SwitchCandidate? = nil, editing: Bool = false) -> CommandBarSnapshot {
+        let visual = SwitchCandidate(tab: ItemID("current"), title: "Visual fixture", url: URL(string: "http://127.0.0.1:8764/visual.html")!, favicon: nil,
+                                     spaceTitle: nil, inCurrentSpace: true, isFocused: true)
+        var shown = current ?? visual
+        shown.isFocused = true
+        let suggestions = google.map { EngineSuggestion($0.0.hasPrefix("https://") ? $0.0 : $0.0, kind: $0.0.hasPrefix("https://") ? .navigation : .query, relevance: $0.1) }
+        var bar = commandBar((current == nil ? [visual] : [shown]) + tabs, history, actions: listedActions, spaces: spaces, suggestions: suggestions, suggestedFor: query)
+        bar.suggestedVerbatimRelevance = verbatim
         bar.now = Self.now
-        bar.createsTab = true
+        bar.commandUsage = usage
+        bar.createsTab = !editing
+        if editing { bar.initialQuery = shown.url.absoluteString }
         return bar
     }
 
     /// Each row as the real Arc's list reads it: a title, "search" for the text as typed.
     private func order(_ query: String, _ bar: CommandBarSnapshot) -> [String] {
-        Suggest.rank(query: query, bar: bar, appName: "Brk").map { $0.kind == .openTyped ? "search" : $0.title }
+        Suggest.rank(query: query, bar: bar, appName: "Brk").map { $0.kind == .openTyped && $0.symbol != "globe" ? "search" : $0.title }
     }
 
-    /// The candidates are what the real Arc 1.170 listed on 2026-11-10 for the same text (its engine's suggestions, the
-    /// fixture pages with the same visits and typed visits, an open tab); the expected rows are Arc's first five, minus
-    /// rows only Arc can have (rows of the user's own history). ~/brk-evidence/command-bar-ranking/README.md has the table.
+    /// Each case is what the real Arc 1.170 listed on 2026-11-10 with the same state (its sidebar's tabs, the fixture pages'
+    /// visits and typed visits, Google's answer in Chromium's form fetched beside the probe, a Space command run 165 times);
+    /// the expected rows are the start of Arc's list. ~/brk-evidence/command-bar-ranking/README.md has the full table.
     func testOrdersMatchTheRealArc() {
-        var almanac = candidate("almanac", "Brindlewick Zarquon Almanac", "http://127.0.0.1:62846/tab-a.html")
+        let almanac = candidate("almanac", "Brindlewick Zarquon Almanac", "http://127.0.0.1:62846/tab-a.html")
         var github = candidate("github", "GitHub", "https://github.com/")
         github.isFavorite = true
         github.saveLevel = 1
+        var mdn = candidate("mdn", "MDN Web Docs", "https://developer.mozilla.org/en-US/")
+        mdn.isFavorite = true
+        mdn.saveLevel = 1
+        var docs = candidate("docs", "Docs", "http://127.0.0.1:8764/docs.html")
+        docs.saveLevel = 2
+        let space = SpaceCandidate(id: SpaceID("space1"), title: "Space 1", icon: .none, isCurrent: false)
+        let spaceRuns = [Suggest.usageKey(.space(.focus(space.id))): CommandUsageRow(count: 165, lastRun: ago(6_500))]
+        let typedAlmanac = page("Brindlewick Zarquon Almanac", "tab-a.html", 600, visits: 2, typed: 2)
+        let zarquon = [("zarquon meaning", 900), ("zarquon hitchhiker's guide to the galaxy", 601), ("zarqoon stone", 600)]
         let cases: [(String, CommandBarSnapshot, [String])] = [
             ("brindlewick zarq", bar("brindlewick zarq", tabs: [almanac]), ["search", "Brindlewick Zarquon Almanac"]),
-            ("zarquon", bar("zarquon", tabs: [almanac], suggestions: ["zarquon hitchhiker's guide to the galaxy", "The Great Prophet Zarquon", "zarquon meaning", "zarquon incident", "zarquon incident year"]),
-             ["Brindlewick Zarquon Almanac", "search"]),
-            ("quorvex tele", bar("quorvex tele", history: [page("Quorvex Telemetry Digest", "hist-a.html", 270)]), ["search", "Quorvex Telemetry Digest"]),
+            ("zarquon", bar("zarquon", tabs: [almanac], google: zarquon, verbatim: 1300), ["Brindlewick Zarquon Almanac", "search"]),
+            // The tab on screen ranks as any tab (Arc draws it as a visited page); its address typed in full replaces it.
+            ("zarquon", bar("zarquon", google: zarquon, verbatim: 1300, current: almanac), ["Brindlewick Zarquon Almanac", "search"]),
+            ("127.0.0.1:62846/tab-a.html", bar("127.0.0.1:62846/tab-a.html", history: [typedAlmanac], current: almanac),
+             ["127.0.0.1:62846/tab-a.html", "127.0.0.1:62846/tab-a.html"]),
+            ("127.0.0.1:62846/tab-a.html", bar("127.0.0.1:62846/tab-a.html", tabs: [almanac], history: [typedAlmanac]),
+             ["127.0.0.1:62846/tab-a.html", "Brindlewick Zarquon Almanac", "127.0.0.1:62846/tab-a.html"]),
             ("gorblin", bar("gorblin", history: [page("Gorblin Ferrum Ledger", "typed-a.html", 160, visits: 2, typed: 2), page("Gorblin Nimbus Ledger", "typed-b.html", 130, visits: 2)],
-                            suggestions: ["Goblin", "goblin tools", "Goblin shark", "Goblin Slayer", "goblin sponsorship"]),
-             ["search", "Gorblin Ferrum Ledger", "Gorblin Nimbus Ledger", "Goblin", "goblin tools"]),
-            ("mardrake", bar("mardrake", history: [page("Mardrake Newcombe Survey", "rec-new.html", 90), page("Mardrake Oldwick Survey", "rec-old.html", 230)],
-                             suggestions: ["Mandrake", "mandrake peak", "mandrake root", "Mandrake Rooftop", "mandrake harry potter"]),
-             ["search", "Mardrake Newcombe Survey", "Mardrake Oldwick Survey", "Mandrake", "mandrake peak"]),
-            ("githu", bar("githu", tabs: [github], suggestions: ["github login", "github copilot", "github desktop", "github status"]),
-             ["GitHub", "search", "github login", "github copilot", "github desktop"]),
-            ("esp", bar("esp", suggestions: ["espn", "espn fantasy", "espn fantasy football", "NFL on ESPN", "Estes Express Lines", "espn fantasy login", "espn plus", "espn nfl scores", "NBA on ESPN"]),
-             ["ESPN", "search", "espn", "espn fantasy", "espn fantasy football"]),
-            ("dark mode", bar("dark mode", suggestions: ["dark mode google docs", "dark mode chrome", "dark mode extension", "dark mode google"]),
-             ["Switch to Dark Mode", "search", "dark mode google docs", "dark mode chrome", "dark mode extension"]),
-            ("best pizza dough recipe", bar("best pizza dough recipe", suggestions: ["best pizza dough recipe for home oven", "best pizza dough recipe for pizza oven", "best pizza dough recipe using 00 flour", "best pizza dough recipe for ooni"]),
-             ["search", "best pizza dough recipe for home oven", "best pizza dough recipe for pizza oven", "best pizza dough recipe using 00 flour", "best pizza dough recipe for ooni"]),
+                            google: [("goblin", 1250), ("goblin shark", 601), ("goblin slayer", 600)], verbatim: 1300),
+             ["search", "Gorblin Ferrum Ledger", "Gorblin Nimbus Ledger", "goblin"]),
+            ("githu", bar("githu", tabs: [github], google: [("github", 1250), ("https://github.com/", 1249), ("github login", 601), ("github copilot", 600)], verbatim: 851),
+             ["GitHub", "search"]),
+            // The start of one of Arc's popular sites completes the input, with or without a site suggestion from Google.
+            ("dreamst", bar("dreamst", google: [("dreamstate", 1251), ("dreamstate 2026", 1250), ("dreamstime", 900)], verbatim: 851), ["Dreamstime", "search"]),
+            ("kompa", bar("kompa", google: [("kompas", 1250), ("kompan", 601), ("kompany", 600)], verbatim: 891), ["search"]),
+            ("swi", bar("swi", google: [("switch 2", 650), ("swig", 602), ("switch 2 zelda edition", 601)], verbatim: 851, spaces: [space], usage: spaceRuns),
+             ["Focus on Space 1", "search", "Switch to Dark Mode"]),
+            ("switch to d", bar("switch to d", google: [("switch to desktop mode steam deck", 1252), ("switch to dark mode", 1251), ("switch to dock", 601)], verbatim: 851),
+             ["Switch to Dark Mode", "search"]),
+            ("clear", bar("clear", google: [("clearwater", 601), ("clear cache", 600)], verbatim: 1300), ["Clear Unpinned Tabs", "search"]),
+            ("save", bar("save", google: [("save a lot", 601), ("savers", 600)], verbatim: 1300), ["Pin/Unpin Tab", "search", "Save Page As"]),
+            ("dark mode", bar("dark mode", google: [("dark mode google docs", 850), ("dark mode iphone", 603), ("dark mode chrome", 602)], verbatim: 1300),
+             ["Switch to Dark Mode", "search", "dark mode google docs"]),
+            // Cmd+L lists no tab: the pinned Docs and the MDN Favorite come as visited pages (P02-c).
+            ("doc", bar("doc", tabs: [mdn, docs], history: [HistoryCandidate(url: URL(string: "http://127.0.0.1:8764/docs.html")!, title: "Docs", visitedAt: ago(5_000), visitCount: 11, typedCount: 11),
+                                                       HistoryCandidate(url: URL(string: "https://developer.mozilla.org/en-US/")!, title: "MDN Web Docs", visitedAt: ago(20_000), visitCount: 2, typedCount: 1)],
+                        google: [("docs", 1000), ("docusign", 602), ("doctor", 601)], verbatim: 1054, editing: true),
+             ["Google Docs", "search", "Docs", "MDN Web Docs"]),
+            ("best pizza dough recipe", bar("best pizza dough recipe", google: [("best pizza dough recipe for pizza oven", 601), ("best pizza dough recipe ever", 600)], verbatim: 1300),
+             ["search", "best pizza dough recipe for pizza oven", "best pizza dough recipe ever"]),
         ]
         for (query, bar, expected) in cases {
             XCTAssertEqual(Array(order(query, bar).prefix(expected.count)), expected, query)
         }
+        let current = Suggest.rank(query: "zarquon", bar: bar("zarquon", google: zarquon, verbatim: 1300, current: almanac), appName: "Brk").first
+        XCTAssertEqual(current?.kind, .history, "the tab on screen is drawn as a visited page")
+        XCTAssertEqual(current?.subtitle, "127.0.0.1:62846/tab-a.html")
     }
 }

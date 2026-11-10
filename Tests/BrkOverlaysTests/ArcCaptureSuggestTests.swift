@@ -34,8 +34,8 @@ final class ArcCaptureSuggestTests: XCTestCase {
         XCTAssertEqual(Suggest.siteSearchOffer("wiki", completing: domain, bar: bar), wikipedia)
     }
 
-    /// no completion for one letter, a phrase, an address with a path or scheme, a number, the focused tab's host, or
-    /// a query whose top hit is an action (Return runs that)
+    /// no completion for one letter, a phrase, an address with a path or scheme, a number, or a query whose top hit is an
+    /// action (Return runs that); the tab on screen is a row like any tab, so its host completes
     func testCompletionOnlyForABareHostBeingTyped() {
         let bar = captureBar()
         for query in ["w", "wiki pedia", "wikipedia.org/wiki", "https://wiki", "127", "wikipedia.org"] {
@@ -44,6 +44,6 @@ final class ArcCaptureSuggestTests: XCTestCase {
         XCTAssertEqual(Suggest.completion("WIKI", bar: bar, appName: "Brk"), "wikipedia.org", "case-insensitive")
         XCTAssertNil(Suggest.completion("preferences", bar: bar, appName: "Brk"), "Preferences… is the top hit")
         let focused = commandBar([candidate("f", "Focused", "https://focusedonly.example/", focused: true)], [])
-        XCTAssertNil(Suggest.completion("focusedo", bar: focused, appName: "Brk"))
+        XCTAssertEqual(Suggest.completion("focusedo", bar: focused, appName: "Brk"), "focusedonly.example")
     }
 }

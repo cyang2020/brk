@@ -10,7 +10,7 @@ import Foundation
 /// orders asserted are the ones the real Arc showed for the same fixture pages (~/brk-evidence/command-bar-ranking).
 enum CommandBarRankingScenarios {
     static let all = [
-        Scenario("Ranking-CmdT", "real keys: part of an open tab's title puts the search first and the tab second, a whole word puts the tab first, a visited page sits under the search, typed visits and more visits rank a page up, and a command run from the bar moves above the search",
+        Scenario("Ranking-CmdT", "real keys: part of an open tab's title puts the search first and the tab second, a whole word puts the tab first, a visited page sits under the search, typed visits and more visits rank a page up, a command run from the bar moves above the search, and the tab on screen is listed as a visited page",
                  cefOnly: "native command bar, real keys", ranking),
     ]
 
@@ -90,7 +90,7 @@ enum CommandBarRankingScenarios {
         self.app = app
         record = ""
         // The fixture: an open tab, a page visited and closed, a page typed twice in ⌘L, a page reached twice by links.
-        _ = try E.loadReady(app, "ranking-almanac.html")
+        let almanac = try E.loadReady(app, "ranking-almanac.html")
         let digest = try E.loadReady(app, "ranking-digest.html")
         try app.press("cmd+w")
         try app.waitUntil("the digest tab closed") { try tab(digest, in: app.view()) == nil }
@@ -168,6 +168,17 @@ enum CommandBarRankingScenarios {
         S.log(app, "ranking-rows.txt", record)
         if let command = after.0, let search = after.1 { note(command < search, "after one run Zoom Out should rank above the search: \(r)") }
         else { failures.append("zoom: \(r)") }
+        try close(app)
+
+        // The tab on screen ranks as any tab but is drawn as a visited page, its title and address, no Switch to Tab (Arc
+        // 1.170, 2026-11-10: "zarquon" with that tab on screen lists it first that way).
+        try app.dispatch(.tab(.focus(almanac)))
+        try app.waitUntil("the almanac tab on screen") { try E.committed(app, S.page(app, almanac)) == app.site.url("ranking-almanac.html") }
+        app.sleep(0.5)
+        r = try rows(app, "zarquon", until: "Brindlewick Zarquon Almanac")
+        let first = r.first ?? []
+        note(index(r, "Brindlewick Zarquon Almanac") == 0 && !first.contains("Switch to Tab") && first.contains { $0.hasSuffix("ranking-almanac.html") },
+             "zarquon with the almanac on screen: \(r)")
         try close(app)
         try expect(failures.isEmpty, failures.joined(separator: "\n"))
     }

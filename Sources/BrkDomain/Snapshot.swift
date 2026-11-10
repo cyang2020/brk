@@ -593,8 +593,10 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var siteSearch: [SearchEngineCandidate]
     /// The engine's suggestions for the bar's last answered `queryChanged`, and the query they answer; the view
     /// drops them when its text has moved on. Empty until they arrive. F4.
-    public var suggestions: [String]
+    public var suggestions: [EngineSuggestion]
     public var suggestedFor: String?
+    /// The relevance the engine gave the search as typed (`google:verbatimrelevance`); nil: Chromium's own (1300).
+    public var suggestedVerbatimRelevance: Int? = nil
     public var suggestionsEnabled: Bool = true
     /// The bar opens a new tab (Cmd+T, the New Tab row): the sidebar's New Tab row shows as selected meanwhile (Q01-a).
     public var createsTab: Bool = false

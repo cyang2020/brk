@@ -8,7 +8,7 @@ import BrkBase
 /// scorer, never one another row already offers, only for the text they answer.
 @MainActor
 final class MeaningRowsTests: XCTestCase {
-    private func bar(tabs: [SwitchCandidate] = [], history: [HistoryCandidate] = [], meaning: MeaningCandidates? = nil, suggestions: [String] = [],
+    private func bar(tabs: [SwitchCandidate] = [], history: [HistoryCandidate] = [], meaning: MeaningCandidates? = nil, suggestions: [EngineSuggestion] = [],
                      suggestedFor: String? = nil) -> CommandBarSnapshot {
         var bar = commandBar(tabs, history, actions: [], suggestions: suggestions, suggestedFor: suggestedFor)
         bar.createsTab = true

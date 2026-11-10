@@ -131,12 +131,23 @@ public enum ArcRanking {
         }
 
         /// The highest row this archetype is lifted to when its score puts it lower (`ASE2.PreferredMaxRankConfig`, an
-        /// optional row per archetype). Arc's defaults were not found in the binary; the one value here is fitted to the
-        /// real Arc: the Ask row is third (P49).
+        /// optional row per archetype). Arc's defaults were not found in the binary; the value here is fitted to the real
+        /// Arc: the Ask row is third (P49; with Max on, 2026-11-10, "best pizza dough recipe", "how tall is the eiffel
+        /// tower" and "what is a plimsoll line"). The search as typed has its own (`searchAsTypedRow`).
         public var preferredMaxRank: Int? {
             self == .askGPTWhatYouTyped ? 2 : nil
         }
     }
+
+    /// The two values of `ASE2.PreferredMaxRankConfig` the real Arc shows (the config is in the binary, its defaults are
+    /// not). The search as typed is never lower than the second row: in 60 probes of the real Arc on 2026-11-10 it was first
+    /// or second every time, under a tab, a site or a command that outscored it and above commands it did not ("save" →
+    /// Pin Tab, save, Save Page As). Not for an address typed in full, whose search row stays where it scores.
+    public static let searchAsTypedRow = 1
+
+    /// An address typed in full is the first row (fitted: first in all three address probes of the real Arc, above an open
+    /// tab showing that page, d03 and two on 2026-11-10).
+    public static let addressAsTypedRow = 0
 
     /// `ASE2.Boost` with its weight and score (tables 0x10378e130 and 0x10378e0c0).
     public enum Boost: Int, CaseIterable, Sendable {
@@ -179,10 +190,14 @@ public enum ArcRanking {
         public var isFavorite: Bool
         /// How often a command was run from the bar (`typeTravelUsage.frequency`).
         public var runs: Int
-        /// Rows that are the same thing show once (`order`).
+        /// Rows that are the same thing show once (`order`): the same key, or the same second key (a page's title and host on
+        /// Arc's dedup hosts).
         public var dedupKey: String
+        public var titleKey: String? = nil
         /// The highest row this candidate is lifted to when it scores lower (its archetype's).
         public var preferredRow: Int?
+        /// The tab on screen: ranked as a tab, but not a tab to switch to, so its address typed in full replaces it.
+        public var isCurrent = false
 
         public init(archetype: Archetype, features: [Feature: Double] = [:], url: URL? = nil, autocompleteText: String = "", hotWords: [String] = [],
                     customTitle: String? = nil, isFavorite: Bool = false, runs: Int = 0, dedupKey: String, preferredRow: Int? = nil) {
@@ -385,19 +400,16 @@ public enum ArcRanking {
     ///   address starts with the query, and for a row that is not a tab it is not the whole address. A tab gets
     ///   exactURL and baseDomain, never exactBaseDomain.
     /// - exactHotWord: the lowercased query is one of the hot words.
-    /// - autocompleteDefault (rows that open a page or run a command) and autocompleteSearchOnly (searches): the input, as
-    ///   Chromium's inline completion leaves it (`input`: "time" completed to "time.com"), is or starts with the row's
-    ///   text (a row that opens a page), or the row is the search as typed. So the completed site and the text as typed
-    ///   get it; a suggestion does not (Arc keeps "visual field" above "visual fixation" for "visual fix", and "ETS" in
-    ///   its place when "etsy" completes to etsy.com).
+    /// - autocompleteDefault (rows that open a page or run a command) and autocompleteSearchOnly (searches): the row's text
+    ///   is or starts with the input (the binary's test), the input as completed inline (`input`: "time" completed to
+    ///   "time.com"). So with a completed site the site gets it and the text as typed does not; without one the text as
+    ///   typed and every row that starts with it do (fitted on 60 probes of the real Arc: the binary's own test against the
+    ///   completed input matched best).
     /// - chromiumSpecialSearchFunction: Chromium's second row, for a `word:word` query.
     /// - customTitlePrefix: a tab's own title starts with the query.
     /// - veryRecentTabOrDocumentBoost: a tab used in the last hour. topApp: a Favorite.
     /// - recentlyUseTypeTravel: a command run more than once. typeTravelPrefixForLongQuery: a command whose title or a
-    ///   trigger starts with the query. The binary checks a query of three characters or more against the command's
-    ///   phrases, but the real Arc lifts only a start of two words or more ("switch to d" puts Switch to Dark Mode first;
-    ///   "swi", "dark" and "nigh" leave the search first, though the trigger list "Switch to Dark Mode; Switch Dark Mode;
-    ///   Dark Mode; Night Mode" starts with each), so Brk applies it from two words.
+    ///   trigger starts with a query of three characters or more (the binary's test, case 0xb).
     /// - highFuzzySearchConfidence: fuzzySearchConfidence above 0.8. No code in Arc 1.170 sets that feature, so it never
     ///   applies; Brk keeps the rule. unboxingPromotedAction: Arc's onboarding list, which Brk does not have.
     public static func boosts(_ candidate: Candidate, query: String, input: String? = nil) -> [Boost] {
@@ -414,10 +426,8 @@ public enum ArcRanking {
         }
         if candidate.hotWords.contains(where: { $0.lowercased() == q }) { out.append(.exactHotWord) }
         let text = candidate.autocompleteText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        if candidate.archetype.isSearch {
-            if !text.isEmpty, q == text || shown == text { out.append(.autocompleteSearchOnly) }
-        } else if !text.isEmpty, shown == text || shown.hasPrefix(text) {
-            out.append(.autocompleteDefault)
+        if !text.isEmpty, !shown.isEmpty, text == shown || text.hasPrefix(shown) {
+            out.append(candidate.archetype.isSearch ? .autocompleteSearchOnly : .autocompleteDefault)
         }
         if candidate.features[.chromiumRank] == 1, isSpecialSearch(q) { out.append(.chromiumSpecialSearchFunction) }
         if isTab, let title = candidate.customTitle?.lowercased(), title.hasPrefix(q) { out.append(.customTitlePrefix) }
@@ -425,7 +435,7 @@ public enum ArcRanking {
         if isTab, candidate.isFavorite { out.append(.topApp) }
         if candidate.archetype == .typeTravel {
             if candidate.runs > 1 { out.append(.recentlyUseTypeTravel) }
-            if q.count > 2, q.contains(" "), ([candidate.customTitle].compactMap { $0 } + candidate.hotWords).contains(where: { $0.lowercased().hasPrefix(q) }) {
+            if q.count > 2, ([candidate.customTitle].compactMap { $0 } + candidate.hotWords).contains(where: { $0.lowercased().hasPrefix(q) }) {
                 out.append(.typeTravelPrefixForLongQuery)
             }
         }
@@ -479,26 +489,32 @@ public enum ArcRanking {
     /// the best one's place, a candidate lifted to its preferred row, at most `limit`. Which duplicate Arc shows was not
     /// read; fitted to what the real Arc showed: a tab's row takes the place of the same site as a popular site (the
     /// Favorites GitHub and Wikipedia), and an address typed in full takes the place of a visited page at that address
-    /// but stays beside the open tab that shows it (the typed address first, Switch to Tab second).
+    /// and of the tab on screen, but stays beside another open tab that shows it (the typed address first, Switch to Tab
+    /// second).
     public static func order(_ candidates: [Candidate], scores: [Double], limit: Int) -> [Int] {
         let sorted = candidates.indices.sorted { scores[$0] != scores[$1] ? scores[$0] > scores[$1] : $0 < $1 }
-        var place: [String: Int] = [:], typedPlace: [String: Int] = [:], rows: [Int] = []
+        func switchable(_ i: Int) -> Bool { candidates[i].archetype == .tab && !candidates[i].isCurrent }
+        var place: [String: Int] = [:], typedPlace: [String: Int] = [:], rows: [Int] = [], keyOf: [String: String] = [:]
         for i in sorted {
-            let key = candidates[i].dedupKey, archetype = candidates[i].archetype
+            var key = candidates[i].dedupKey
+            let archetype = candidates[i].archetype
+            if let title = candidates[i].titleKey {
+                if place[key] == nil, let other = keyOf[title] { key = other } else if keyOf[title] == nil { keyOf[title] = key }
+            }
             if archetype == .chromiumNavigateWhatYouTyped {
-                if let at = place[key], candidates[rows[at]].archetype != .tab { rows[at] = i; typedPlace[key] = at; continue }
+                if let at = place[key], !switchable(rows[at]) { rows[at] = i; typedPlace[key] = at; continue }
                 typedPlace[key] = rows.count
                 if place[key] == nil { place[key] = rows.count }
                 rows.append(i)
                 continue
             }
-            if archetype == .tab, place[key] != nil, place[key] == typedPlace[key] {
+            if switchable(i), place[key] != nil, place[key] == typedPlace[key] {
                 place[key] = rows.count
                 rows.append(i)
                 continue
             }
             if let at = place[key] {
-                if archetype == .tab, candidates[rows[at]].archetype != .tab, candidates[rows[at]].archetype != .chromiumNavigateWhatYouTyped { rows[at] = i }
+                if archetype == .tab, !switchable(rows[at]), candidates[rows[at]].archetype != .chromiumNavigateWhatYouTyped { rows[at] = i }
                 continue
             }
             place[key] = rows.count

@@ -11,7 +11,7 @@ import BrkBase
 final class QuickSourceRowsTests: XCTestCase {
     private let noon = Instant(milliseconds: 1_794_052_800_000)
 
-    private func bar(tabs: [SwitchCandidate] = [], history: [HistoryCandidate] = [], suggestions: [String] = [], suggestedFor: String? = nil,
+    private func bar(tabs: [SwitchCandidate] = [], history: [HistoryCandidate] = [], suggestions: [EngineSuggestion] = [], suggestedFor: String? = nil,
                      local: LocalResults? = nil, rates: CurrencyRates? = nil, fillsPane: Bool = false) -> CommandBarSnapshot {
         var bar = commandBar(tabs, history, actions: [], suggestions: suggestions, suggestedFor: suggestedFor)
         bar.createsTab = !fillsPane
@@ -59,7 +59,7 @@ final class QuickSourceRowsTests: XCTestCase {
     func testArcsRowsDoNotChangeWhenNothingMatches() {
         let tabs = [candidate("t1", "GitHub", "https://github.com/arc"), candidate("t2", "Docs", "https://docs.example.com/")]
         let history = [visit("Budget tips", "https://example.org/budget", 100)]
-        let suggestions = ["budget app", "budget planner"]
+        let suggestions: [EngineSuggestion] = ["budget app", "budget planner"]
         for text in ["budget", "git", "doc", "how do browsers render fonts", "emoji", "file", "example.com"] {
             var plain = commandBar(tabs, history, actions: listedActions, suggestions: suggestions, suggestedFor: text)
             let before = Suggest.rank(query: text, bar: plain, appName: "Brk", resolve: { resolveTypedInput($0) })
@@ -488,7 +488,7 @@ final class QuickSourceRowsTests: XCTestCase {
     /// Apps and files rank as commands do (Arc's typeTravel archetype): an app named exactly what is typed leads; each row
     /// keeps what Return, ⌘Return and ⌥Return do, and carries the key its runs are learned under.
     func testAppsAndFilesRankAsCommands() {
-        let suggestions = ["budget a", "budget b", "budget c"]
+        let suggestions: [EngineSuggestion] = ["budget a", "budget b", "budget c"]
         let local = LocalResults(query: "budget", apps: [app("Budget")], files: [hit("budget.txt"), hit("budget2.txt")])
         let rows = rank("budget", bar(suggestions: suggestions, suggestedFor: "budget", local: local))
         XCTAssertEqual(rows.first?.kind, .app, "the app's name is the whole text")

@@ -118,7 +118,8 @@ final class CommandBarViewTests: XCTestCase {
         type(url, into: view)
         press(#selector(NSResponder.insertNewline(_:)), in: view)
         XCTAssertEqual(chosen, [.commandBar(.submit(url))])
-        press(#selector(NSResponder.moveDown(_:)), in: view)
+        let tab = view.results.firstIndex { $0.command == .tab(.focus(ItemID("setter"))) } ?? 0
+        for _ in 0..<tab { press(#selector(NSResponder.moveDown(_:)), in: view) }
         press(#selector(NSResponder.insertNewline(_:)), in: view)
         XCTAssertEqual(chosen.last, .tab(.focus(ItemID("setter"))), "the fuzzy tab remains an explicit choice")
     }

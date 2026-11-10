@@ -439,6 +439,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             siteSearch: SearchEngine.siteSearchable(state.profileSettings(in: id)).filter { $0.id != engine.id }.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
             suggestions: session.suggestions?.results ?? [],
             suggestedFor: session.suggestions?.query,
+            suggestedVerbatimRelevance: session.suggestions?.verbatimRelevance,
             suggestionsEnabled: doc.kind != .incognito && state.profileSettings(in: id).searchSuggestions,
             createsTab: target == .newTab,
             fillsPane: { if case .fillPane = target { true } else { false } }(),
