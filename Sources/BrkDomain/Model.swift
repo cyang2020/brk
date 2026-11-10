@@ -418,7 +418,9 @@ enum ProfileDialog: Sendable, Equatable {
 /// The default engine's suggestions for one typed query.
 struct Suggestions: Sendable, Equatable {
     var query: String
-    var results: [String]
+    var results: [EngineSuggestion]
+    /// The relevance the engine gives the search as typed (`google:verbatimrelevance`), when it sends one.
+    var verbatimRelevance: Int?
 }
 
 /// Arc: `CommandBarDestinationType` createNewTab | overrideCurrentTab.

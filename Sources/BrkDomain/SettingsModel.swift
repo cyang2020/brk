@@ -427,7 +427,9 @@ public struct SearchEngine: Hashable, Sendable, Codable {
     public var name: String
     public var keyword: String
     public var template: String
-    /// OpenSearch suggestions JSON (`["q", ["s1", "s2"]]`), or nil when the engine has none.
+    /// OpenSearch suggestions JSON (`["q", ["s1", "s2"]]`), or nil when the engine has none. Google's is asked the way Chromium's
+    /// omnibox asks it (`client=chrome-omni`), which adds site suggestions and relevances (`SuggestionFetcher.parse`); Bing's answer carries
+    /// relevances too; DuckDuckGo and Ecosia send the plain form.
     public var suggestTemplate: String?
 
     public init(id: SearchEngineID, name: String, keyword: String, template: String, suggestTemplate: String?) {
@@ -440,7 +442,7 @@ public struct SearchEngine: Hashable, Sendable, Codable {
 
     public static let google = SearchEngine(id: SearchEngineID("google"), name: "Google", keyword: "google",
                                             template: "https://www.google.com/search?q={q}",
-                                            suggestTemplate: "https://suggestqueries.google.com/complete/search?client=firefox&q={q}")
+                                            suggestTemplate: "https://www.google.com/complete/search?client=chrome-omni&gs_ri=chrome-ext-ansg&xssi=t&q={q}")
     public static let duckDuckGo = SearchEngine(id: SearchEngineID("duckduckgo"), name: "DuckDuckGo", keyword: "duckduckgo",
                                                 template: "https://duckduckgo.com/?q={q}",
                                                 suggestTemplate: "https://duckduckgo.com/ac/?type=list&q={q}")

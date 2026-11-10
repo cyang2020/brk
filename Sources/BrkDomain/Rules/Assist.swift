@@ -1038,9 +1038,10 @@ extension Work {
         if let asked, state.doc.windows[asked] != nil { toast(ToastCopy.downloadRenamed, in: asked, subtitle: (new as NSString).lastPathComponent) }
     }
 
-    mutating func suggestions(_ window: WindowID, query: String, _ results: [String]) {
+    mutating func suggestions(_ window: WindowID, query: String, _ results: [EngineSuggestion], verbatimRelevance: Int?) {
         guard state.session.windows[window] != nil, case .commandBar? = state.session.windows[window]!.overlay else { return }
-        state.session.windows[window]!.suggestions = Suggestions(query: query, results: Array(results.prefix(Metrics.commandBar.maxSearchSuggestions.value)))
+        state.session.windows[window]!.suggestions = Suggestions(query: query, results: Array(results.prefix(Metrics.commandBar.maxSearchSuggestions.value)),
+                                                                 verbatimRelevance: verbatimRelevance)
     }
 }
 extension AIPurpose {

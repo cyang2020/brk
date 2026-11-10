@@ -408,7 +408,14 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         // Type travel lists what the menu would enable now; of the two Pinned rows only the one that applies.
         var enabled = enabledActions(state, window: id, tree: tree, space: space, shown: shown, focused: state.resolveTab(.focused, in: id).flatMap { p in state.displayedTab(p, in: id).map { (p, $0) } })
         enabled.remove(space.pinnedCollapsed ? .collapsePinnedSection : .expandPinnedSection)
-        let listed = ActionID.allCases.filter { $0.spec.commandBar != nil && enabled.contains($0) }
+        // The appearance in use (ticked in View > Appearance) is no command: the real Arc, Automatic ticked, offers only Switch to
+        // Dark Mode and Switch to Light Mode ("swi", "switch", 2026-11-10).
+        let inUse: ActionID = switch state.sitePreferences(state.siteTarget(in: id)?.context ?? state.libraryContext(in: id)).appearance ?? .automatic {
+        case .automatic: .appearanceAutomatic
+        case .light: .appearanceLight
+        case .dark: .appearanceDark
+        }
+        let listed = ActionID.allCases.filter { $0.spec.commandBar != nil && enabled.contains($0) && $0 != inUse }
         let bindings = KeyBindings.resolve(overrides: state.doc.keyOverrides)
         let learned = doc.kind == .incognito ? nil : CommandBarHistory(visits: state.doc.history.filter { $0.profile == profile },
                                                                        foreground: state.doc.foreground[profile] ?? [:])
@@ -439,6 +446,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             siteSearch: SearchEngine.siteSearchable(state.profileSettings(in: id)).filter { $0.id != engine.id }.map { SearchEngineCandidate(id: $0.id, name: $0.name, keyword: $0.keyword) },
             suggestions: session.suggestions?.results ?? [],
             suggestedFor: session.suggestions?.query,
+            suggestedVerbatimRelevance: session.suggestions?.verbatimRelevance,
             suggestionsEnabled: doc.kind != .incognito && state.profileSettings(in: id).searchSuggestions,
             createsTab: target == .newTab,
             fillsPane: { if case .fillPane = target { true } else { false } }(),

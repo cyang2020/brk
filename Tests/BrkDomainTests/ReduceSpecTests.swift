@@ -79,8 +79,9 @@ final class ReduceSpecTests: XCTestCase {
         ])
         XCTAssertEqual(bar.history, [HistoryCandidate(url: url("http://127.0.0.1:9/b"), title: "Bee", visitedAt: T0.advanced(by: minute), visitCount: 1, typedCount: 1)],
                        "typed in the bar: one typed visit")
-        // What the menu would enable now, with a listing; of the two Pinned rows the one that applies (F4).
-        XCTAssertEqual(bar.actions, ActionID.allCases.filter { $0.spec.commandBar != nil && d.view.enabledActions.contains($0) && $0 != .expandPinnedSection })
+        // What the menu would enable now, with a listing; of the two Pinned rows the one that applies (F4); not the appearance
+        // in use (Automatic: the real Arc offers only the other two).
+        XCTAssertEqual(bar.actions, ActionID.allCases.filter { $0.spec.commandBar != nil && d.view.enabledActions.contains($0) && $0 != .expandPinnedSection && $0 != .appearanceAutomatic })
         XCTAssertTrue(bar.actions.contains(.addSplitView))
     }
 

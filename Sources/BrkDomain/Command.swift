@@ -673,7 +673,7 @@ public enum SystemEvent: Sendable, Equatable {
     /// `LinkSettings.defaultRoute` and `externalLinksInLittleArc`. F3.
     case externalURL(URL)
     /// The default engine answered `Effect.fetchSuggestions` for this query (stale answers are dropped). F4.
-    case suggestions(WindowID, query: String, [String])
+    case suggestions(WindowID, query: String, [EngineSuggestion], verbatimRelevance: Int? = nil)
     /// The file and app sources answered `Effect.searchLocal`; the bar shows it only while its text is still the answer's.
     case localResults(WindowID, LocalResults)
     /// The local search model's matches for a text the bar or the History page asked about (`Effect.searchByMeaning`).

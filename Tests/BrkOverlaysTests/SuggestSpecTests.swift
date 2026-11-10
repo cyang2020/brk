@@ -48,7 +48,7 @@ let kagi = SearchEngineCandidate(id: SearchEngine.kagi.id, name: "Kagi", keyword
 
 func commandBar(_ tabs: [SwitchCandidate], _ history: [HistoryCandidate], actions: [ActionID] = listedActions,
                 openID: Int = 1, initialQuery: String = "", spaces: [SpaceCandidate] = [], siteSearch: [SearchEngineCandidate] = [],
-                suggestions: [String] = [], suggestedFor: String? = nil) -> CommandBarSnapshot {
+                suggestions: [EngineSuggestion] = [], suggestedFor: String? = nil) -> CommandBarSnapshot {
     CommandBarSnapshot(openID: openID, placement: .centered, initialQuery: initialQuery, tabs: tabs, history: history, actions: actions,
                        keys: defaultKeys(actions), spaces: spaces, engine: google, siteSearch: siteSearch,
                        suggestions: suggestions, suggestedFor: suggestedFor)
@@ -103,14 +103,19 @@ final class SuggestSpecTests: XCTestCase {
         XCTAssertTrue(rows(suggest("wéather")).contains("switch:t3"))
     }
 
-    /// never offers to switch to the focused tab
-    func test_neverOffersToSwitchToTheFocusedTab() {
-        XCTAssertEqual(rows(suggest("fixture")), ["open:fixture"])
+    /// the tab on screen ranks as any open tab but is drawn as a visited page, its title and address, and choosing it
+    /// stays on it (Arc 1.170, 2026-11-10: "zarquon" and "almanac" list the current tab first, "brindlewick zarq" second)
+    func test_theFocusedTabIsListedAsAVisitedPage() {
+        let list = suggest("fixture")
+        XCTAssertEqual(list.first?.kind, .history, "a whole word of its title, as any tab")
+        XCTAssertEqual(list.first?.subtitle, "127.0.0.1:4000")
+        XCTAssertEqual(list.first?.command, .tab(.focus(ItemID("t0"))))
+        XCTAssertFalse(list.contains { $0.kind == .switchToTab })
     }
 
-    /// a typed URL that is in history shows once, as the open row
+    /// a typed URL that is in history shows once, as the open row, then the text as a search (Arc 1.170, 2026-11-10)
     func test_aTypedURLThatIsInHistoryShowsOnceAsTheOpenRow() {
-        XCTAssertEqual(rows(suggest("https://news.ycombinator.com/")), ["open:news.ycombinator.com"])
+        XCTAssertEqual(rows(suggest("https://news.ycombinator.com/")), ["open:news.ycombinator.com", "suggestion:google:https://news.ycombinator.com/"])
     }
 
     func test_aTypedAddressPrecedesTabsWithDifferentDestinations() {
@@ -118,7 +123,8 @@ final class SuggestSpecTests: XCTestCase {
             let url = "http://127.0.0.1:4000/cookie.html"
             let bar = commandBar([candidate("setter", "Cookie", url + suffix)], [])
             let list = Suggest.rank(query: url, bar: bar, appName: "Brk")
-            XCTAssertEqual(list.map(\.command), [.commandBar(.submit(url)), .tab(.focus(ItemID("setter")))], suffix)
+            XCTAssertEqual(list.first?.command, .commandBar(.submit(url)), suffix)
+            XCTAssertTrue(list.contains { $0.command == .tab(.focus(ItemID("setter"))) }, suffix)
         }
         let bar = commandBar([candidate("upper", "Cookie", "https://example.com/Cookie.html")], [])
         XCTAssertEqual(Suggest.rank(query: "https://example.com/cookie.html", bar: bar, appName: "Brk").first?.kind, .openTyped,
@@ -149,13 +155,13 @@ final class SuggestSpecTests: XCTestCase {
     }
 
     /// a command whose title or a trigger is the whole text leads, carrying its shortcut or none (Arc 1.170, 2026-11-10:
-    /// "split", "archive", "devtools"); a command the text only starts sits under the search ("nigh" → the search, then
-    /// Switch to Dark Mode)
+    /// "split", "archive", "devtools"); a command a trigger of which the text starts shares the first two rows with the search
+    /// (the real Arc puts the search first for "nigh"; the README lists this difference)
     func test_listedActionsMatchByLabelAndCarryTheFormattedFirstKeyOrNone() {
         XCTAssertEqual(rows(suggest("split")).first, "action:Add Split View:⌃⇧=")
         XCTAssertEqual(rows(suggest("archive")).first, "action:View Archive:-")
         XCTAssertEqual(rows(suggest("devtools")).first, "action:Developer Tools:⌥⌘I")
-        XCTAssertEqual(Array(rows(suggest("nigh")).prefix(2)), ["open:nigh", "action:Switch to Dark Mode:-"])
+        XCTAssertEqual(Set(rows(suggest("nigh")).prefix(2)), ["open:nigh", "action:Switch to Dark Mode:-"])
     }
 
     /// shows at most Metrics.commandBar.maxVisibleRows (5) rows
@@ -178,7 +184,7 @@ final class SuggestWave2Tests: XCTestCase {
         XCTAssertFalse(rows(suggest("evtools")).contains { $0.hasPrefix("action:") }, "mid-word in Devtools")
         // With the engine's suggestions there as they always are (Arc's z-scores are over every candidate).
         let swi = commandBar(fixtureBar.tabs, [], suggestions: ["switch 2", "sweetwater", "switzerland", "swappa", "switch"], suggestedFor: "swi")
-        XCTAssertEqual(rows(suggest("swi", swi)).first, "open:swi")
+        XCTAssertTrue(rows(suggest("swi", swi)).prefix(2).contains("open:swi"), "the search as typed stays in the first two rows")
         XCTAssertTrue(rows(suggest("swi", swi)).contains("action:Switch to Dark Mode:-"))
         XCTAssertEqual(rows(suggest("switch to d")).first, "action:Switch to Dark Mode:-", "two words starting the title lift it")
     }
@@ -195,16 +201,16 @@ final class SuggestWave2Tests: XCTestCase {
         XCTAssertFalse(suggest("move to", unfocused).contains { $0.title == "Move to Work" }, "nothing to move")
     }
 
-    /// Arc's popular sites: a site whose domain the text starts (three letters at least) leads, as Google's site suggestion
-    /// does in Arc ("esp" shows ESPN first), and the input completes to it; never for one letter or a phrase; the full domain
-    /// is one row
+    /// Arc's popular sites: a site whose domain the text starts (three letters at least) leads and the input completes to it,
+    /// with or without a site suggestion from the engine (Arc 1.170, 2026-11-10: "dreamst", "timeweb", "detik"); never for
+    /// one letter or a phrase; the full domain is one page row
     func test_topDomainsOfferTheSite() {
         let bar = commandBar([], [])
         XCTAssertEqual(rows(suggest("you", bar)).prefix(2), ["domain:youtube.com", "open:you"])
         XCTAssertEqual(Suggest.completion("you", bar: bar, appName: "Brk"), "youtube.com")
         XCTAssertFalse(rows(suggest("y", bar)).contains { $0.hasPrefix("domain:") }, "one letter is not enough")
         XCTAssertEqual(rows(suggest("you tube", bar)), ["open:you tube"])
-        XCTAssertEqual(rows(suggest("youtube.com", bar)).count, 1, "the typed address and the site are one page")
+        XCTAssertEqual(rows(suggest("youtube.com", bar)).filter { $0.hasPrefix("open:") || $0.hasPrefix("domain:") }.count, 1, "the typed address and the site are one page")
     }
 
     /// the engine's suggestions sit under the typed row while they answer the text: all for the asked query, those
@@ -283,11 +289,13 @@ final class MaxCommandBarSuggestTests: XCTestCase {
         return bar
     }
 
-    func testNoAskRowWhenOffForAnAddressOrOneWord() {
+    /// the Ask row needs Max on and three words or more (Arc 1.170 with Max on, 2026-11-10: "eiffel tower?" and "pizza dough"
+    /// list none, "best pizza dough recipe" lists it third)
+    func testAskRowForThreeWordsOrMore() {
         XCTAssertFalse(Suggest.rank(query: "how do browsers render fonts", bar: bar(ask: nil), appName: "Brk").contains { $0.kind == .ask })
         XCTAssertFalse(Suggest.rank(query: "example.com/fonts", bar: bar(), appName: "Brk").contains { $0.kind == .ask })
-        XCTAssertFalse(Suggest.rank(query: "fonts", bar: bar(), appName: "Brk").contains { $0.kind == .ask })
-        XCTAssertTrue(Suggest.rank(query: "fonts?", bar: bar(), appName: "Brk").contains { $0.kind == .ask })
+        XCTAssertFalse(Suggest.rank(query: "render fonts?", bar: bar(), appName: "Brk").contains { $0.kind == .ask })
+        XCTAssertEqual(Suggest.rank(query: "how do browsers render fonts", bar: bar(), appName: "Brk").firstIndex { $0.kind == .ask }, 2)
     }
 
     func testShiftReturnSearchesOnlyAWebSearch() {

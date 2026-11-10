@@ -17,8 +17,8 @@ final class SuggestionFetcherTests: XCTestCase {
         return SuggestionFetcher(send: { [unowned self] in self.sent.append($0) }, session: URLSession(configuration: configuration), override: override)
     }
 
-    private func answers() -> [(WindowID, String, [String])] {
-        sent.compactMap { if case .system(.suggestions(let w, let q, let r)) = $0 { (w, q, r) } else { nil } }
+    private func answers() -> [(WindowID, String, [EngineSuggestion])] {
+        sent.compactMap { if case .system(.suggestions(let w, let q, let r, _)) = $0 { (w, q, r) } else { nil } }
     }
 
     private func waitForAnswers(_ count: Int) async {
@@ -41,6 +41,22 @@ final class SuggestionFetcherTests: XCTestCase {
         XCTAssertEqual(answers().map(\.1), ["swi"])
         XCTAssertEqual(answers().first?.2, ["swi-a", "swi-b"])
         XCTAssertEqual(answers().first?.0, w)
+    }
+
+    /// Google's answer in Chromium's form: searches and a site with their relevances, the search as typed's relevance, an
+    /// entity shown by its name (field 7 of its entity info), a calculator row left out, the `)]}'` line skipped; the
+    /// OpenSearch form still reads as plain searches
+    func test_parsesGooglesChromiumForm() throws {
+        let entity = Data([0x0a, 0x02, 0x2f, 0x67, 0x3a, 0x06] + Array("GitHub".utf8)).base64EncodedString()
+        let json: [Any] = ["githu", ["github", "github", "https://github.com/", "= 4"], ["", "", "GitHub page", ""], [],
+                           ["google:suggesttype": ["QUERY", "ENTITY", "NAVIGATION", "CALCULATOR"], "google:suggestrelevance": [1251, 1250, 1249, 1200],
+                            "google:verbatimrelevance": 851, "google:suggestdetail": [[:], ["google:entityinfo": entity], [:], [:]]]]
+        let body = Data(")]}'\n".utf8) + (try JSONSerialization.data(withJSONObject: json))
+        let answer = SuggestionFetcher.parse(body)
+        XCTAssertEqual(answer.verbatimRelevance, 851)
+        XCTAssertEqual(answer.rows, [EngineSuggestion("github", relevance: 1251), EngineSuggestion("github", relevance: 1250, title: "GitHub"),
+                                     EngineSuggestion("https://github.com/", kind: .navigation, relevance: 1249, title: "GitHub page")])
+        XCTAssertEqual(SuggestionFetcher.parse(try JSONSerialization.data(withJSONObject: ["q", ["q-a"]])).rows, ["q-a"])
     }
 }
 

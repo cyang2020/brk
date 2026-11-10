@@ -51,3 +51,20 @@ struct CommandBarHistory {
         self.engagement = engagement
     }
 }
+
+/// One of the engine's suggestions, as Chromium reads Google's answer (`client=chrome`): a search, or a site Google is
+/// sure of (`google:suggesttype` NAVIGATION, `text` its address, `title` the page's), with the relevance Google gives it
+/// (`google:suggestrelevance`). Engines that answer in the plain OpenSearch form give searches without a relevance.
+public struct EngineSuggestion: Equatable, Sendable, Codable, ExpressibleByStringLiteral {
+    public enum Kind: String, Equatable, Sendable, Codable { case query, navigation }
+    public var text: String
+    public var kind: Kind
+    public var relevance: Int?
+    public var title: String?
+
+    public init(_ text: String, kind: Kind = .query, relevance: Int? = nil, title: String? = nil) {
+        self.text = text; self.kind = kind; self.relevance = relevance; self.title = title
+    }
+
+    public init(stringLiteral value: String) { self.init(value) }
+}

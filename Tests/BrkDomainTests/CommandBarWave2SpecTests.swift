@@ -30,7 +30,7 @@ final class CommandBarWave2SpecTests: XCTestCase {
         let d = Driver()
         d.user(.commandBar(.open(.newTab)))
         let t = d.user(.commandBar(.queryChanged("swi")))
-        XCTAssertEqual(t.effects.filter(notLocalSearch), [.fetchSuggestions(d.window, query: "swi", url: url("https://suggestqueries.google.com/complete/search?client=firefox&q=swi"))])
+        XCTAssertEqual(t.effects.filter(notLocalSearch), [.fetchSuggestions(d.window, query: "swi", url: url("https://www.google.com/complete/search?client=chrome-omni&gs_ri=chrome-ext-ansg&xssi=t&q=swi"))])
         XCTAssertFalse(t.changed, "the query is view-local; only the fetch leaves")
         d.system(.suggestions(d.window, query: "swi", ["swift", "swim"]))
         XCTAssertEqual(d.bar?.suggestions, ["swift", "swim"])

@@ -16,6 +16,9 @@ public struct Suggestion: Equatable, Sendable {
         case searchSuggestion
         /// A site from Arc's top domains list (Arc: `topDomains`).
         case topDomain
+        /// A site the engine suggests (Google's NAVIGATION suggestion, Arc's `chromiumNavigateSuggestion`): its address, then
+        /// its domain ("etsy.com — etsy.com").
+        case siteSuggestion
         /// Max's Ask row (Arc's "Ask ChatGPT →", P49): the query, the local tool's name and the arrow square.
         case ask
         /// Brk's own, beyond Arc (`LocalSources`): a file by name, an app, an emoji, one form of a colour.
@@ -296,25 +299,26 @@ public enum Suggest {
     struct Built {
         var candidate: ArcRanking.Candidate
         var row: Suggestion
+        /// Chromium's default match only: the input as Chromium completes it inline (a page's address, a suggestion's text).
+        var inline: String? = nil
     }
 
-    /// Chromium's relevance numbers are not visible through CEF; a fixed one per kind stands in (Chromium's usual values:
-    /// 1300 for the text as typed, more for a visited page the text inline-completes, about 900 for other visited pages,
-    /// the engine's suggestions below). Chromium's rows are ordered the way its dropdown groups them: the default row (a
-    /// page the text completes, else the text as typed), then the text as typed, then the engine's suggestions, then the
-    /// other visited pages.
+    /// Chromium's relevance numbers. The engine's come with its answer (Google's `google:suggestrelevance` and
+    /// `google:verbatimrelevance`); the rest are Chromium's own scores, which CEF does not expose: the text as typed 1300
+    /// (SearchProvider's verbatim score when the engine sends none), an address typed in full 1203 (HistoryURLProvider's
+    /// what-you-typed score), 1413 once that address was typed before (its best inline score), the address as a search 850
+    /// (SearchProvider's verbatim score for an address); visited pages are Brk's fit (more for typed visits, then for visits,
+    /// more still when the text completes the address), and an engine that sends no relevance has its suggestions under the
+    /// text as typed in its order.
     enum Relevance {
-        static let whatYouTyped = 1300.0, historyAutocompletes = 1400.0, history = 900.0, suggestion = 800.0, demotedWhatYouTyped = 801.0
+        static let whatYouTyped = 1300.0, historyAutocompletes = 1413.0, history = 900.0, suggestion = 600.0
+        static let addressTyped = 1203.0, addressTypedBefore = 1413.0, addressAsSearch = 850.0
+        /// Chromium's matches Arc ranks: the real Arc's list holds up to 15 rows, most of them Chromium's (2026-11-10 probes).
+        static let resultLimit = 15
 
         /// A visited page that the text does not inline-complete: more for typed visits, then for visits.
         static func history(_ page: HistoryCandidate) -> Double {
             history + min(250, 20 * Double(page.typedCount) + 5 * Double(page.visitCount))
-        }
-
-        /// The dropdown group a Chromium row belongs to, top first.
-        static func group(_ relevance: Double, isHistory: Bool) -> Int {
-            if relevance >= whatYouTyped { return 0 }
-            return isHistory ? 2 : 1
         }
     }
 
@@ -342,49 +346,103 @@ public enum Suggest {
         }
         func page(_ archetype: ArcRanking.Archetype, url: URL, title: String, hotWords: [String] = []) -> ArcRanking.Candidate {
             var candidate = ArcRanking.Candidate(archetype: archetype, url: url, autocompleteText: ArcRanking.readable(url), hotWords: hotWords,
-                                                 dedupKey: pageKey(url, title))
+                                                 dedupKey: "page:" + ArcRanking.readable(url))
+            candidate.titleKey = titleKey(url, title)
             candidate.features = ArcRanking.matchFeatures(text, url: ArcRanking.readable(url), title: title, hotWords: hotWords)
                 .merging(siteFeatures(url)) { $1 }
             return candidate
         }
 
-        // Chromium's result: the text as typed, visited pages and the engine's suggestions, ranked among themselves.
-        var chromium: [(built: Built, relevance: Double, group: Int)] = []
+        // Chromium's own result for the text: the text as typed, the engine's suggestions and visited pages, each with Chromium's
+        // relevance (`Relevance`). Chromium dedups them by address, puts the best one that may be the default first (that one
+        // may complete the input inline), then the searches, then the pages (AutocompleteResult::GroupSuggestionsBySearchVsURL),
+        // eight at most. Its rank and relevance are two of Arc's features; the input as completed is what the autocomplete
+        // boosts compare with.
+        struct Match { var built: Built; var relevance: Double; var isSearch: Bool; var completes: String? }
+        var matches: [Match] = []
+        let answer = engineSuggestions(text, bar)
+        let verbatim = answer.verbatimRelevance.map(Double.init) ?? Relevance.whatYouTyped
+        let visited = recentHistory(bar.history).filter { matchRank(needle, in: [$0.title, $0.url.absoluteString]) == 0 }.enumerated()
+            .sorted { a, b in
+                let x = Relevance.history(a.element), y = Relevance.history(b.element)
+                return x != y ? x > y : a.offset < b.offset
+            }.map(\.element).prefix(historyCandidates)
         var isAddress = false
         if let url = resolve(text) {
             let search = url == engine.searchURL(text) || isSearch(url, for: text)
             isAddress = !search
             let row = Suggestion(kind: .openTyped, title: search ? text : displayURL(url), subtitle: nil, symbol: search ? "magnifyingglass" : "globe",
                                  favicon: nil, hint: nil, command: .commandBar(.submit(text)))
-            var candidate: ArcRanking.Candidate
             if search {
-                candidate = ArcRanking.Candidate(archetype: .chromiumSearchWhatYouTyped, autocompleteText: text, dedupKey: searchKey(text))
+                var candidate = ArcRanking.Candidate(archetype: .chromiumSearchWhatYouTyped, autocompleteText: text, dedupKey: searchKey(text),
+                                                     preferredRow: ArcRanking.searchAsTypedRow)
                 candidate.features = ArcRanking.matchFeatures(text, url: nil, title: text, hotWords: [])
+                matches.append(Match(built: Built(candidate: candidate, row: row), relevance: verbatim, isSearch: true, completes: nil))
             } else {
-                candidate = page(.chromiumNavigateWhatYouTyped, url: url, title: text)
+                // An address typed in full: Chromium's what-you-typed match, which is the visited page at that address when
+                // there is one (its visits and typed visits, and the inline score once it was typed), and beside it the text
+                // as a search, at Chromium's verbatim relevance for an address.
+                var candidate = page(.chromiumNavigateWhatYouTyped, url: url, title: text)
                 candidate.autocompleteText = text
+                candidate.preferredRow = ArcRanking.addressAsTypedRow
+                var relevance = Relevance.addressTyped
+                if let known = visited.first(where: { ArcRanking.readable($0.url) == ArcRanking.readable(url) }) {
+                    candidate.features[.frequencyEver] = Double(known.visitCount)
+                    candidate.features[.typedCountEver] = Double(known.typedCount)
+                    if known.typedCount > 0 { relevance = Relevance.addressTypedBefore }
+                }
+                matches.append(Match(built: Built(candidate: candidate, row: row), relevance: relevance, isSearch: false, completes: nil))
+                var asSearch = ArcRanking.Candidate(archetype: .chromiumSearchWhatYouTyped, autocompleteText: text, dedupKey: searchKey(text))
+                asSearch.features = ArcRanking.matchFeatures(text, url: nil, title: text, hotWords: [])
+                let searchRow = Suggestion(kind: .searchSuggestion, title: text, subtitle: nil, symbol: "magnifyingglass", favicon: nil, hint: nil,
+                                           command: .commandBar(.submitSearch(engine: bar.engine.id, query: text)))
+                matches.append(Match(built: Built(candidate: asSearch, row: searchRow), relevance: Relevance.addressAsSearch, isSearch: true, completes: nil))
             }
-            chromium.append((Built(candidate: candidate, row: row), Relevance.whatYouTyped, 0))
         }
-        // Chromium matches visited pages where a word of the title or the address starts with the text, and scores them by
-        // typed visits, then visits, then the newest visit. Arc gives these rows their visit and typed counts but no
-        // last-visit feature (Arc sets that one only for tabs and commands, 0x101d4fc34 and 0x101d38610).
-        let visited = recentHistory(bar.history).filter { matchRank(needle, in: [$0.title, $0.url.absoluteString]) == 0 }
-            .prefix(historyCandidates).enumerated()
-            .sorted { a, b in
-                let x = Relevance.history(a.element), y = Relevance.history(b.element)
-                return x != y ? x > y : a.offset < b.offset
-            }.map(\.element)
+        // Visited pages where a word of the title or the address starts with the text, scored by typed visits, then visits;
+        // one the text starts the address of may complete the input. Arc gives these rows their visit and typed counts but
+        // no last-visit feature (Arc sets that one only for tabs and commands, 0x101d4fc34 and 0x101d38610).
         for entry in visited {
+            if isAddress, let typed = matches.first?.built.candidate.url, ArcRanking.readable(typed) == ArcRanking.readable(entry.url) { continue }
             var candidate = page(.chromiumHistory, url: entry.url, title: entry.title)
             candidate.features[.frequencyEver] = Double(entry.visitCount)
             candidate.features[.typedCountEver] = Double(entry.typedCount)
-            let relevance = ArcRanking.isPrefix(text, entry.url) ? Relevance.historyAutocompletes : Relevance.history(entry)
-            chromium.append((Built(candidate: candidate, row: historyRow(entry)), relevance, Relevance.group(relevance, isHistory: true)))
+            let inline = ArcRanking.isPrefix(text, entry.url)
+            matches.append(Match(built: Built(candidate: candidate, row: historyRow(entry)), relevance: inline ? Relevance.historyAutocompletes : Relevance.history(entry),
+                                 isSearch: false, completes: inline ? ArcRanking.readable(entry.url) : nil))
         }
-        // Google's navigational suggestion for a site (Arc's "etsy.com" row, the input completing to it) is not in the
-        // suggestion answer Brk asks for; Arc's own popular-sites list stands in: the first site whose domain the text
-        // starts (three letters at least) is Chromium's default row.
+        // The engine's suggestions with its relevances: a search, or a site it is sure of (Google's NAVIGATION, Arc's
+        // "etsy.com" row). One that starts with the text may complete the input when it outranks the text as typed.
+        for (index, suggestion) in answer.rows.enumerated() {
+            let relevance = suggestion.relevance.map(Double.init) ?? Relevance.suggestion - Double(index)
+            switch suggestion.kind {
+            case .query:
+                // An entity (Google's ENTITY) shows the thing's name and searches its text.
+                let shown = suggestion.title ?? suggestion.text
+                var candidate = ArcRanking.Candidate(archetype: .chromiumSearchSuggestion, autocompleteText: suggestion.text, dedupKey: searchKey(shown))
+                candidate.features = ArcRanking.matchFeatures(text, url: nil, title: shown, hotWords: [])
+                let row = Suggestion(kind: .searchSuggestion, title: shown, subtitle: nil, symbol: "magnifyingglass", favicon: nil, hint: nil,
+                                     command: .commandBar(.submitSearch(engine: bar.engine.id, query: suggestion.text)))
+                let folded = fold(suggestion.text)
+                let inline = folded.hasPrefix(needle) && folded.count > needle.count && relevance > verbatim
+                matches.append(Match(built: Built(candidate: candidate, row: row), relevance: relevance, isSearch: true, completes: inline ? suggestion.text : nil))
+            case .navigation:
+                guard let url = URL(string: suggestion.text.contains("://") ? suggestion.text : "https://" + suggestion.text), let site = host(url) else { continue }
+                if matches.contains(where: { $0.built.candidate.url.map(ArcRanking.readable) == ArcRanking.readable(url) }) { continue }
+                let shown = ArcRanking.readable(url)
+                var candidate = page(.chromiumNavigateSuggestion, url: url, title: suggestion.title ?? shown)
+                candidate.autocompleteText = shown
+                let row = Suggestion(kind: .siteSuggestion, title: shown, subtitle: site, symbol: "globe", favicon: nil, hint: nil,
+                                     command: .commandBar(.submit(url.absoluteString)))
+                let inline = ArcRanking.isPrefix(text, url) && relevance > verbatim
+                matches.append(Match(built: Built(candidate: candidate, row: row), relevance: relevance, isSearch: false, completes: inline ? shown : nil))
+            }
+        }
+        // Arc's own completion: the first of its popular sites whose domain the text starts (three letters at least, one word)
+        // completes the input and joins Chromium's result as its default match, whether or not the engine suggests the
+        // site ("dreamst", "timeweb", "detik" in the real Arc: no Google site suggestion, the site first, the input
+        // completed; "kompa", whose site is not on the list, leaves the search first). A Google site suggestion for the same
+        // address is the same match.
         var topDomains: [(site: TopDomains.Site, rank: Int)] = []
         if needle.count >= 2, !needle.contains(where: \.isWhitespace) {
             var seen = Set<String>()
@@ -399,59 +457,69 @@ public enum Suggest {
             candidate.features[.globalSiteRank] = Double(rank)
             return Built(candidate: candidate, row: domainRow(site))
         }
-        let completedSite = needle.count < 3 ? nil : topDomains.firstIndex { $0.site.domain.hasPrefix(needle) && $0.site.domain.count > needle.count }
-        if let at = completedSite, let built = topDomain(topDomains[at].site, rank: topDomains[at].rank) {
-            chromium.append((built, Relevance.historyAutocompletes, 0))
-            // With a site it is sure of, Google's answer lowers the as-typed search ("google:verbatimrelevance"), which
-            // Chromium then ranks among the suggestions.
-            if let typed = chromium.firstIndex(where: { $0.built.row.kind == .openTyped }), chromium[typed].built.candidate.archetype == .chromiumSearchWhatYouTyped {
-                chromium[typed].relevance = Relevance.demotedWhatYouTyped
-                chromium[typed].group = 1
-            }
+        let completedSite = needle.count < 3 || isAddress ? nil : topDomains.firstIndex { $0.site.domain.hasPrefix(needle) && $0.site.domain.count > needle.count }
+        if let at = completedSite, let built = topDomain(topDomains[at].site, rank: topDomains[at].rank), let url = built.candidate.url {
+            matches.removeAll { $0.built.candidate.url.map(ArcRanking.readable) == ArcRanking.readable(url) }
+            matches.append(Match(built: built, relevance: Relevance.historyAutocompletes, isSearch: false, completes: topDomains[at].site.domain))
+            // The input now reads as an address: the text as typed is Chromium's verbatim search for an address.
+            if let typed = matches.firstIndex(where: { $0.built.row.kind == .openTyped && $0.isSearch }) { matches[typed].relevance = Relevance.addressAsSearch }
         }
-        for (index, suggestion) in engineSuggestions(text, bar).prefix(suggestionCandidates).enumerated() {
-            var candidate = ArcRanking.Candidate(archetype: .chromiumSearchSuggestion, autocompleteText: suggestion, dedupKey: searchKey(suggestion))
-            candidate.features = ArcRanking.matchFeatures(text, url: nil, title: suggestion, hotWords: [])
-            let row = Suggestion(kind: .searchSuggestion, title: suggestion, subtitle: nil, symbol: "magnifyingglass", favicon: nil, hint: nil,
-                                 command: .commandBar(.submitSearch(engine: bar.engine.id, query: suggestion)))
-            chromium.append((Built(candidate: candidate, row: row), Relevance.suggestion - Double(index), 1))
-        }
-        let ordered = chromium.enumerated().sorted { a, b in
-            if a.element.group != b.element.group { return a.element.group < b.element.group }
-            if a.element.relevance != b.element.relevance { return a.element.relevance > b.element.relevance }
-            return a.offset < b.offset
+        var ordered = matches.enumerated().sorted { a, b in
+            a.element.relevance != b.element.relevance ? a.element.relevance > b.element.relevance : a.offset < b.offset
         }.map(\.element)
-        for (rank, entry) in ordered.enumerated() {
-            var built = entry.built
+        // The default: a site or page that completes the text, else the best of the suggestions that complete it and the text as
+        // typed (fitted: for "opentab", "cloudfl", "zillo", "dropb" Google ranks the search "opentable" etc. a point above its
+        // site suggestion, and the real Arc completes the site).
+        let site = ordered.firstIndex { $0.completes != nil && !$0.isSearch }
+        if let best = site ?? ordered.firstIndex(where: { $0.completes != nil || $0.built.row.kind == .openTyped }), best > 0 { ordered.insert(ordered.remove(at: best), at: 0) }
+        ordered = Array(ordered.prefix(Relevance.resultLimit))
+        if ordered.count > 1 {
+            let rest = ordered.dropFirst()
+            ordered = [ordered[0]] + rest.filter(\.isSearch) + rest.filter { !$0.isSearch }
+        }
+        for (rank, match) in ordered.enumerated() {
+            var built = match.built
             built.candidate.features[.chromiumRank] = Double(rank)
-            built.candidate.features[.chromiumRelevanceScore] = entry.relevance
+            built.candidate.features[.chromiumRelevanceScore] = match.relevance
+            if rank == 0 { built.inline = match.completes }
             out.append(built)
         }
 
-        // Open tabs, never the focused one, then saved Pinned and Favorites without a page. A tab's last visit is when it
-        // was last switched to from this bar (Arc's `recentlySwitchedToTabs`), so the bar learns which tabs it is used for.
-        for tab in matching(bar.tabs.filter { !$0.isFocused }, needle, texts: { [$0.title, $0.url.absoluteString] }).prefix(tabCandidates) {
+        // Arc's other popular sites whose domain or name the text starts (one word, two letters at least).
+        for (index, entry) in topDomains.enumerated() where index != completedSite {
+            if let built = topDomain(entry.site, rank: entry.rank) { out.append(built) }
+        }
+
+        // Open tabs, then saved Pinned and Favorites without a page. A tab's last visit is when it was last switched to from
+        // this bar (Arc's `recentlySwitchedToTabs`), so the bar learns which tabs it is used for. The tab on screen ranks as
+        // any tab but shows as Arc shows it, its title and address with the history clock (choosing it stays on it); an
+        // address typed in full takes its place.
+        // Editing the page's address (Cmd+L) Arc offers no tab at all, open or saved: its pages come as visited pages.
+        let editsPage = !bar.createsTab && !bar.fillsPane && !bar.initialQuery.isEmpty
+        for tab in matching(editsPage ? [] : bar.tabs, needle, texts: { [$0.title, $0.url.absoluteString] }).prefix(tabCandidates) {
             var candidate = page(.tab, url: tab.url, title: tab.title, hotWords: words(tab.title))
             candidate.customTitle = tab.customTitle
             candidate.isFavorite = tab.isFavorite
             candidate.features[.lastNavigated] = since(bar.commandUsage[switchKey(tab.tab)]?.lastRun)
             candidate.features[.saveLevel] = tab.saveLevel.map(Double.init)
+            if tab.isFocused {
+                candidate.isCurrent = true
+                out.append(Built(candidate: candidate, row: Suggestion(kind: .history, title: tab.title.isEmpty ? displayURL(tab.url) : tab.title,
+                                                                       subtitle: ArcRanking.readable(tab.url), symbol: "clock", favicon: tab.favicon, hint: nil,
+                                                                       command: .tab(.focus(tab.tab)))))
+                continue
+            }
             var row = switchRow(tab)
             row.usageKey = switchKey(tab.tab)
             out.append(Built(candidate: candidate, row: row))
         }
-        for saved in matching(bar.bookmarks, needle, texts: { [$0.title, $0.url.absoluteString] }).prefix(tabCandidates) {
+        for saved in matching(editsPage ? [] : bar.bookmarks, needle, texts: { [$0.title, $0.url.absoluteString] }).prefix(tabCandidates) {
             var candidate = page(.tab, url: saved.url, title: saved.title, hotWords: words(saved.title))
             candidate.isFavorite = saved.isFavorite
             candidate.features[.saveLevel] = saved.saveLevel.map(Double.init)
             let row = Suggestion(kind: .bookmark, title: saved.title, subtitle: nil, symbol: "bookmark", favicon: nil, hint: nil,
                                  command: .commandBar(.submit(saved.url.absoluteString)))
             out.append(Built(candidate: candidate, row: row))
-        }
-
-        // Arc's popular sites whose domain or name the text starts (one word, two letters at least).
-        for (index, entry) in topDomains.enumerated() where index != completedSite {
-            if let built = topDomain(entry.site, rank: entry.rank) { out.append(built) }
         }
 
         // Commands. A command chosen before carries its runs: their count is the typed count, the newest one the last
@@ -513,8 +581,10 @@ public enum Suggest {
             }
         }
 
-        // Max's Ask row (Arc's "Ask ChatGPT →", P49) for a search of two words or more, or a question.
-        if let provider = bar.askProvider, !isAddress, completing == nil, text.split(whereSeparator: \.isWhitespace).count >= 2 || text.hasSuffix("?") {
+        // Max's Ask row (Arc's "Ask ChatGPT →", P49) for a search of three words or more (the real Arc with Max on, 2026-11-10:
+        // "best pizza dough recipe", "switch to dark", "how tall is the eiffel tower?" list it; "pizza dough", "eiffel tower",
+        // "eiffel tower?", "dark mode", "pizza" do not).
+        if let provider = bar.askProvider, !isAddress, completing == nil, text.split(whereSeparator: \.isWhitespace).count >= Self.askWords {
             out.append(Built(candidate: ArcRanking.Candidate(archetype: .askGPTWhatYouTyped, autocompleteText: text, dedupKey: "ask"), row: askRow(text, provider: provider)))
         }
 
@@ -538,16 +608,18 @@ public enum Suggest {
         return (leading, below)
     }
 
-    /// What Chromium's inline completion makes of the input: the address of its default row when that row opens a page the
-    /// text completes (relevance above the text as typed), else nothing.
+    /// What Chromium's inline completion makes of the input: its default match's address or text when that match completes
+    /// the text (a page or site it starts, a suggestion that outranks the text as typed), else nothing.
     static func inlineCompletion(_ built: [Built]) -> String? {
-        built.first { $0.candidate.features[.chromiumRank] == 0 && ($0.candidate.features[.chromiumRelevanceScore] ?? 0) > Relevance.whatYouTyped && !$0.candidate.archetype.isSearch }?
-            .candidate.autocompleteText
+        built.first { $0.inline != nil }?.inline
     }
 
-    /// How many candidates each source gives the ranking. Arc's providers' own limits were not read; Chromium's result
-    /// holds about ten rows.
-    private static let tabCandidates = 8, historyCandidates = 10, suggestionCandidates = 10, topDomainCandidates = 5, commandCandidates = 5,
+    /// The Ask row needs this many words.
+    static let askWords = 3
+
+    /// How many candidates each source gives the ranking. Visited pages: Chromium's history providers return three
+    /// (`provider_max_matches_`); the others' limits were not read.
+    private static let tabCandidates = 8, historyCandidates = 3, suggestionCandidates = 10, topDomainCandidates = 5, commandCandidates = 5,
                        localCandidates = 2, conversationCandidates = 2, meaningCandidates = 2
 
     /// A tab's title words, its hot words in Arc's ranking ("fixture" is a whole word of "Visual fixture").
@@ -555,10 +627,10 @@ public enum Suggest {
         title.split(whereSeparator: { $0.isWhitespace }).map(String.init)
     }
 
-    /// One row per page: the readable address, or the title and host on Arc's dedup hosts.
-    static func pageKey(_ url: URL, _ title: String) -> String {
-        if let host = host(url), dedupByTitleAndHost.contains(host), !title.isEmpty { return "page:\(host)\u{0}\(title)" }
-        return "page:" + ArcRanking.readable(url)
+    /// On Arc's dedup hosts two pages with one title are one row too (a Figma file reached through different addresses).
+    static func titleKey(_ url: URL, _ title: String) -> String? {
+        guard let host = host(url), dedupByTitleAndHost.contains(host), !title.isEmpty else { return nil }
+        return "page:\(host)\u{0}\(title)"
     }
 
     /// Where a tab's switches from the bar are saved, beside the commands' runs.
@@ -622,12 +694,13 @@ public enum Suggest {
 
     // MARK: Inline completion and site search beside the input
 
-    /// The domain the input completes `typed` to, the completed part selected (Arc: "githu" shows github.com, "wiki"
-    /// wikipedia.org). Arc completes only to its first row: when that row opens a site (an open or saved tab, a visited
-    /// page, a popular site) whose host starts with what is typed and is longer, the input shows that host; a search, a
-    /// command or a tab found by a word of its title completes nothing. Only for a bare host being typed: two characters
-    /// or more, a letter first, then letters, digits, dots and hyphens. The caller decides whether the user is typing on
-    /// (a deletion never completes).
+    /// What the input completes `typed` to, the completed part selected (Arc: "githu" shows github.com, "wiki"
+    /// wikipedia.org, "today" todaytix). Arc completes only to its first row: when that row opens a site (an open or saved
+    /// tab, a visited page, a site the engine or Arc's popular sites suggest) whose host starts with what is typed and is
+    /// longer, the input shows that host; when it is a suggestion the engine ranked above the text as typed and that starts
+    /// with it, that suggestion; a command or a tab found by a word of its title completes nothing. Only for a bare word
+    /// being typed: two characters or more, a letter first, then letters, digits, dots and hyphens. The caller decides
+    /// whether the user is typing on (a deletion never completes).
     public static func completion(_ typed: String, bar: CommandBarSnapshot, appName: String) -> String? {
         let needle = typed.lowercased()
         guard bar.aiMode == nil, needle.count >= 2, let first = needle.first, first.isASCII, first.isLetter,
@@ -637,7 +710,13 @@ public enum Suggest {
         switch (row.kind, row.command) {
         case (.switchToTab, .tab(.focus(let id))): url = bar.tabs.first { $0.tab == id }?.url
         case (.topDomain, .commandBar(.submit(let domain))): url = URL(string: "https://\(domain)")
-        case (.history, .commandBar(.submit(let address))), (.bookmark, .commandBar(.submit(let address))): url = URL(string: address)
+        case (.history, .commandBar(.submit(let address))), (.bookmark, .commandBar(.submit(let address))), (.siteSuggestion, .commandBar(.submit(let address))):
+            url = URL(string: address)
+        case (.history, .tab(.focus(let id))): url = bar.tabs.first { $0.tab == id }?.url
+        case (.searchSuggestion, _):
+            // A suggestion Chromium completes the text to ("today" -> "todaytix") stands first: the input shows it.
+            guard fold(row.title).hasPrefix(fold(typed)), row.title.count > typed.count else { return nil }
+            return typed + row.title.dropFirst(typed.count)
         default: url = nil
         }
         guard let host = url.flatMap(host), host.hasPrefix(needle), host.count > needle.count else { return nil }
@@ -697,17 +776,18 @@ public enum Suggest {
                    command: .commandBar(.submit("https://resources.arc.net/hc/en-us"))),
     ]
 
-    /// The engine's suggestions that still answer `text`: all of them while they were asked for exactly this text,
-    /// else (the user typed on) only those that start with it; none once the text no longer starts with what was
-    /// asked. The typed text itself is the typed row, not a suggestion.
-    private static func engineSuggestions(_ text: String, _ bar: CommandBarSnapshot) -> [String] {
-        guard let asked = bar.suggestedFor.map(fold) else { return [] }
+    /// The engine's suggestions that still answer `text`: all of them while they were asked for exactly this text (with the
+    /// relevance it gave the text as typed), else (the user typed on) only those that start with it; none once the text no
+    /// longer starts with what was asked. The typed text itself is the typed row, not a suggestion.
+    private static func engineSuggestions(_ text: String, _ bar: CommandBarSnapshot) -> (rows: [EngineSuggestion], verbatimRelevance: Int?) {
+        guard let asked = bar.suggestedFor.map(fold) else { return ([], nil) }
         let now = fold(text)
-        guard now.hasPrefix(asked) else { return [] }
-        return bar.suggestions.filter { s in
-            let folded = fold(s)
-            return folded != now && (asked == now || folded.hasPrefix(now))
+        guard now.hasPrefix(asked) else { return ([], nil) }
+        let rows = bar.suggestions.filter { s in
+            let folded = fold(s.text)
+            return folded != now && (asked == now || folded.hasPrefix(now) || s.kind == .navigation && folded.contains(now))
         }
+        return (rows, asked == now ? bar.suggestedVerbatimRelevance : nil)
     }
 
     /// The first site-search engine whose name or keyword the query begins (two letters at least, one word).
@@ -728,9 +808,9 @@ public enum Suggest {
         // The engine's pill before the input says where these search.
         let search = Suggestion(kind: .openTyped, title: text, subtitle: nil, symbol: "magnifyingglass",
                                 favicon: nil, hint: nil, command: .commandBar(.submitSearch(engine: engine.id, query: text)))
-        return [search] + engineSuggestions(text, bar).prefix(suggestionCap).map { s in
-            Suggestion(kind: .searchSuggestion, title: s, subtitle: nil, symbol: "magnifyingglass", favicon: nil, hint: nil,
-                       command: .commandBar(.submitSearch(engine: engine.id, query: s)))
+        return [search] + engineSuggestions(text, bar).rows.filter { $0.kind == .query }.prefix(suggestionCap).map { s in
+            Suggestion(kind: .searchSuggestion, title: s.text, subtitle: nil, symbol: "magnifyingglass", favicon: nil, hint: nil,
+                       command: .commandBar(.submitSearch(engine: engine.id, query: s.text)))
         }
     }
 
@@ -762,7 +842,8 @@ public enum Suggest {
         }
         let focused = bar.tabs.first(where: \.isFocused)?.tab
         for space in bar.spaces where !space.isCurrent {
-            candidates.append(("\(OverlayCopy.focusSpace) \(space.title)", [], "square.on.square", nil, .space(.focus(space.id))))
+            // Arc finds its Focus on <Space> row by "switch" too ("swi", "switch", "switch to" list it, 2026-11-10).
+            candidates.append(("\(OverlayCopy.focusSpace) \(space.title)", ["\(OverlayCopy.switchToSpace) \(space.title)"], "square.on.square", nil, .space(.focus(space.id))))
             if let focused {
                 candidates.append(("\(OverlayCopy.moveToSpace) \(space.title)", [], "arrow.right.square", nil, .item(.move(focused, to: .space(space.id)))))
             }
@@ -890,6 +971,7 @@ extension OverlayCopy {
     static func siteSearchPlaceholder(_ engine: String) -> String { "\(searchVerb) \(engine)…" }
     /// Observed: "Focus on <space>" (`TypeTravelCandidate.focusSpace`).
     static let focusSpace = "Focus on"
+    static let switchToSpace = "Switch to"
     /// Arc writes "Move to Today in <space>" or "Move to Pinned in <space>"; Brk's move keeps the tab's section
     /// (Today, or Pinned when it came from Pinned), so the section is left out.
     static let moveToSpace = "Move to"

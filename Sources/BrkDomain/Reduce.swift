@@ -172,7 +172,7 @@ struct Work {
             }
         }
         switch event {
-        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _), .localResults(let window, _), .meaningResults(let window, _), .barTranslationDue(let window, _), .definition(let window, _), .spaceExportFinished(let window, _, _), .aiMentionMatches(let window, _, _): begin(window: window)
+        case .exportFinished(let window, _), .window(let window, _), .suggestions(let window, _, _, _), .localResults(let window, _), .meaningResults(let window, _), .barTranslationDue(let window, _), .definition(let window, _), .spaceExportFinished(let window, _, _), .aiMentionMatches(let window, _, _): begin(window: window)
         case .agentRead(let request): begin(window: request.window)
         case .agentAct(let request): begin(window: request.window)
         case .easel(let event):
@@ -229,7 +229,7 @@ struct Work {
             checkLivePages()
         case .window(let window, let e): windowEvent(e, in: window)
         case .externalURL(let url): externalURL(url)
-        case .suggestions(let window, let query, let results): suggestions(window, query: query, results)
+        case .suggestions(let window, let query, let results, let verbatim): suggestions(window, query: query, results, verbatimRelevance: verbatim)
         case .localResults(let window, let results): localResults(window, results)
         case .meaningResults(let window, let results): meaningResults(window, results)
         case .barTranslationDue(let window, let text): barTranslationDue(window, text)

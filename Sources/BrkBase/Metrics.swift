@@ -295,7 +295,7 @@ public struct CommandBarMetrics: MetricGroup {
     /// Typing pause before the default engine's suggest endpoint is asked (`Effect.fetchSuggestions`).
     public let suggestionDebounce = Metric(0.15, .guess("debounce before a search-suggestion fetch; Arc's value was not traced"))
     public let translationDebounce = Metric(1.0, .guess("pause in typing before the translate prefix asks a local agent, which takes seconds; Brk's own"))
-    public let maxSearchSuggestions = Metric(5, .guess("search-engine suggestions shown; Arc shows a handful under the typed row"))
+    public let maxSearchSuggestions = Metric(15, .guess("search-engine suggestions kept for the ranking: Google sends 15, and the real Arc's list holds up to 15 rows, about a dozen of them suggestions (2026-11-10 probes)"))
 }
 
 /// Arc's `ARCUI.PageSwipeController` and its owner `WindowLayoutController` (Arc 1.170, addresses in
