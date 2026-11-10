@@ -89,6 +89,23 @@ struct Doc: Sendable, Equatable {
     /// BrkApp/ConversationFiles.swift keeps one file each and loads them at launch (`SystemEvent.conversationsLoaded`).
     var conversations: [AIRequestID: StoredConversation] = [:]
     var aiPages: [AIPageID: AIPageRecord] = [:]
+    /// What the command bar learns from use, per profile (Arc: `StorableCommandBarAdditionalRanking`'s `typeTravelUsage`
+    /// and `recentlySwitchedToTabs`): each command chosen in the bar and each tab switched to from it, by
+    /// `Suggestion.usageKey`.
+    var commandUsage: [ProfileID: [String: CommandUsage]] = [:]
+    /// Seconds each site (scheme and host) was on screen, per profile: half of Brk's own site-engagement score (the
+    /// other half is visits), since CEF does not expose Chromium's.
+    var foreground: [ProfileID: [String: Double]] = [:]
+}
+
+/// One command's runs from the command bar: the newest 15 times and how many runs in all (Arc: `CappedStack<Date>`
+/// with maxSize 15, and `frequency`).
+struct CommandUsage: Sendable, Equatable, Codable {
+    static let kept = 15
+    /// Entries kept per profile (commands and tabs).
+    static let limit = 500
+    var runs: [Instant]
+    var count: Int
 }
 
 /// Arc: `SpaceModel` + `CustomInfo`.
@@ -240,6 +257,9 @@ struct HistoryEntry: Sendable, Equatable {
     var visitedAt: Instant
     /// The profile the visit happened in (incognito pages record nothing). v1 files are migrated as `.default`.
     var profile: ProfileID
+    /// The visit came from an address typed or chosen in the command bar (Chromium's TYPED transition); a search is
+    /// never typed. The command bar ranks pages by how often they were typed.
+    var typed = false
 }
 
 // MARK: - Session
@@ -262,6 +282,9 @@ struct Session: Sendable, Equatable {
     /// The tab each tab was opened from by a page (window.open, a link), while both may live. Not saved: the pages'
     /// relationship ends with them. A page closing itself hands the window back to its opener (`closePage`).
     var pageOpeners: [ItemID: ItemID] = [:]
+    /// Tabs whose next committed document was asked for by typing or choosing an address in the command bar; that visit is
+    /// recorded as typed. Not saved.
+    var typedPending: Set<ItemID> = []
     /// What loaded pages report.
     var live: [PageID: LivePage]
     var generations: [PageID: UInt64] = [:]

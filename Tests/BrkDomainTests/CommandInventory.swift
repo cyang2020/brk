@@ -45,7 +45,7 @@ enum CommandInventory {
         .find(.open(replace: false)), .find(.query(FindQuery(text: "x"))), .find(.step(.next)), .find(.close),
         .find(.useSelection), .find(.jumpToSelection), .find(.captureScope), .find(.replaceCurrent("y")), .find(.replaceAll("y")),
         .commandBar(.open(.newTab)), .commandBar(.submit("example.com")), .commandBar(.submitSearch(engine: SearchEngine.duckDuckGo.id, query: "x")),
-        .commandBar(.queryChanged("exa")), .commandBar(.dismiss),
+        .commandBar(.queryChanged("exa")), .commandBar(.ran("x")), .commandBar(.dismiss),
         .archive(.restore(ArchiveID("ghost"))), .archive(.restoreLast), .archive(.requestClear), .archive(.clear),
         .tab(.focus(item)), .tab(.step(.next)), .tab(.cycleRecent(.next)), .tab(.close(.focused)), .tab(.archive(.item(item))),
         .tab(.togglePin(.focused)), .tab(.reset(.focused)), .tab(.clearToday), .tab(.newDocument),
@@ -334,6 +334,7 @@ enum CommandInventory {
             case .submitSearch: "submitSearch"
             case .queryChanged: "queryChanged"
             case .dismiss: "dismiss"
+            case .ran: "ran"
             }
         case .archive(let c): switch c { case .restore: "restore"; case .restoreLast: "restoreLast"; case .requestClear: "requestClear"; case .clear: "clear"; case .delete: "delete" }
         case .tab(let c):

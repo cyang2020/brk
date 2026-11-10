@@ -12,7 +12,7 @@ final class CommandBarViewTests: XCTestCase {
     private var sent: [Command] = []
     /// What the user chose: everything dispatched except the `queryChanged` each edit sends.
     private var chosen: [Command] {
-        sent.filter { switch $0 { case .commandBar(.queryChanged), .commandBar(.queryChangedForSite): false; default: true } }
+        sent.filter { switch $0 { case .commandBar(.queryChanged), .commandBar(.queryChangedForSite), .commandBar(.ran): false; default: true } }
     }
     private let box = CGRect(x: 300, y: 219, width: 766, height: 338)
 
@@ -35,19 +35,18 @@ final class CommandBarViewTests: XCTestCase {
 
     func testReturnDispatchesTheHighlightedResultAndArrowsWrapAround() {
         let view = makeBar()
-        type("hub", into: view)   // completes to hubspot.com: hubspot.com, "hub", t2, t1, history status.example.com/hub
+        type("hub", into: view)
+        let results = view.results
+        XCTAssertGreaterThan(results.count, 2)
         press(#selector(NSResponder.insertNewline(_:)), in: view)
         press(#selector(NSResponder.moveUp(_:)), in: view)       // from the first row up to the last
         press(#selector(NSResponder.insertNewline(_:)), in: view)
         press(#selector(NSResponder.moveDown(_:)), in: view)     // from the last row down to the first
         press(#selector(NSResponder.moveDown(_:)), in: view)
-        press(#selector(NSResponder.moveDown(_:)), in: view)
         press(#selector(NSResponder.insertNewline(_:)), in: view)
-        XCTAssertEqual(chosen, [
-            .commandBar(.submit("hubspot.com")),
-            .commandBar(.submit("https://status.example.com/hub")),
-            .tab(.focus(ItemID("t2"))),
-        ])
+        XCTAssertEqual(chosen, [results[0].command, results[results.count - 1].command, results[1].command])
+        XCTAssertEqual(sent.filter { if case .commandBar(.ran) = $0 { true } else { false } }.count,
+                       [results[0], results[results.count - 1], results[1]].filter { $0.usageKey != nil }.count, "each row with a key is learned first")
     }
 
     /// Arc's inline completion (P02-c, Q01-b): typing on shows the rest of a site's domain after what was typed and
@@ -167,8 +166,9 @@ final class CommandBarViewTests: XCTestCase {
         type("hub", into: view)
         press(#selector(NSResponder.moveDown(_:)), in: view)
         type("hub ", into: view)
+        let first = view.results.first?.command
         press(#selector(NSResponder.insertNewline(_:)), in: view)
-        XCTAssertEqual(chosen, [.tab(.focus(ItemID("t2")))])
+        XCTAssertEqual(chosen, first.map { [$0] })
     }
 
     func testReturnNavigatesToTheTypedURLInsteadOfAPrefixMatch() {
@@ -195,14 +195,14 @@ final class CommandBarViewTests: XCTestCase {
 
     /// suggestions that arrive while the user looks at the rows slot in under the typed row and keep the highlight
     func testArrivingSuggestionsSlotInUnderTheTypedRow() {
-        let view = makeBar(commandBar([], []))   // no site's domain starts with "swi": no completion
-        type("swi", into: view)
-        XCTAssertEqual(rows(view.results).first, "open:swi")
-        view.show(commandBar([], [], suggestions: ["swift", "swim"], suggestedFor: "swi"), in: box, scheme: .light)
-        XCTAssertEqual(Array(rows(view.results).prefix(3)), ["open:swi", "suggestion:google:swift", "suggestion:google:swim"])
+        let view = makeBar(commandBar([], []))   // no site, tab or command matches "zqv"
+        type("zqv", into: view)
+        XCTAssertEqual(rows(view.results), ["open:zqv"])
+        view.show(commandBar([], [], suggestions: ["zqvx", "zqvy"], suggestedFor: "zqv"), in: box, scheme: .light)
+        XCTAssertEqual(rows(view.results), ["open:zqv", "suggestion:google:zqvx", "suggestion:google:zqvy"])
         press(#selector(NSResponder.moveDown(_:)), in: view)
         press(#selector(NSResponder.insertNewline(_:)), in: view)
-        XCTAssertEqual(chosen, [.commandBar(.submitSearch(engine: google.id, query: "swift"))])
+        XCTAssertEqual(chosen, [.commandBar(.submitSearch(engine: google.id, query: "zqvx"))])
     }
 
     /// Tab with a site-search offer beside the input (or Space after an engine's whole name) enters site search: the
@@ -282,15 +282,18 @@ final class CommandBarViewTests: XCTestCase {
         press(#selector(NSResponder.moveDown(_:)), in: view)
         // A page event re-projects the same opening with one tab fewer: the query and its completion stay, the rows
         // follow.
-        view.show(commandBar(fixtureBar.tabs.filter { $0.tab != ItemID("t2") }, fixtureBar.history), in: box, scheme: .light)
+        let reduced = commandBar(fixtureBar.tabs.filter { $0.tab != ItemID("t2") }, fixtureBar.history)
+        view.show(reduced, in: box, scheme: .light)
         XCTAssertEqual(view.typed, "hub")
-        XCTAssertEqual(view.input.stringValue, "hubspot.com")
-        XCTAssertEqual(rows(view.results), ["domain:hubspot.com", "open:hub", "switch:t1", "history:https://status.example.com/hub"])
+        XCTAssertEqual(view.input.stringValue, "hub")
+        XCTAssertEqual(view.results, Suggest.rank(query: "hub", bar: reduced, appName: Product.name, resolve: fakeResolve))
+        XCTAssertFalse(rows(view.results).contains("switch:t2"))
         // Cmd+L opens a new bar: its query is the tab's URL and the first row is highlighted again.
         view.show(commandBar(fixtureBar.tabs, fixtureBar.history, openID: 2, initialQuery: "https://github.com/arc"), in: box, scheme: .light)
         XCTAssertEqual(view.input.stringValue, "https://github.com/arc")
+        let first = view.results.first?.command
         press(#selector(NSResponder.insertNewline(_:)), in: view)
-        XCTAssertEqual(chosen, [.tab(.focus(ItemID("t1")))])
+        XCTAssertEqual(chosen, first.map { [$0] })
     }
 
     func testRowsCarryTheirIdentifiersAndOnlyTheCardTakesClicks() {

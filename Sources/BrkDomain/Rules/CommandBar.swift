@@ -47,8 +47,23 @@ extension Work {
                 showConversationInPanel(conversation, in: window)
                 return
             }
-            guard let url = resolveTypedInput(text, engine: state.searchEngine(in: window)) else { return }
-            apply(url, in: window)
+            let engine = state.searchEngine(in: window)
+            guard let url = resolveTypedInput(text, engine: engine) else { return }
+            // An address typed or chosen here is a typed visit (Chromium's TYPED); a search is not.
+            apply(url, in: window, typed: url != engine.searchURL(text.trimmingCharacters(in: .whitespacesAndNewlines)))
+        case .ran(let key):
+            // A command chosen in the bar (Arc's `executedTypeTravelAction`), or a tab switched to from it (Arc's
+            // `switchedToTab`): its newest runs and how many in all, per profile. Nothing in a private window.
+            guard case .commandBar? = state.session.windows[window]?.overlay, !key.isEmpty, case .profile(let profile) = state.libraryContext(in: window) else { return }
+            var usage = state.doc.commandUsage[profile]?[key] ?? CommandUsage(runs: [], count: 0)
+            usage.runs = Array((usage.runs + [ctx.now]).suffix(CommandUsage.kept))
+            usage.count += 1
+            state.doc.commandUsage[profile, default: [:]][key] = usage
+            // Commands and tabs switched to: the longest unused go first past `CommandUsage.limit`.
+            if let byKey = state.doc.commandUsage[profile], byKey.count > CommandUsage.limit {
+                let oldest = byKey.sorted { ($0.value.runs.last ?? Instant(milliseconds: 0)) < ($1.value.runs.last ?? Instant(milliseconds: 0)) }
+                for (stale, _) in oldest.prefix(byKey.count - CommandUsage.limit) { state.doc.commandUsage[profile]?[stale] = nil }
+            }
         case .submitSearch(let engine, let query):
             // Site search: Tab or Space on a known engine's name, then the query (F4 ranks the hint rows).
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -157,23 +172,29 @@ extension Work {
 
     /// What a submitted url does per the open bar's target: a live page navigates, a tab without a page (an empty
     /// pane) gets its page created from the url, a new-tab bar opens a tab; then the bar closes.
-    private mutating func apply(_ url: URL, in window: WindowID) {
+    /// `typed`: the tab's next committed document is recorded as a typed visit.
+    private mutating func apply(_ url: URL, in window: WindowID, typed: Bool = false) {
         guard let session = state.session.windows[window] else { return }
         var target = CommandBarTarget.newTab
         if case .commandBar(_, let open)? = session.overlay { target = open }
+        var opened: ItemID?
         switch target {
         case .navigate(let tab, _) where state.tab(tab) != nil, .fillPane(let tab) where state.tab(tab) != nil:
             request(url, for: PageID(window: window, item: tab))
             focus(tab, in: window)
+            opened = tab
         case .ai: return
         case .newTab, .navigate, .fillPane:
             guard let doc = state.doc.windows[window] else { return }
             if doc.kind == .standard {
-                openTab(url, inSpace: doc.space, window: window, focus: true)
+                opened = openTab(url, inSpace: doc.space, window: window, focus: true)
             } else {
                 // An ephemeral window's new tab lives in its own container.
-                openScratchTab(url, in: window, focus: true)
+                opened = openScratchTab(url, in: window, focus: true)
             }
+        }
+        if let opened {
+            if typed { state.session.typedPending.insert(opened) } else { state.session.typedPending.remove(opened) }
         }
         state.session.windows[window]!.overlay = nil
     }

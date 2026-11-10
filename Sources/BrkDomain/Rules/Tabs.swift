@@ -241,8 +241,9 @@ extension Work {
             if (state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites), current.pinnedURL == nil {
                 state.withTree(scope) { $0.updateTab(tab) { $0.pinnedURL = url } }
             }
+            let typed = state.session.typedPending.remove(tab) != nil
             if case .profile(let profile) = state.browsingContext(of: tab), (live.document.token == nil ? live.lastHistoryAddress != url : live.recordedVisit != live.document.token) {
-                live.recordedVisitID = recordVisit(url, title: live.observedTitle ?? current.title, profile: profile)
+                live.recordedVisitID = recordVisit(url, title: live.observedTitle ?? current.title, profile: profile, typed: typed)
                 live.recordedVisit = live.document.token
                 live.lastHistoryAddress = url
             }
@@ -380,10 +381,10 @@ extension Work {
     /// Newest first, one entry per committed main document, retained until explicit removal. A visit never removes
     /// another profile's. about:blank and URLs a page may not open are not history. Committing the newest entry's
     /// URL again in the same profile refreshes it in place.
-    private mutating func recordVisit(_ url: URL, title: String, profile: ProfileID) -> HistoryVisitID? {
+    private mutating func recordVisit(_ url: URL, title: String, profile: ProfileID, typed: Bool) -> HistoryVisitID? {
         guard url.absoluteString != "about:blank", isAllowedURL(url) else { return nil }
         let id = HistoryVisitID(ctx.newID())
-        state.doc.history.insert(HistoryEntry(id: id, url: url, title: title, visitedAt: ctx.now, profile: profile), at: 0)
+        state.doc.history.insert(HistoryEntry(id: id, url: url, title: title, visitedAt: ctx.now, profile: profile, typed: typed), at: 0)
         return id
     }
 }

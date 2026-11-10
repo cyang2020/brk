@@ -4,8 +4,8 @@ import XCTest
 import BrkBase
 @testable import BrkDomain
 
-/// The command bar's rows found by meaning (slice B2): Brk's own group in the last places, never one another row
-/// already offers, only for the text they answer; Arc's rows and their order stay.
+/// The command bar's rows found by meaning (slice B2): each ranks as the page it is (an open tab, a visited page) in Arc's
+/// scorer, never one another row already offers, only for the text they answer.
 @MainActor
 final class MeaningRowsTests: XCTestCase {
     private func bar(tabs: [SwitchCandidate] = [], history: [HistoryCandidate] = [], meaning: MeaningCandidates? = nil, suggestions: [String] = [],
@@ -31,18 +31,19 @@ final class MeaningRowsTests: XCTestCase {
         ])
     }
 
-    func testRowsFoundByMeaningTakeTheLastPlacesUnderArcsRows() {
+    func testRowsFoundByMeaningRankAsThePageTheyAre() {
         let text = "上周那篇讲数据库的"
         let rows = rank(text, bar(tabs: [mysql, soup], meaning: found(text), suggestions: ["上周那篇讲数据库的文章"], suggestedFor: text))
-        XCTAssertEqual(rows.map(\.kind), [.openTyped, .searchSuggestion, .meaning, .meaning], "the typed row and the engine's suggestion first")
-        XCTAssertEqual(rows[2].title, "MySQL 索引优化实战 - 掘金")
-        XCTAssertEqual(rows[2].command, .tab(.focus(ItemID("t1"))), "an open tab switches")
-        XCTAssertEqual(rows[2].hint, "Switch to Tab")
-        XCTAssertEqual(rows[2].symbol, "sparkle.magnifyingglass")
-        XCTAssertNil(rows[2].favicon, "the mark says where it came from")
-        XCTAssertEqual(rows[3].command, .commandBar(.submit("https://use-the-index-luke.com/")))
-        XCTAssertNil(rows[3].hint)
-        XCTAssertEqual(rows.filter { $0.kind == .meaning }.count, 2, "two at most")
+        XCTAssertEqual(rows.first?.kind, .openTyped, "nothing matches the words: the search leads")
+        let meaning = rows.filter { $0.kind == .meaning }
+        XCTAssertEqual(meaning.count, 2, "two at most")
+        XCTAssertEqual(meaning[0].title, "MySQL 索引优化实战 - 掘金", "an open tab outranks a visited page")
+        XCTAssertEqual(meaning[0].command, .tab(.focus(ItemID("t1"))), "an open tab switches")
+        XCTAssertEqual(meaning[0].hint, "Switch to Tab")
+        XCTAssertEqual(meaning[0].symbol, "sparkle.magnifyingglass")
+        XCTAssertNil(meaning[0].favicon, "the mark says where it came from")
+        XCTAssertEqual(meaning[1].command, .commandBar(.submit("https://use-the-index-luke.com/")))
+        XCTAssertNil(meaning[1].hint)
     }
 
     func testAPageAnotherRowShowsIsNotRepeated() {

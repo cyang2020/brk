@@ -410,15 +410,18 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         enabled.remove(space.pinnedCollapsed ? .collapsePinnedSection : .expandPinnedSection)
         let listed = ActionID.allCases.filter { $0.spec.commandBar != nil && enabled.contains($0) }
         let bindings = KeyBindings.resolve(overrides: state.doc.keyOverrides)
+        let learned = doc.kind == .incognito ? nil : CommandBarHistory(visits: state.doc.history.filter { $0.profile == profile },
+                                                                       foreground: state.doc.foreground[profile] ?? [:])
         overlay = .commandBar(CommandBarSnapshot(
             openID: openID, aiMode: { if case .ai(let mode) = target { mode } else { nil } }(), placement: placement, initialQuery: initialQuery,
             tabs: switchCandidates(state, window: id, tree: tree, space: space, focused: focusedPane),
-            history: historyIndex(state.doc.history.filter { doc.kind != .incognito && $0.profile == profile }).map { HistoryCandidate(url: $0.url, title: $0.title, visitedAt: $0.visitedAt) },
+            history: learned?.pages ?? [],
             bookmarks: doc.kind == .incognito ? [] : state.doc.tree.allTabs().compactMap { tab in
                 guard state.browsingContext(of: tab) == .profile(profile),
                       state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites,
                       let value = state.displayedTab(tab, in: id, for: .savedDocument), let url = value.url else { return nil }
-                return HistoryCandidate(url: url, title: value.displayTitle, visitedAt: value.lastActiveAt)
+                return HistoryCandidate(url: url, title: value.displayTitle, visitedAt: value.lastActiveAt,
+                                        saveLevel: saveLevel(state.doc.tree, tab), isFavorite: state.role(of: tab)?.kind == .favorites)
             },
             folders: doc.kind != .standard ? [] : state.doc.tree.items.values.compactMap { item in
                 guard case .folder(let folder) = item.body, let role = state.doc.tree.role(of: item.id),
@@ -454,7 +457,12 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             translationOn: doc.kind != .incognito && state.doc.settings.max.enabled(.translation),
             translation: session.barTranslation,
             definition: session.barDefinition,
-            isPrivate: doc.kind == .incognito
+            isPrivate: doc.kind == .incognito,
+            mostVisited: learned?.mostVisited ?? [],
+            siteEngagement: learned?.engagement ?? [:],
+            commandUsage: doc.kind == .incognito ? [:] : (state.doc.commandUsage[profile] ?? [:]).compactMapValues { usage in
+                usage.runs.last.map { CommandUsageRow(count: usage.count, lastRun: $0) }
+            }
         ))
     case .library(let openID, let page)?:
         // Owner: F5. Only the open page's data; downloads and history of the window's profile (none in incognito).
@@ -662,7 +670,8 @@ private func switchCandidates(_ state: AppState, window: WindowID, tree: Sidebar
                 if root == s.pinnedRoot, !state.session.loaded.contains(where: { $0.item == tab }) { continue }
                 guard let t = state.displayedTab(tab, in: window), let url = t.url else { continue }
                 out.append((SwitchCandidate(tab: tab, title: t.displayTitle, url: url, favicon: t.favicon, spaceTitle: state.displayTitle(of: s.id),
-                                            inCurrentSpace: s.id == space.id, isFocused: tab == focused), t.lastActiveAt))
+                                            inCurrentSpace: s.id == space.id, isFocused: tab == focused,
+                                            saveLevel: root == s.pinnedRoot ? saveLevel(tree, tab) : nil, customTitle: t.customTitle), t.lastActiveAt))
             }
         }
     }
@@ -671,14 +680,16 @@ private func switchCandidates(_ state: AppState, window: WindowID, tree: Sidebar
             guard state.session.loaded.contains(where: { $0.item == tab }) else { continue }
             guard let t = state.displayedTab(tab, in: window), let url = t.url else { continue }
             out.append((SwitchCandidate(tab: tab, title: t.displayTitle, url: url, favicon: t.favicon, spaceTitle: nil,
-                                        inCurrentSpace: true, isFocused: tab == focused), t.lastActiveAt))
+                                        inCurrentSpace: true, isFocused: tab == focused,
+                                        saveLevel: saveLevel(tree, tab), isFavorite: true, customTitle: t.customTitle), t.lastActiveAt))
         }
     }
     if case .window = tree.scope {
         for tab in tree.allTabs() {
             guard let value = state.displayedTab(tab, in: window), let url = value.url else { continue }
             out.append((SwitchCandidate(tab: tab, title: value.displayTitle, url: url, favicon: value.favicon, spaceTitle: nil,
-                                        inCurrentSpace: true, isFocused: tab == focused), value.lastActiveAt))
+                                        inCurrentSpace: true, isFocused: tab == focused,
+                                        customTitle: value.customTitle), value.lastActiveAt))
         }
     }
     return out.enumerated().sorted { a, b in
@@ -686,6 +697,25 @@ private func switchCandidates(_ state: AppState, window: WindowID, tree: Sidebar
         if a.element.1 != b.element.1 { return a.element.1 > b.element.1 }
         return a.offset < b.offset
     }.map(\.element.0)
+}
+
+/// Arc's save level of a saved tab (0x101d4fc34 counts the steps up to the top): a Favorite 1, a pinned tab 2, one more
+/// for each folder around it; nil outside Favorites and Pinned.
+func saveLevel(_ tree: SidebarTree, _ tab: ItemID) -> Int? {
+    var depth = 0, current = tab
+    for _ in 0..<64 {
+        guard let parent = tree[current]?.parent, let item = tree[parent] else { return nil }
+        if case .section(let section) = item.body {
+            switch section.role.kind {
+            case .favorites: return 1 + depth
+            case .pinned: return 2 + depth
+            default: return nil
+            }
+        }
+        if case .folder = item.body { depth += 1 }
+        current = parent
+    }
+    return nil
 }
 
 /// Archive entries grouped by Arc's buckets in bucket order, newest first in each, empty buckets left out.

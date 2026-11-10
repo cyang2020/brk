@@ -47,6 +47,8 @@ public struct Suggestion: Equatable, Sendable {
     /// What ⌘Return and ⌥Return do on this row; nil keeps those keys' usual behaviour.
     public var commandReturn: Command? = nil
     public var optionReturn: Command? = nil
+    /// A command row: choosing it records a run under this key (`Suggest.usageKey`), which the ranking reads next time.
+    public var usageKey: String? = nil
 
     public enum Icon: Equatable, Sendable {
         case file(String)
@@ -57,51 +59,23 @@ public struct Suggestion: Equatable, Sendable {
 }
 
 public enum Suggest {
-    /// Per-source caps (electron-v1 `suggest.ts` CAP, our choice there too), so one source cannot push the others
-    /// out of the rows. Engine suggestions: three, so history and actions keep a row in Arc's five (a guess; Arc
-    /// mixes its sources with a scoring model that was not recovered).
-    private static let tabCap = 3, historyCap = 3, actionCap = 3, emptyTabCap = 4, suggestionCap = 3, topDomainCap = 1
-    /// With an inline completion the typed text names a site, and Arc lists more sites under it (Q01-b: "wiki" shows
-    /// Wikimedia, Fandom and wikiHow).
-    private static let completingTopDomainCap = 3
-    /// A type-travel result outranks everything when the query is the start of its title or a trigger word,
-    /// ending where a word ends, and is at least this long ("Press ⌘T, and type “update”" is Arc's own
-    /// instruction for Check for Updates). "swi" is not a top hit for "Switch to Dark Mode"; "night" is.
-    private static let topHitMinLength = 3
+    /// The split prefix lists at most this many tabs, site search this many suggestions, and a blank query this many
+    /// recent tabs (Q01-a).
+    private static let tabCap = 3, emptyTabCap = 4, suggestionCap = 3
 
-    /// Ranks results for `query`, at most Metrics.commandBar.maxVisibleRows (Arc shows 5). The page being edited
-    /// (`query` is `bar.initialQuery`, the focused tab's URL, untouched): that page, then Arc's own entries (P02-b).
-    /// A blank query: the recent tabs without the focused one (at most 4), then Arc's own entries fill the five rows
-    /// (Q01-a: four tabs and Contact the Team; P21-a, a Little window with no tabs: all five entries). With `completing` (the domain the input completes the query to, `completion`): that site
-    /// first (its tab's switch row when it is open, else its top-domain row), the typed row, then tabs, history, up to
-    /// three more top domains, the engine's suggestions and type travel (P02-c, Q01-b). Otherwise, a non-blank query:
-    /// 1. the top hit: the best type-travel result when the query is its title or the start of its title or of one
-    ///    of its trigger words up to a word's end (an exact title or trigger first), 3 characters at least, and the
-    ///    query is not an address;
-    /// 2. open tabs whose title or URL matches (`.tab(.focus(id))`), never the focused one; word-start matches
-    ///    before mid-word. For an address, only exact URL matches precede the typed row (none while the bar fills an
-    ///    empty split pane, `fillsPane`: the typed row opens there); partial matches follow it;
-    /// 3. "open what you typed" (`.commandBar(.submit(trimmed))`) when `resolve` accepts it: "Search <q>" when it
-    ///    resolves to a search for the text, else "Open <url>"; a typed URL that is also in history shows once;
-    /// 4. (site search is offered beside the input, `siteSearchOffer`, not as a row);
-    /// 5. one of Arc's top domains whose domain or site name the query begins (`.commandBar(.submit(domain))`);
-    /// 6. the engine's suggestions for the query (`bar.suggestions` while `bar.suggestedFor` is the start of what
-    ///    is typed; ones that no longer start with the text are dropped), searched on the profile's engine;
-    /// 7. history entries (`.commandBar(.submit(url))`), newest first, one row per URL (per title and host on Arc's
-    ///    dedup hosts: figma.com, notion.so, github.com...), none that an open tab has;
-    /// 8. the rest of the type-travel results: listed actions (their command and resolved shortcut), the settings
-    ///    panes (`.settings(.openPane)`), "Focus on <space>" and "Move to <space>" for the other spaces.
-    /// In site-search mode (`siteSearch` set) the rows are the query on that engine and the suggestions, each a
-    /// `.commandBar(.submitSearch)` on it.
-    /// Matching is case- and diacritic-insensitive. `resolve` is the domain's URL policy (default: the bar's engine).
+    /// Ranks results for `query`, at most Metrics.commandBar.maxVisibleRows (Arc shows 5).
     ///
-    /// Brk's own sources beyond Arc, none of which changes a row when it has nothing to say, and none in site search, AI
-    /// mode or a bar that fills an empty pane: a quick answer (`QuickAnswers`) leads when the text can only be that
-    /// question, else sits right under the typed row so Return still searches; apps and files take the last two rows at
-    /// most (never the top hit, never the typed row) while `bar.local` answers exactly this text, in `createsTab` bars only.
-    /// Pages the local search model found by meaning (`bar.meaning`, for exactly this text) take up to two of the last
-    /// rows before the files and apps, never one another row already shows.
-    /// A `prefix` (`QuickPrefixes`) has the whole list to itself, like site search: the user asked for it with Tab.
+    /// Lists of their own, not rankings: AI mode (the one row it asks), site search (the query on that engine, then its
+    /// suggestions), a `prefix` (`QuickPrefixes`: the user asked for that list with Tab), a blank query (the recent tabs
+    /// without the focused one, at most 4, then Arc's own entries fill the five rows: Q01-a, P21-a) and the page being
+    /// edited (`query` is `bar.initialQuery`, the focused tab's URL, untouched: that page, then Arc's own entries, P02-b).
+    ///
+    /// Any other text is ranked the way Arc 1.170 ranks it (`ArcRanking`): every source gives candidates (`candidates`),
+    /// Arc's scorer gives each one score, and the best five show, one per page or search. Rules of Brk's own stay on top
+    /// of that: an answer that is not the only reading of the text sits right under the typed row; a bar filling an empty
+    /// split pane puts a typed address first (it opens in that pane); and with `completing` (the domain the input
+    /// completes the query to, `completion`) a top-domain first row shows the site's name alone. Matching is case- and
+    /// diacritic-insensitive. `resolve` is the domain's URL policy (default: the bar's engine).
     public static func rank(query: String, bar: CommandBarSnapshot, appName: String, siteSearch: SearchEngineCandidate? = nil, prefix: QuickPrefix? = nil,
                             resolve: ((String) -> URL?)? = nil, completing: String? = nil,
                             timeZone: TimeZone = .current, locale: Locale = .current) -> [Suggestion] {
@@ -126,7 +100,6 @@ public enum Suggest {
         if let siteSearch { return Array(siteSearchRows(text, on: siteSearch, bar: bar).prefix(limit)) }
         if let prefix { return Array(prefixRows(prefix, text, bar: bar, appName: appName, resolve: resolve).prefix(limit)) }
         let tabs = bar.tabs.filter { !$0.isFocused }
-        var taken = Set(bar.tabs.flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })
         if text.isEmpty {
             return Array((tabs.prefix(emptyTabCap).map(switchRow) + arcRows).prefix(limit))
         }
@@ -137,98 +110,24 @@ public enum Suggest {
             return Array(([row] + arcRows).prefix(limit))
         }
 
-        let selectedEngine = selectedEngine(bar)
-        let resolve = resolve ?? { resolveTypedInput($0, engine: selectedEngine) }
-        let needle = fold(text)
-        if let result = BrowserCalculator.result(text) {
-            return [Suggestion(kind: .calculator, title: result, subtitle: text, symbol: "equal", favicon: nil, hint: "Copy Result",
-                               command: .commandBar(.calculate(text)))]
+        let built = candidates(text, bar: bar, appName: appName, resolve: resolve, completing: completing, timeZone: timeZone, locale: locale)
+        let scores = ArcRanking.scores(built.map(\.candidate), query: text)
+        var rows = ArcRanking.order(built.map(\.candidate), scores: scores, limit: Int.max).map { built[$0].row }
+        // Answers worked out from the text are Brk's own and take no part in Arc's scoring (their scores would change every
+        // other row's): one the text can only be leads, otherwise it sits right under the typed row.
+        let (leading, below) = answers(text, bar: bar, timeZone: timeZone, locale: locale)
+        rows.insert(contentsOf: below, at: rows.firstIndex { $0.kind == .openTyped }.map { $0 + 1 } ?? rows.count)
+        rows.insert(contentsOf: leading, at: 0)
+        // Filling an empty split pane, a typed address opens in that pane: it leads (Brk's rule for that bar).
+        if bar.fillsPane, let i = rows.firstIndex(where: { $0.kind == .openTyped && $0.symbol == "globe" }), i > 0 { rows.insert(rows.remove(at: i), at: 0) }
+        // The completed site's row is the site's name alone: the input already shows its domain (P02-c "Google Docs").
+        if let completing, let first = rows.first, first.kind == .topDomain, first.command == .commandBar(.submit(completing)) {
+            rows[0] = domainRow(TopDomains.Site(domain: completing, name: TopDomains.all.first { $0.domain == completing }?.name ?? completing), named: true)
         }
-        let quick = bar.fillsPane ? nil : QuickAnswers.answer(text, QuickAnswerContext(now: bar.now, timeZone: timeZone, locale: locale, rates: bar.rates)).map(quickRow)
-        var typed: Suggestion?
-        var isAddress = false
-        let resolvedURL = resolve(text)
-        if let url = resolvedURL {
-            let search = url == selectedEngine.searchURL(text) || isSearch(url, for: text)
-            isAddress = !search
-            if !search { taken.insert(url.absoluteString) }
-            typed = Suggestion(kind: .openTyped, title: search ? text : displayURL(url),
-                               subtitle: nil, symbol: search ? "magnifyingglass" : "globe", favicon: nil, hint: nil,
-                               command: .commandBar(.submit(text)))
-        }
-        // The completed site leads: its open tab, else its top-domain row (and neither shows again below).
-        let completed = completing.map { domain -> Suggestion in
-            if let tab = tabs.first(where: { host($0.url) == domain }) { return switchRow(tab) }
-            // The input shows the domain, so the row is the site's name alone (P02-c "Google Docs").
-            return domainRow(TopDomains.Site(domain: domain, name: TopDomains.all.first { $0.domain == domain }?.name ?? domain), named: true)
-        }
-        let matches = matching(tabs, needle) { [$0.title, $0.url.absoluteString] }.filter { completed?.command != .tab(.focus($0.tab)) }
-        // A URL is a destination, including its path, query and fragment. Keep fuzzy matches available, but
-        // Return must not switch to cookie.html#set when the user typed cookie.html.
-        let exact = isAddress ? tabs.filter { $0.url == resolvedURL } : []
-        let switches = (isAddress ? exact : matches).prefix(tabCap).map(switchRow)
-        let related = isAddress ? matches.filter { $0.url != resolvedURL }.prefix(max(0, tabCap - switches.count)).map(switchRow) : []
-        let openHosts = Set(bar.tabs.compactMap { host($0.url) })
-        var seenDomains = Set(completing.map { [$0] } ?? [])
-        // Arc's table lists some sites twice (wikipedia.org); each shows once.
-        var domains: [Suggestion] = []
-        if needle.count >= 2, !needle.contains(where: \.isWhitespace) {
-            for site in TopDomains.all where domains.count < (completing == nil ? topDomainCap : completingTopDomainCap) {
-                guard site.domain.hasPrefix(needle) || fold(site.name).hasPrefix(needle), !openHosts.contains(site.domain),
-                      resolve(site.domain).map({ !taken.contains($0.absoluteString) }) != false, seenDomains.insert(site.domain).inserted else { continue }
-                domains.append(domainRow(site))
-            }
-        }
-        let suggestions = engineSuggestions(text, bar).prefix(suggestionCap).map { s in
-            Suggestion(kind: .searchSuggestion, title: s, subtitle: nil, symbol: "magnifyingglass", favicon: nil, hint: nil,
-                       command: .commandBar(.submitSearch(engine: bar.engine.id, query: s)))
-        }
-        let history = matching(recentHistory(bar.history, excluding: taken), needle) { [$0.title, $0.url.absoluteString] }
-            .prefix(historyCap).map(historyRow)
-
-        var travel = typeTravel(needle, bar: bar, appName: appName)
-        var top: [Suggestion] = []
-        if let best = travel.first, best.score >= 3, needle.count >= topHitMinLength, !isAddress {
-            top = [best.suggestion]
-            travel.removeFirst()
-        }
-        let bookmarks = matching(bar.bookmarks.filter { !taken.contains($0.url.absoluteString) }, needle) { [$0.title, $0.url.absoluteString] }.prefix(2).map { entry in
-            Suggestion(kind: .bookmark, title: entry.title, subtitle: nil, symbol: "bookmark", favicon: nil, hint: nil,
-                       command: .commandBar(.submit(entry.url.absoluteString)))
-        }
-        let typedRow = typed.map { [$0] } ?? []
-        // Filling an empty split pane, a typed address opens in that pane: it leads, the tab showing it follows.
-        let (lead, trail) = bar.fillsPane && isAddress ? ([], switches) : (switches, [])
-        var rows: [Suggestion]
-        if let completed {
-            rows = [completed] + typedRow + switches + related + history + domains + bookmarks + suggestions + travel.prefix(actionCap).map(\.suggestion)
-        } else {
-            rows = top + lead + typedRow + trail + related + domains + bookmarks + suggestions + history + travel.prefix(actionCap).map(\.suggestion)
-        }
-        // Max's Ask row is the third (P49: the search, one suggestion, then Ask ChatGPT →) for a search of two words or
-        // more, or a question.
-        if let provider = bar.askProvider, !isAddress, completed == nil, text.split(whereSeparator: \.isWhitespace).count >= 2 || text.hasSuffix("?") {
-            rows.insert(askRow(text, provider: provider), at: min(2, rows.count))
-        }
-        if let quick {
-            if QuickAnswers.leads(text) { rows.insert(quick, at: 0) }
-            else { rows.insert(quick, at: rows.firstIndex { $0.kind == .openTyped }.map { $0 + 1 } ?? rows.count) }
-        }
-        if !bar.fillsPane, let color = QuickColors.parse(text) {
-            rows.insert(contentsOf: colorRows(color), at: QuickColors.leads(text) ? 0 : rows.firstIndex { $0.kind == .openTyped }.map { $0 + 1 } ?? rows.count)
-        }
-        let conversations = conversationRows(needle, isAddress: isAddress, shown: rows, bar: bar)
-        let meaning = meaningRows(text, isAddress: isAddress, shown: rows + conversations, bar: bar)
-        rows = withLastRows(rows, conversations + meaning + localRows(text, isAddress: isAddress, bar: bar), limit: limit)
-        // An exact phrase like "left half": its row low down. Nothing else about the window reaches ordinary queries.
-        if bar.createsTab, let placement = WindowSnap.exact(text) { rows = withLastRows(rows, [placementRow(placement)], limit: limit) }
         return Array(rows.prefix(limit))
     }
 
     // MARK: Brk's own sources
-
-    /// The most file and app rows among the others.
-    private static let inlineLocalCap = 2
 
     private static func quickRow(_ answer: QuickAnswer) -> Suggestion {
         let symbol = switch answer.kind { case .math: "equal"; case .date: "clock"; case .currency: "dollarsign.circle" }
@@ -391,68 +290,281 @@ public enum Suggest {
         Suggestion(kind: .action, title: title, subtitle: subtitle, symbol: "sparkles", favicon: nil, hint: "Return", command: command)
     }
 
-    /// Apps, then files, for the last places.
-    private static func localRows(_ text: String, isAddress: Bool, bar: CommandBarSnapshot) -> [Suggestion] {
-        guard bar.createsTab, !isAddress, text.count >= LocalSources.inlineMinLength, let local = bar.local, local.query == text, local.scope == .filesAndApps else { return [] }
-        return Array((local.apps.map(appRow) + local.files.map(fileRow)).prefix(inlineLocalCap))
+    // MARK: Candidates for Arc's ranking
+
+    /// One row and what Arc's scorer knows about it.
+    struct Built {
+        var candidate: ArcRanking.Candidate
+        var row: Suggestion
     }
 
-    /// The most rows found by meaning among the others.
-    private static let meaningCap = 2
-    /// The most conversation rows among the others.
-    private static let conversationCap = 2
+    /// Chromium's relevance numbers are not visible through CEF; a fixed one per kind stands in (Chromium's usual values:
+    /// 1300 for the text as typed, more for a visited page the text inline-completes, about 900 for other visited pages,
+    /// the engine's suggestions below). Chromium's rows are ordered the way its dropdown groups them: the default row (a
+    /// page the text completes, else the text as typed), then the text as typed, then the engine's suggestions, then the
+    /// other visited pages.
+    enum Relevance {
+        static let whatYouTyped = 1300.0, historyAutocompletes = 1400.0, history = 900.0, suggestion = 800.0, demotedWhatYouTyped = 801.0
 
-    /// Saved conversations the shared conversation search finds (`ConversationSearch`, the one the Library's "AI 对话" page
-    /// and the panel's list use): the title has the text, then every word of it was said, newest first. The subtitle names
-    /// the Space it is in, then what was said around the words. Choosing one opens it in the AI panel, switching to its
-    /// Space first.
-    private static func conversationRows(_ needle: String, isAddress: Bool, shown: [Suggestion], bar: CommandBarSnapshot) -> [Suggestion] {
-        guard !isAddress, !bar.fillsPane, !needle.isEmpty, !bar.conversations.isEmpty else { return [] }
-        return ConversationSearch.search(needle, in: bar.conversations).prefix(conversationCap).map { conversation, found in
-            let snippet: String? = if case .text(let snippet) = found { snippet } else { nil }
-            let subtitle = [conversation.space, snippet].compactMap { $0 }.joined(separator: " · ")
-            return Suggestion(kind: .conversation, title: conversation.title, subtitle: subtitle.isEmpty ? nil : subtitle, symbol: "bubble.left.and.bubble.right",
-                              favicon: ConversationPage.favicon, hint: OverlayCopy.conversation, command: .assist(.showConversation(conversation.id)))
+        /// A visited page that the text does not inline-complete: more for typed visits, then for visits.
+        static func history(_ page: HistoryCandidate) -> Double {
+            history + min(250, 20 * Double(page.typedCount) + 5 * Double(page.visitCount))
+        }
+
+        /// The dropdown group a Chromium row belongs to, top first.
+        static func group(_ relevance: Double, isHistory: Bool) -> Int {
+            if relevance >= whatYouTyped { return 0 }
+            return isHistory ? 2 : 1
         }
     }
 
-    /// The search model's pages for exactly this text, best first, without the focused tab and without a page another
-    /// row already offers. An open tab switches to it like Switch to Tab; an archived tab or a visit opens its address.
-    private static func meaningRows(_ text: String, isAddress: Bool, shown: [Suggestion], bar: CommandBarSnapshot) -> [Suggestion] {
-        guard !isAddress, !bar.fillsPane, let meaning = bar.meaning, meaning.text == text else { return [] }
-        var taken = Set<String>()
-        for row in shown {
-            switch row.command {
-            case .tab(.focus(let id)): if let tab = bar.tabs.first(where: { $0.tab == id }) { taken.insert(tab.url.absoluteString) }
-            case .commandBar(.submit(let address)): taken.insert(address)
-            case .assist(.showConversation(let id)): taken.insert(ConversationPage.url(id).absoluteString)
-            default: break
+    /// Every source's candidates for `text`, each with its row. Archetypes: open tabs and saved Pinned and Favorites
+    /// (Brk's bookmarks, which are tabs in Arc) are `tab`; the typed row is Chromium's search or address as typed;
+    /// visited pages are `chromiumHistory`; the engine's suggestions `chromiumSearchSuggestion`; Arc's popular sites
+    /// `topDomain`; commands, settings panes, Spaces, folders, apps, files and the window places `typeTravel`; saved
+    /// conversations `assistantHistory`; Max's Ask row Arc's `askGPTWhatYouTyped`. A page the search model found by meaning
+    /// ranks as what it is (a tab, a visited page, a conversation). Answers are not candidates (`answers`).
+    static func candidates(_ text: String, bar: CommandBarSnapshot, appName: String, resolve: ((String) -> URL?)?, completing: String?,
+                           timeZone: TimeZone, locale: Locale) -> [Built] {
+        let engine = selectedEngine(bar)
+        let resolve = resolve ?? { resolveTypedInput($0, engine: engine) }
+        let needle = fold(text)
+        let now = bar.now
+        var out: [Built] = []
+        func since(_ instant: Instant?) -> Double? {
+            instant.map { max(0, Double(now.milliseconds - $0.milliseconds) / 1000) }
+        }
+        func siteFeatures(_ url: URL) -> [ArcRanking.Feature: Double] {
+            var features: [ArcRanking.Feature: Double] = [:]
+            if let rank = bar.mostVisited.firstIndex(of: url) { features[.mostVisitedRank] = Double(rank) }
+            if let site = SiteEngagement.site(url), let score = bar.siteEngagement[site] { features[.siteEngagementScore] = score }
+            return features
+        }
+        func page(_ archetype: ArcRanking.Archetype, url: URL, title: String, hotWords: [String] = []) -> ArcRanking.Candidate {
+            var candidate = ArcRanking.Candidate(archetype: archetype, url: url, autocompleteText: ArcRanking.readable(url), hotWords: hotWords,
+                                                 dedupKey: pageKey(url, title))
+            candidate.features = ArcRanking.matchFeatures(text, url: ArcRanking.readable(url), title: title, hotWords: hotWords)
+                .merging(siteFeatures(url)) { $1 }
+            return candidate
+        }
+
+        // Chromium's result: the text as typed, visited pages and the engine's suggestions, ranked among themselves.
+        var chromium: [(built: Built, relevance: Double, group: Int)] = []
+        var isAddress = false
+        if let url = resolve(text) {
+            let search = url == engine.searchURL(text) || isSearch(url, for: text)
+            isAddress = !search
+            let row = Suggestion(kind: .openTyped, title: search ? text : displayURL(url), subtitle: nil, symbol: search ? "magnifyingglass" : "globe",
+                                 favicon: nil, hint: nil, command: .commandBar(.submit(text)))
+            var candidate: ArcRanking.Candidate
+            if search {
+                candidate = ArcRanking.Candidate(archetype: .chromiumSearchWhatYouTyped, autocompleteText: text, dedupKey: searchKey(text))
+                candidate.features = ArcRanking.matchFeatures(text, url: nil, title: text, hotWords: [])
+            } else {
+                candidate = page(.chromiumNavigateWhatYouTyped, url: url, title: text)
+                candidate.autocompleteText = text
+            }
+            chromium.append((Built(candidate: candidate, row: row), Relevance.whatYouTyped, 0))
+        }
+        // Chromium matches visited pages where a word of the title or the address starts with the text, and scores them by
+        // typed visits, then visits, then the newest visit. Arc gives these rows their visit and typed counts but no
+        // last-visit feature (Arc sets that one only for tabs and commands, 0x101d4fc34 and 0x101d38610).
+        let visited = recentHistory(bar.history).filter { matchRank(needle, in: [$0.title, $0.url.absoluteString]) == 0 }
+            .prefix(historyCandidates).enumerated()
+            .sorted { a, b in
+                let x = Relevance.history(a.element), y = Relevance.history(b.element)
+                return x != y ? x > y : a.offset < b.offset
+            }.map(\.element)
+        for entry in visited {
+            var candidate = page(.chromiumHistory, url: entry.url, title: entry.title)
+            candidate.features[.frequencyEver] = Double(entry.visitCount)
+            candidate.features[.typedCountEver] = Double(entry.typedCount)
+            let relevance = ArcRanking.isPrefix(text, entry.url) ? Relevance.historyAutocompletes : Relevance.history(entry)
+            chromium.append((Built(candidate: candidate, row: historyRow(entry)), relevance, Relevance.group(relevance, isHistory: true)))
+        }
+        // Google's navigational suggestion for a site (Arc's "etsy.com" row, the input completing to it) is not in the
+        // suggestion answer Brk asks for; Arc's own popular-sites list stands in: the first site whose domain the text
+        // starts (three letters at least) is Chromium's default row.
+        var topDomains: [(site: TopDomains.Site, rank: Int)] = []
+        if needle.count >= 2, !needle.contains(where: \.isWhitespace) {
+            var seen = Set<String>()
+            for (rank, site) in TopDomains.all.enumerated() where topDomains.count < topDomainCandidates {
+                guard site.domain.hasPrefix(needle) || fold(site.name).hasPrefix(needle), seen.insert(site.domain).inserted else { continue }
+                topDomains.append((site, rank))
             }
         }
-        if let focused = bar.tabs.first(where: \.isFocused) { taken.insert(focused.url.absoluteString) }
-        var rows: [Suggestion] = []
-        for found in meaning.rows where rows.count < meaningCap && taken.insert(found.url.absoluteString).inserted {
-            let open = found.tab.flatMap { id in bar.tabs.first { $0.tab == id } }
-            let title = found.title.isEmpty ? displayURL(found.url) : found.title
-            if found.place == .conversation, let conversation = ConversationPage.id(of: found.url) {
-                rows.append(Suggestion(kind: .meaning, title: title, subtitle: nil, symbol: "sparkle.magnifyingglass", favicon: nil,
-                                       hint: OverlayCopy.conversation, command: .assist(.showConversation(conversation))))
-                continue
-            }
-            rows.append(Suggestion(kind: .meaning, title: title, subtitle: nil, symbol: "sparkle.magnifyingglass", favicon: nil,
-                                   hint: open != nil ? OverlayCopy.switchToTab : found.place == .archive ? OverlayCopy.archived : nil,
-                                   command: open.map { .tab(.focus($0.tab)) } ?? .commandBar(.submit(found.url.absoluteString))))
+        func topDomain(_ site: TopDomains.Site, rank: Int) -> Built? {
+            guard let url = URL(string: "https://\(site.domain)") else { return nil }
+            var candidate = page(.topDomain, url: url, title: site.name)
+            candidate.features[.globalSiteRank] = Double(rank)
+            return Built(candidate: candidate, row: domainRow(site))
         }
-        return rows
+        let completedSite = needle.count < 3 ? nil : topDomains.firstIndex { $0.site.domain.hasPrefix(needle) && $0.site.domain.count > needle.count }
+        if let at = completedSite, let built = topDomain(topDomains[at].site, rank: topDomains[at].rank) {
+            chromium.append((built, Relevance.historyAutocompletes, 0))
+            // With a site it is sure of, Google's answer lowers the as-typed search ("google:verbatimrelevance"), which
+            // Chromium then ranks among the suggestions.
+            if let typed = chromium.firstIndex(where: { $0.built.row.kind == .openTyped }), chromium[typed].built.candidate.archetype == .chromiumSearchWhatYouTyped {
+                chromium[typed].relevance = Relevance.demotedWhatYouTyped
+                chromium[typed].group = 1
+            }
+        }
+        for (index, suggestion) in engineSuggestions(text, bar).prefix(suggestionCandidates).enumerated() {
+            var candidate = ArcRanking.Candidate(archetype: .chromiumSearchSuggestion, autocompleteText: suggestion, dedupKey: searchKey(suggestion))
+            candidate.features = ArcRanking.matchFeatures(text, url: nil, title: suggestion, hotWords: [])
+            let row = Suggestion(kind: .searchSuggestion, title: suggestion, subtitle: nil, symbol: "magnifyingglass", favicon: nil, hint: nil,
+                                 command: .commandBar(.submitSearch(engine: bar.engine.id, query: suggestion)))
+            chromium.append((Built(candidate: candidate, row: row), Relevance.suggestion - Double(index), 1))
+        }
+        let ordered = chromium.enumerated().sorted { a, b in
+            if a.element.group != b.element.group { return a.element.group < b.element.group }
+            if a.element.relevance != b.element.relevance { return a.element.relevance > b.element.relevance }
+            return a.offset < b.offset
+        }.map(\.element)
+        for (rank, entry) in ordered.enumerated() {
+            var built = entry.built
+            built.candidate.features[.chromiumRank] = Double(rank)
+            built.candidate.features[.chromiumRelevanceScore] = entry.relevance
+            out.append(built)
+        }
+
+        // Open tabs, never the focused one, then saved Pinned and Favorites without a page. A tab's last visit is when it
+        // was last switched to from this bar (Arc's `recentlySwitchedToTabs`), so the bar learns which tabs it is used for.
+        for tab in matching(bar.tabs.filter { !$0.isFocused }, needle, texts: { [$0.title, $0.url.absoluteString] }).prefix(tabCandidates) {
+            var candidate = page(.tab, url: tab.url, title: tab.title, hotWords: words(tab.title))
+            candidate.customTitle = tab.customTitle
+            candidate.isFavorite = tab.isFavorite
+            candidate.features[.lastNavigated] = since(bar.commandUsage[switchKey(tab.tab)]?.lastRun)
+            candidate.features[.saveLevel] = tab.saveLevel.map(Double.init)
+            var row = switchRow(tab)
+            row.usageKey = switchKey(tab.tab)
+            out.append(Built(candidate: candidate, row: row))
+        }
+        for saved in matching(bar.bookmarks, needle, texts: { [$0.title, $0.url.absoluteString] }).prefix(tabCandidates) {
+            var candidate = page(.tab, url: saved.url, title: saved.title, hotWords: words(saved.title))
+            candidate.isFavorite = saved.isFavorite
+            candidate.features[.lastNavigated] = since(saved.visitedAt)
+            candidate.features[.saveLevel] = saved.saveLevel.map(Double.init)
+            let row = Suggestion(kind: .bookmark, title: saved.title, subtitle: nil, symbol: "bookmark", favicon: nil, hint: nil,
+                                 command: .commandBar(.submit(saved.url.absoluteString)))
+            out.append(Built(candidate: candidate, row: row))
+        }
+
+        // Arc's popular sites whose domain or name the text starts (one word, two letters at least).
+        for (index, entry) in topDomains.enumerated() where index != completedSite {
+            if let built = topDomain(entry.site, rank: entry.rank) { out.append(built) }
+        }
+
+        // Commands. A command chosen before carries its runs: their count is the typed count, the newest one the last
+        // visit (0x101d38610), and more than one run is Arc's recentlyUseTypeTravel boost.
+        func command(_ row: Suggestion, title: String, triggers: [String]) -> Built {
+            let key = usageKey(row.command)
+            var row = row
+            row.usageKey = key
+            let usage = bar.commandUsage[key]
+            var candidate = ArcRanking.Candidate(archetype: .typeTravel, autocompleteText: title,
+                                                 hotWords: ([title] + triggers).map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "…")) },
+                                                 customTitle: title, runs: usage?.count ?? 0, dedupKey: "command:" + key)
+            candidate.features = ArcRanking.matchFeatures(text, url: nil, title: title, hotWords: triggers)
+            if let usage {
+                candidate.features[.typedCountEver] = Double(usage.count)
+                candidate.features[.lastNavigated] = since(usage.lastRun)
+            }
+            return Built(candidate: candidate, row: row)
+        }
+        for entry in typeTravel(needle, bar: bar, appName: appName).filter(\.startsAWord).prefix(commandCandidates) {
+            out.append(command(entry.suggestion, title: entry.suggestion.title, triggers: entry.triggers))
+        }
+        if bar.createsTab, !isAddress, text.count >= LocalSources.inlineMinLength, let local = bar.local, local.query == text, local.scope == .filesAndApps {
+            for hit in local.apps.prefix(localCandidates) { out.append(command(appRow(hit), title: hit.name, triggers: [])) }
+            for hit in local.files.prefix(localCandidates) { out.append(command(fileRow(hit), title: hit.name, triggers: [])) }
+        }
+        if bar.createsTab, let placement = WindowSnap.exact(text) {
+            out.append(command(placementRow(placement), title: placement.title, triggers: placement.triggers))
+        }
+
+        // Saved conversations, then what the search model found by meaning.
+        if !isAddress, !bar.fillsPane, !needle.isEmpty {
+            for (conversation, found) in ConversationSearch.search(needle, in: bar.conversations).prefix(conversationCandidates) {
+                let snippet: String? = if case .text(let snippet) = found { snippet } else { nil }
+                let subtitle = [conversation.space, snippet].compactMap { $0 }.joined(separator: " · ")
+                var candidate = ArcRanking.Candidate(archetype: .assistantHistory, autocompleteText: conversation.title, dedupKey: "conversation:\(conversation.id)")
+                candidate.features = ArcRanking.matchFeatures(text, url: nil, title: conversation.title, hotWords: [])
+                let row = Suggestion(kind: .conversation, title: conversation.title, subtitle: subtitle.isEmpty ? nil : subtitle, symbol: "bubble.left.and.bubble.right",
+                                     favicon: ConversationPage.favicon, hint: OverlayCopy.conversation, command: .assist(.showConversation(conversation.id)))
+                out.append(Built(candidate: candidate, row: row))
+            }
+        }
+        if !isAddress, !bar.fillsPane, let meaning = bar.meaning, meaning.text == text {
+            let focused = bar.tabs.first(where: \.isFocused)?.url
+            for found in meaning.rows.filter({ $0.url != focused }).prefix(meaningCandidates) {
+                let title = found.title.isEmpty ? displayURL(found.url) : found.title
+                if found.place == .conversation, let id = ConversationPage.id(of: found.url) {
+                    var candidate = ArcRanking.Candidate(archetype: .assistantHistory, autocompleteText: title, dedupKey: "conversation:\(id)")
+                    candidate.features = ArcRanking.matchFeatures(text, url: nil, title: title, hotWords: [])
+                    out.append(Built(candidate: candidate, row: Suggestion(kind: .meaning, title: title, subtitle: nil, symbol: "sparkle.magnifyingglass", favicon: nil,
+                                                                           hint: OverlayCopy.conversation, command: .assist(.showConversation(id)))))
+                    continue
+                }
+                let open = found.tab.flatMap { id in bar.tabs.first { $0.tab == id } }
+                let candidate = page(open != nil ? .tab : .chromiumHistory, url: found.url, title: title)
+                out.append(Built(candidate: candidate, row: Suggestion(kind: .meaning, title: title, subtitle: nil, symbol: "sparkle.magnifyingglass", favicon: nil,
+                                                                       hint: open != nil ? OverlayCopy.switchToTab : found.place == .archive ? OverlayCopy.archived : nil,
+                                                                       command: open.map { .tab(.focus($0.tab)) } ?? .commandBar(.submit(found.url.absoluteString)))))
+            }
+        }
+
+        // Max's Ask row (Arc's "Ask ChatGPT →", P49) for a search of two words or more, or a question.
+        if let provider = bar.askProvider, !isAddress, completing == nil, text.split(whereSeparator: \.isWhitespace).count >= 2 || text.hasSuffix("?") {
+            out.append(Built(candidate: ArcRanking.Candidate(archetype: .askGPTWhatYouTyped, autocompleteText: text, dedupKey: "ask"), row: askRow(text, provider: provider)))
+        }
+
+        return out
     }
 
-    /// `found` in the last places: they replace what would be cut last, and the typed row and anything above it stay.
-    private static func withLastRows(_ rows: [Suggestion], _ found: [Suggestion], limit: Int) -> [Suggestion] {
-        guard !found.isEmpty else { return rows }
-        let lastKept = rows.lastIndex { $0.kind == .openTyped || $0.kind == .calculator || $0.kind == .color } ?? 0
-        let room = max(0, limit - (lastKept + 1))
-        let shown = Array(found.prefix(room))
-        return Array(rows.prefix(max(lastKept + 1, min(rows.count, limit - shown.count)))) + shown
+    /// Answers worked out from the text itself (Brk's own): the calculator, a quick answer, a colour's three forms. Arc 1.170
+    /// lists no calculator answer (for "2+2" it shows the search and the engine's suggestions), so these keep the places Brk
+    /// gave them: the rows that lead when the text can only be that question, and the rows for under the typed row.
+    static func answers(_ text: String, bar: CommandBarSnapshot, timeZone: TimeZone, locale: Locale) -> (leading: [Suggestion], below: [Suggestion]) {
+        var leading: [Suggestion] = [], below: [Suggestion] = []
+        if let result = BrowserCalculator.result(text) {
+            leading.append(Suggestion(kind: .calculator, title: result, subtitle: text, symbol: "equal", favicon: nil, hint: "Copy Result",
+                                      command: .commandBar(.calculate(text))))
+        } else if !bar.fillsPane, let quick = QuickAnswers.answer(text, QuickAnswerContext(now: bar.now, timeZone: timeZone, locale: locale, rates: bar.rates)) {
+            if QuickAnswers.leads(text) { leading.append(quickRow(quick)) } else { below.append(quickRow(quick)) }
+        }
+        if !bar.fillsPane, let color = QuickColors.parse(text) {
+            if QuickColors.leads(text) { leading.append(contentsOf: colorRows(color)) } else { below.append(contentsOf: colorRows(color)) }
+        }
+        return (leading, below)
+    }
+
+    /// How many candidates each source gives the ranking. Arc's providers' own limits were not read; Chromium's result
+    /// holds about ten rows.
+    private static let tabCandidates = 8, historyCandidates = 10, suggestionCandidates = 10, topDomainCandidates = 5, commandCandidates = 5,
+                       localCandidates = 2, conversationCandidates = 2, meaningCandidates = 2
+
+    /// A tab's title words, its hot words in Arc's ranking ("fixture" is a whole word of "Visual fixture").
+    static func words(_ title: String) -> [String] {
+        title.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+    }
+
+    /// One row per page: the readable address, or the title and host on Arc's dedup hosts.
+    static func pageKey(_ url: URL, _ title: String) -> String {
+        if let host = host(url), dedupByTitleAndHost.contains(host), !title.isEmpty { return "page:\(host)\u{0}\(title)" }
+        return "page:" + ArcRanking.readable(url)
+    }
+
+    /// Where a tab's switches from the bar are saved, beside the commands' runs.
+    static func switchKey(_ tab: ItemID) -> String { "tab:\(tab.rawValue)" }
+
+    static func searchKey(_ text: String) -> String { "search:" + fold(text.trimmingCharacters(in: .whitespacesAndNewlines)) }
+
+    /// What a command row's runs are saved under: its command, as stable JSON.
+    public static func usageKey(_ command: Command) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return (try? encoder.encode(command)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: command)
     }
 
     private static func fileRow(_ hit: LocalHit) -> Suggestion {
@@ -506,18 +618,26 @@ public enum Suggest {
 
     // MARK: Inline completion and site search beside the input
 
-    /// The domain the input completes `typed` to, the completed part selected (Arc: "wiki" shows wikipedia.org, "doc"
-    /// docs.google.com): the first open tab's host (not the focused tab's), else the first of Arc's top domains, that
-    /// starts with what is typed and is longer. Only for a bare host being typed: two characters or more, a letter
-    /// first, then letters, digits, dots and hyphens; and not when a type-travel result is the top hit (Return runs
-    /// that). The caller decides whether the user is typing on (a deletion never completes).
+    /// The domain the input completes `typed` to, the completed part selected (Arc: "githu" shows github.com, "wiki"
+    /// wikipedia.org). Arc completes only to its first row: when that row opens a site (an open or saved tab, a visited
+    /// page, a popular site) whose host starts with what is typed and is longer, the input shows that host; a search, a
+    /// command or a tab found by a word of its title completes nothing. Only for a bare host being typed: two characters
+    /// or more, a letter first, then letters, digits, dots and hyphens. The caller decides whether the user is typing on
+    /// (a deletion never completes).
     public static func completion(_ typed: String, bar: CommandBarSnapshot, appName: String) -> String? {
         let needle = typed.lowercased()
         guard bar.aiMode == nil, needle.count >= 2, let first = needle.first, first.isASCII, first.isLetter,
-              needle.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-") }) else { return nil }
-        if let best = typeTravel(needle, bar: bar, appName: appName).first, best.score >= 3, needle.count >= topHitMinLength { return nil }
-        let hosts = bar.tabs.filter { !$0.isFocused }.compactMap { host($0.url) } + TopDomains.all.map(\.domain)
-        return hosts.first { $0.hasPrefix(needle) && $0.count > needle.count }
+              needle.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-") }),
+              let row = rank(query: typed, bar: bar, appName: appName).first else { return nil }
+        let url: URL?
+        switch (row.kind, row.command) {
+        case (.switchToTab, .tab(.focus(let id))): url = bar.tabs.first { $0.tab == id }?.url
+        case (.topDomain, .commandBar(.submit(let domain))): url = URL(string: "https://\(domain)")
+        case (.history, .commandBar(.submit(let address))), (.bookmark, .commandBar(.submit(let address))): url = URL(string: address)
+        default: url = nil
+        }
+        guard let host = url.flatMap(host), host.hasPrefix(needle), host.count > needle.count else { return nil }
+        return host
     }
 
     /// The engine Tab searches, shown beside the input as "Search Wikipedia" and a Tab key: the one for the completed
@@ -615,6 +735,9 @@ public enum Suggest {
     private struct Scored {
         let score: Int
         let suggestion: Suggestion
+        let triggers: [String]
+        /// The text starts a word of the title or of a trigger (what a command candidate needs).
+        let startsAWord: Bool
     }
 
     /// Every type-travel candidate that matches, best first (ties in source order: actions in table order, panes,
@@ -650,8 +773,10 @@ public enum Suggest {
         }
         let scored = candidates.enumerated().compactMap { index, c -> (Int, Int, Scored)? in
             guard let score = score(needle, title: c.title, triggers: c.triggers) else { return nil }
+            let startsAWord = matchRank(needle, in: [c.title] + c.triggers) == 0
             return (score, index, Scored(score: score, suggestion: Suggestion(kind: .action, title: c.title, subtitle: nil, symbol: c.symbol,
-                                                                              favicon: nil, hint: c.hint, command: c.command)))
+                                                                              favicon: nil, hint: c.hint, command: c.command),
+                                         triggers: c.triggers, startsAWord: startsAWord))
         }
         return scored.sorted {
             if $0.0 != $1.0 { return $0.0 > $1.0 }
@@ -699,8 +824,9 @@ public enum Suggest {
         return url.absoluteString
     }
 
-    /// Newest visit first, one entry per page, skipping pages in `excluding` (URLs and identities).
-    private static func recentHistory(_ history: [HistoryCandidate], excluding: Set<String>) -> [HistoryCandidate] {
+    /// Newest visit first, one entry per page (per title and host on Arc's dedup hosts), skipping pages in `excluding`
+    /// (URLs and identities).
+    private static func recentHistory(_ history: [HistoryCandidate], excluding: Set<String> = []) -> [HistoryCandidate] {
         var seen = excluding
         return history.sorted { $0.visitedAt > $1.visitedAt }.filter { entry in
             guard !seen.contains(entry.url.absoluteString), seen.insert(identity(entry.url, entry.title)).inserted else { return false }

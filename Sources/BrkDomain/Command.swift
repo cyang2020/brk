@@ -118,6 +118,9 @@ public enum CommandBarCommand: Hashable, Sendable, Codable {
     case copyAnswer(String)
     /// A file or app row (`LocalResults`): only a path the bar is showing is acted on.
     case local(LocalAction, path: String)
+    /// A command row was chosen (sent just before the row's own command): the bar learns it was run
+    /// (`Suggest.usageKey`).
+    case ran(String)
 }
 
 /// Return on a file row opens it with its default app (an app launches); ⌘Return shows it in the Finder; ⌥Return copies

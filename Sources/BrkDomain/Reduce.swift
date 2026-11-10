@@ -314,6 +314,19 @@ struct Work {
         }
     }
 
+    /// Tabs leaving the screen were shown since their last stamp: that time goes to their site, per profile (Brk's site
+    /// engagement, `SiteEngagement`). One stretch counts at most `SiteEngagement.longestStretch` seconds, so a window left
+    /// open overnight does not make a site important. Private tabs record nothing.
+    mutating func recordForeground(_ left: Set<ItemID>) {
+        for tab in left.sorted() {
+            guard case .profile(let profile) = state.browsingContext(of: tab), let value = state.tab(tab), let url = value.url,
+                  let site = SiteEngagement.site(url) else { continue }
+            let seconds = Double(ctx.now.milliseconds - value.lastActiveAt.milliseconds) / 1000
+            guard seconds > 0 else { continue }
+            state.doc.foreground[profile, default: [:]][site, default: 0] += min(seconds, SiteEngagement.longestStretch)
+        }
+    }
+
     /// `lastActiveAt = now` for these tabs (any container); other ids are ignored.
     mutating func stamp(_ tabs: Set<ItemID>) {
         let now = ctx.now
@@ -336,8 +349,13 @@ struct Work {
         if input.doc.sidebarData.sync?.document != state.doc.sidebarData.sync?.document { requestSidebarSync() }
         if let before = screenBefore {
             let walking = dispatchingWindow.flatMap { state.session.windows[$0]?.recentCycle } != nil
-            if !walking { stamp(before.symmetricDifference(state.onScreenTabs())) }
+            if !walking {
+                let after = state.onScreenTabs()
+                recordForeground(before.subtracting(after))
+                stamp(before.symmetricDifference(after))
+            }
         }
+        if !state.session.typedPending.isEmpty { state.session.typedPending = state.session.typedPending.filter { state.locate($0) != nil } }
         let changed = state != input
         if changed { state.session.rev += 1 }
         return Transition(state: state, effects: effects, docChanged: changed && state.doc != input.doc, changed: changed, keyShortcut: keyShortcut, keyHandled: keyHandled,

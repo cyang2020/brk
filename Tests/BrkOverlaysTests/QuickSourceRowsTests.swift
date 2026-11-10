@@ -44,24 +44,26 @@ final class QuickSourceRowsTests: XCTestCase {
         XCTAssertEqual(rank("time in tokyo", bar())[0].kind, .calculator)
     }
 
+    /// A bare word's answer sits right under the typed row, so Return searches, unless a site completes the word: then the
+    /// site leads, as in Arc ("time" puts TIME, time.com, first), the typed row follows and the answer follows that.
     func testABareWordSitsBelowTheTypedRowSoReturnStillSearches() {
-        for word in ["today", "tomorrow", "yesterday", "time", "now"] {
+        for word in ["tomorrow", "yesterday", "now"] {
             let rows = rank(word, bar())
             XCTAssertEqual(rows[0].kind, .openTyped, word)
             XCTAssertEqual(rows[0].command, .commandBar(.submit(word)), word)
             XCTAssertEqual(rows[1].kind, .calculator, word)
         }
-        XCTAssertTrue(rank("today", bar())[1].title.contains("7 November 2026"))
-        // With the inline completion the site leads, the typed row follows it, the answer follows that.
-        let completed = rank("time", bar(), completing: "time.com")
-        XCTAssertEqual(Array(completed.map(\.kind).prefix(3)), [.topDomain, .openTyped, .calculator])
+        XCTAssertTrue(rank("today", bar()).contains { $0.title.contains("7 November 2026") })
+        let time = rank("time", bar())
+        XCTAssertEqual(Array(time.map(\.kind).prefix(3)), [.topDomain, .openTyped, .calculator])
+        XCTAssertEqual(time[0].command, .commandBar(.submit("time.com")))
     }
 
-    func testPlainArithmeticKeepsItsOneRow() {
+    func testPlainArithmeticLeadsAndTheSearchFollows() {
         let rows = rank("2+2", bar())
-        XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows[0].command, .commandBar(.calculate("2+2")))
         XCTAssertEqual(rows[0].title, "4")
+        XCTAssertEqual(rows[1].kind, .openTyped)
     }
 
     func testACurrencyQuestionHasNoRowUntilRatesAreKnown() {
@@ -85,40 +87,33 @@ final class QuickSourceRowsTests: XCTestCase {
 
     // MARK: Files and apps inline
 
-    func testAppsAndFilesTakeTheLastPlacesAtMostTwo() {
+    /// Apps and files rank as commands do (Arc's typeTravel archetype): an app named exactly what is typed leads; each row
+    /// keeps what Return, ⌘Return and ⌥Return do, and carries the key its runs are learned under.
+    func testAppsAndFilesRankAsCommands() {
         let suggestions = ["budget a", "budget b", "budget c"]
         let local = LocalResults(query: "budget", apps: [app("Budget")], files: [hit("budget.txt"), hit("budget2.txt")])
         let rows = rank("budget", bar(suggestions: suggestions, suggestedFor: "budget", local: local))
-        XCTAssertEqual(rows.map(\.kind), [.openTyped, .searchSuggestion, .searchSuggestion, .app, .file])
-        XCTAssertEqual(rows[3].title, "Budget")
-        XCTAssertEqual(rows[3].hint, "Open App")
-        XCTAssertEqual(rows[3].command, .commandBar(.local(.open, path: "/Applications/Budget.app")))
-        XCTAssertEqual(rows[3].icon, .file("/Applications/Budget.app"))
-        XCTAssertNil(rows[3].commandReturn)
-        XCTAssertEqual(rows[4].title, "budget.txt")
-        XCTAssertEqual(rows[4].subtitle, "/Users/u/Documents")
-        XCTAssertEqual(rows[4].hint, "⌘↩ Reveal  ⌥↩ Copy Path")
-        XCTAssertEqual(rows[4].command, .commandBar(.local(.open, path: "/Users/u/Documents/budget.txt")))
-        XCTAssertEqual(rows[4].commandReturn, .commandBar(.local(.reveal, path: "/Users/u/Documents/budget.txt")))
-        XCTAssertEqual(rows[4].optionReturn, .commandBar(.local(.copyPath, path: "/Users/u/Documents/budget.txt")))
+        XCTAssertEqual(rows.first?.kind, .app, "the app's name is the whole text")
+        XCTAssertTrue(rows.contains { $0.kind == .openTyped }, "the search stays")
+        let app = rows[0]
+        XCTAssertEqual(app.title, "Budget")
+        XCTAssertEqual(app.hint, "Open App")
+        XCTAssertEqual(app.command, .commandBar(.local(.open, path: "/Applications/Budget.app")))
+        XCTAssertEqual(app.icon, .file("/Applications/Budget.app"))
+        XCTAssertNil(app.commandReturn)
+        XCTAssertEqual(app.usageKey, Suggest.usageKey(app.command))
+        let file = try! XCTUnwrap(rows.first { $0.kind == .file })
+        XCTAssertEqual(file.subtitle, "/Users/u/Documents")
+        XCTAssertEqual(file.hint, "⌘↩ Reveal  ⌥↩ Copy Path")
+        XCTAssertEqual(file.commandReturn, .commandBar(.local(.reveal, path: file.command == .commandBar(.local(.open, path: "/Users/u/Documents/budget.txt")) ? "/Users/u/Documents/budget.txt" : "/Users/u/Documents/budget2.txt")))
+        XCTAssertLessThanOrEqual(rows.filter { $0.kind == .file || $0.kind == .app }.count, 4, "two of each at most")
     }
 
-    func testTheyAreNeverTheTopHitOrTheTypedRow() {
-        let local = LocalResults(query: "fixture", apps: [], files: [hit("fixture.txt"), hit("fixture2.txt")])
-        let tabs = (1...4).map { candidate("t\($0)", "Fixture \($0)", "https://example.com/\($0)") }
-        let rows = rank("fixture", bar(tabs: tabs, local: local))
-        XCTAssertNotEqual(rows[0].kind, .file)
-        XCTAssertTrue(rows.contains { $0.kind == .openTyped }, "the typed row stays")
-        let typedAt = rows.firstIndex { $0.kind == .openTyped }!
-        XCTAssertTrue(rows[...typedAt].allSatisfy { $0.kind != .file })
-        XCTAssertEqual(rows.count, 5)
-    }
-
-    func testExactURLPrecedenceStaysAndAnAddressHasNoRows() {
+    func testAnAddressListsTheTabAndNoFileRows() {
         let tab = candidate("t1", "Home", "https://example.com/")
         let local = LocalResults(query: "https://example.com/", apps: [], files: [hit("example.txt")])
         let rows = rank("https://example.com/", bar(tabs: [tab], local: local))
-        XCTAssertEqual(rows.first?.kind, .switchToTab)
+        XCTAssertEqual(rows.prefix(2).map(\.kind), [.openTyped, .switchToTab], "as in Arc: the typed address, then the tab showing it")
         XCTAssertFalse(rows.contains { $0.kind == .file })
     }
 
@@ -260,11 +255,11 @@ final class QuickSourceRowsTests: XCTestCase {
         for text in ["left", "half", "right", "maximize", "center", "next", "window", "display"] {
             XCTAssertFalse(rank(text, bar()).contains { if case .window(.place) = $0.command { true } else { false } }, text)
         }
+        // The exact name of a place is a command typed in full: it leads, as Arc's commands do ("dark mode").
         let rows = rank("left half", bar(suggestions: ["left half a", "left half b", "left half c"], suggestedFor: "left half"))
-        XCTAssertEqual(rows.first?.kind, .openTyped, "Return still searches")
-        XCTAssertEqual(rows.last?.command, .window(.place(.leftHalf)), "low down")
-        XCTAssertEqual(rows.count, 5)
-        XCTAssertEqual(rank("next display", bar()).last?.command, .window(.place(.nextDisplay)))
+        XCTAssertEqual(rows.first?.command, .window(.place(.leftHalf)))
+        XCTAssertTrue(rows.contains { $0.kind == .openTyped }, "the search stays")
+        XCTAssertEqual(rank("next display", bar()).first?.command, .window(.place(.nextDisplay)))
         var editing = bar()
         editing.createsTab = false
         XCTAssertFalse(rank("left half", editing).contains { if case .window(.place) = $0.command { true } else { false } })

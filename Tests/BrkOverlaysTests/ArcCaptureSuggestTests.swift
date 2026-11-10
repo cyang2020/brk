@@ -53,7 +53,7 @@ final class ArcCaptureSuggestTests: XCTestCase {
         let domain = Suggest.completion("doc", bar: bar, appName: "Brk")
         XCTAssertEqual(domain, "docs.google.com")
         let list = Suggest.rank(query: "doc", bar: bar, appName: "Brk", resolve: fakeResolve, completing: domain)
-        XCTAssertEqual(Array(rows(list).prefix(4)), ["domain:docs.google.com", "open:doc", "switch:mdn", "switch:docs"])
+        XCTAssertEqual(Array(rows(list).prefix(2)), ["domain:docs.google.com", "open:doc"])
         XCTAssertEqual(list[0].title, "Google Docs")
         XCTAssertNil(list[0].subtitle, "the input already shows the domain")
         XCTAssertEqual(Suggest.siteSearchOffer("doc", completing: domain, bar: bar), googleDocs)

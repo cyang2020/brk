@@ -237,6 +237,9 @@ struct StoredDocV3: Codable {
     var keyOverrides: [ActionID: KeyOverride]
     /// Easels' boards. Absent in files written before Easels existed.
     var easels: [EaselID: StoredEasel]? = nil
+    /// The command bar's learning from use. Absent in files written before it existed.
+    var commandUsage: [ProfileID: [String: CommandUsage]]? = nil
+    var foreground: [ProfileID: [String: Double]]? = nil
 
     struct StoredEasel: Codable {
         var title: String, titleSize: Double, createdAt: Instant, modifiedAt: Instant, profile: ProfileID
@@ -321,7 +324,7 @@ struct StoredDocV3: Codable {
         var fromProfile: ProfileID?
         var structure: ArchivedNode?
     }
-    struct StoredHistory: Codable { var url: URL, title: String, visitedAt: Instant, profile: ProfileID; var id: HistoryVisitID? = nil }
+    struct StoredHistory: Codable { var url: URL, title: String, visitedAt: Instant, profile: ProfileID; var id: HistoryVisitID? = nil; var typed: Bool? = nil }
     struct StoredWindow: Codable {
         var bounds: CGRect?
         var space: SpaceID
@@ -371,7 +374,7 @@ struct StoredDocV3: Codable {
                            fromSpace: $0.fromSpace, fromSection: $0.fromSection, fromParent: $0.fromParent, fromIndex: $0.fromIndex, fromProfile: $0.fromProfile, structure: $0.structure)
         }
         history = historyIndex(doc.history).map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: $0.profile, id: $0.id) }
-        historyVisits = doc.history.map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: $0.profile, id: $0.id) }
+        historyVisits = doc.history.map { StoredHistory(url: $0.url, title: $0.title, visitedAt: $0.visitedAt, profile: $0.profile, id: $0.id, typed: $0.typed ? true : nil) }
         windows = doc.windows.filter { $0.value.isPersistent }.mapValues {
             StoredWindow(bounds: $0.bounds, space: $0.space, activeBySpace: $0.activeBySpace, sidebarVisible: $0.sidebarVisible, sidebarWidth: $0.sidebarWidth,
                          toolbarVisible: $0.toolbarVisible, spaceHeaderVisible: $0.spaceHeaderVisible,
@@ -390,6 +393,8 @@ struct StoredDocV3: Codable {
         }
         linkRoutes = doc.linkRoutes
         keyOverrides = doc.keyOverrides
+        commandUsage = doc.commandUsage.isEmpty ? nil : doc.commandUsage
+        foreground = doc.foreground.isEmpty ? nil : doc.foreground
         easels = doc.easels.isEmpty ? nil : doc.easels.mapValues {
             StoredEasel(title: $0.title, titleSize: $0.titleSize, createdAt: $0.createdAt, modifiedAt: $0.modifiedAt, profile: $0.profile, elements: $0.elements)
         }
@@ -547,7 +552,7 @@ struct StoredDocV3: Codable {
                 var id = value.id ?? HistoryVisitID(ctx.newID())
                 if !seen.insert(id).inserted { id = HistoryVisitID(ctx.newID()); seen.insert(id) }
                 return HistoryEntry(id: id, url: value.url, title: value.title,
-                                    visitedAt: usable(value.visitedAt, "history \(value.url): visitedAt"), profile: value.profile)
+                                    visitedAt: usable(value.visitedAt, "history \(value.url): visitedAt"), profile: value.profile, typed: value.typed ?? false)
             }
         }
         var restoredSidebarData = sidebarData ?? SidebarDataSaved()
@@ -592,6 +597,11 @@ struct StoredDocV3: Codable {
             keyOverrides: keyOverrides
         )
         doc.tabPreferences = tabPreferences ?? TabPreferences()
+        // Usage of a profile that no longer exists is dropped; runs are kept newest last, at most `CommandUsage.kept`.
+        doc.commandUsage = (commandUsage ?? [:]).filter { doc.profiles[$0.key] != nil }.mapValues { byKey in
+            byKey.mapValues { CommandUsage(runs: Array($0.runs.filter { Instant.supported.contains($0) }.sorted().suffix(CommandUsage.kept)), count: max($0.count, $0.runs.count)) }
+        }
+        doc.foreground = (foreground ?? [:]).filter { doc.profiles[$0.key] != nil }.mapValues { $0.filter { $0.value.isFinite && $0.value > 0 } }
         for (id, stored) in easels ?? [:] {
             let title = stored.title.trimmingCharacters(in: .whitespacesAndNewlines)
             let elements = stored.elements.filter { $0.frame.minX.isFinite && $0.frame.minY.isFinite && $0.frame.width.isFinite && $0.frame.height.isFinite }

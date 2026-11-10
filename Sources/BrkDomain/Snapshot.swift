@@ -632,6 +632,19 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var definition: BarDefinition? = nil
     /// A private window lists nothing of the user's: no history, no bookmarks, no files.
     public var isPrivate: Bool = false
+    /// What the ranking reads beside each row (`ArcRanking`): the profile's most visited pages, best first (Chromium's
+    /// most-visited list), each site's engagement score by "scheme://host" (`SiteEngagement`), and each command's runs
+    /// from the bar by `Suggest.usageKey`.
+    public var mostVisited: [URL] = []
+    public var siteEngagement: [String: Double] = [:]
+    public var commandUsage: [String: CommandUsageRow] = [:]
+}
+
+/// How often a command was chosen in the command bar and when last.
+public struct CommandUsageRow: Sendable, Equatable, Codable {
+    public var count: Int
+    public var lastRun: Instant
+    public init(count: Int, lastRun: Instant) { self.count = count; self.lastRun = lastRun }
 }
 
 public struct FolderDestinationCandidate: Sendable, Equatable, Codable {
@@ -682,12 +695,25 @@ public struct SwitchCandidate: Sendable, Equatable, Codable {
     public var spaceTitle: String?
     public var inCurrentSpace: Bool
     public var isFocused: Bool
+    /// How deep a saved tab sits (Arc's save level, lower is more saved): a Favorite 1, a pinned tab 2, one more per
+    /// folder; nil for a Today tab.
+    public var saveLevel: Int? = nil
+    public var isFavorite: Bool = false
+    /// The name the user gave the tab, if any.
+    public var customTitle: String? = nil
 }
 
 public struct HistoryCandidate: Sendable, Equatable, Codable {
     public var url: URL
     public var title: String
+    /// The newest visit.
     public var visitedAt: Instant
+    /// Visits in all, and how many of them were typed in the command bar (history rows only).
+    public var visitCount: Int = 1
+    public var typedCount: Int = 0
+    /// A saved tab's place, as on `SwitchCandidate` (bookmark rows only).
+    public var saveLevel: Int? = nil
+    public var isFavorite: Bool = false
 }
 
 public struct ArchiveSnapshot: Sendable, Equatable, Codable {
