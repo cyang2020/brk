@@ -1,0 +1,82 @@
+name: Bug report
+description: Something in Brk is broken, crashes, or stopped working.
+labels:
+  - bug
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Help › Report a Bug…** in Brk opens this form with the version, macOS, Mac and engine already filled in.
+        One problem per report, please. Search [existing issues](https://github.com/cyang2020/brk/issues?q=is%3Aissue) first.
+        If Brk looks or behaves differently from Arc, the [Arc parity form](https://github.com/cyang2020/brk/issues/new?template=arc_parity.yml) fits better.
+        Security problems go to a [private advisory](https://github.com/cyang2020/brk/security/advisories/new), not here.
+
+  - type: input
+    id: version
+    attributes:
+      label: Brk version and commit
+      description: Brk › About Brk, or Help › Troubleshooting › Copy Brk Info.
+      placeholder: Brk 1.0 (1), commit 1a2b3c4d
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: Version 26.1 (Build 25B78)
+    validations:
+      required: true
+
+  - type: input
+    id: mac
+    attributes:
+      label: Mac
+      description: Apple silicon or Intel.
+      placeholder: Apple silicon (arm64)
+    validations:
+      required: true
+
+  - type: input
+    id: engine
+    attributes:
+      label: Engine
+      description: Filled in by Help › Report a Bug…. Leave it as it is if you are not sure.
+      placeholder: Chromium 154.0.7795.0 (CEF)
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The shortest list of steps that shows the problem, starting from a fresh window if you can.
+      placeholder: |
+        1. Open a new window with ⌘N
+        2. Press ⌘T and type "time in tokyo"
+        3. Press Return
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Screenshots or a short screen recording help a lot. Drag them into this box.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or crash report
+      description: |
+        After a crash, Brk offers to fill this in from the crash report. Otherwise paste the relevant lines from
+        ~/Library/Logs/DiagnosticReports (files named Brk-…). Remove anything private before you submit.
+      render: text

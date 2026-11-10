@@ -390,8 +390,10 @@ public enum HelpAction: Hashable, Sendable, Codable {
     case releaseNotes
     /// Arc's help center (the command bar's Help Center row opens the same page).
     case helpCenter
-    /// A new issue on Brk's repository, its body filled with Copy {app} Info's text.
-    case contactTeam
+    /// Help > Report a Bug…: the repository's bug report form in a new tab, the build, macOS, chip and engine filled in.
+    case reportBug
+    /// Help > Send Feedback… and Contact the Team: the repository's feedback form in a new tab, the build filled in.
+    case sendFeedback
     /// The Restore Data window: pick a saved copy of the state file, check it, restore and relaunch.
     case restoreData
     /// Record Trace: starts a Chromium trace; while one records, the row stops it and saves the file.

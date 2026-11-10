@@ -217,6 +217,7 @@ final class AppUnderTest {
             }
         }
         environment["BRK_SUGGEST_URL"] = site.url("suggest").absoluteString
+        if scenarioID.hasPrefix("HelpReport") { environment["BRK_CRASH_REPORTS_DIR"] = HelpReportScenarios.crashFolder(self).path }
         if scenarioID.hasPrefix("TabTools") || scenarioID.hasPrefix("SidebarTools") || scenarioID.hasPrefix("R36") || scenarioID.hasPrefix("R49") { environment["BRK_GITHUB_FIXTURE_BASE"] = site.baseURL.absoluteString }
         if scenarioID.hasPrefix("SiteFilters") {
             // Port 9 (discard) refuses connections: the offline scenario's downloads find no server.

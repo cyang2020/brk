@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brk: Arc, but better</title>
+  <meta name="description" content="Brk is a native macOS browser that rebuilds Arc pixel for pixel, with an upgraded ⌘T, AI on your Mac with no new subscription, and an agent that can see your tabs. Free and open source.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0d1a" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://cyang2020.github.io/brk/">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Brk: Arc, but better">
+  <meta property="og:description" content="A native macOS rebuild of Arc, with an upgraded ⌘T and AI that runs on your Mac. Free and open source.">
+  <meta property="og:url" content="https://cyang2020.github.io/brk/">
+  <meta property="og:image" content="https://cyang2020.github.io/brk/media/ai-panel-answer.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#top" aria-label="Brk home"><img src="icon.png" width="28" height="28" alt=""><span>Brk</span></a>
+    <nav aria-label="Sections">
+      <a href="#cmdt">⌘T</a>
+      <a href="#everyday">Everyday</a>
+      <a href="#ai-on-your-mac">AI</a>
+      <a href="#parity">Arc parity</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/cyang2020/brk">GitHub</a>
+    </nav>
+    <a class="button small" href="https://github.com/cyang2020/brk/releases/tag/latest">Download</a>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <img class="hero-icon" src="icon.png" width="128" height="128" alt="The Brk icon">
+      <h1>Arc, <span class="gradient">but better.</span></h1>
+      <p class="lede">Everything you know from Arc is here: the sidebar, Spaces, Favorites, Pinned tabs, split view, Little Arc, Peek, Boosts, the Library and the command bar. Brk rebuilds Arc 1.170 natively for macOS, then adds the things Arc never had.</p>
+      <div class="actions">
+        <a class="button" href="https://github.com/cyang2020/brk/releases/tag/latest">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>
+          Download for Mac
+        </a>
+        <a class="button ghost" href="https://github.com/cyang2020/brk">View on GitHub</a>
+      </div>
+      <p class="meta">
+        <span>Apple silicon and Intel</span>
+        <span>macOS 14 Sonoma or later</span>
+        <span>No account</span>
+        <a class="badge" href="https://github.com/cyang2020/brk/blob/main/LICENSE">MIT License</a>
+      </p>
+      <img class="shot hero-shot" src="hero.webp" width="1600" height="1000" fetchpriority="high" alt="Brk with the sidebar, a Wikipedia page and the AI panel answering with a table">
+    </section>
+
+    <section class="feature" id="cmdt">
+      <p class="eyebrow"><span class="num blue">1</span> Basic upgrades</p>
+      <h2>⌘T, upgraded</h2>
+      <p class="lede">Inspired by Raycast, the command bar does much more than open pages. Type, and the answer is already there. Type a word and press <kbd>Tab</kbd> to switch the bar into a mode.</p>
+      <img class="shot" src="media/cmdt-quick-actions.gif" width="800" height="357" loading="lazy" decoding="async" alt="Quick actions in the command bar">
+      <dl class="modes">
+        <div><dt><code>2^10 * 3</code> <code>15% of 240</code></dt><dd>The answer in the bar. Return copies it.</dd></div>
+        <div><dt><code>100 usd in eur</code> <code>time in tokyo</code></dt><dd>Currency, unit and time-zone conversions.</dd></div>
+        <div><dt><code>file</code> + Tab</dt><dd>Files on your Mac by name, from the Spotlight index in about a tenth of a second.</dd></div>
+        <div><dt><code>app</code> + Tab, or the app's name</dt><dd>Open any app.</dd></div>
+        <div><dt><code>translate</code> + Tab</dt><dd>Translate text, or the whole page.</dd></div>
+        <div><dt><code>window</code> + Tab, or <code>left half</code></dt><dd>Put the window on a half, centre it, maximise it or move it to the next display.</dd></div>
+        <div><dt><code>claude</code> <code>gpt</code> <code>gemini</code> + Tab</dt><dd>Ask that agent, with the current tab attached.</dd></div>
+        <div><dt><code>emoji</code> <code>define</code> <code>color</code> + Tab</dt><dd>Find an emoji, look up a word in the macOS dictionary, read a colour in hex, RGB and HSL.</dd></div>
+        <div><dt>A site's name + Tab</dt><dd>Search inside that site.</dd></div>
+        <div><dt><code>dark mode</code> <code>new space</code></dt><dd>Run any menu command by name.</dd></div>
+      </dl>
+      <p>The ordinary results (open tabs, history, suggestions, top sites) are ranked by a port of Arc's own scoring, so the first row is the one Arc would pick. It learns from you: pages you type often and commands you run rise to the top.</p>
+    </section>
+
+    <section class="feature" id="everyday">
+      <p class="eyebrow"><span class="num purple">2</span> Everyday upgrades</p>
+      <h2>The small things, done right</h2>
+      <div class="cards">
+        <article class="card">
+          <img src="media/library-download-flight.gif" width="700" height="640" loading="lazy" decoding="async" alt="A download flies into the Library button, and resting on the button lists recent downloads">
+          <h3>Downloads where you look</h3>
+          <p>A new download flies from your click into the Library button. Rest the pointer on the button to see your four newest downloads and captures, with progress, preview and drag-out.</p>
+        </article>
+        <article class="card">
+          <img src="media/side-buttons-spaces.gif" width="800" height="576" loading="lazy" decoding="async" alt="Mouse side buttons step through Spaces over the sidebar">
+          <h3>Your mouse works everywhere</h3>
+          <p>Back and forward buttons and mouse-driver swipes go back and forward over a page and switch Spaces over the sidebar. <kbd>⇧⌘]</kbd> and <kbd>⇧⌘[</kbd> step through tabs, and a middle-click on a tab closes it.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="feature" id="ai-on-your-mac">
+      <p class="eyebrow"><span class="num coral">3</span> AI on your Mac</p>
+      <h2>No new subscription</h2>
+      <div class="split">
+        <img class="shot" src="media/local-agents-and-models.png" width="1160" height="1110" loading="lazy" decoding="async" alt="Settings: Claude Code as the AI, and the models on this Mac">
+        <div>
+          <h3>Your plan, not ours</h3>
+          <p>Brk uses the Claude Code or Codex already installed on your Mac, signed in to the Claude or ChatGPT plan you already pay for. No API key and no Brk account.</p>
+          <h3>The small jobs never leave your Mac</h3>
+          <p>Naming tabs and groups, tidying Today into groups and spotting duplicate tabs can run on small models on your Mac (Settings › Max › On This Mac). They don't call a large model, cost nothing and keep working offline.</p>
+          <h3>Search by meaning</h3>
+          <p>Type what a page was about, not its title, and the command bar finds the tab or the page you visited. The index lives on your Mac.</p>
+        </div>
+      </div>
+      <img class="shot narrow" src="media/search-by-meaning.png" width="1480" height="430" loading="lazy" decoding="async" alt="The command bar finding a tab by what it is about">
+    </section>
+
+    <section class="feature" id="more-ai">
+      <p class="eyebrow"><span class="num pink">4</span> More AI, better than Dia</p>
+      <h2>An agent that can see your tabs</h2>
+      <p class="lede">Open the AI panel with <kbd>⌥⌘A</kbd>, or drag a tab to the right edge of the window. Drag in more tabs, or type @ and part of a tab's name. The agent reads them, compares them, and can open, close, group, move and split tabs for you.</p>
+      <img class="shot" src="media/ai-drag-tabs.gif" width="900" height="648" loading="lazy" decoding="async" alt="Dragging tabs into the AI panel">
+      <div class="cards">
+        <article class="card">
+          <img src="media/ai-hover-tabs.gif" width="900" height="648" loading="lazy" decoding="async" alt="Hovering a conversation lights up the tabs it used">
+          <h3>Every conversation is kept, per Space</h3>
+          <p>Come back tomorrow and carry on. Rest the pointer on a conversation and the tabs it used light up in the sidebar.</p>
+        </article>
+        <article class="card">
+          <img src="media/ai-page.png" width="1600" height="1000" loading="lazy" decoding="async" alt="An AI page saved as a tab">
+          <h3>Pages that keep themselves up to date</h3>
+          <p>Ask for a price watch or a weekly reading list. The agent builds a page, you save it as a tab, and it refreshes itself on the schedule you pick.</p>
+        </article>
+      </div>
+      <div class="split reverse">
+        <img class="shot" src="media/approval.png" width="720" height="280" loading="lazy" decoding="async" alt="An approval card in the AI panel">
+        <div>
+          <h3>You stay in charge</h3>
+          <p>Page text is checked for hidden instructions before an agent sees it, and once a conversation has read a page, every tool the agent wants to run waits for your OK.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="feature" id="parity">
+      <p class="eyebrow"><span class="num blue">5</span> Arc, pixel for pixel</p>
+      <h2>The Arc you know</h2>
+      <figure>
+        <img class="shot" src="media/arc-brk-window.png" width="2024" height="606" loading="lazy" decoding="async" alt="Arc 1.170 on the left, Brk on the right">
+        <figcaption>Arc 1.170 on the left, Brk on the right, same window and same pages.</figcaption>
+      </figure>
+      <p>0.14% of the pixels differ, and the visible one is Arc's update button. Sizes, colours, timings and rules are read from Arc's own app and compared with the real Arc on the same screen. Of the 148 Arc features in the ledger, 124 are verified; the <a href="https://github.com/cyang2020/brk#not-in-brk-yet">README lists the rest</a> and why.</p>
+    </section>
+
+    <section class="faq" id="faq">
+      <h2>Questions</h2>
+      <details>
+        <summary>Is Brk made by The Browser Company, or affiliated with Arc?</summary>
+        <p>No. Arc is a trademark of The Browser Company; Brk is an independent project. It rebuilds Arc's design and behaviour from scratch in Swift and does not include Arc's code.</p>
+      </details>
+      <details>
+        <summary>What stays on my Mac?</summary>
+        <p>Brk has no account, no analytics and no server of its own. Your tabs, history and settings stay in your Mac's Application Support folder. Like any browser, Brk talks to the sites you open and to your search engine for suggestions.</p>
+        <p>The small models are downloaded once when you turn them on, then run on your Mac, offline. When you ask the AI something, the tabs and text you give it go to your own agent (Claude Code or Codex), which sends them to Anthropic or OpenAI under your own plan. Nothing goes to Brk.</p>
+      </details>
+      <details>
+        <summary>Which Macs does it run on?</summary>
+        <p>Macs with Apple silicon and Intel Macs, on macOS 14 Sonoma or later. The release page has a download for each.</p>
+      </details>
+      <details>
+        <summary>Does it update itself?</summary>
+        <p>Not yet. New builds are published on the <a href="https://github.com/cyang2020/brk/releases/tag/latest">release page</a>; download the newest one to update. Help › Release Notes in Brk lists what changed in your build.</p>
+      </details>
+      <details>
+        <summary>How do I report a bug or send feedback?</summary>
+        <p>In Brk, choose <b>Help › Report a Bug…</b> or <b>Help › Send Feedback…</b>. A new tab opens GitHub's form with your Brk version, macOS, Mac and engine filled in. You read and edit everything before you submit; nothing is sent automatically. If Brk crashed, the next launch offers to fill the form from the crash report, and you can turn that off.</p>
+        <p>You can also use the forms directly: <a href="https://github.com/cyang2020/brk/issues/new?template=bug_report.yml">bug report</a>, <a href="https://github.com/cyang2020/brk/issues/new?template=arc_parity.yml">Brk differs from Arc</a>, <a href="https://github.com/cyang2020/brk/issues/new?template=feature_request.yml">idea or feedback</a>. Questions go to <a href="https://github.com/cyang2020/brk/discussions">Discussions</a>, and security problems to a <a href="https://github.com/cyang2020/brk/security/advisories/new">private report</a>.</p>
+      </details>
+      <details>
+        <summary>Is it free?</summary>
+        <p>Yes. Brk is open source under the <a href="https://github.com/cyang2020/brk/blob/main/LICENSE">MIT license</a>. The AI features use the Claude or ChatGPT plan you already have, or the free models on your Mac.</p>
+      </details>
+    </section>
+
+    <section class="cta">
+      <img src="icon.png" width="72" height="72" loading="lazy" alt="">
+      <h2>Try Brk</h2>
+      <div class="actions">
+        <a class="button" href="https://github.com/cyang2020/brk/releases/tag/latest">Download for Mac</a>
+        <a class="button ghost" href="https://github.com/cyang2020/brk/blob/main/CONTRIBUTING.md">Contribute</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <nav aria-label="Project">
+      <a href="https://github.com/cyang2020/brk">GitHub</a>
+      <a href="https://github.com/cyang2020/brk/releases">Releases</a>
+      <a href="https://github.com/cyang2020/brk/issues/new/choose">Report a bug</a>
+      <a href="https://github.com/cyang2020/brk/discussions">Discussions</a>
+      <a href="https://github.com/cyang2020/brk/blob/main/.github/SECURITY.md">Security</a>
+      <a href="https://github.com/cyang2020/brk/blob/main/LICENSE">MIT License</a>
+    </nav>
+    <p>Arc is a trademark of The Browser Company; Brk is an independent project and is not affiliated with The Browser Company.</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,62 @@
+name: Arc parity
+description: Arc does something one way and Brk does it differently.
+labels:
+  - arc-parity
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Brk rebuilds Arc 1.170 behaviour by behaviour, so a difference from Arc is a bug unless Brk changed it on purpose
+        (the README lists the deliberate changes). The best reports show both apps doing the same thing.
+        Brk is an independent project and is not affiliated with The Browser Company.
+
+  - type: textarea
+    id: arc
+    attributes:
+      label: What Arc does
+      description: The steps in Arc and what you see.
+      placeholder: |
+        1. …
+        2. …
+        Arc shows …
+    validations:
+      required: true
+
+  - type: textarea
+    id: brk
+    attributes:
+      label: What Brk does
+      description: The same steps in Brk and what you see.
+      placeholder: After the same steps, Brk shows …
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or recordings
+      description: Arc and Brk side by side, at the same window size if you can. Drag the files into this box.
+    validations:
+      required: true
+
+  - type: input
+    id: arc-version
+    attributes:
+      label: Arc version
+      description: Arc › About Arc.
+      placeholder: Arc 1.170.0
+
+  - type: input
+    id: version
+    attributes:
+      label: Brk version and commit
+      placeholder: Brk 1.0 (1), commit 1a2b3c4d
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: Version 26.1 (Build 25B78)

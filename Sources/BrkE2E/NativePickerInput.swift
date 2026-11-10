@@ -335,6 +335,33 @@ enum NativeSystemInput {
         return true
     }
 
+    /// The titles of a main-menu menu's items (`AXMenuBar` > the menu's title > its items), as Accessibility reads them.
+    static func mainMenuTitles(pid: Int32, menu title: String) throws -> [String] {
+        try mainMenuItems(pid: pid, menu: title).map { NativePickerInput.string($0, kAXTitleAttribute) }
+    }
+
+    /// Chooses a main-menu item the way an accessibility client does (AXPress on the item), which runs the item's action.
+    static func chooseMainMenu(pid: Int32, menu title: String, item: String) throws {
+        guard let entry = try mainMenuItems(pid: pid, menu: title).first(where: { NativePickerInput.string($0, kAXTitleAttribute) == item }) else {
+            throw Check(description: "\(title) has no \(item)")
+        }
+        guard AXUIElementPerformAction(entry, kAXPressAction as CFString) == .success else { throw Check(description: "pressing \(item) failed") }
+    }
+
+    private static func mainMenuItems(pid: Int32, menu title: String) throws -> [AXUIElement] {
+        guard let bar = NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXMenuBarAttribute) else { throw Check(description: "no menu bar through Accessibility") }
+        let titles = NativePickerInput.attribute(bar as! AXUIElement, kAXChildrenAttribute) as? [AXUIElement] ?? []
+        guard let holder = titles.first(where: { NativePickerInput.string($0, kAXTitleAttribute) == title }),
+              let menu = (NativePickerInput.attribute(holder, kAXChildrenAttribute) as? [AXUIElement])?.first else { throw Check(description: "no \(title) menu") }
+        return NativePickerInput.attribute(menu, kAXChildrenAttribute) as? [AXUIElement] ?? []
+    }
+
+    /// Presses the button titled `title` in any of the app's windows or sheets (an alert's button, for example).
+    static func pressButton(pid: Int32, title: String) throws {
+        guard let button = NativePickerInput.find(AXUIElementCreateApplication(pid), { node, role in role == kAXButtonRole && NativePickerInput.string(node, kAXTitleAttribute) == title }),
+              AXUIElementPerformAction(button, kAXPressAction as CFString) == .success else { throw Check(description: "no \(title) button to press") }
+    }
+
     /// The status item's menu, opened and chosen through Accessibility (`AXExtrasMenuBar`).
     static func chooseStatusMenu(pid: Int32, title: String) throws {
         let app = AXUIElementCreateApplication(pid)

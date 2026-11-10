@@ -60,7 +60,7 @@ public enum ActionID: String, Hashable, Sendable, Codable, CaseIterable, CodingK
     // Window (168 to 174). Zoom and Bring All to Front are AppKit items.
     case minimize, toggleStayOnTop, viewLibrary, viewDownloads, viewEaselsAndNotes, viewMedia, viewBoosts
     // Help (177 to 189)
-    case gettingStarted, keyboardShortcutsEDU, releaseNotes, contactTheTeam, visitHelpCenter, restoreData, exportArcNotes
+    case gettingStarted, keyboardShortcutsEDU, releaseNotes, contactTheTeam, reportBug, sendFeedback, visitHelpCenter, restoreData, exportArcNotes
     case recordTrace, cancelTrace, openTaskManager, revealArcData, copyArcInfo
 }
 
@@ -135,8 +135,9 @@ public struct ActionSpec: Hashable, Sendable {
 
     /// Brk's own row placed right after this action in its menu (menus order by `row`, and Brk's rows come after Arc's 189).
     public var after: ActionID? = nil
-    /// Where the row sorts in its menu: its own row, or just after `after`'s.
-    public var menuOrder: Double { after.map { Double($0.spec.row) + 0.5 } ?? Double(row) }
+    /// Where the row sorts in its menu: its own row, or just after `after`'s place (a chain of placed rows keeps its
+    /// order and stays before the next Arc row).
+    public var menuOrder: Double { after.map { $0.spec.menuOrder + 0.1 } ?? Double(row) }
 
     /// What the command bar's row runs: the listing's own command, else the item's.
     public var barCommand: Command { commandBar?.command ?? command }
@@ -514,8 +515,13 @@ extension ActionID {
         case .releaseNotes:
             entry(179, "Release Notes", .help, 0, [], .app(.help(.releaseNotes)), bar: listing("clock", "Changelog", "Whats new", "What's new", "{app} updates"))
         case .contactTheTeam:
-            entry(180, "Contact the Team", .help, 0, [], .app(.help(.contactTeam)),
+            // Brk has no team mailbox: Arc's row (and its command bar row) opens the same form as Send Feedback….
+            entry(180, "Contact the Team", .help, 0, [], .app(.help(.sendFeedback)),
                   bar: listing("ellipsis.message", "Idea", "Feedback", "Request", "Feature Request", "Send Feedback", "Report Bug", "Bug", "Question"))
+        // Brk's own, under Contact the Team: GitHub's issue forms, filled with the build, macOS, the Mac's chip and the
+        // engine; nothing is sent until the user submits the form in the tab.
+        case .reportBug: entry(247, "Report a Bug…", .help, 0, [], .app(.help(.reportBug))).placed(after: .contactTheTeam)
+        case .sendFeedback: entry(248, "Send Feedback…", .help, 0, [], .app(.help(.sendFeedback))).placed(after: .reportBug)
         case .visitHelpCenter:
             entry(181, "Visit Help Center", .help, 0, [], .app(.help(.helpCenter)), bar: listing("heart.circle", "Question", "Inquiry", "Help Center", "Help", "Resources"))
         case .restoreData: entry(182, "Restore Data", .help, 0, [], .app(.help(.restoreData)), bar: listing("opticaldiscdrive", "Restore", "Backup"))
