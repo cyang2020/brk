@@ -121,7 +121,9 @@ extension KeyInput {
         guard event.type == .keyDown, let key = Key.byCode(event.keyCode) else { return nil }
         let mask = Modifiers.shift.rawValue | Modifiers.control.rawValue | Modifiers.option.rawValue | Modifiers.command.rawValue
         let chord = KeyChord(Modifiers(rawValue: event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue & mask), key)
-        self.init(press: KeyPress(chord: chord, phase: .down, isRepeat: event.isARepeat, editableFieldFocused: false), stage: .menu,
+        // A native text field (the command bar, a rename field) keeps ⌘Z and the other editing keys.
+        let editing = (event.window?.firstResponder as? NSText)?.isEditable == true
+        self.init(press: KeyPress(chord: chord, phase: .down, isRepeat: event.isARepeat, editableFieldFocused: editing), stage: .menu,
                   pressID: PressID(eventTimestamp: event.timestamp))
     }
 }

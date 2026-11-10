@@ -13,14 +13,14 @@ import Vision
 /// downloaded.
 ///
 /// - `AIRealLocal-none`: no agent on this Mac (the instance searches no folder for one) and no key. Tidy groups by the
-///   search model, Place New Tabs and the duplicate question go to JevK5, the command bar and History find a page by
-///   meaning.
+///   search model and ⌘Z undoes it from a page after its toast has gone, Place New Tabs and the duplicate question go to
+///   JevK5, the command bar and History find a page by meaning, and the `file` mode finds a document by what it is about.
 /// - `AIRealLocal-claude`: Claude Code on its small model. Tidy and Place New Tabs go to the text model, the duplicate
 ///   question still to JevK5, the page check flags a page the phrase patterns miss by JevK5, and @ in the panel finds a
 ///   tab by meaning.
 ///
 /// Opt-in: BRK_E2E_REAL_LOCAL=1 (JevK5 holds 3.2 GB while loaded; the Claude run spends about ten small-model requests
-/// and one tab-session turn). BRK_E2E_REAL_LOCAL_PART=tidy,place,duplicates,bar,history,check,mention picks steps.
+/// and one tab-session turn). BRK_E2E_REAL_LOCAL_PART=tidy,undo,place,duplicates,bar,files,history,check,mention picks steps.
 /// Results: real-local-<agent>.txt in the shots folder.
 enum AIRealLocalScenarios {
     static var all: [Scenario] {
@@ -45,6 +45,22 @@ enum AIRealLocalScenarios {
             if !FileManager.default.fileExists(atPath: target.path) { try FileManager.default.copyItem(at: source, to: target) }
             try Data(model.sha256.utf8).write(to: folder.appendingPathComponent(model.file + ".sha256"))
         }
+    }
+
+    /// Documents for the `file` mode, named as files often are (nothing in the name says what they are about); the texts
+    /// are the first lines of public pages (Wikipedia's Sourdough and Jet lag, RFC 1149).
+    static let files: [(name: String, text: String)] = [
+        ("Document3.txt", "Sourdough is a leavening agent containing naturally occurring yeast and lactobacillus bacteria. It is used to make breads, pancakes and other baked goods, and gives the bread a sour taste."),
+        ("tips.txt", "Jet lag is a temporary physiological condition that occurs when a person's circadian rhythm is out of sync with the time zone they are in, typically after long flights east or west."),
+        ("rfc1149.txt", "A Standard for the Transmission of IP Datagrams on Avian Carriers. Avian carriers can provide high delay, low throughput, and low altitude service."),
+        ("budget 2027.txt", "Rent, groceries, utilities and savings for next year, month by month."),
+    ]
+
+    static func makeFiles(in dataDirectory: URL) throws -> URL {
+        let root = dataDirectory.appendingPathComponent("files-fixture", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for file in files { try Data(file.text.utf8).write(to: root.appendingPathComponent(file.name)) }
+        return root
     }
 
     private final class Log {
@@ -118,6 +134,12 @@ enum AIRealLocalScenarios {
         usleep(300_000)
     }
     private static func click(_ point: CGPoint) throws { try mouse(point, [.mouseMoved, .leftMouseDown, .leftMouseUp]) }
+    /// The Backspace key (no `Key` of its own).
+    private static func backspace() throws {
+        try brkActive()
+        let source = CGEventSource(stateID: .hidSystemState)
+        for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: down)?.post(tap: .cghidEventTap); usleep(20_000) }
+    }
     private static func rightClick(_ point: CGPoint) throws { try mouse(point, [.mouseMoved, .rightMouseDown, .rightMouseUp], button: .right) }
     private static func screen(_ app: AppUnderTest, _ frame: CGRect) throws -> CGPoint {
         let facts = try app.native()
@@ -360,6 +382,21 @@ enum AIRealLocalScenarios {
             return "groups " + groups.map { "\($0.title) (\($0.children.count))" }.joined(separator: ", ") + "; text-model requests \(used)"
         } }
 
+        if agent == nil, wanted("undo") { log.check("⌘Z after Tidy, from a page and after the toast has gone, puts Today back") {
+            guard try !folders(app).isEmpty else { throw Check(description: "no groups to undo (run with tidy)") }
+            try app.waitUntil("the toast gone", timeout: 15) { toast(app) == nil }
+            // A click low in the page, clear of the fixture's text and links, gives the page the keyboard.
+            let area = try app.native().computed.contentArea
+            try click(try screen(app, CGRect(x: area.midX, y: area.maxY - 60, width: 1, height: 1)))
+            try app.waitUntil("the page focused") { try app.native().focusedPage != nil }
+            try key(.command, .z)
+            try app.waitUntil("Today without groups", timeout: 5) { try folders(app).isEmpty }
+            try hover(app, .todayTidy)
+            try click(app, .todayTidy)
+            try app.waitUntil("Today in groups again", timeout: 150) { try !folders(app).isEmpty }
+            return "groups gone on ⌘Z with the page focused; Tidy again: " + (try folders(app)).map { "\($0.title) (\($0.children.count))" }.joined(separator: ", ")
+        } }
+
         if wanted("place") { log.check(agent == nil ? "Place New Tabs without an agent: JevK5 picks the group" : "Place New Tabs with an agent: the text model picks the group") {
             guard try !folders(app).isEmpty else { throw Check(description: "no groups to place into (run with tidy)") }
             let before = try usage(app, AIFeature.tabPlacement.title)
@@ -424,6 +461,30 @@ enum AIRealLocalScenarios {
             try app.waitUntil("the Lisbon tab shown") { try tabs(app).first { $0.id == lisbon.id }?.status == .current }
             try expect(drawn.contains("Lisbon"), "the bar did not draw it: \(drawn.prefix(300))")
             return "row “\(found.title)” drawn and clicked; the tab is shown"
+        } }
+
+        if wanted("files") { log.check("Files by meaning: in the file mode, “bread made with wild yeast” finds Document3.txt") {
+            try WindowServerKeys.ensureFrontmost(app, app.window!)
+            try key(.command, .t)
+            try app.waitUntil("the command bar") { try bar(app) != nil }
+            try type("file")
+            try key([], .tab)
+            app.sleep(0.5)
+            let query = "bread made with wild yeast"
+            var found: [LocalHit] = []
+            // The first file search starts the index: type again until it has read the folder.
+            for attempt in 0..<4 where !found.contains(where: { $0.name == "Document3.txt" }) {
+                if attempt > 0 { for _ in query { try backspace() }; app.sleep(3) }
+                try type(query)
+                try? app.waitUntil("files by meaning", timeout: 8) {
+                    found = try bar(app)?.local?.files ?? []
+                    return try bar(app)?.local?.query == query && found.contains { $0.name == "Document3.txt" }
+                }
+            }
+            _ = shot(app, "files-\(name)")
+            try expect(found.first?.name == "Document3.txt", "files: \(found.map(\.name))")
+            try key([], .escape); try key([], .escape)
+            return "rows \(found.map(\.name))"
         } }
 
         if wanted("history") { log.check("Search by meaning on the History page: “\(query)” lists the Lisbon visit under Found by meaning") {

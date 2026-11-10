@@ -55,6 +55,17 @@ final class MeaningRowsTests: XCTestCase {
         XCTAssertEqual(archived.first { $0.kind == .meaning }?.hint, "Archived")
     }
 
+    /// A file found by meaning opens the file, and only a new-tab bar lists files (as the rows found by name).
+    func testAFileFoundByMeaningOpensItInANewTabBarOnly() {
+        let text = "bread made with wild yeast"
+        let file = MeaningCandidates(text: text, rows: [MeaningCandidate(place: .file, title: "Document3.docx", url: URL(fileURLWithPath: "/Users/u/Document3.docx"))])
+        let rows = rank(text, bar(meaning: file))
+        XCTAssertEqual(rows.first { $0.command == .commandBar(.local(.open, path: "/Users/u/Document3.docx")) }?.title, "Document3.docx")
+        var editing = bar(meaning: file)
+        editing.createsTab = false
+        XCTAssertFalse(rank(text, editing).contains { $0.command == .commandBar(.local(.open, path: "/Users/u/Document3.docx")) })
+    }
+
     func testNothingChangesWithoutAnAnswerForThisText() {
         let text = "上周那篇讲数据库的"
         let plain = rank(text, bar(tabs: [mysql, soup]))

@@ -4,7 +4,7 @@ import BrkDomain
 import Foundation
 import os
 
-/// Finds files for the command bar. File names only, never contents.
+/// Finds files for the command bar by name (Spotlight's index); files by what they are about come from `FileMeaningIndex`.
 @MainActor
 protocol LocalFileFinder: AnyObject {
     /// Hits for `name`, the source's best first, without what `LocalSources.isExcluded` leaves out. Ends early on cancellation.
@@ -24,6 +24,9 @@ final class LocalSearch {
     /// Ordinary typing also looks in the file index (off, the `file` prefix does). See `live`.
     private let filesWhileTyping: Bool
     private var pending: [WindowID: Task<Void, Never>] = [:]
+    /// Files by meaning for the `file` mode (`FileMeaningIndex`, started by the first file search); merged with the
+    /// names Spotlight found by `LocalSources.merge`.
+    var fileMeaning: (@MainActor (String) async -> [LocalHit])?
 
     init(send: @escaping @MainActor (Input) -> Void, finder: (any LocalFileFinder)?, applicationRoots: [URL], filesWhileTyping: Bool = true,
          debounce: Duration = .seconds(Metrics.commandBar.suggestionDebounce.value)) {
@@ -67,12 +70,15 @@ final class LocalSearch {
         guard let finder else { return }
         let roots = applicationRoots, debounce = debounce, send = send
         let wantsFiles = request.scope == .files || (request.scope == .filesAndApps && filesWhileTyping)
+        let meaning = request.scope == .files ? fileMeaning : nil
         pending[window] = Task { @MainActor [weak self] in
             try? await Task.sleep(for: debounce)
             guard !Task.isCancelled else { return }
             let apps = request.scope != .files ? await Task.detached(priority: .userInitiated) { Self.apps(named: request.name, in: roots) }.value : []
             guard !Task.isCancelled else { return }
-            let files = wantsFiles ? LocalSources.rank(await finder.find(request.name), needle: request.name) : []
+            var files = wantsFiles ? LocalSources.rank(await finder.find(request.name), needle: request.name) : []
+            guard !Task.isCancelled else { return }
+            if let meaning { files = LocalSources.merge(names: files, meaning: await meaning(request.name)) }
             guard !Task.isCancelled else { return }
             self?.pending[window] = nil
             send(.system(.localResults(window, LocalResults(query: request.query, scope: request.scope, apps: apps, files: files))))

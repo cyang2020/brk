@@ -43,9 +43,10 @@ public struct MeaningResults: Hashable, Sendable, Codable {
     }
 }
 
-/// One command bar row found by meaning, resolved against the state: an open tab to switch to, or an address to open.
+/// One command bar row found by meaning, resolved against the state: an open tab to switch to, an address to open, or a
+/// file on this Mac (its `url` a file URL).
 public struct MeaningCandidate: Hashable, Sendable, Codable {
-    public enum Place: String, Hashable, Sendable, Codable { case tab, history, archive, conversation }
+    public enum Place: String, Hashable, Sendable, Codable { case tab, history, archive, conversation, file }
     public var place: Place
     public var title: String
     public var url: URL
@@ -73,11 +74,15 @@ public struct HistoryMeaning: Equatable, Sendable, Codable {
 }
 
 public enum MeaningSearch {
-    /// Similarity a match needs. Measured on slice B's 121 labelled tabs (cf04c1ef94:verify/ai-native/b2-local-wiring/results/
-    /// search-scores.json): the right tab scored 0.70 to 0.88 (median 0.81) for the 35 labelled queries, the best tab
-    /// for a query nothing answers 0.63 to 0.76 ("asdf" 0.755). At 0.76, 33 of the 35 right tabs pass and none of the
-    /// unrelated queries does.
-    public static let minimumScore = 0.76
+    /// A match needs both: this similarity, and `minimumLead` above the query's median similarity over the whole index.
+    /// Measured on 32 paraphrased queries that share no word with the right page, over 40 real pages, plus 12 queries no
+    /// page answers (~/brk-evidence/local-models-quality). The old single cut-off, 0.76 (fitted on queries that mostly
+    /// shared a word with their tab), let 10 of the 32 through: right pages scored 0.65 to 0.83, while vague texts
+    /// ("asdf", "lorem ipsum", "hello") reached 0.74 against every page alike, so no fixed number separates them. The
+    /// median is each query's own baseline: 27 of 32 found, and none of the 12 unrelated queries; 16 of 20 and 0 of 5 on
+    /// queries written after the choice.
+    public static let minimumScore = 0.68
+    public static let minimumLead = 0.10
     /// Shorter texts are not asked about (a letter or two matches everything a little).
     public static let minimumLength = 2
 
@@ -152,6 +157,9 @@ extension AppState {
         case "conversation":
             guard let conversation = doc.conversations[AIRequestID(raw)], conversation.profile == profile else { return nil }
             return MeaningCandidate(place: .conversation, title: conversation.title, url: ConversationPage.url(conversation.id), tab: nil)
+        case "file":
+            guard raw.hasPrefix("/") else { return nil }
+            return MeaningCandidate(place: .file, title: (raw as NSString).lastPathComponent, url: URL(fileURLWithPath: raw), tab: nil)
         default:
             return nil
         }
@@ -248,5 +256,34 @@ extension AppState {
         let route = AIDecisionRoute.resolve(doc.settings.max, keys: storedKeys, localReady: session.ai.localDecisions, basic: basicRoute, yesNo: true)
         if case .textModel(.unavailable) = route { return false }
         return true
+    }
+}
+
+// MARK: Page descriptions
+
+/// What search by meaning reads of a page besides its title: the page's own short description (`PageDescription.script`).
+public enum PageDescription {
+    /// At most this many characters are kept.
+    public static let limit = 300
+    /// Runs in a loaded page: its meta description, else og:description, else the first paragraph of 80 characters or
+    /// more (Wikipedia has no meta description; its first paragraph says what the article is about), whitespace folded,
+    /// footnote marks like [3] dropped, cut to `limit`.
+    public static let script = """
+    (()=>{const m=n=>{const e=document.querySelector('meta[name="'+n+'" i],meta[property="'+n+'" i]');return e&&e.content?e.content:''};\
+    let t=m('description')||m('og:description');if(!t.trim()){for(const p of document.querySelectorAll('p')){\
+    const s=(p.innerText||p.textContent||'').replace(/\\[\\d+\\]/g,'').replace(/\\s+/g,' ').trim();if(s.length>=80){t=s;break}}}\
+    return t.replace(/\\s+/g,' ').trim().slice(0,\(limit))})()
+    """
+}
+
+extension AppState {
+    /// The page a browser shows when search by meaning may read its description: a tab of a profile (never a private
+    /// window's) on a web address, with its committed address.
+    public func describablePage(_ token: BrowserToken) -> (page: PageID, url: URL)? {
+        guard let (page, live) = session.live.first(where: { $0.value.browser == token }),
+              doc.windows[page.window]?.kind == .standard, case .profile = browsingContext(of: page.item),
+              let url = doc.windows[page.window]?.slots[page.item]?.committedURL,
+              let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http", live.failure == nil else { return nil }
+        return (page, url)
     }
 }

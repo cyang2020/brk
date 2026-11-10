@@ -13,6 +13,17 @@ extension Work {
         guard var memory = state.session.windows[window]?.keyRouting else { return false }
         // The map is the table plus the user's overrides (F4); a conflicting chord routes to no one.
         let map = state.doc.keyOverrides.isEmpty ? KeyRouting.defaultMap : KeyMap(overrides: state.doc.keyOverrides)
+        // ⌘Z with no text field focused undoes Tidy while its groups are as Tidy left them. Arc 1.170 keeps Tidy on the
+        // same undo list as Archive Tab (its binary's "Undo prompt for tidying explore tabs"): ⌘Z reaches it from the
+        // sidebar and from a page, after its toast has gone (probed 2026-11-10: an archived tab came back on ⌘Z
+        // pressed 6 s after a click into another page). A text field keeps ⌘Z for its own typing.
+        if key.press.phase == .down, !key.press.isRepeat, !key.press.editableFieldFocused, key.stage != .afterPage,
+           map.lookup(key.press.chord)?.0 == .undo, state.tidyUndo(in: window) != nil {
+            if state.session.windows[window]?.toastUndo == .tidy { undoFromToast(in: window) } else { undoAIOrganize(in: window) }
+            keyHandled = true
+            keyAction = .aiUndoOrganize
+            return true
+        }
         let decision = KeyRouting.decide(key, map: map, memory: &memory, now: ctx.now)
         // Undo to Select All are no Chromium shortcut: the page's own editing keys go on as before.
         if key.press.phase == .down, let (action, _) = map.lookup(key.press.chord), !key.press.isRepeat || action.spec.repeats, action.standardEdit == nil {

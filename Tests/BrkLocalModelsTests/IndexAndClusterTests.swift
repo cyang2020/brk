@@ -70,13 +70,14 @@ final class IndexAndClusterTests: XCTestCase {
     }
 
     func testFileRoundTripsAndRejectsAnotherSize() {
-        let data = SemanticIndex.encode(keys: ["tab:1", "history:https://a/"], kinds: [.tab, .history], fingerprints: [7, 9],
+        let data = SemanticIndex.encode(keys: ["tab:1", "history:https://a/"], kinds: [.tab, .history], fingerprints: [7, 9], descriptions: [0, 11],
                                         vectors: [[0.5, -0.25, 1, 0], [0, 0, 0, 1]], dimensions: 4)
         let decoded = SemanticIndex.decode(data, dimensions: 4)
         XCTAssertEqual(decoded?.0, ["tab:1", "history:https://a/"])
         XCTAssertEqual(decoded?.1, [.tab, .history])
         XCTAssertEqual(decoded?.2, [7, 9])
-        XCTAssertEqual(decoded?.3.first, [0.5, -0.25, 1, 0])
+        XCTAssertEqual(decoded?.3, [0, 11])
+        XCTAssertEqual(decoded?.4.first, [0.5, -0.25, 1, 0])
         XCTAssertNil(SemanticIndex.decode(data, dimensions: 8))
         XCTAssertNil(SemanticIndex.decode(data.prefix(data.count - 1), dimensions: 4))
     }
@@ -84,9 +85,55 @@ final class IndexAndClusterTests: XCTestCase {
     func testClustersMergeCloseVectorsOnly() {
         let vectors = [[1, 0, 0], [0.95, 0.1, 0], [0, 1, 0], [0.05, 0.98, 0], [0, 0, 1]].map { VectorMath.normalized($0.map(Float.init)) }
         XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: 0.7), [[0, 1], [2, 3], [4]])
-        XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: -1).count, 1)
+        XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: -1, centred: -2).count, 1)
         XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: 1.01).count, 5)
         XCTAssertEqual(EmbeddingGroups.clusters([], threshold: 0.7), [])
+    }
+
+    /// The README's failure: eight tabs of one broad subject sit above the similarity check together, so it alone made
+    /// one group. Two clusters must also be more alike than the list as a whole.
+    func testClustersSplitAListOfOneBroadSubject() {
+        let shared: [Float] = [3, 0, 0, 0]
+        let css = (0..<4).map { i in VectorMath.normalized(zip(shared, [0, 1, Float(i) * 0.05, 0]).map(+)) }
+        let swift = (0..<4).map { i in VectorMath.normalized(zip(shared, [0, 0, Float(i) * 0.05, 1]).map(+)) }
+        let vectors = css + swift
+        XCTAssertEqual(EmbeddingGroups.clusters(vectors, threshold: 0.68, centred: -2), [Array(0..<8)], "the similarity check alone: one group")
+        XCTAssertEqual(EmbeddingGroups.clusters(vectors), [[0, 1, 2, 3], [4, 5, 6, 7]])
+    }
+
+    /// A page read this session is embedded with its description; after a relaunch nothing is read until the page loads
+    /// again, and its vector stays; a different description is embedded again.
+    func testDescriptionsAreEmbeddedOnceAndKept() async throws {
+        let calls = LockedCounter()
+        let index = SemanticIndex(file: folder.appendingPathComponent("d.vectors"), dimensions: 4)
+        let embedder = TableEmbedder(table: table, calls: calls)
+        let plain = IndexEntry(kind: .tab, id: "1", title: "Perseverance (rover)", url: "https://en.wikipedia.org/wiki/Perseverance")
+        XCTAssertEqual(plain.text, .document(title: nil, text: "Perseverance (rover) (en.wikipedia.org)"))
+        var described = plain
+        described.description = "Perseverance is a NASA rover exploring Mars."
+        XCTAssertEqual(described.text, .document(title: nil, text: "Perseverance (rover) (en.wikipedia.org). Perseverance is a NASA rover exploring Mars."))
+        _ = try await index.reconcile([plain], embedder: embedder)
+        _ = try await index.reconcile([described], embedder: embedder)
+        XCTAssertEqual(calls.value, 2, "the description arrived: embedded again")
+        _ = try await index.reconcile([plain], embedder: embedder)
+        XCTAssertEqual(calls.value, 2, "no description known: the described vector stays")
+        described.description = "Another text."
+        _ = try await index.reconcile([described], embedder: embedder)
+        XCTAssertEqual(calls.value, 3)
+    }
+
+    /// A vague text is about as close to everything: nothing passes the lead over the query's median. A real one stands out.
+    func testSearchNeedsALeadOverTheQuerysMedian() async throws {
+        let index = SemanticIndex(file: folder.appendingPathComponent("s.vectors"), dimensions: 4)
+        let table: [String: [Float]] = ["a": [1, 0, 0, 0], "b": [0, 1, 0, 0], "c": [0, 0, 1, 0], "d": [0, 0, 0, 1], "e": [0.7, 0.7, 0, 0]]
+        let all = ["a", "b", "c", "d", "e"].map { IndexEntry(kind: .tab, id: $0, title: $0, url: "") }
+        _ = try await index.reconcile(all, embedder: TableEmbedder(table: table, calls: LockedCounter()))
+        let vague = await index.search(VectorMath.normalized([1, 1, 1, 1]), minimum: 0.3, lead: 0.25)
+        XCTAssertEqual(vague.map(\.key), [], "0.5 against four of five, 0.71 against one: under the median plus 0.25")
+        let real = await index.search(VectorMath.normalized([1, 0.1, 0, 0]), minimum: 0.3, lead: 0.25)
+        XCTAssertEqual(real.map(\.key), ["tab:a", "tab:e"])
+        let floor = await index.search(VectorMath.normalized([1, 0.1, 0, 0]), minimum: 0.9, lead: 0.25)
+        XCTAssertEqual(floor.map(\.key), ["tab:a"])
     }
 
     func testNearestAndDuplicateCandidates() {

@@ -564,8 +564,16 @@ public enum Suggest {
         }
         if !isAddress, !bar.fillsPane, let meaning = bar.meaning, meaning.text == text {
             let focused = bar.tabs.first(where: \.isFocused)?.url
-            for found in meaning.rows.filter({ $0.url != focused }).prefix(meaningCandidates) {
+            // Files only in a new-tab bar, like the file rows found by name.
+            for found in meaning.rows.filter({ $0.url != focused && ($0.place != .file || bar.createsTab) }).prefix(meaningCandidates) {
                 let title = found.title.isEmpty ? displayURL(found.url) : found.title
+                if found.place == .file {
+                    let hit = LocalHit(path: found.url.path, name: title)
+                    var built = command(fileRow(hit), title: title, triggers: [])
+                    built.candidate.dedupKey = "file:" + found.url.path
+                    out.append(built)
+                    continue
+                }
                 if found.place == .conversation, let id = ConversationPage.id(of: found.url) {
                     var candidate = ArcRanking.Candidate(archetype: .assistantHistory, autocompleteText: title, dedupKey: "conversation:\(id)")
                     candidate.features = ArcRanking.matchFeatures(text, url: nil, title: title, hotWords: [])

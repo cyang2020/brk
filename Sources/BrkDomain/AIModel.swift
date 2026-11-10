@@ -438,6 +438,17 @@ struct AIOrganizeUndo: Equatable, Sendable {
     let original: [ItemID]
     let folders: [ItemID: [ItemID]]
 }
+
+extension AppState {
+    /// The window's last Tidy, while it can still be undone: its Space is shown and every group it made still holds
+    /// exactly the tabs Tidy put there, in Today. A later edit to those groups ends it, as a later action would sit on
+    /// top of it in Arc's undo list.
+    func tidyUndo(in window: WindowID) -> AIOrganizeUndo? {
+        guard let undo = session.ai.undo[window], doc.windows[window]?.space == undo.space, let root = doc.spaces[undo.space]?.todayRoot,
+              undo.folders.allSatisfy({ doc.tree[$0.key]?.parent == root && doc.tree[$0.key]?.children == $0.value }) else { return nil }
+        return undo
+    }
+}
 struct AISession: Equatable, Sendable {
     var requests: [AIRequestID: AIRequest] = [:]
     var backgroundContexts: [AIRequestID: BrowsingContext] = [:]

@@ -207,6 +207,8 @@ final class AppUnderTest {
                 // usual install folders are searched too, so PATH alone cannot hide them).
                 try AIRealLocalScenarios.cloneModels(into: dataDirectory)
                 if scenarioID.hasSuffix("-none") { environment["BRK_TEST_AGENT_PATH"] = "" }
+                // Files by meaning read this folder only, never the real home folder.
+                environment["BRK_LOCAL_SEARCH_FIXTURE"] = try AIRealLocalScenarios.makeFiles(in: dataDirectory).path
             }
             if scenarioID.hasPrefix("AIRealUI") || scenarioID.hasPrefix("AIRealTabs") || scenarioID.hasPrefix("AIRealLocal") || scenarioID.hasPrefix("AIRealPages") {
                 // As a GUI app starts: launchd's short PATH, so the agents are found the way a Dock launch finds them;

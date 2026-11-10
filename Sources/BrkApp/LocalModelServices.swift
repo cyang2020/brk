@@ -17,6 +17,8 @@ import os
 @MainActor
 final class LocalModelServices {
     let models: LocalModels
+    /// Files by meaning, one index per Mac (`FileMeaningIndex`); nil under the control socket without a fixture folder.
+    let files: FileMeaningIndex?
     private let send: @MainActor (Input) -> Void
     private let log = Logger(subsystem: "Brk", category: "local-models")
     private var pending: Task<Void, Never>?
@@ -29,12 +31,15 @@ final class LocalModelServices {
     /// Candidate pairs already posted this session (each tab and its address), so a "no" is not asked again.
     private var askedPairs: Set<String> = []
     private var lastDecisionUsable: Bool?
+    /// Pages' short descriptions by address, read this session after each load (`PageDescription`); memory only.
+    private var descriptions: [String: String] = [:]
     let debounce: Duration
     /// Called when JevK5 becomes usable or stops being usable (the decision route reads it).
     var onDecisionAvailability: (@MainActor () -> Void)?
 
-    init(models: LocalModels, debounce: Duration = .seconds(3), send: @escaping @MainActor (Input) -> Void) {
+    init(models: LocalModels, files: FileMeaningIndex? = nil, debounce: Duration = .seconds(3), send: @escaping @MainActor (Input) -> Void) {
         self.models = models
+        self.files = files
         self.debounce = debounce
         self.send = send
         models.onChange = { [weak self] in self?.report(); self?.scheduleIndexing() }
@@ -44,7 +49,8 @@ final class LocalModelServices {
     static func live(root dataFolder: URL, send: @escaping @MainActor (Input) -> Void) -> LocalModelServices {
         let root = ProcessInfo.processInfo.environment["BRK_LOCAL_MODELS_ROOT"].map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? dataFolder.appendingPathComponent("Local Models", isDirectory: true)
-        return LocalModelServices(models: LocalModels(root: root), send: send)
+        let models = LocalModels(root: root)
+        return LocalModelServices(models: models, files: FileMeaningIndex.live(models: models), send: send)
     }
 
     // MARK: The card
@@ -55,7 +61,7 @@ final class LocalModelServices {
         case .cancel(let kind): models.cancelDownload(role(kind))
         case .remove(let kind):
             models.remove(role(kind))
-            if kind == .search { indexed = [:] }
+            if kind == .search { indexed = [:]; files?.removeAll() }
         case .choose(_, let id):
             if let model = ModelCatalog.model(id: id) { models.choose(model) }
         }
@@ -136,11 +142,13 @@ final class LocalModelServices {
         guard models.status(.search).install.isReady else {
             // Vectors are useless without their model: none stay on disk once it is gone.
             models.removeIndexes()
+            files?.removeAll()
             indexed = [:]
             report()
             return
         }
         let corpus = corpus
+        let described = descriptions
         let embedder = models.embedder
         running = Task.detached(priority: .utility) { [weak self, log] in
             // Listing a long history takes a while: off the main thread, from the state value the store handed over.
@@ -148,7 +156,9 @@ final class LocalModelServices {
             guard let indexes = await self?.indexes(for: Array(wanted.keys)) else { return }
             var counts: [ProfileID: Int] = [:]
             for (profile, index) in indexes {
-                let entries = (wanted[profile] ?? []).map { IndexEntry(kind: Self.kind($0.kind), id: $0.id, title: $0.title, url: $0.url) }
+                let entries = (wanted[profile] ?? []).map {
+                    IndexEntry(kind: Self.kind($0.kind), id: $0.id, title: $0.title, url: $0.url, description: $0.url.isEmpty ? nil : described[$0.url])
+                }
                 do {
                     try await index.reconcile(entries, embedder: embedder)
                 } catch is CancellationError {
@@ -185,20 +195,41 @@ final class LocalModelServices {
         }
     }
 
+    // MARK: Page descriptions
+
+    /// Reads a loaded page's short description (an ordinary window's tab on a web address, `AppState.describablePage`)
+    /// and indexes it with the page at the next pass. Only while the search model is ready; nothing leaves this Mac.
+    func describe(_ page: PageID, url: URL, read: @escaping @MainActor (PageID) async -> String?) {
+        guard models.status(.search).usable else { return }
+        let address = url.absoluteString
+        Task { [weak self] in
+            guard let text = await read(page)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty, let self else { return }
+            let kept = String(text.prefix(PageDescription.limit))
+            guard self.descriptions[address] != kept else { return }
+            if self.descriptions.count >= Self.descriptionLimit { self.descriptions.removeAll(keepingCapacity: true) }
+            self.descriptions[address] = kept
+            self.scheduleIndexing()
+        }
+    }
+
+    /// Descriptions kept in memory at most (a long session forgets them all at once; indexed vectors keep theirs).
+    static let descriptionLimit = 5_000
+
     // MARK: For features
 
-    /// The best matches for `query` in a profile's index, best first, at least `minimum` similar; nil when the search
-    /// model is not usable.
+    /// The best matches for `query` in a profile's index, best first, passing both checks of `MeaningSearch`; nil when
+    /// the search model is not usable.
     func search(_ query: String, profile: ProfileID, limit: Int = 8, kinds: Set<IndexEntry.Kind> = Set(IndexEntry.Kind.allCases),
-                minimum: Float = Float(MeaningSearch.minimumScore)) async -> [SearchHit]? {
+                minimum: Float = Float(MeaningSearch.minimumScore), lead: Float = Float(MeaningSearch.minimumLead)) async -> [SearchHit]? {
         guard let embedder = models.embedder else { return nil }
         let index = models.index(profile: profile.rawValue)
         guard let vector = try? await embedder.embed([.query(query)]).first else { return nil }
-        return await index.search(vector, limit: limit, kinds: kinds, minimum: minimum)
+        return await index.search(vector, limit: limit, kinds: kinds, minimum: minimum, lead: lead)
     }
 
     /// Tidy's first cut: groups of tab indices by meaning, biggest first, or nil without the search model. Titles are
-    /// embedded alone at 768 dimensions, the form measured best for grouping.
+    /// embedded alone at 768 dimensions, the form measured best for grouping (slice B; on 8 lists in 2026-11-10 the title
+    /// alone did as well as the title with its host, and better than with the page's description).
     func clusters(titles: [String]) async -> [[Int]]? {
         guard let found = try? await embedClusters(titles) else { return nil }
         return found.groups

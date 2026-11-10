@@ -1001,9 +1001,7 @@ extension Work {
         undoToast("Tidied Tabs! Use", undo: .tidy, in: request.window)
     }
     mutating func undoAIOrganize(in window: WindowID) {
-        guard let undo = state.session.ai.undo[window], state.doc.windows[window]?.space == undo.space,
-              let root = state.doc.spaces[undo.space]?.todayRoot,
-              undo.folders.allSatisfy({ state.doc.tree[$0.key]?.parent == root && state.doc.tree[$0.key]?.children == $0.value }) else {
+        guard let undo = state.tidyUndo(in: window), let root = state.doc.spaces[undo.space]?.todayRoot else {
             toast("The groups changed. Undo was refused to protect your edits.", in: window); return
         }
         var tree = state.doc.tree

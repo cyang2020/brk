@@ -58,6 +58,18 @@ public enum LocalSources {
     /// How many hits the bar keeps: all its rows under the file prefix.
     public static let hitLimit = 5
 
+    /// Rows found by meaning a name list keeps at least, when there are that many.
+    public static let meaningRows = 2
+
+    /// The `file` mode's rows: the names Spotlight matched first (they hold what was typed), then files found by meaning
+    /// that are not among them; at least `meaningRows` of the latter stay, and they fill the rows when no name matched.
+    public static func merge(names: [LocalHit], meaning: [LocalHit], limit: Int = hitLimit) -> [LocalHit] {
+        let listed = Set(names.map(\.path))
+        let extra = meaning.filter { !listed.contains($0.path) }
+        let shown = names.prefix(max(0, limit - min(meaningRows, extra.count)))
+        return Array(shown) + extra.prefix(limit - shown.count)
+    }
+
     /// What `typed` asks of the file and app sources, nil for nothing: an address, a calculation, a short text.
     public static func request(for typed: String, engine: SearchEngine) -> LocalSearchRequest? {
         let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)

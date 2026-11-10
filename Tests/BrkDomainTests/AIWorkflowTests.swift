@@ -80,6 +80,23 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertEqual(d.todayIDs, before + [newTab])
         XCTAssertEqual(Driver(file: d.savedFile).todayIDs, before + [newTab])
     }
+    /// Arc 1.170 keeps Tidy on its undo list: ⌘Z undoes it from a page after the toast has gone (probed 2026-11-10).
+    /// A text field in the page keeps ⌘Z for its own typing.
+    func testCommandZUndoesTidyAfterTheToastUnlessATextFieldHasFocus() throws {
+        let d = enabled(); d.user(.settings(.max(.tidyTabs(true))))
+        _ = d.open("https://example.com/b"); let before = d.todayIDs
+        let (id, task) = try request(d.user(.assist(.organizeToday)))
+        guard case .tidyToday(_, let tabs) = task else { return XCTFail() }
+        d.system(.aiResult(id, .reply(.groups([AIGroupPlan(folder: "Reading", tabs: tabs.map { $0.id.rawValue })]))))
+        d.advance(.seconds(6)); d.system(.clockTick)
+        XCTAssertNil(d.view.tabTools.toast)
+        let commandZ = KeyChord(.command, .z)
+        XCTAssertFalse(d.key(commandZ, stage: .beforePage, pressID: 1, editable: true).keyHandled, "the text field's own undo")
+        guard case .folder? = d.view.space.today.rows.first else { return XCTFail("a text field's ⌘Z undid Tidy") }
+        XCTAssertTrue(d.key(commandZ, stage: .beforePage, pressID: 2).keyHandled)
+        XCTAssertEqual(d.todayIDs, before)
+        XCTAssertFalse(d.key(commandZ, stage: .beforePage, pressID: 3).keyHandled, "nothing left to undo: the page's ⌘Z")
+    }
     func testOrganizeRejectsStaleForeignAndDuplicateIDsAtomically() throws {
         let d = enabled(); d.user(.settings(.max(.tidyTabs(true)))); _ = d.open("https://example.com/b")
         let (id, _) = try request(d.user(.assist(.organizeToday)))

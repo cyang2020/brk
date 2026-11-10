@@ -42,8 +42,14 @@ final class MeaningSearchService {
             try? await Task.sleep(for: debounce)
             guard !Task.isCancelled, let self else { return }
             guard let hits = await models.search(query.text, profile: query.profile, limit: limit, kinds: kinds), !Task.isCancelled else { return }
+            var found = hits.map { MeaningHit(key: $0.key, score: Double($0.score)) }
+            // The bar also lists files by meaning, from an index an earlier file search made (this never starts one: the
+            // first indexing can make macOS ask about a folder, which nobody asked for while typing a web search).
+            if query.scope == .commandBar, let files = await models.files?.search(query.text, limit: 2), !Task.isCancelled {
+                found = (found + files.map { MeaningHit(key: "file:" + $0.hit.path, score: Double($0.score)) }).sorted { $0.score > $1.score }
+            }
             pending[key] = nil
-            send(.system(.meaningResults(window, MeaningResults(text: query.text, scope: query.scope, hits: hits.map { MeaningHit(key: $0.key, score: Double($0.score)) }))))
+            send(.system(.meaningResults(window, MeaningResults(text: query.text, scope: query.scope, hits: found))))
         }
     }
 

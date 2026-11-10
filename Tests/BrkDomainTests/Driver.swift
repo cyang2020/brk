@@ -80,8 +80,8 @@ final class Driver {
     }
 
     @discardableResult
-    func key(_ chord: KeyChord, stage: KeyStage, pressID: UInt64, isRepeat: Bool = false, in window: WindowID? = nil) -> Transition {
-        let press = KeyPress(chord: chord, phase: .down, isRepeat: isRepeat, editableFieldFocused: false)
+    func key(_ chord: KeyChord, stage: KeyStage, pressID: UInt64, isRepeat: Bool = false, editable: Bool = false, in window: WindowID? = nil) -> Transition {
+        let press = KeyPress(chord: chord, phase: .down, isRepeat: isRepeat, editableFieldFocused: editable)
         let input = KeyInput(press: press, stage: stage, pressID: PressID(raw: pressID))
         return apply(reduce(state, .key(window ?? self.window, input), ctx))
     }

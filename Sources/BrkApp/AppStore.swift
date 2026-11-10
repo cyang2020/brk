@@ -173,6 +173,13 @@ public final class AppStore {
         dispatching = false
         let restored = state
         localModels.stateChanged(corpus: { restored.searchCorpus() }, duplicates: { [weak self] in self?.state.duplicateScopes() ?? [] })
+        localModels.files?.resumeIfIndexed()
+        localSearch.fileMeaning = { [weak self] text in
+            guard let files = self?.localModels.files else { return [] }
+            files.begin()
+            await files.firstVectors(within: .seconds(4))
+            return await files.search(text)?.map(\.hit) ?? []
+        }
         drain()
         if let window = snapshot.windows.keys.sorted().first {
             if snapshot.sidebarData.needsOnboarding { dispatch(.user(window, .sidebarData(.welcome))) }
@@ -376,6 +383,10 @@ public final class AppStore {
             publish(docChanged: t.docChanged && !checkpointed)
         }
         if t.docChanged { let changed = t.state; localModels.stateChanged(corpus: { changed.searchCorpus() }, duplicates: { [weak self] in self?.state.duplicateScopes() ?? [] }) }
+        // A page that finished loading in an ordinary window: search by meaning reads its short description.
+        if case .system(.page(let token, .loadingChanged(isLoading: false, _, _))) = input, let shown = state.describablePage(token) {
+            localModels.describe(shown.page, url: shown.url) { [engine] page in (try? await engine.evaluateForResult(PageDescription.script, in: page)) ?? nil }
+        }
         run(t.effects)
         return KeyHandling(handled: t.keyHandled, shortcut: t.keyShortcut, action: t.keyAction?.rawValue)
     }
