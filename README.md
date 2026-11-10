@@ -2,22 +2,33 @@
 
 # Brk
 
-An Arc-style browser on Electron 45. Created in [T3 Code](https://t3.codes).
+A native macOS rebuild of the Arc browser, written in Swift 6 with AppKit on the Chromium Embedded Framework (CEF 154). It follows Arc 1.170 feature by feature and pixel by pixel; Arc's numbers are read from its binary and checked against the real Arc on the same screen. On top of that it adds AI features that run on the user's own local agents (Claude Code, Codex) and local models, without API keys.
 
-The design (`docs/design/rationale.md`, `docs/design/module-map.md`) and the typed skeleton under `src/` are the
-contract four implementation workers fill in; function bodies are `throw new Error('not implemented')` until then.
+The first version (October 2026) was an Electron app. It is kept at the git tag `electron-v1` and is no longer developed.
 
-## Develop and verify
+## Layout
+
+- `Sources/`: the SwiftPM targets. `Brk` is the app; `BrkDomain` holds the state and its rules; `BrkSidebar`, `BrkContent`, `BrkOverlays`, `BrkLibrary` and `BrkSettings` are the UI; `BrkCEF` is the CEF engine; `BrkCoreEngine` runs Brk's own Chromium build; `BrkE2E` drives native scenarios.
+- `engine/`: Brk's own Chromium build (BrkCore.framework) and its patch series. CEF stays the default engine.
+- `docs/`: the design (`docs/design/`, with the AI plan in `docs/design/ai-native.md`), Arc facts read from the binary (`docs/arc-anatomy/`), the feature ledger (`docs/completion/features.json`) and the testing rules (`docs/testing-policy.md`).
+- `scripts/`: the build, the native scenario runner and the station, which compares Brk's screens with Arc's on the same display.
+
+## Build and run
+
+Needs macOS on Apple silicon and Xcode with Swift 6. The first build downloads CEF (132 MB).
 
 ```sh
-npm install
-npm run dev          # open the app with hot reload (needs a desktop session)
-npm run typecheck    # strict tsc for main + preload + domain, renderers, e2e (three composite projects)
-npm test             # vitest unit tests (src/**/*.test.ts): architecture rules now, domain tests as W1 fills them
-npm run build        # electron-vite -> out/
-npm run e2e          # Playwright against out/ (run npm run build first)
-npm run e2e:docker   # build + e2e on Linux/Xvfb in Docker; writes verify/REPORT.md and verify/shots/
+scripts/build.sh                 # release build, unit tests, CEF bundle and signature: dist/Brk.app
+SKIP_TESTS=1 scripts/build.sh    # the same without the unit tests
+open dist/Brk.app
 ```
 
-`e2e/arc.spec.ts` holds the ten scenarios as `test.skip` stubs until the main process can launch; the report lists
-them as SKIPPED.
+## Test
+
+```sh
+swift test                                            # unit tests
+swift build -c release --product brk-e2e
+python3 scripts/run-native.py <name> --set smoke      # native scenarios with real input on a real launch
+```
+
+Which tests a change adds, and what runs before a merge, is in `docs/testing-policy.md`. Test evidence (pictures, logs, reports) stays outside the repository.
