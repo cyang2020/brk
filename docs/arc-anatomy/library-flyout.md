@@ -51,7 +51,9 @@ The Arc | Brk pictures, the frame-by-frame timing tables and the probe scripts a
 - Icon: the file's 40 pt Finder icon, 4 pt into the row. Title: SF 14 regular, label colour (black 0.85). Subtitle: SF
   12 regular, secondary colour (black 0.5), "51 seconds ago", "2 minutes ago", "1 day ago". Both start 57 pt into the row.
 - A running download: a 24 pt blue ring with a down arrow instead of the icon, "2.8/8.4 MB · 29s", and an × (11 pt,
-  centred 18 pt before the row's end) that cancels it.
+  centred 18 pt before the row's end) that cancels it. A cancelled one reads "Cancelled", a failed one "Failed to
+  Download"; the subtitles come from Arc's DownloadsUI builder, shared with Little Arc's pills
+  (`little-arc-downloads.md` has the format).
 - Hover: the sidebar's item fill (black 0.05 on the light sidebar, Brk's `itemBackground`) and Arc's own tooltip with the
   file name beside the pointer.
 - Right click on a file: Copy File (Copy Image for an image) | Send via iMessage, AirDrop | Open in <its default app>,
@@ -115,7 +117,7 @@ When and where:
   100 points away before the download started and the icon still left from the click. Brk keeps the window's last
   mouse press for 5 s (`pressMemory`, ours) and otherwise takes the pointer.
 - Toolbar mode (View > Show Toolbar): the same flight into the button (r7). Little Arc: no flight; Little Arc shows its
-  own download pill (icon, name, "1/1 KB") at the window's bottom left instead (r6). Incognito windows were not probed;
+  own download pills at the window's bottom left instead (r6; `little-arc-downloads.md`). Incognito windows were not probed;
   Brk's have no Library list, so they throw nothing.
 
 What flies:
@@ -177,4 +179,3 @@ The end:
 ## Not rebuilt
 
 - macOS screenshots in the list (see above).
-- Little Arc's own download pill (r6): it is a separate Little Arc feature, not part of the flight or the preview.
