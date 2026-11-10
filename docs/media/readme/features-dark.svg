@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 380" width="840" height="380">
+<defs><filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#1a2a6c" flood-opacity="0.45"/></filter></defs>
+<g transform="translate(10,10)">
+<rect width="405" height="170" rx="18" fill="#141933" stroke="#2a3160" filter="url(#sh)"/>
+<rect x="24" y="26" width="38" height="6" rx="3" fill="#1a4fe0"><animate attributeName="width" values="38;64;38" dur="4s" repeatCount="indefinite"/></rect>
+<text x="24" y="66" font-family="'SF Pro Display','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="24" font-weight="700" fill="#ffffff">⌘T, upgraded</text>
+<text x="24" y="100" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">Calculator, conversions, files, apps,</text>
+<text x="24" y="124" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">emoji, translate, windows and splits.</text>
+<text x="24" y="148" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">Ranked like Arc. Inspired by Raycast.</text>
+</g>
+<g transform="translate(425,10)">
+<rect width="405" height="170" rx="18" fill="#141933" stroke="#2a3160" filter="url(#sh)"/>
+<rect x="24" y="26" width="38" height="6" rx="3" fill="#8b45c9"><animate attributeName="width" values="38;64;38" dur="5s" repeatCount="indefinite"/></rect>
+<text x="24" y="66" font-family="'SF Pro Display','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="24" font-weight="700" fill="#ffffff">AI on your Mac</text>
+<text x="24" y="100" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">Local models name and tidy tabs</text>
+<text x="24" y="124" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">and search by meaning, offline.</text>
+<text x="24" y="148" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">No new subscription: use your own plan.</text>
+</g>
+<g transform="translate(10,195)">
+<rect width="405" height="170" rx="18" fill="#141933" stroke="#2a3160" filter="url(#sh)"/>
+<rect x="24" y="26" width="38" height="6" rx="3" fill="#ff5a5f"><animate attributeName="width" values="38;64;38" dur="6s" repeatCount="indefinite"/></rect>
+<text x="24" y="66" font-family="'SF Pro Display','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="24" font-weight="700" fill="#ffffff">More AI than Dia</text>
+<text x="24" y="100" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">An agent that sees your tabs.</text>
+<text x="24" y="124" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">Drag tabs in, ask, approve its actions.</text>
+<text x="24" y="148" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">Pages that keep themselves updated.</text>
+</g>
+<g transform="translate(425,195)">
+<rect width="405" height="170" rx="18" fill="#141933" stroke="#2a3160" filter="url(#sh)"/>
+<rect x="24" y="26" width="38" height="6" rx="3" fill="#ff8fa3"><animate attributeName="width" values="38;64;38" dur="7s" repeatCount="indefinite"/></rect>
+<text x="24" y="66" font-family="'SF Pro Display','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="24" font-weight="700" fill="#ffffff">Arc, pixel for pixel</text>
+<text x="24" y="100" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">Sidebar, Spaces, splits, Little Arc,</text>
+<text x="24" y="124" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">Boosts and the Library, measured</text>
+<text x="24" y="148" font-family="'SF Pro Text','Helvetica Neue','Segoe UI',Arial,sans-serif" font-size="15" fill="#a6aed3">from Arc itself. 124 of 148 verified.</text>
+</g>
+</svg>

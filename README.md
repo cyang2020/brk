@@ -1,14 +1,8 @@
-<p align="center">
-  <img src="assets/icon.png" width="128" height="128" alt="Brk">
-</p>
-
-<h1 align="center">Brk</h1>
-
-<p align="center">
-  <b>Arc, but better.</b><br>
-  The Arc browser, rebuilt natively for macOS, with a Raycast-style command bar<br>
-  and AI that runs on your Mac and on the subscription you already have.
-</p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/banner-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/media/readme/banner-light.svg">
+  <img alt="Brk: Arc, but better" src="docs/media/readme/banner-light.svg" width="100%">
+</picture>
 
 <p align="center">
   <a href="https://github.com/cyang2020/brk/releases/latest"><img src="https://img.shields.io/badge/Download-for%20Mac-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac"></a>
@@ -30,13 +24,23 @@
   <a href="#not-in-brk-yet">Not yet</a>
 </p>
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/features-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/media/readme/features-light.svg">
+  <img alt="Four things Brk adds: an upgraded ⌘T, AI on your Mac, more AI than Dia, Arc pixel for pixel" src="docs/media/readme/features-light.svg" width="100%">
+</picture>
+
 <p align="center">
   <img src="docs/media/ai-panel-answer.png" width="900" alt="Brk with the sidebar, a Wikipedia page and the AI panel answering with a table">
 </p>
 
 Everything you know from Arc is here: the sidebar, Spaces, Favorites, Pinned tabs, split view, Little Arc, Peek, Boosts, the Library, the command bar and the shortcuts. Brk rebuilds Arc 1.170 feature by feature, from Arc's own measurements. On top of that it adds the things Arc never had.
 
----
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/media/readme/divider-light.svg">
+  <img alt="" src="docs/media/readme/divider-light.svg" width="100%">
+</picture>
 
 ## ⌘T, upgraded
 
@@ -68,6 +72,12 @@ Most modes also answer to Chinese words: 问, 翻译, 查, 分屏, 窗口, 文�
 
 The ordinary results (open tabs, history, suggestions, top sites) are ranked by a port of Arc's own scoring, so the first row is the one Arc would pick. It learns from you: pages you type often and commands you run rise to the top.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/media/readme/divider-light.svg">
+  <img alt="" src="docs/media/readme/divider-light.svg" width="100%">
+</picture>
+
 ## Everyday upgrades
 
 <p align="center">
@@ -81,6 +91,12 @@ The ordinary results (open tabs, history, suggestions, top sites) are ranked by 
 </p>
 
 **Your mouse works everywhere.** Back and forward buttons and mouse-driver swipes go back and forward over a page and switch Spaces over the sidebar. ⇧⌘] and ⇧⌘[ step through tabs, and a middle-click on a tab closes it.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/media/readme/divider-light.svg">
+  <img alt="" src="docs/media/readme/divider-light.svg" width="100%">
+</picture>
 
 ## AI on your Mac
 
@@ -97,6 +113,12 @@ The ordinary results (open tabs, history, suggestions, top sites) are ranked by 
 </p>
 
 **Search by meaning.** Type what a page was about, not its title, and the command bar finds the tab or the page you visited. The index lives on your Mac.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/media/readme/divider-light.svg">
+  <img alt="" src="docs/media/readme/divider-light.svg" width="100%">
+</picture>
 
 ## More AI (better than Dia)
 
@@ -124,6 +146,12 @@ The ordinary results (open tabs, history, suggestions, top sites) are ranked by 
 
 **You stay in charge.** Page text is checked for hidden instructions before an agent sees it, and once a conversation has read a page, every tool the agent wants to run waits for your OK.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/media/readme/divider-light.svg">
+  <img alt="" src="docs/media/readme/divider-light.svg" width="100%">
+</picture>
+
 ## Arc, pixel for pixel
 
 <p align="center">
@@ -132,8 +160,10 @@ The ordinary results (open tabs, history, suggestions, top sites) are ranked by 
 
 Arc 1.170 on the left, Brk on the right, same window and same pages: 0.14% of the pixels differ, and the visible one is Arc's update button. Sizes, colours, timings and rules are read from Arc's own app and compared with the real Arc on the same screen. Of the 148 Arc features in the ledger (`docs/completion/features.json`), 124 are verified.
 
-<details id="not-in-brk-yet">
-<summary><b>Not in Brk yet</b></summary>
+## Not in Brk yet
+
+<details>
+<summary><b>The Arc features Brk has not verified yet, and why</b></summary>
 
 These are the 24 Arc features that Brk has not verified, with the reasons recorded in the ledger, followed by two smaller gaps.
 
