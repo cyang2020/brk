@@ -32,6 +32,10 @@ keys PB1H
 keys W2-9
 keys R44-ShortcutKeys
 keys Ext-shortcut-physical
+keys Input-TabKeys
+keys Input-SideButtons
+keys Input-SwipeIndicator
+keys Input-MiddleClick
 
 # find：页内查找
 find F1
