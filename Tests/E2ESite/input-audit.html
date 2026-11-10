@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>audit</title>
+<style>
+body { font: 16px -apple-system, system-ui; margin: 24px; min-height: 3000px; }
+a { display: inline-block; margin: 8px 16px 8px 0; font-size: 20px; }
+#field, #area { display: block; margin: 12px 0; width: 360px; font-size: 16px; }
+#wide { width: 420px; overflow-x: auto; white-space: nowrap; border: 1px solid #999; margin-top: 16px; }
+#wide div { width: 2400px; height: 90px; background: linear-gradient(90deg, #fcc, #ccf); }
+</style></head>
+<body>
+<h1 id="h">Input audit</h1>
+<a id="next" href="input-audit.html?p=2">Next page</a>
+<a id="third" href="input-audit.html?p=3">Third page</a>
+<a id="away" href="input-audit.html?p=away" target="_blank">New-tab link</a>
+<input id="field" placeholder="text field">
+<textarea id="area" placeholder="text area"></textarea>
+<div id="wide"><div>wide scroller</div></div>
+<script>
+// The title is the page's report to the probe and the e2e runner: "audit:<p>:<last event>".
+// ?handlers=1 makes the page claim keys the way web apps do (preventDefault on Cmd+K, Cmd+S, Cmd+F, Cmd+[ and on
+// Space/arrows outside fields), so the "page first, then app" rules can be seen with a real page that eats keys.
+var q = new URLSearchParams(location.search);
+var page = q.get('p') || '1';
+var handlers = q.get('handlers') === '1';
+var events = [];
+function report(s) { events.push(s); document.title = 'audit:' + page + ':' + s; }
+function chord(e) { return (e.ctrlKey ? 'ctrl+' : '') + (e.altKey ? 'alt+' : '') + (e.shiftKey ? 'shift+' : '') + (e.metaKey ? 'cmd+' : '') + (e.key === ' ' ? 'space' : e.key.toLowerCase()); }
+report('loaded');
+var claimed = ['cmd+k', 'cmd+s', 'cmd+f', 'cmd+[', 'cmd+l', 'cmd+d', 'ctrl+shift+=', 'cmd+p'];
+window.addEventListener('keydown', function (e) {
+  if (['Control', 'Alt', 'Shift', 'Meta'].indexOf(e.key) >= 0) return;
+  var c = chord(e);
+  var swallow = handlers && claimed.indexOf(c) >= 0;
+  report('key:' + c + (swallow ? ':swallowed' : ':seen'));
+  if (swallow) e.preventDefault();
+}, true);
+window.addEventListener('mousedown', function (e) { report('down:' + e.button); }, true);
+window.addEventListener('auxclick', function (e) { report('aux:' + e.button); }, true);
+window.addEventListener('wheel', function (e) { if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) report('wheelx'); }, { passive: true });
+window.addEventListener('focusin', function (e) { report('focus:' + (e.target.id || e.target.tagName)); });
+</script></body></html>

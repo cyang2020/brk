@@ -189,6 +189,11 @@ public final class WindowRootView: NSView {
         }
     }
 
+    /// Whether a point of the window (its coordinates) is over the shown sidebar, anchored or floating.
+    public func isSidebar(atWindowPoint point: NSPoint) -> Bool {
+        !sidebar.isHiddenOrHasHiddenAncestor && sidebar.alphaValue > 0 && sidebar.bounds.contains(sidebar.convert(point, from: nil))
+    }
+
     /// The sidebar's swipe between Spaces, else the AI panel's between its list and its conversation.
     public func handleScrollWheel(_ event: NSEvent) -> Bool { sidebar.handleScrollWheel(event) || aiAnswer.handleScrollWheel(event) }
 
