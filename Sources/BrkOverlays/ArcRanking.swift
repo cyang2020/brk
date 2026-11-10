@@ -386,9 +386,10 @@ public enum ArcRanking {
     ///   exactURL and baseDomain, never exactBaseDomain.
     /// - exactHotWord: the lowercased query is one of the hot words.
     /// - autocompleteDefault (rows that open a page or run a command) and autocompleteSearchOnly (searches): the input, as
-    ///   Chromium's inline completion leaves it (`input`: "time" completed to "time.com"), is the row's text or starts
-    ///   with it. So the completed site, or else the text as typed, gets it; a suggestion that merely starts with the
-    ///   query does not (Arc keeps "visual field" above "visual fixation" for "visual fix").
+    ///   Chromium's inline completion leaves it (`input`: "time" completed to "time.com"), is the row's text (a search) or
+    ///   is or starts with it (a row that opens a page). So the completed site, or else the text as typed, gets it; a
+    ///   suggestion does not (Arc keeps "visual field" above "visual fixation" for "visual fix", and "ETS" in its place
+    ///   when "etsy" completes to etsy.com).
     /// - chromiumSpecialSearchFunction: Chromium's second row, for a `word:word` query.
     /// - customTitlePrefix: a tab's own title starts with the query.
     /// - veryRecentTabOrDocumentBoost: a tab used in the last hour. topApp: a Favorite.
@@ -413,7 +414,11 @@ public enum ArcRanking {
         }
         if candidate.hotWords.contains(where: { $0.lowercased() == q }) { out.append(.exactHotWord) }
         let text = candidate.autocompleteText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty, shown == text || shown.hasPrefix(text) { out.append(candidate.archetype.isSearch ? .autocompleteSearchOnly : .autocompleteDefault) }
+        if candidate.archetype.isSearch {
+            if !text.isEmpty, shown == text { out.append(.autocompleteSearchOnly) }
+        } else if !text.isEmpty, shown == text || shown.hasPrefix(text) {
+            out.append(.autocompleteDefault)
+        }
         if candidate.features[.chromiumRank] == 1, isSpecialSearch(q) { out.append(.chromiumSpecialSearchFunction) }
         if isTab, let title = candidate.customTitle?.lowercased(), title.hasPrefix(q) { out.append(.customTitlePrefix) }
         if isTab, let seconds = candidate.features[.lastNavigated], seconds < 3600 { out.append(.veryRecentTabOrDocumentBoost) }

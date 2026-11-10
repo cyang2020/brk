@@ -57,6 +57,8 @@ final class ArcRankingTests: XCTestCase {
         let site = ArcRanking.Candidate(archetype: .topDomain, url: URL(string: "https://time.com")!, autocompleteText: "time.com", dedupKey: "t")
         XCTAssertTrue(ArcRanking.boosts(site, query: "time", input: "time.com").contains(.autocompleteDefault))
         XCTAssertFalse(ArcRanking.boosts(site, query: "time").contains(.autocompleteDefault))
+        let ets = ArcRanking.Candidate(archetype: .chromiumSearchSuggestion, autocompleteText: "ETS", dedupKey: "e")
+        XCTAssertEqual(ArcRanking.boosts(ets, query: "etsy", input: "etsy.com"), [], "a search only when it is the input itself")
         XCTAssertFalse(ArcRanking.boosts(ArcRanking.Candidate(archetype: .typeTravel, customTitle: "Switch to Dark Mode", runs: 1, dedupKey: "c"), query: "swi")
             .contains(.typeTravelPrefixForLongQuery), "one word is not a long query (the real Arc leaves the search first)")
         XCTAssertTrue(ArcRanking.boosts(ArcRanking.Candidate(archetype: .typeTravel, customTitle: "Switch to Dark Mode", runs: 1, dedupKey: "c"), query: "switch to d")
