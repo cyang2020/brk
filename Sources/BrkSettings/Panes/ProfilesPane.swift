@@ -420,7 +420,7 @@ private var P: ProfilesPaneMetricsTable { ProfilesPaneMetrics }
 let ProfilesPaneMetrics = ProfilesPaneMetricsTable()
 
 struct ProfilesPaneMetricsTable: MetricGroup {
-    private static let capture = "scripts/station/arc-reference/P38/P38-d-arc.png"
+    private static let capture = "~/brk-arc-reference/P38/P38-d-arc.png"
     var selectedFill: Color { ArtColor.rgb(0xEEF2FD) }
     let introHeight = Metric(32.0, .anatomy("\(capture): two 16-point lines"))
     let introToColumns = Metric(20.0, .anatomy("\(capture): the paragraph ends near y 280 px, the columns start at 320 px"))

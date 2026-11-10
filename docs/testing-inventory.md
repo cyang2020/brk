@@ -132,7 +132,7 @@ main 上原有一个失败的测试：它要求每个命令都在别处有行为
 还在用的东西搬出来：
 
 - station 工具（`scripts/station/`）搬到 `scripts/station/`。其中只服务 11 月 3 日那次 Arc 截图的几个脚本（写死了那次的临时目录：cap.sh、capwide.sh、lib.sh、menucap.sh、step.sh、rec.py、drive.py）随记录一起删。
-- station 对比用的真 Arc 1.170 截图搬到 `scripts/station/arc-reference/`，只留 station 现有 53 个画面用得到的 316 张（273 MB）。它们不是运行记录，而是 station 这一步门的输入，重拍需要用户登录 Arc。这是唯一保留的一批图片。
+- station 对比用的真 Arc 1.170 截图搬到 `~/brk-arc-reference/`，只留 station 现有 53 个画面用得到的 316 张（273 MB）。它们不是运行记录，而是 station 这一步门的输入，重拍需要用户登录 Arc。这是唯一保留的一批图片。
 - station 用的夹具网站搬到 `scripts/station/fixture-site/`，https 夹具（证书场景和 station 都用）搬到 `Tests/Fixtures/https-fixture/`，Brk 自己引擎的扩展弹窗夹具搬到 `Tests/Fixtures/ExtensionPopup/`。
 - 各处复制的 `run-native.py` 合成一个 `scripts/run-native.py`，按 `scripts/native-sets.txt` 的分组跑，结果写到仓库外的 `~/brk-evidence/native/<名字>/`；`bounded-phase.py` 搬到 `scripts/`。
 - 命令栏排序研究（`docs/research/arc-command-bar-ranking/`）不是测试记录，搬到 `docs/research/arc-command-bar-ranking/`，下一步工作要用它的 `ase2-defaults.json`。图片只留 README 里嵌入的 4 张。

@@ -32,9 +32,9 @@
 
 ## 测试记录不进仓库
 
-现状：以前每个任务都把截图、日志、运行报告、补丁、manifest 提交进 `verify/<任务>/`，一次合并留下几百上千个文件。台账 `docs/completion/features.json` 的证据字段指向这些文件。2026-11-10 用户决定 `verify/` 全部删掉，git 历史不改写，旧文件在 main 的 933155f6 还能看到，例如 `git show 933155f6:verify/ai-native/merge-gate-h/README.md`。
+现状：以前每个任务都把截图、日志、运行报告、补丁、manifest 提交进 `verify/<任务>/`，一次合并留下几百上千个文件。台账 `docs/completion/features.json` 的证据字段指向这些文件。2026-11-10 用户决定 `verify/` 全部删掉，当天又把它从整个 git 历史里清掉了（为了推到 GitHub 并准备公开仓库），所以这些旧记录已经取不回来，提交号也都变了。
 
-推理：这些记录在合并当时有用，合并以后几乎没人再看；需要的时候用提交号就能从 git 历史里取出来。它们留在最新的树里，只会让仓库越来越大、让 grep 和代码审查越来越慢。
+推理：这些记录在合并当时有用，合并以后几乎没人再看。它们留在最新的树里，只会让仓库越来越大、让 grep 和代码审查越来越慢。
 
 结论：
 
@@ -72,7 +72,7 @@
 | 新加了画面、按钮或界面文字（任何模块） | 再加 `--only TextLayout`：它在所有主要画面上找被截断的文字。2026-11-10 它发现 Library 的 AI 对话页有 4 处文字被截断，那一页是 AI 第 7、8 步加的，当时的门没跑它 |
 | 只改了测试、文档、脚本 | 只跑单测 |
 
-3. **station 只在看得见的东西变了时跑**，只跑相关画面，分支和 main 在同一块屏上各跑一次比较：`~/.t3/projects/brk/scripts/station/station.sh <分支> ~/brk-evidence/<任务>/station-branch <画面>`，再用 main 跑一次。真 Arc 的参照图在 `scripts/station/arc-reference/`，夹具网站在 `scripts/station/fixture-site/`，要在 8764 端口开着：`python3 -m http.server 8764 --bind 127.0.0.1 --directory scripts/station/fixture-site`（在主 checkout 里运行）。
+3. **station 只在看得见的东西变了时跑**，只跑相关画面，分支和 main 在同一块屏上各跑一次比较：`~/.t3/projects/brk/scripts/station/station.sh <分支> ~/brk-evidence/<任务>/station-branch <画面>`，再用 main 跑一次。真 Arc 的参照图在 `~/brk-arc-reference/`，夹具网站在 `scripts/station/fixture-site/`，要在 8764 端口开着：`python3 -m http.server 8764 --bind 127.0.0.1 --directory scripts/station/fixture-site`（在主 checkout 里运行）。
 4. **真实 agent 只在 agent 相关代码改了时跑**，一次只跑和改动有关的一个入口，因为每次都花用户的额度：`python3 scripts/run-native.py <新名字> --set real --agent claude` 会跑全部四个；只跑一个用 `--only AIRealUI-claude`（Max 的各个功能）、`AIRealUIBasic-claude`（小模型）、`AIRealRightPanel-claude`（右侧面板对话）或 `AIRealLocal-none`（只用本地模型）。
 5. **失败了先单独重跑一次**，用新名字只跑失败的编号。第二次还失败就是真的失败，要修或者说明，不能靠反复重跑凑出通过。
 

@@ -51,7 +51,7 @@ final class LinkStatusCapsule: NSView {
 }
 
 enum LinkStatusMetrics {
-    private static let capture = "scripts/station/arc-reference/P45/P45-a-arc.png"
+    private static let capture = "~/brk-arc-reference/P45/P45-a-arc.png"
     static let inset = Metric(10.0, .anatomy("\(capture): the capsule starts at x 238 pt, the card at 228"))
     static let bottom = Metric(10.5, .anatomy("\(capture): the capsule ends at y 755.5 pt, the card at 766"))
     static let height = Metric(23.5, .anatomy("\(capture): the capsule spans y 732 to 755.5 pt"))

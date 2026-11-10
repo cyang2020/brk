@@ -13,7 +13,7 @@
 # 3. Runs capture-brk-scenes.py for the requested scenes into <outdir>.
 # 4. Writes <outdir>/sheet.png (Arc | Brk | diff per pair, with the differing-pixel share) and <outdir>/sheet.tsv.
 #
-# The Arc 1.170 references are arc-reference/<scene>/ next to this script (ARC_RUN overrides). Needs the fixture site
+# The Arc 1.170 references live outside the repository, in ~/brk-arc-reference/<scene>/ (BRK_ARC_REFERENCE or ARC_RUN overrides). Needs the fixture site
 # on 127.0.0.1:8764: python3 -m http.server 8764 --bind 127.0.0.1 --directory scripts/station/fixture-site (from the
 # main checkout). Do not type while it captures.
 set -euo pipefail
@@ -34,7 +34,7 @@ fi
 REF="${1:?branch or sha}"; OUT="${2:?output directory}"; SCENES="${3:-all}"
 STATION="${STATION:-$HOME/.t3/worktrees/brk/station}"
 TOOLS="$(cd "$(dirname "$0")" && pwd)"
-ARC_RUN="${ARC_RUN:-$TOOLS/arc-reference}"
+ARC_RUN="${ARC_RUN:-${BRK_ARC_REFERENCE:-$HOME/brk-arc-reference}}"
 mkdir -p "$OUT"
 cd "$STATION"
 git checkout -q --detach "$REF"

@@ -222,7 +222,7 @@ private final class PreviewShareButton: NSView {
 
 /// P45-a in points (the 2x pixels halved): the card at x 373 under the link box ending at y 99.5, the card 299 wide.
 enum PreviewCardMetrics {
-    private static let capture = "scripts/station/arc-reference/P45/P45-a-arc.png"
+    private static let capture = "~/brk-arc-reference/P45/P45-a-arc.png"
     static let width = Metric(300.0, .anatomy("\(capture): the card spans x 746 to 1346 px"))
     static let offset = Metric([6.0, 6.5], .anatomy("\(capture): the link box starts at x 758 px and ends at y 199 px; the card starts at x 746 px, y 212 px"))
     static let radius = Metric(12.0, .anatomy("\(capture): the card's corners round over about 24 px"))

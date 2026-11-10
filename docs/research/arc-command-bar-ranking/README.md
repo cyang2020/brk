@@ -323,21 +323,21 @@ The pictures are cropped to the command bar and use fixture pages or public site
 | `secondary ref` (history page title, not open) | search | history "Secondary reference" | 3 engine suggestions | none | 14 |
 | `long title` (history page title, not open) | search | history "Long title for truncation…" | 3 engine suggestions | none | 8 |
 
-Pictures: the four below are in `shots/`. The other seven (`q1b-site-prefix-yout`, `q1c-site-prefix-wiki`, `q3-multiword`, `q4-question`, `q5-command`, `q5b-command`, `q6b-history-title`) were dropped from the tree when this folder moved out of `verify/`; `git show 933155f6:verify/arc-command-bar-ranking/shots/<name>.png` prints them.
+Pictures: the real Arc's command bar for these queries. They are Arc's own screens, so they are kept outside the repository, in `~/brk-arc-reference/research-command-bar/` on the build Mac.
 
-![visual fix](shots/t0-fixture.png)
+(Arc's screen: `~/brk-arc-reference/research-command-bar/t0-fixture.png`)
 
 **`visual fix`.** The typed search leads and the open tab is second, although the tab's title starts with the query. A partial word gets no tab boost.
 
-![fixture](shots/q2-open-tab-word.png)
+(Arc's screen: `~/brk-arc-reference/research-command-bar/q2-open-tab-word.png`)
 
 **`fixture`.** With a whole word of the same title, the tab leads. This fits the `exactHotWord` boost (100 / 15).
 
-![githu](shots/q1-site-prefix-githu.png)
+(Arc's screen: `~/brk-arc-reference/research-command-bar/q1-site-prefix-githu.png`)
 
 **`githu`.** A Favorite whose domain starts with the query leads, and the input completes to its host.
 
-![secondary ref](shots/q6-history-title.png)
+(Arc's screen: `~/brk-arc-reference/research-command-bar/q6-history-title.png`)
 
 **`secondary ref`.** A history page whose title matches sits at row 2, right under the typed search and above the engine's suggestions.
 

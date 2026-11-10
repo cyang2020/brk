@@ -477,13 +477,13 @@ enum ShortcutsCopy {
     }
 }
 
-/// The pane's numbers, measured on Arc 1.170's capture (scripts/station/arc-reference/P38/P38-e-arc.png).
+/// The pane's numbers, measured on Arc 1.170's capture (~/brk-arc-reference/P38/P38-e-arc.png).
 let ShortcutsPaneMetrics = ShortcutsPaneMetricsTable()
 
 private var K: ShortcutsPaneMetricsTable { ShortcutsPaneMetrics }
 
 struct ShortcutsPaneMetricsTable: MetricGroup {
-    private static let capture = "scripts/station/arc-reference/P38/P38-e-arc.png"
+    private static let capture = "~/brk-arc-reference/P38/P38-e-arc.png"
     let recorderSize = Metric(CGSize(width: 64, height: 24), .anatomy("\(capture): the key caps span x 632 to 760 px, y 530 to 578 px"))
     let recorderRadius = Metric(6.0, .guess("the key cap's corner"))
     let capOpacity = Metric(0.6, .anatomy("\(capture): a chord and '---' are #858585 at their darkest"))

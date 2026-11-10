@@ -282,10 +282,10 @@ enum SplitMenuGlyph {
 let PaneHeaderDraw = PaneHeaderMetrics()
 
 struct PaneHeaderMetrics: MetricGroup {
-    let closePitch = Metric(32.0, .anatomy("scripts/station/arc-reference/P23/P23-c-arc.png: the split button is centred 32 left of close, translate and website controls 36 apart before it"))
-    let menuGlyph = Metric(16.0, .anatomy("scripts/station/arc-reference/P23/P23-splitmenu-arc.png: the menu's pane glyphs fill a 16 pt image slot"))
-    let menuGlyphTrailing = Metric(4.0, .anatomy("scripts/station/arc-reference/P23/P23-splitmenu-arc.png: the titles start at x 159 px of the crop, the ink ends at 138 px"))
-    let menuConvertExtra = Metric(2.0, .anatomy("scripts/station/arc-reference/P23/P23-splitmenu-arc.png: Separate to Convert is 52 px, Convert to Share 74 px; every other pitch is 48 px and 70 px"))
+    let closePitch = Metric(32.0, .anatomy("~/brk-arc-reference/P23/P23-c-arc.png: the split button is centred 32 left of close, translate and website controls 36 apart before it"))
+    let menuGlyph = Metric(16.0, .anatomy("~/brk-arc-reference/P23/P23-splitmenu-arc.png: the menu's pane glyphs fill a 16 pt image slot"))
+    let menuGlyphTrailing = Metric(4.0, .anatomy("~/brk-arc-reference/P23/P23-splitmenu-arc.png: the titles start at x 159 px of the crop, the ink ends at 138 px"))
+    let menuConvertExtra = Metric(2.0, .anatomy("~/brk-arc-reference/P23/P23-splitmenu-arc.png: Separate to Convert is 52 px, Convert to Share 74 px; every other pitch is 48 px and 70 px"))
     let menuGlyphLine = Metric(1.2, .guess("the split menu glyphs' light outline, about 1.2 pt in P23-splitmenu-arc.png"))
 }
 

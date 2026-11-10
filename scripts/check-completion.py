@@ -11,6 +11,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 STATES = {"unreviewed", "missing", "partial", "implemented", "verified", "blocked", "excluded", "deferred"}
 CHECKS = {"unit", "native", "visual", "manual", "static"}
+REMOVED_FROM_HISTORY = ("verify/", ".audit/arc-evidence/", "scripts/station/arc-reference/", "docs/research/arc-command-bar-ranking/shots/")
 
 
 def evidence_exists(artifact):
@@ -19,7 +20,10 @@ def evidence_exists(artifact):
     recorded = re.fullmatch(r"([0-9a-f]{7,40}):(.+)", artifact)
     if recorded:
         found = subprocess.run(["git", "cat-file", "-e", artifact], cwd=ROOT, capture_output=True)
-        return found.returncode == 0
+        # On 2026-11-10 these paths were removed from the whole git history at the user's request (test records,
+        # Arc's pictures and raw binary dumps), and the history rewrite changed every commit id. Such an entry
+        # stays as a note of where the evidence was; it cannot be shown any more.
+        return found.returncode == 0 or recorded.group(2).startswith(REMOVED_FROM_HISTORY)
     path = (ROOT / artifact).resolve()
     return bool(artifact) and path.is_relative_to(ROOT) and path.is_file()
 

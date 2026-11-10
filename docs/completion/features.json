@@ -7960,7 +7960,7 @@
           "kind": "native",
           "result": "pass",
           "command": "python3 scripts/run-native.py gate-flight --set smoke,downloads",
-          "artifact": "92b2e4954662:docs/arc-anatomy/library-flyout.md",
+          "artifact": "docs/arc-anatomy/library-flyout.md",
           "scope": "LibraryFlyout-Flight: a real click on a download link; the flying icon found within 2 pt of Arc's measured arc, then the sidebar-hidden bin; DownloadFlightTests (3). Arc facts with binary addresses in docs/arc-anatomy/library-flyout.md."
         }
       ],

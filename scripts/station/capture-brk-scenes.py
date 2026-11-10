@@ -7,7 +7,7 @@ Launches the app with a control socket and a data directory seeded from tools/fi
 sidebar the Arc references were taken with: favorites Wikipedia / MDN / GitHub / Apple, pinned Home, Docs and the
 folder 资料, Today Inbox / Long title… / Secondary reference / Visual fixture), puts the window at the standard
 1280×776 frame at screen point (320,70), then drives each scene and writes <outdir>/<scene>-<letter>-brk.png.
-Pair those with scripts/station/arc-reference/<scene>/<scene>-<letter>-arc.png.
+Pair those with ~/brk-arc-reference/<scene>/<scene>-<letter>-arc.png.
 
 Needs the fixture site on 127.0.0.1:8764 (python3 -m http.server 8764 --bind 127.0.0.1 --directory
 scripts/station/fixture-site). Uses real mouse and key events, so do not type while it runs. Every scene
