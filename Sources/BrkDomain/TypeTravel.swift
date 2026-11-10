@@ -2,7 +2,7 @@ import BrkBase
 import Foundation
 
 // Owner: R3-6. Command bar actions that are not menu rows (A068, Arc: `ASE2.TypeTravelCandidate`, 35 cases in
-// `.audit/arc-evidence/a/types-commandbar.txt`). Menu rows come from `ActionID` (`menuItem`), the settings panes from
+// Arc's command-bar type dump, removed from the repository on 2026-11-10). Menu rows come from `ActionID` (`menuItem`), the settings panes from
 // `SettingsPane` (`openPreferencePane`), spaces and folder moves from the bar's lists (`focusSpace`, `moveToSpace`,
 // `moveToFolder`). This file adds what is left and applies now: the Favorites moves, Move to New Folder, Open
 // <folder>, Replace Pinned Tab with the Current Site, the four Add … Split rows, Mute and Unmute All Tabs, Undo while

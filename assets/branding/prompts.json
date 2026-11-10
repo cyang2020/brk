@@ -1,0 +1,71 @@
+{
+  "product": "brk / bark",
+  "date": "2026-11-05",
+  "generation_mode": "built-in imagegen edit",
+  "reference": "assets/branding/reference-approved.png",
+  "concepts": [
+    {
+      "id": "original",
+      "kind": "app",
+      "title": "Original",
+      "prompt": "Use case: logo-brand, precise-object-edit. The attached image is the APPROVED brk/bark browser brand. Preserve its exact uppercase B / dog geometry: two B bowls, large long blue vertical floppy ear, short round muzzle with a nose, NO EYE, NO face dots, two small barking arcs in front of the nose. No new letters or words. Preserve all positions, proportions, stroke weights, margins, and the exact same silhouette. Make only the requested production/style changes. A single square PNG asset, no mockup or presentation sheet. The outside of any app tile MUST be genuinely transparent alpha, not white, gray or a checkerboard. Create the production version of the approved original app icon. Keep the exact white rounded-square macOS tile, colorful red/pink/royal-blue/violet mark, white contour and restrained shadows, with identical overall sizing. Remove ONLY the pale gray canvas OUTSIDE the tile, leaving transparent alpha around the tile and its faint outer shadow. Do not redesign or recolor anything.",
+      "path": "Sources/BrkSettings/Resources/AppIcons/original.png"
+    },
+    {
+      "id": "candy",
+      "kind": "app",
+      "title": "Candy",
+      "prompt": "Use case: logo-brand, precise-object-edit. The attached image is the APPROVED brk/bark browser brand. Preserve its exact uppercase B / dog geometry: two B bowls, large long blue vertical floppy ear, short round muzzle with a nose, NO EYE, NO face dots, two small barking arcs in front of the nose. No new letters or words. Preserve all positions, proportions, stroke weights, margins, and the exact same silhouette. Make only the requested production/style changes. A single square PNG asset, no mockup or presentation sheet. The outside of any app tile MUST be genuinely transparent alpha, not white, gray or a checkerboard. Create a Candy style of the SAME app icon. Keep the same rounded-square tile and placement, but use a soft pale rose tile. Recolor the mark in warm candy pink, peach-coral and lavender-violet, with darker violet translucent overlaps and a violet nose. Barking arcs use coral and lavender. A polished satin graphic finish, restrained white contour and soft relief, cheerful but refined. Transparent outside the tile.",
+      "path": "Sources/BrkSettings/Resources/AppIcons/candy.png"
+    },
+    {
+      "id": "neon",
+      "kind": "app",
+      "title": "Neon",
+      "prompt": "Use case: logo-brand, precise-object-edit. The attached image is the APPROVED brk/bark browser brand. Preserve its exact uppercase B / dog geometry: two B bowls, large long blue vertical floppy ear, short round muzzle with a nose, NO EYE, NO face dots, two small barking arcs in front of the nose. No new letters or words. Preserve all positions, proportions, stroke weights, margins, and the exact same silhouette. Make only the requested production/style changes. A single square PNG asset, no mockup or presentation sheet. The outside of any app tile MUST be genuinely transparent alpha, not white, gray or a checkerboard. Create a Neon / dark appearance style of the SAME app icon. The rounded-square tile is deep near-black navy with a restrained indigo gradient. Recolor the same geometry in luminous fuchsia pink, electric cyan and violet, with a cyan nose and two fuchsia/cyan bark arcs. Keep the strokes crisp with a subtle colored edge glow, no haze obscuring the logo. Preserve white counters as cut-through spaces showing the dark tile. No eyes. Transparent outside the tile.",
+      "path": "Sources/BrkSettings/Resources/AppIcons/neon.png"
+    },
+    {
+      "id": "graphite",
+      "kind": "app",
+      "title": "Graphite",
+      "prompt": "Use case: logo-brand, precise-object-edit. The attached image is the APPROVED brk/bark browser brand. Preserve its exact uppercase B / dog geometry: two B bowls, large long blue vertical floppy ear, short round muzzle with a nose, NO EYE, NO face dots, two small barking arcs in front of the nose. No new letters or words. Preserve all positions, proportions, stroke weights, margins, and the exact same silhouette. Make only the requested production/style changes. A single square PNG asset, no mockup or presentation sheet. The outside of any app tile MUST be genuinely transparent alpha, not white, gray or a checkerboard. Create a Graphite monochrome style of the SAME app icon. A charcoal graphite rounded-square tile. The same B/dog and two bark arcs use pearl-white, silver and pale gray, with a slightly darker silver nose and tasteful gray overlap areas. Both letter counters show the dark tile underneath. Elegant restrained grayscale, absolutely no colors or new eye. Transparent outside the tile.",
+      "path": "Sources/BrkSettings/Resources/AppIcons/graphite.png"
+    },
+    {
+      "id": "schoolbook",
+      "kind": "app",
+      "title": "Schoolbook",
+      "prompt": "Use case: logo-brand, precise-object-edit. The attached image is the APPROVED brk/bark browser brand. Preserve its exact uppercase B / dog geometry: two B bowls, large long blue vertical floppy ear, short round muzzle with a nose, NO EYE, NO face dots, two small barking arcs in front of the nose. No new letters or words. Preserve all positions, proportions, stroke weights, margins, and the exact same silhouette. Make only the requested production/style changes. A single square PNG asset, no mockup or presentation sheet. The outside of any app tile MUST be genuinely transparent alpha, not white, gray or a checkerboard. Create a Schoolbook / warm paper style of the SAME app icon. A warm ivory pale butter-yellow rounded-square tile. Preserve the exact original silhouette and its two barking arcs. Recolor the ear/stem in deep forest green and the two bowls in warm tangerine and coral, using a dark green nose and green/orange sound arcs. A restrained flat print-like finish with a thin ivory edge and very little shadow, no actual writing, no paper texture lines, no eyes. Transparent outside the tile.",
+      "path": "Sources/BrkSettings/Resources/AppIcons/schoolbook.png"
+    },
+    {
+      "id": "colorful",
+      "kind": "app",
+      "title": "Colorful",
+      "prompt": "Use case: logo-brand, precise-object-edit. The attached image is the APPROVED brk/bark browser brand. Preserve its exact uppercase B / dog geometry: two B bowls, large long blue vertical floppy ear, short round muzzle with a nose, NO EYE, NO face dots, two small barking arcs in front of the nose. No new letters or words. Preserve all positions, proportions, stroke weights, margins, and the exact same silhouette. Make only the requested production/style changes. A single square PNG asset, no mockup or presentation sheet. The outside of any app tile MUST be genuinely transparent alpha, not white, gray or a checkerboard. Create a Colorful style of the SAME app icon. A deep aubergine-to-indigo rounded-square tile. The same geometric mark combines vivid turquoise, sunny golden yellow, coral orange and magenta with strong readable overlaps, a turquoise nose and two coral/turquoise barking arcs. A saturated playful desktop icon, optically balanced, minimal soft relief. Both counters show the dark tile. No eyes. Transparent outside the tile.",
+      "path": "Sources/BrkSettings/Resources/AppIcons/colorful.png"
+    },
+    {
+      "id": "logo-color",
+      "kind": "brand",
+      "title": "Transparent color logo",
+      "prompt": "Use case: logo-brand, precise-object-edit. The attached image is the APPROVED brk/bark browser brand. Preserve its exact uppercase B / dog geometry: two B bowls, large long blue vertical floppy ear, short round muzzle with a nose, NO EYE, NO face dots, two small barking arcs in front of the nose. No new letters or words. Preserve all positions, proportions, stroke weights, margins, and the exact same silhouette. Make only the requested production/style changes. A single square PNG asset, no mockup or presentation sheet. The outside of any app tile MUST be genuinely transparent alpha, not white, gray or a checkerboard. Extract ONLY the colorful B/dog mark AND its two barking arcs from the approved icon. Remove the ENTIRE white app tile and the outside canvas. The background AND both white letter counters must be truly TRANSPARENT. Preserve the exact red/pink/royal-blue/violet shapes, large ear and nose, two arcs, and a restrained clean white keyline around the colorful strokes. No tile, no square, no surrounding shadow halo, no eyes. Center the standalone mark with even approximately 8% clear space, high-quality clean alpha edges.",
+      "path": "assets/branding/logo-color.png"
+    },
+    {
+      "id": "logo-black",
+      "kind": "brand",
+      "title": "Black template mark",
+      "prompt": "Use case: logo-brand, precise-object-edit. The attached image is the APPROVED brk/bark browser brand. Preserve its exact uppercase B / dog geometry: two B bowls, large long blue vertical floppy ear, short round muzzle with a nose, NO EYE, NO face dots, two small barking arcs in front of the nose. No new letters or words. Preserve all positions, proportions, stroke weights, margins, and the exact same silhouette. Make only the requested production/style changes. A single square PNG asset, no mockup or presentation sheet. The outside of any app tile MUST be genuinely transparent alpha, not white, gray or a checkerboard. Create a FLAT BLACK monochrome standalone logo of ONLY the B/dog mark plus its two barking arcs. Remove the entire app tile, all white keylines, all shadows and all gradient effects. The entire unified B/dog silhouette, nose and both arcs are pure opaque black. Preserve the same outline and both internal counters as TRANSPARENT holes. No eyes. Real transparent background, crisp flat vector-like shapes, no gray or white outside, even approximately 8% clear space.",
+      "path": "assets/branding/logo-black.png"
+    },
+    {
+      "id": "logo-white",
+      "kind": "brand",
+      "title": "White template mark",
+      "prompt": "Use case: logo-brand, precise-object-edit. The attached image is the APPROVED brk/bark browser brand. Preserve its exact uppercase B / dog geometry: two B bowls, large long blue vertical floppy ear, short round muzzle with a nose, NO EYE, NO face dots, two small barking arcs in front of the nose. No new letters or words. Preserve all positions, proportions, stroke weights, margins, and the exact same silhouette. Make only the requested production/style changes. A single square PNG asset, no mockup or presentation sheet. The outside of any app tile MUST be genuinely transparent alpha, not white, gray or a checkerboard. Create a FLAT WHITE monochrome standalone logo of ONLY the B/dog mark plus its two barking arcs. Remove the entire app tile, all outlines, all shadows and all gradient effects. The entire unified B/dog silhouette, nose and both arcs are pure opaque white. Preserve the same outline and both internal counters as TRANSPARENT holes. No eyes. Real transparent background, crisp flat vector-like shapes, no gray or black background, even approximately 8% clear space.",
+      "path": "assets/branding/logo-white.png"
+    }
+  ]
+}

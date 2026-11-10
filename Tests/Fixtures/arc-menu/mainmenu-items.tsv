@@ -1,0 +1,189 @@
+Arc							2166
+Arc > About Arc				orderFrontStandardAboutPanel:->nil(first responder)		arcTypeTravelID=aboutArc;arcTypeTravelIcon=book.closed	115
+Arc > Preferences…	Cmd+,	mask=1048576 raw=',' 		showPreferences:->NSClassSwapper:_TtC3Arc11AppDelegate		arcKeyBindingID=viewPreferences	1009
+Arc > Share Arc						arcTypeTravelID=giftArcToAFriend;arcTypeTravelTriggers=Refer; Refer a friend; Referral; Invite; Share Arc; Gift Arc;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 1.3)]>;arcTypeTravelIcon=gift	369
+Arc > Set as Default Browser				setAsDefaultBrowser:->nil(first responder)		arcTypeTravelID=defaultBrowser;arcTypeTravelIcon=heart;KeyEquivalent=♡;arcTypeTravelTriggers=Default Browser;	249
+Arc > Import from Another Browser…						arcTypeTravelID=importFromAnotherBrowser;arcTypeTravelIcon=arrow.turn.right.down;arcTypeTravelTriggers=Import Bookmarks; Import Settings; Import Logins; Import Passwords; Transfer Bookmarks; Transfer Settings; Transfer Logins; Transfer Passwords; Bookmarks	1454
+Arc > Check for Updates…				checkForUpdates:->NSClassSwapper:_TtC3Arc11AppDelegate		arcTypeTravelID=checkForUpdates;arcTypeTravelIcon=sparkles;arcTypeTravelTriggers=Download; Update; Check for Updates	1337
+Arc > Services							2177
+Arc > Privacy Policy				showPrivacyPolicy:->nil(first responder)		arcTypeTravelID=privacyPolicy;arcTypeTravelIcon=book.closed;arcTypeTravelTriggers=Privacy Policy	353
+Arc > Hide Arc	Cmd+H	mask=1048576 raw='h' 		hide:->nil(first responder)		arcTypeTravelID=hideArc;arcTypeTravelIcon=macwindow;arcTypeTravelTriggers=Hide Arc;arcKeyBindingPriority=overrideWebView;arcKeyBindingID=hideArc	477
+Arc > Hide Other Windows	Cmd+Opt+H	mask=1572864 raw='h' 		hideOtherApplications:->nil(first responder)		arcTypeTravelID=hideOthers;arcTypeTravelIcon=macwindow;arcTypeTravelTriggers=Hide Others;arcKeyBindingID=hideOthers	731
+Arc > Show All				unhideAllApplications:->nil(first responder)		arcTypeTravelID=showAll;arcTypeTravelIcon=book	344
+Arc > Sign Out				signOut:->NSClassSwapper:_TtC3Arc11AppDelegate			1753
+Arc > Quit Arc	Cmd+Q	mask=1048576 raw='q' 		userQuitApp:->nil(first responder)		arcTypeTravelID=quitArc;arcTypeTravelIcon=hand.wave;arcTypeTravelTriggers=Quit App;arcKeyBindingPriority=overrideWebView;arcKeyBindingID=quitArc	988
+File							2190
+File > New Tab…	Cmd+T	mask=1048576 raw='t' 	newTabMenuItem	newWindowForTab:->nil(first responder)		arcKeyBindingID=newTab;arcKeyBindingPriority=overrideWebView	830
+File > New Window	Cmd+N	mask=1048576 raw='n' 	newWindow	newWindow:->NSClassSwapper:_TtC3Arc11AppDelegate		arcTypeTravelID=newWindow;arcTypeTravelIcon=plus.rectangle;arcTypeTravelTriggers=Create Window; Copy Window; Duplicate Window;arcKeyBindingID=newWindow;arcKeyBindingPriority=overrideWebView	678
+File > Blank Window	Cmd+Ctrl+N	mask=1310720 raw='n' 	newBlankWindow	blankWindow:->NSClassSwapper:_TtC3Arc11AppDelegate		arcTypeTravelID=blankWindow;arcTypeTravelIcon=macwindow.on.rectangle;arcTypeTravelTriggers=Create Window;arcKeyBindingID=newBlankWindow	1485
+File > New Incognito Window	Cmd+Shift+N	mask=1048576 raw='N' shift implied by uppercase key	newIncognitoWindowMenuItemId	newIncognitoWindow:->NSClassSwapper:_TtC3Arc11AppDelegate		arcTypeTravelID=newIncognitoWindow;arcTypeTravelIcon=macwindow.on.rectangle;arcTypeTravelTriggers=Create Incognito Window; New Private Window; Incognito;arcKeyBindingID=newIncognitoWindow;arcKeyBindingPriority=overrideWebView	1029
+File > New Little Arc Window	Cmd+Opt+N	mask=1572864 raw='n' 	showLittleArc	newLittleBrowserWindow:->NSClassSwapper:_TtC3Arc11AppDelegate		arcTypeTravelID=newLittleBrowserWindow;arcTypeTravelIcon=macwindow.on.rectangle;arcTypeTravelTriggers=Quick Lookup, Mini Window, Floating Window;arcKeyBindingID=showLittleArc;arcKeyBindingPriority=overrideWebView	463
+File > Restore Last Closed Tab	Cmd+Shift+T	mask=1048576 raw='T' shift implied by uppercase key		reopenLastTab:->nil(first responder)		arcTypeTravelID=reopenClosedTab;arcTypeTravelIcon=arrow.uturn.backward;arcTypeTravelTriggers=Reopen Closed Tab;arcKeyBindingID=reopenLastClosedTab;arcKeyBindingPriority=overrideWebView	717
+File > Open Command Bar	Cmd+L	mask=1048576 raw='l' 		toggleOpenOmnibox:->nil(first responder)		arcKeyBindingID=addressBar;arcKeyBindingPriority=overrideWebView	240
+File > New Boost			newBoostMenuItem	newBoost:->nil(first responder)	hidden	arcTypeTravelID=newBoost;arcTypeTravelIcon=paintbrush;arcTypeTravelTriggers=Boost; New Boost; Create boost; extension; Boost the Current Page; Edit Boost	879
+File > Edit Boost			editBoostMenuItem	editBoost:->nil(first responder)	hidden	arcTypeTravelID=editBoost;arcTypeTravelIcon=paintbrush;arcTypeTravelTriggers=Boost; New Boost; Create boost; extension; Boost the Current Page; Edit Boost	416
+File > New Legacy Boost (Advanced)			newLegacyBoostMenuItem	newLegacyBoost:->nil(first responder)	hidden	arcTypeTravelID=newLegacyBoost;arcTypeTravelIcon=burst;arcTypeTravelTriggers=Create legacy boost; legacy boost;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.5)]>	1182
+File > Boost Gallery				openBoostGallery:->nil(first responder)	hidden	arcTypeTravelID=openBoostGallery;arcTypeTravelIcon=paintbrush;arcTypeTravelTriggers=Boost Gallery; Boosts Gallery; Boost Store; Boosts Store	8
+File > New Profile				newProfile:->nil(first responder)		arcTypeTravelID=newProfile;arcTypeTravelIcon=person.fill;arcTypeTravelTriggers=Profile	393
+File > New Note	Shift+Ctrl+N	mask=262144 raw='N' shift implied by uppercase key	newNoteMenuItem	newNote:->nil(first responder)		arcTypeTravelID=newNote;arcTypeTravelIcon=note.text;arcTypeTravelTriggers=Create Note; Note; Scratchpad;arcKeyBindingID=newNote;arcKeyBindingPriority=promptAfterConsumedByWebView	690
+File > New Note (in Split)	Opt+Ctrl+N	mask=786432 raw='n' 	newNoteInSplitView	newNoteInSplitView:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcTypeTravelID=newNoteInSplitView;arcTypeTravelIcon=note.text;arcTypeTravelTriggers=Create Note in Split View; Note Split; Scratchpad Split;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.9)]>;arcKeyBindingID=newNoteInSplitView;arcKeyBindingPriority=promptAfterConsumedByWebView	1220
+File > New Easel	Shift+Ctrl+E	mask=262144 raw='E' shift implied by uppercase key	newEaselMenuItemId	newEasel:->nil(first responder)		arcTypeTravelID=newEasel;arcTypeTravelIcon=scribble.variable;arcTypeTravelTriggers=Mood Board;arcKeyBindingID=newEasel	1263
+File > Close Window	Cmd+Shift+W	mask=1048576 raw='W' shift implied by uppercase key		closeWindow:->nil(first responder)		arcTypeTravelID=closeWindow;arcTypeTravelIcon=xmark.circle;arcTypeTravelTriggers=Exit Window;arcKeyBindingID=closeWindow;arcKeyBindingPriority=overrideWebView	574
+File > Archive Tab	Cmd+W	mask=1048576 raw='w' 		closeCurrentItem:->nil(first responder)	keyEquivWorksWhenHidden	arcTypeTravelID=archiveTab;arcTypeTravelIcon=archivebox;arcTypeTravelTriggers=Exit Tab; Unload; Deselect; Close;arcKeyBindingID=archiveTab;arcKeyBindingPriority=overrideWebView	968
+File > Share…				share:->nil(first responder)		arcTypeTravelID=share;arcTypeTravelIcon=square.and.arrow.up;arcTypeTravelTriggers=Share;arcKeyBindingID=share;arcTypeTravelTitle=Share URL	602
+File > Send to Dia				sendCurrentTabToDia:->nil(first responder)		arcTypeTravelID=sendCurrentTabToDia;arcTypeTravelIcon=sunrise;arcTypeTravelTriggers=Send Tab to Dia;arcTypeTravelTitle=Send Tab to Dia	1157
+File > Capture…	Cmd+Shift+2	mask=1179648 raw='2' 	capturePage	capturePage:->nil(first responder)		arcTypeTravelID=capturePage;arcTypeTravelIcon=camera;arcTypeTravelTriggers=Capture; Screenshot; Snapshot; Cut Out;;arcKeyBindingID=capturePage	263
+File > Capture Full Page			captureFullPage	captureFullPage:->nil(first responder)		arcTypeTravelID=captureFullPage;arcTypeTravelIcon=newspaper;arcTypeTravelTriggers=Full Page Capture; Capture Entire Page; Screenshot Full Page; Capture Full Page; Screenshot;arcKeyBindingID=captureFullPage	1242
+File > Capture in Portrait Mode			capturePrettyScreenshot	capturePrettyScreenshot:->nil(first responder)	keyEquivWorksWhenHidden	arcTypeTravelID=capturePrettyScreenshot;arcTypeTravelIcon=camera.macro;arcTypeTravelTriggers=Screenshot in Portrait Mode; Capture Portrait; Portrait Mode; Screenshot;arcKeyBindingID=capturePrettyScreenshot	914
+File > Save Page As	Cmd+Shift+S	mask=1048576 raw='S' shift implied by uppercase key		save:->nil(first responder)		arcTypeTravelID=save;arcTypeTravelIcon=square.and.arrow.down;arcTypeTravelTriggers=Save Page; Save File;arcKeyBindingID=savePageAs	1207
+File > Print	Cmd+P	mask=1048576 raw='p' 		printPage:->nil(first responder)		arcTypeTravelID=printPage;arcTypeTravelIcon=printer;arcTypeTravelTriggers=Print Page;arcKeyBindingID=printPage;arcKeyBindingPriority=promptAfterConsumedByWebView	901
+Edit							2202
+Edit > Undo	Cmd+Z	mask=1048576 raw='z' 		undo:->nil(first responder)			1992
+Edit > Redo	Cmd+Shift+Z	mask=1048576 raw='Z' shift implied by uppercase key		redo:->nil(first responder)		arcTypeTravelID=redo;arcTypeTravelIcon=arrow.uturn.forward	124
+Edit > Cut	Cmd+X	mask=1048576 raw='x' 		cut:->nil(first responder)		arcTypeTravelID=cut;arcTypeTravelIcon=scissors	1393
+Edit > Copy	Cmd+C	mask=1048576 raw='c' 		copyAction:->nil(first responder)		arcTypeTravelID=copy;arcTypeTravelIcon=doc.on.doc	1465
+Edit > Copy URL	Cmd+Shift+C	mask=1048576 raw='C' shift implied by uppercase key		copyCurrentURL:->nil(first responder)		arcTypeTravelID=copyCurrentURL;arcTypeTravelIcon=doc.on.doc;arcTypeTravelTriggers=Copy URL; Copy Link;arcKeyBindingID=copyCurrentURL;arcKeyBindingPriority=overrideWebView	890
+Edit > Copy URL as Markdown	Cmd+Shift+Opt+C	mask=1572864 raw='C' shift implied by uppercase key		copyCurrentURLAsMarkdown:->nil(first responder)		arcTypeTravelID=copyCurrentURLAsMarkdown;arcTypeTravelIcon=doc.on.doc;arcTypeTravelTriggers=Copy Link as Markdown; Copy Markdown;arcKeyBindingID=copyCurrentURLMarkdown;arcKeyBindingPriority=overrideWebView	402
+Edit > Copy URL as Quote	Cmd+Shift+Ctrl+C	mask=1310720 raw='C' shift implied by uppercase key		copyCurrentURLAsQuote:->nil(first responder)	disabled	arcTypeTravelID=copyCurrentURLAsQuote;arcTypeTravelIcon=quote.bubble;arcTypeTravelTriggers=Copy URL as Quote; Copy Quote; Copy Link to Highlight;arcKeyBindingID=copyCurrentURLAsQuote;arcKeyBindingPriority=overrideWebView	1412
+Edit > Paste	Cmd+V	mask=1048576 raw='v' 		paste:->nil(first responder)		arcTypeTravelID=paste;arcTypeTravelIcon=list.clipboard	1074
+Edit > Paste and Match Style	Cmd+Shift+V	mask=1048576 raw='V' shift implied by uppercase key		pasteAsPlainText:->nil(first responder)		arcTypeTravelID=pasteAndMatchStyle;arcTypeTravelIcon=list.clipboard;arcTypeTravelTriggers=Paste Without Formatting;arcKeyBindingID=pasteAndMatchStyle	740
+Edit > Delete				delete:->nil(first responder)			1885
+Edit > Select All	Cmd+A	mask=1048576 raw='a' 		selectAll:->nil(first responder)		arcTypeTravelID=selectAll;arcTypeTravelIcon=square.grid.2x2.fill	533
+Edit > Find							2212
+Edit > Find > Find…	Cmd+F	mask=1048576 raw='f' 		arc_performFindPanelAction:->nil(first responder)		arcTypeTravelID=find;arcTypeTravelIcon=magnifyingglass;arcTypeTravelTriggers=Find in Page;arcKeyBindingID=find	799
+Edit > Find > Find and Replace	Cmd+Opt+F	mask=1572864 raw='f' 		arc_performFindPanelAction:->nil(first responder)		arcTypeTravelID=findAndReplace;arcTypeTravelIcon=magnifyingglass;arcKeyBindingID=findAndReplace	822
+Edit > Find > Find Next	Cmd+G	mask=1048576 raw='g' 		arc_performFindPanelAction:->nil(first responder)		arcTypeTravelID=findNext;arcTypeTravelIcon=arrow.right;arcTypeTravelTriggers=Next;arcKeyBindingID=findNext	1254
+Edit > Find > Find Previous	Cmd+Shift+G	mask=1048576 raw='G' shift implied by uppercase key		arc_performFindPanelAction:->nil(first responder)		arcTypeTravelID=findPrevious;arcTypeTravelIcon=arrow.left;arcTypeTravelTriggers=Previous;arcKeyBindingID=findPrevious	487
+Edit > Find > Use Selection to Find				arc_performFindPanelAction:->nil(first responder)		arcTypeTravelID=useSelectionForFind;arcTypeTravelIcon=magnifyingglass;arcTypeTravelTriggers=Find Selection; Find Selected;arcKeyBindingID=useSelectionForFind	926
+Edit > Find > Jump to Selection	Cmd+J	mask=1048576 raw='j' 		arc_performFindPanelAction:->nil(first responder)		arcTypeTravelID=jumpToSelection;arcTypeTravelIcon=arrow.turn.right.down;arcTypeTravelTriggers=Jump to Selected; Selection;arcKeyBindingID=jumpToSelection	543
+Edit > Spelling and Grammar							2220
+Edit > Spelling and Grammar > Show Spelling and Grammar	Cmd+:	mask=1048576 raw=':' 		showGuessPanel:->nil(first responder)		arcTypeTravelID=showSpellingAndGrammar;arcTypeTravelIcon=textformat;arcTypeTravelTriggers=Show Spelling; Show Grammar; Spelling; Grammar	294
+Edit > Spelling and Grammar > Check Document Now	Cmd+;	mask=1048576 raw=';' 		checkSpelling:->nil(first responder)			2023
+Edit > Spelling and Grammar > Check Spelling While Typing				toggleContinuousSpellChecking:->nil(first responder)			2087
+Edit > Spelling and Grammar > Check Grammar With Spelling				toggleGrammarChecking:->nil(first responder)			2044
+Edit > Spelling and Grammar > Correct Spelling Automatically				toggleAutomaticSpellingCorrection:->nil(first responder)			1769
+Edit > Substitutions							2230
+Edit > Substitutions > Show Substitutions				orderFrontSubstitutionsPanel:->nil(first responder)			2151
+Edit > Substitutions > Smart Copy/Paste				toggleSmartInsertDelete:->nil(first responder)			1789
+Edit > Substitutions > Smart Quotes				toggleAutomaticQuoteSubstitution:->nil(first responder)			2017
+Edit > Substitutions > Smart Dashes				toggleAutomaticDashSubstitution:->nil(first responder)			2093
+Edit > Substitutions > Smart Links				toggleAutomaticLinkDetection:->nil(first responder)			1974
+Edit > Substitutions > Data Detectors				toggleAutomaticDataDetection:->nil(first responder)			2109
+Edit > Substitutions > Text Replacement				toggleAutomaticTextReplacement:->nil(first responder)			1815
+Edit > Transformations							2239
+Edit > Transformations > Make Upper Case				uppercaseWord:->nil(first responder)			2127
+Edit > Transformations > Make Lower Case				lowercaseWord:->nil(first responder)			1980
+Edit > Transformations > Capitalize				capitalizeWord:->nil(first responder)			1910
+Edit > Speech							2247
+Edit > Speech > Start Speaking				startSpeaking:->nil(first responder)			1947
+Edit > Speech > Stop Speaking				stopSpeaking:->nil(first responder)			1867
+Edit > Format							2255
+Edit > Format > Font							2263
+Edit > Format > Font > Bold	Cmd+B	mask=1048576 raw='b' 		addFontTrait:->NSCustomObject:NSFontManager			1839
+Edit > Format > Font > Italic	Cmd+I	mask=1048576 raw='i' 		addFontTrait:->NSCustomObject:NSFontManager			2139
+Edit > Format > Font > Underline	Cmd+U	mask=1048576 raw='u' 		underline:->nil(first responder)			1797
+View							2272
+View > Appearance							2280
+View > Appearance > Websites, Easels, and Notes will use:					keyEquivWorksWhenHidden,disabled		2286
+View > Appearance > Automatic				setAutomaticAppearance:->nil(first responder)		arcTypeTravelID=automaticMode;arcTypeTravelIcon=sparkles;arcTypeTravelTriggers=Switch to Automatic Appearance; Switch Automatic Mode; Automatic Mode;arcTypeTravelTitle=Switch to Automatic Appearance	640
+View > Appearance > Light				setLightAppearance:->nil(first responder)		arcTypeTravelID=lightMode;arcTypeTravelIcon=sun.max;arcTypeTravelTriggers=Switch to Light Mode; Switch Light Mode; Light Mode;arcTypeTravelTitle=Switch to Light Mode	1121
+View > Appearance > Dark				setDarkAppearance:->nil(first responder)		arcTypeTravelID=darkMode;arcTypeTravelIcon=moon.stars.fill;arcTypeTravelTriggers=Switch to Dark Mode; Switch Dark Mode; Dark Mode; Night Mode;arcTypeTravelTitle=Switch to Dark Mode	305
+View > Show/Hide Sidebar	Cmd+S	mask=1048576 raw='s' 		toggleArcSidebar:->nil(first responder)		arcTypeTravelID=toggleSidebar;arcTypeTravelIcon=sidebar.left;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.5)]>;arcKeyBindingID=showSidebar;arcKeyBindingPriority=promptAfterConsumedByWebView;arcTypeTravelTriggers=Toggle Sidebar;	33
+View > Show/Hide Toolbar	Cmd+Shift+D	mask=1048576 raw='D' shift implied by uppercase key		toggleArcToolbar:->nil(first responder)	hidden,disabled	arcTypeTravelID=toggleToolbar;arcTypeTravelTriggers=Toggle Hide Show Toolbar;;arcTypeTravelIcon=rectangle.topthird.inset.filled;arcKeyBindingID=toggleToolbar;arcKeyBindingPriority=promptAfterConsumedByWebView	1095
+View > Expand Pinned Section				expandPinnedSection:->nil(first responder)	hidden,disabled	arcTypeTravelID=expandPinnedSection;arcTypeTravelTriggers=Expand Pinned Tabs; Show Pinned Tabs; Pinned;arcTypeTravelIcon=chevron.down	617
+View > Collapse Pinned Section				collapsePinnedSection:->nil(first responder)	hidden,disabled	arcTypeTravelID=collapsePinnedSection;arcTypeTravelTriggers=Collapse Pinned Tabs; Hide Pinned Tabs; Pinned;arcTypeTravelIcon=chevron.right	840
+View > Reveal Current Tab	Ctrl+Space	mask=262144 raw=' ' 		focusSidebar:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcTypeTravelID=focusSidebar;arcTypeTravelIcon=sidebar.left;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.5)]>;arcKeyBindingPriority=promptAfterConsumedByWebView;arcKeyBindingID=focusSidebar	778
+View > Stop Loading	Cmd+.	mask=1048576 raw='.' 		stopLoadingCurrentTab:->nil(first responder)		arcKeyBindingID=stopLoading	512
+View > Refresh the Page	Cmd+R	mask=1048576 raw='r' 		reloadPage:->nil(first responder)	disabled	arcTypeTravelID=reloadPage;arcTypeTravelIcon=arrow.clockwise;arcTypeTravelTriggers=Reload Page;arcKeyBindingID=reloadPage	704
+View > Force Refresh the Page	Cmd+Shift+R	mask=1048576 raw='R' shift implied by uppercase key		forceReloadPage:->nil(first responder)	alternate,disabled	arcKeyBindingID=forceReloadPage;arcTypeTravelTriggers=Force Reload; Force Refresh;arcTypeTravelID=forceReloadPage;arcTypeTravelIcon=arrow.clockwise	1039
+View > Clear Cookies and Refresh				clearCookiesAndRefresh:->nil(first responder)		arcKeyBindingID=clearCookies;arcTypeTravelTriggers=Clear Cookies;arcTypeTravelID=clearCookies;arcTypeTravelIcon=trash	1436
+View > Clear Cache and Refresh				clearCacheAndRefresh:->nil(first responder)		arcTypeTravelTriggers=Clear Cache;arcTypeTravelID=clearCache;arcTypeTravelIcon=trash	1083
+View > Add Split View	Shift+Ctrl+=	mask=393216 raw='=' 		addSplitPanel:->nil(first responder)		arcTypeTravelID=addSplitView;arcTypeTravelIcon=square.split.2x1;arcTypeTravelTriggers=Add Split View; Split View; Create Split View Pane; New Split View; Split;arcKeyBindingID=addSplitView;arcKeyBindingPriority=promptAfterConsumedByWebView	194
+View > Close this Split Pane	Shift+Ctrl+-	mask=393216 raw='-' 		closeFocusedSplitViewPanel:->nil(first responder)	disabled	arcTypeTravelID=removeSplitView;arcTypeTravelIcon=xmark.square;arcTypeTravelTriggers=Close Split View;arcKeyBindingID=removeSplitView;arcKeyBindingPriority=promptAfterConsumedByWebView	228
+View > Separate Page from Split View				separateTabFromSplitView:->nil(first responder)	disabled	arcTypeTravelID=separateTabFromSplitView;arcTypeTravelIcon=scissors;arcTypeTravelTriggers=Separate from split view; separate tab;arcKeyBindingID=separateTabFromSplitView	1300
+View > Expand Current Split				maximizeCurrentSplitViewPane:->nil(first responder)		arcTypeTravelID=expandSplitViewPane;arcTypeTravelIcon=arrow.up.left.and.arrow.down.right;arcTypeTravelTriggers=Expand; Expand Split View; Maximize	629
+View > Zoom to Actual Size	Cmd+0	mask=1048576 raw='0' 		resetZoom:->nil(first responder)		arcTypeTravelID=actualSize;arcTypeTravelIcon=magnifyingglass;arcTypeTravelTriggers=Reset Zoom;arcKeyBindingID=resetZoom	764
+View > Zoom In	Cmd++	mask=1048576 raw='+' 		zoomIn:->nil(first responder)		arcTypeTravelID=zoomIn;arcTypeTravelIcon=plus.magnifyingglass;arcKeyBindingID=zoomIn	1051
+View > Zoom In	Cmd+=	mask=1048576 raw='=' 		zoomIn:->nil(first responder)	hidden,keyEquivWorksWhenHidden		2083
+View > Zoom In	Cmd+=	mask=1048576 raw='=' 		zoomIn:->nil(first responder)	hidden,keyEquivWorksWhenHidden		2070
+View > Zoom Out	Cmd+-	mask=1048576 raw='-' 		zoomOut:->nil(first responder)	keyEquivWorksWhenHidden	arcTypeTravelID=zoomOut;arcTypeTravelIcon=minus.magnifyingglass;arcKeyBindingID=zoomOut	93
+View > Zoom Out	Cmd+Shift+-	mask=1179648 raw='-' 		zoomOut:->nil(first responder)	hidden,keyEquivWorksWhenHidden		1881
+View > Cast				cast:->nil(first responder)		arcTypeTravelID=cast;arcKeyBindingID=cast;arcTypeTravelIcon=rectangle.portrait.and.arrow.right.fill	1371
+View > Developer							2296
+View > Developer > View Source	Cmd+Opt+U	mask=1572864 raw='u' 		viewSource:->nil(first responder)		arcTypeTravelID=viewSource;arcTypeTravelIcon=curlybraces;arcTypeTravelTriggers=View Source;;arcKeyBindingID=viewSource;arcKeyBindingPriority=promptAfterConsumedByWebView	655
+View > Developer > Developer Tools	Cmd+Opt+I	mask=1572864 raw='i' 		toggleDevTools:->nil(first responder)		arcTypeTravelID=devTools;arcTypeTravelIcon=hammer.fill;arcTypeTravelTriggers=Developer Tools; Debug Tools; Devtools;arcKeyBindingID=developerTools;arcKeyBindingPriority=promptAfterConsumedByWebView	1473
+View > Developer > Developer Tools	F12	mask=0 raw='\uf70f' 		toggleDevTools:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=developerTools_Alternate;arcKeyBindingPriority=promptAfterConsumedByWebView	285
+View > Developer > Inspect Elements	Cmd+Opt+C	mask=1572864 raw='c' 		inspectElements:->nil(first responder)		arcTypeTravelID=inspectElements;arcTypeTravelIcon=scope;arcTypeTravelTriggers=Inspect Element;;arcKeyBindingID=inspectElements;arcKeyBindingPriority=promptAfterConsumedByWebView	1380
+View > Developer > JavaScript Console	Cmd+Opt+J	mask=1572864 raw='j' 		javaScriptConsole:->nil(first responder)		arcTypeTravelID=javaScriptConsole;arcTypeTravelIcon=terminal;arcTypeTravelTriggers=Toggle console; Console; Javascript Console; JS console;arcKeyBindingID=javaScriptConsole	1312
+View > Developer > Network Inspector				networkInspector:->nil(first responder)		arcTypeTravelID=networkInspector;arcTypeTravelIcon=wifi;arcTypeTravelTriggers=Network Inspector;;arcKeyBindingID=networkInspector	521
+View > Developer > Allow JavaScript from Apple Events				allowJavascriptFromAppleEvents:->nil(first responder)			2038
+View > Developer > Toggle Developer Mode	Ctrl+D	mask=262144 raw='d' 		toggleDeveloperMode:->nil(first responder)		arcTypeTravelID=toggleDeveloperMode;arcTypeTravelIcon=hammer.fill;arcTypeTravelTriggers=Developer Mode; Enable Developer Mode; Disable Developer Mode;;arcKeyBindingID=toggleDeveloperMode;arcKeyBindingPriority=promptAfterConsumedByWebView	1276
+View > Enter/Exit Full Screen	Cmd+Ctrl+F	mask=1310720 raw='f' 		toggleFullScreen:->nil(first responder)		arcTypeTravelID=togglefullscreen;arcTypeTravelIcon=arrow.up.left.and.arrow.down.right;arcTypeTravelTriggers=Enter Full Screen; Exit Full Screen; Full Screen; Toggle Full Screen;arcTypeTravelDisregardCache=<NSNumber [('NS.boolval', True)]>;arcKeyBindingID=fullscreen;arcKeyBindingPriority=promptAfterConsumedByWebView	428
+View > Exit	Esc	mask=0 raw='\x1b' 		exit:->nil(first responder)	keyEquivWorksWhenHidden	arcTypeTravelID=exit;arcTypeTravelIcon=escape;arcTypeTravelTriggers=Exit; Exit Modal; Exit Full Screen;arcTypeTravelDisregardCache=<NSNumber [('NS.boolval', True)]>;arcKeyBindingID=exit;arcKeyBindingPriority=promptAfterConsumedByWebView	1324
+Spaces							1674
+Spaces > New Space…				newSpace:->nil(first responder)		arcTypeTravelID=newSpace;arcTypeTravelIcon=plus.rectangle.portrait;arcTypeTravelTriggers=Create New Space;arcKeyBindingID=newSpace	1195
+Spaces > Edit Theme…				editSpaceTheme:->nil(first responder)		arcTypeTravelID=editSpaceTheme;arcTypeTravelIcon=paintbrush.pointed.fill;arcTypeTravelTriggers=Theme; Edit Theme; Edit Space Theme	1424
+Spaces > Rename Space				renameFocusedSpace:->nil(first responder)		arcTypeTravelID=renameSpace;arcTypeTravelIcon=character.cursor.ibeam	442
+Spaces > Change Profile				changeProfileForCurrentSpace:->nil(first responder)		arcTypeTravelID=changeProfile;arcTypeTravelIcon=person.fill	84
+Spaces > Next Space	Cmd+Opt+Right	mask=1572864 raw='\uf703' 		nextSpace:->nil(first responder)		arcTypeTravelID=nextSpace;arcTypeTravelIcon=arrow.right.to.line;arcTypeTravelTriggers=Focus Next Space;arcKeyBindingID=focusNextSpace	808
+Spaces > Previous Space	Cmd+Opt+Left	mask=1572864 raw='\uf702' 		previousSpace:->nil(first responder)		arcTypeTravelID=previousSpace;arcTypeTravelIcon=arrow.left.to.line;arcTypeTravelTriggers=Focus Previous Space;arcKeyBindingID=focusPreviousSpace	1108
+Spaces > Manage Spaces…				toggleSpaceManager:->nil(first responder)		arcTypeTravelID=openSpaceManager;arcTypeTravelIcon=rectangle.portrait.on.rectangle.portrait;arcTypeTravelTriggers=Space Management; Organize; Toggle Space Manager; View Spaces;arcKeyBindingID=openSpaceManager	554
+Tabs							1685
+Tabs > New Tab…	Cmd+T	mask=1048576 raw='t' 		newWindowForTab:->nil(first responder)			1693
+Tabs > New ChatGPT Message…	Cmd+Opt+G	mask=1572864 raw='g' 	gptMessage	gptMessage:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=gptMessage	52
+Tabs > Join Meeting	Cmd+Ctrl+J	mask=1310720 raw='j' 	joinLiveMeeting	joinLiveMeeting:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=joinLiveMeeting;arcKeyBindingPriority=promptAfterConsumedByWebView	1136
+Tabs > Peek Email…	Cmd+Shift+E	mask=1048576 raw='E' shift implied by uppercase key	peekEmail	peekEmail:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=peekEmail;arcKeyBindingPriority=promptAfterConsumedByWebView	219
+Tabs > Pin/Unpin Tab	Cmd+D	mask=1048576 raw='d' 		toggleSelectedItemsPinned:->nil(first responder)		arcTypeTravelID=pinTab;arcKeyBindingID=pinTab;arcKeyBindingPriority=promptAfterConsumedByWebView;arcTypeTravelIcon=pin;arcTypeTravelTriggers=save	181
+Tabs > Open Little Arc or Peek in…	Cmd+O	mask=1048576 raw='o' 		openInCurrentSpace:->nil(first responder)	keyEquivWorksWhenHidden	arcKeyBindingID=openTabIn;arcKeyBindingPriority=promptAfterConsumedByWebView	1495
+Tabs > New Folder…	Cmd+Shift+N	mask=1048576 raw='N' shift implied by uppercase key	newListMenuItem	newList:->nil(first responder)		arcKeyBindingID=newFolder	959
+Tabs > Duplicate				duplicate:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=duplicate	566
+Tabs > Rename Current Item				rename:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=rename	142
+Tabs > Collapse All Folders				collapseAllFolders:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=collapseAllFolders	134
+Tabs > Expand All Folders				expandAllFolders:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=expandAllFolders	164
+Tabs > Next Tab	Cmd+Opt+Down	mask=1572864 raw='\uf701' 		nextTab:->nil(first responder)		arcTypeTravelID=nextTab;arcKeyBindingID=selectNextTab;arcKeyBindingPriority=overrideWebView;arcTypeTravelIcon=arrow.right	1402
+Tabs > Previous Tab	Cmd+Opt+Up	mask=1572864 raw='\uf700' 		previousTab:->nil(first responder)		arcTypeTravelID=previousTab;arcKeyBindingID=selectPreviousTab;arcKeyBindingPriority=overrideWebView;arcTypeTravelIcon=arrow.left	852
+Tabs > Tab Switcher (forward)	Ctrl+Tab	mask=262144 raw='\t' 		cycleToNextRecentTab:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=cycleNextTab;arcKeyBindingPriority=overrideWebView;arcTypeTravelTriggers=Toggle Tabs; Switch tabs; Recent tabs	1018
+Tabs > Tab Switcher (backward)	Shift+Ctrl+Backtab	mask=393216 raw='\x19' 		cycleToPreviousRecentTab:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=cyclePreviousTab;arcKeyBindingPriority=overrideWebView;arcTypeTravelTriggers=Toggle Tabs; Switch tabs; Recent tabs	207
+Tabs > Cycle Tab Forward	Cmd+Ctrl+Right	mask=1310720 raw='\uf703' 	cycleTabForward	cycleTabForward:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=cycleTabForward;arcKeyBindingPriority=overrideWebView	871
+Tabs > Cycle Tab Backward	Cmd+Ctrl+Left	mask=1310720 raw='\uf702' 	cycleTabBackward	cycleTabBackward:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=cycleTabBackward;arcKeyBindingPriority=overrideWebView	172
+Tabs > Reveal Tab in Sidebar				revealCurrentTabInSidebar:->nil(first responder)		arcTypeTravelID=revealTabInSidebar;arcTypeTravelIcon=arrow.left.circle;arcTypeTravelTriggers=Show Tab in Sidebar; Reveal in Sidebar; Go to Current Tab;arcKeyBindingID=revealTabInSidebar	752
+Tabs >  > Item 1					disabled		1700
+Tabs >  > Item 2					disabled		1704
+Tabs >  > Item 3					disabled		1708
+Tabs > Clear Unpinned Tabs	Cmd+Shift+K	mask=1048576 raw='K' shift implied by uppercase key		clearExplore:->nil(first responder)		arcTypeTravelID=clearUnpinnedTabs;arcTypeTravelIcon=bubbles.and.sparkles;arcTypeTravelTriggers=Close Unpinned Tabs; Clear Tabs; Clear Today;arcKeyBindingID=clearExplore	498
+Tabs > Reset all tabs in this Space				resetVisiblePinnedTabs:->nil(first responder)		arcTypeTravelID=expandPinnedTabs;arcTypeTravelIcon=arrow.backward.to.line;arcKeyBindingID=resetSpace	334
+Tabs > Reset Tab to Original URL				resetTab:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=resetTab;arcTypeTravelTriggers=Reset Tab;	1348
+Archive							1538
+Archive > Go Back	Cmd+[	mask=1048576 raw='[' 		navigateTabBack:->nil(first responder)		arcTypeTravelID=back;arcTypeTravelIcon=arrow.backward;arcTypeTravelTriggers=Go Back; Back; Navigate Back;arcKeyBindingID=goBack;arcKeyBindingPriority=overrideWebView	946
+Archive > Go Back	Cmd+Left	mask=1048576 raw='\uf702' 		navigateTabBackArrow:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=goBack_Alternate	361
+Archive > Go Forward	Cmd+]	mask=1048576 raw=']' 		navigateTabForward:->nil(first responder)		arcTypeTravelID=goForward;arcTypeTravelIcon=arrow.right;arcTypeTravelTriggers=Go Forward; Forward; Navigate Forward;arcKeyBindingID=goForward;arcKeyBindingPriority=overrideWebView	61
+Archive > Go Forward	Cmd+Right	mask=1048576 raw='\uf703' 		navigateTabForwardArrow:->nil(first responder)	hidden,keyEquivWorksWhenHidden	arcKeyBindingID=goForward_Alternate	1447
+Archive > View History	Cmd+Y	mask=1048576 raw='y' 		showAllHistory:->nil(first responder)		arcTypeTravelID=history;arcTypeTravelIcon=book;arcTypeTravelTriggers=Show History; History;arcKeyBindingID=viewHistory	1144
+Archive > View Archive				showArchive:->nil(first responder)		arcTypeTravelID=viewArchive;arcTypeTravelIcon=archivebox;arcTypeTravelDisregardCache=<NSNumber [('NS.boolval', True)]>;arcKeyBindingID=viewArchive;arcTypeTravelTriggers=Archive	935
+Archive > Clear Archive				clearArchive:->nil(first responder)		arcTypeTravelID=clearArchive;arcTypeTravelIcon=archivebox;arcKeyBindingID=clearArchive;arcTypeTravelTriggers=Clear Archive; Delete Archive	1171
+Extensions							1576
+Extensions > Add Extension…				navigateToChromeWebStore:->nil(first responder)		arcTypeTravelID=addExtension;arcTypeTravelIcon=plus.circle;arcTypeTravelTriggers=Install Extensions; Extension Store; Plugins; Chrome Extensions; Chrome Store	1232
+Extensions > Manage Extensions…				navigateToChromeExtensionsPage:->nil(first responder)		arcTypeTravelID=manageExtensions;arcTypeTravelIcon=puzzlepiece;arcTypeTravelTriggers=Manage Extensions; Extensions; Plugins; Chrome Extensions	978
+Window							1718
+Window > Minimize Window	Cmd+M	mask=1048576 raw='m' 		performMiniaturize:->nil(first responder)		arcTypeTravelID=minimize;arcTypeTravelIcon=arrow.down.right.and.arrow.up.left;arcKeyBindingPriority=overrideWebView;arcKeyBindingID=minimize	999
+Window > Zoom				performZoom:->nil(first responder)			1726
+Window > View Library	Cmd+Shift+L	mask=1048576 raw='L' shift implied by uppercase key		toggleLibrary:->nil(first responder)		arcTypeTravelID=openLibrary;arcTypeTravelIcon=archivebox;arcTypeTravelTriggers=Library;arcTypeTravelDisregardCache=<NSNumber [('NS.boolval', True)]>;arcKeyBindingID=viewLibrary	451
+Window > View Downloads	Cmd+Shift+J	mask=1048576 raw='J' shift implied by uppercase key		toggleDownloads:->nil(first responder)		arcTypeTravelID=openDownloads;arcTypeTravelIcon=arrow.down.circle;arcTypeTravelTriggers=Downloads;arcTypeTravelDisregardCache=<NSNumber [('NS.boolval', True)]>;arcKeyBindingID=viewDownloads	150
+Window > View Easels & Notes				viewEaselsAndNotes:->nil(first responder)		arcTypeTravelID=viewEaselsAndNotes;arcTypeTravelIcon=scribble.variable;arcTypeTravelTriggers=Easels; Notes	1516
+Window > View Media				viewScreenshotsAndCaptures:->nil(first responder)		arcTypeTravelID=viewScreenshotsAndCaptures;arcTypeTravelIcon=photo.on.rectangle.angled;arcTypeTravelTriggers=Screenshots; Captures; Videos; Media	668
+Window > View Boosts				viewBoosts:->nil(first responder)		arcTypeTravelID=viewBoosts;arcTypeTravelTriggers=Boosts;arcTypeTravelIcon=paintbrush	862
+Window > Bring All to Front				arrangeInFront:->nil(first responder)			1732
+Help							1592
+Help > Getting Started				showWelcomeToArc:->nil(first responder)		arcTypeTravelID=welcomeToArc;arcTypeTravelIcon=safari;arcTypeTravelTriggers=Welcome to Arc	787
+Help > Essential Keyboard Shortcuts				keyboardShortcutsEDU:->nil(first responder)		arcTypeTravelID=essentialKeyboardShortcuts;arcTypeTravelIcon=keyboard;arcTypeTravelTriggers=Essential Keyboard Shortcuts; keyboard; shortcuts;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.1)]>	321
+Help > Release Notes				onSelectResource_releaseNotes:->nil(first responder)		arcTypeTravelID=resourcesReleaseNotes;arcTypeTravelIcon=clock;arcTypeTravelTriggers=Changelog;Whats new;What's new;arc updates	1359
+Help > Contact the Team				contactTheTeam:->nil(first responder)		arcTypeTravelID=contactTheTeam;arcTypeTravelIcon=ellipsis.message;arcTypeTravelTriggers=Idea; Feedback; Request; Feature Request; Send Feedback; Report Bug; Bug; Question	1288
+Help > Visit Help Center				visitHelpCenter:->nil(first responder)		arcTypeTravelID=visitHelpCenter;arcTypeTravelIcon=heart.circle;arcTypeTravelTriggers=Question; Inquiry; Help Center; Help; Resources	103
+Help > Restore Data				presentRestoreDataFlow:->nil(first responder)		arcTypeTravelID=restoreData;arcTypeTravelIcon=opticaldiscdrive;arcTypeTravelTriggers=Restore; Backup	1504
+Help > Export Arc Notes				exportArcNotes:->nil(first responder)		arcTypeTravelID=exportArcNotes;arcTypeTravelIcon=arrow.down.doc;arcTypeTravelTriggers=Export Notes; Backup Notes; Download Notes;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 1.5)]>	1061
+Help > Troubleshooting							1601
+Help > Troubleshooting > Record Trace				recordTrace:->nil(first responder)		arcTypeTravelID=recordTrace;arcTypeTravelIcon=flag	276
+Help > Troubleshooting > Cancel Trace				cancelTrace:->nil(first responder)	hidden	arcTypeTravelID=cancelTrace;arcTypeTravelIcon=exclamationmark.triangle	75
+Help > Troubleshooting > Open Task Manager				openTaskManager:->nil(first responder)		arcTypeTravelID=openTaskManager;arcTypeTravelIcon=exclamationmark.triangle;arcTypeTravelTriggers="Task; Manager; Task Manager; Cpu; Memory: RAM"	382
+Help > Troubleshooting > Reveal Arc Data				revealArcData:->nil(first responder)		arcTypeTravelID=revealArcData;arcTypeTravelIcon=list.clipboard;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.1)]>	594
+Help > Troubleshooting > Copy Arc Info				copyArcInfo:->nil(first responder)		arcTypeTravelID=copyArcInfo;arcTypeTravelIcon=list.clipboard;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.1)]>	585

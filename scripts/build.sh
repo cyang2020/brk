@@ -18,8 +18,8 @@
 # 5. scripts/declare-url-types.sh adds CFBundleURLTypes for http and https to the bundle's Info.plist (the plugin
 #    writes the plist without them; the default-browser registration needs them). Device permission usage strings
 #    are declared for the main app and all helpers before the bundle is signed again.
-#    The app icon (A131): scripts/app-icon/main.swift draws Sources/BrkSettings/AppIconArt.swift's "The Original" into an
-#    iconset, iconutil makes Resources/<Product>.icns and CFBundleIconFile names it, before the bundle is signed again.
+#    The app icon: the approved artwork in Sources/BrkSettings/Resources/AppIcons is copied into the app.
+#    scripts/app-icon/main.swift exports "The Original" into an iconset and iconutil writes Resources/<Product>.icns.
 #    scripts/declare-scripting.sh adds the AppleScript dictionary, the build's commit and repository, the release
 #    notes and credits pages (A133, A125, A129); scripts/dock-tile/build-plugin.sh adds the Dock tile plug-in that
 #    shows the Icon pane's choice while Brk is not running (A131). scripts/add-llama-runtime.sh puts the pinned
@@ -51,10 +51,11 @@ cp Sources/BrkBase/Resources/website-rules.json "$APP/Contents/Resources/website
 cp Sources/BrkCEF/AudibilityExtension/* "$APP/Contents/Resources/BrkAudibility/"
 mkdir -p "$APP/Contents/Resources/BrkSounds"
 cp Sources/BrkApp/SoundAssets/*.wav "$APP/Contents/Resources/BrkSounds/"
+cp -R Sources/BrkSettings/Resources/AppIcons "$APP/Contents/Resources/"
 scripts/declare-url-types.sh "$APP/Contents/Info.plist"
 ICONSET="$(mktemp -d)/$PRODUCT.iconset"
 swiftc -O -o .build/brk-app-icon scripts/app-icon/main.swift Sources/BrkSettings/AppIconArt.swift
-.build/brk-app-icon "$ICONSET" original
+.build/brk-app-icon "$ICONSET" original "$PWD/Sources/BrkSettings/Resources/AppIcons"
 iconutil -c icns -o "$APP/Contents/Resources/$PRODUCT.icns" "$ICONSET"
 rm -rf "$(dirname "$ICONSET")"
 /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "$APP/Contents/Info.plist" 2>/dev/null || true

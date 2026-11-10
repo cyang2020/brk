@@ -115,7 +115,7 @@ final class ActionsTests: XCTestCase {
     }
 
     /// The listings are Arc's type-travel attributes (`arcTypeTravelIcon`, `arcTypeTravelTriggers`,
-    /// `arcTypeTravelTitle` in the nib's runtime attributes, `.audit/arc-evidence/a/mainmenu-items.tsv`): for every
+    /// `arcTypeTravelTitle` in the nib's runtime attributes, `Tests/Fixtures/arc-menu/mainmenu-items.tsv`): for every
     /// action row where Arc has an icon, the same SF Symbol, Arc's trigger words first and in order, and Arc's title.
     /// Brk adds a word only where its command differs (Share… exports, so "Export"); it drops Arc's "Share URL" title.
     func testListingsAreArcsTypeTravelAttributes() throws {

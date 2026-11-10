@@ -10,7 +10,7 @@
 // read from the Dock's process. A notification from another data directory (a test instance) is ignored.
 //
 // Built by scripts/dock-tile/build-plugin.sh together with Sources/BrkSettings/AppIconArt.swift, so the tile, the
-// running Dock icon, the About window and the Icon pane draw one drawing.
+// running Dock icon, the About window and the Icon pane use the same artwork.
 import AppKit
 import os
 

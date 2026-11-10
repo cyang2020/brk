@@ -58,7 +58,7 @@ let package = Package(
         // F5: the Library host inside the content card (downloads, history, archive, media, easels and notes, boosts, spaces).
         .target(name: "BrkLibrary", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit"], swiftSettings: strict),
         // F1: the settings window's panes (SwiftUI in an NSHostingView), hosted by BrkApp in its own window.
-        .target(name: "BrkSettings", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit"], swiftSettings: strict),
+        .target(name: "BrkSettings", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit"], resources: [.copy("Resources/AppIcons")], swiftSettings: strict),
         // W2: the window root that composes background, sidebar, cards and overlays; the content cards.
         .target(
             name: "BrkContent",

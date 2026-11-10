@@ -1,0 +1,328 @@
+- [2166] Arc | key=- | id=- | action=-
+  (submenu #2170 "Arc" name=_NSAppleMenu)
+  - [115] About Arc | key=- | id=- | action=orderFrontStandardAboutPanel:->nil(first responder) | rt: arcTypeTravelID=aboutArc;arcTypeTravelIcon=book.closed
+  --- (separator #2174)
+  - [1009] Preferences… | key=Cmd+, | id=- | action=showPreferences:->NSClassSwapper:_TtC3Arc11AppDelegate | rt: arcKeyBindingID=viewPreferences
+  - [369] Share Arc | key=- | id=- | action=- | rt: arcTypeTravelID=giftArcToAFriend;arcTypeTravelTriggers=Refer; Refer a friend; Referral; Invite; Share Arc; Gift Arc;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 1.3)]>;arcTypeTravelIcon=gift
+  - [249] Set as Default Browser | key=- | id=- | action=setAsDefaultBrowser:->nil(first responder) | rt: arcTypeTravelID=defaultBrowser;arcTypeTravelIcon=heart;KeyEquivalent=♡;arcTypeTravelTriggers=Default Browser;
+  --- (separator #2175)
+  - [1454] Import from Another Browser… | key=- | id=- | action=- | rt: arcTypeTravelID=importFromAnotherBrowser;arcTypeTravelIcon=arrow.turn.right.down;arcTypeTravelTriggers=Import Bookmarks; Import Settings; Import Logins; Import Passwords; Transfer Bookmarks; Transfer Settings; Transfer Logins; Transfer Passwords; Bookmarks
+  - [1337] Check for Updates… | key=- | id=- | action=checkForUpdates:->NSClassSwapper:_TtC3Arc11AppDelegate | rt: arcTypeTravelID=checkForUpdates;arcTypeTravelIcon=sparkles;arcTypeTravelTriggers=Download; Update; Check for Updates
+  --- (separator #2176)
+  - [2177] Services | key=- | id=- | action=-
+    (submenu #2181 "Services" name=_NSServicesMenu)
+  - [353] Privacy Policy | key=- | id=- | action=showPrivacyPolicy:->nil(first responder) | rt: arcTypeTravelID=privacyPolicy;arcTypeTravelIcon=book.closed;arcTypeTravelTriggers=Privacy Policy
+  --- (separator #2186)
+  - [477] Hide Arc | key=Cmd+H | id=- | action=hide:->nil(first responder) | rt: arcTypeTravelID=hideArc;arcTypeTravelIcon=macwindow;arcTypeTravelTriggers=Hide Arc;arcKeyBindingPriority=overrideWebView;arcKeyBindingID=hideArc
+  - [731] Hide Other Windows | key=Cmd+Opt+H | id=- | action=hideOtherApplications:->nil(first responder) | rt: arcTypeTravelID=hideOthers;arcTypeTravelIcon=macwindow;arcTypeTravelTriggers=Hide Others;arcKeyBindingID=hideOthers
+  - [344] Show All | key=- | id=- | action=unhideAllApplications:->nil(first responder) | rt: arcTypeTravelID=showAll;arcTypeTravelIcon=book
+  --- (separator #2187)
+  - [1753] Sign Out | key=- | id=- | action=signOut:->NSClassSwapper:_TtC3Arc11AppDelegate
+  --- (separator #2188)
+  - [988] Quit Arc | key=Cmd+Q | id=- | action=userQuitApp:->nil(first responder) | rt: arcTypeTravelID=quitArc;arcTypeTravelIcon=hand.wave;arcTypeTravelTriggers=Quit App;arcKeyBindingPriority=overrideWebView;arcKeyBindingID=quitArc
+- [2190] File | key=- | id=- | action=-
+  (submenu #2194 "File" name=-)
+  - [830] New Tab… | key=Cmd+T | id=newTabMenuItem | action=newWindowForTab:->nil(first responder) | rt: arcKeyBindingID=newTab;arcKeyBindingPriority=overrideWebView
+  - [678] New Window | key=Cmd+N | id=newWindow | action=newWindow:->NSClassSwapper:_TtC3Arc11AppDelegate | rt: arcTypeTravelID=newWindow;arcTypeTravelIcon=plus.rectangle;arcTypeTravelTriggers=Create Window; Copy Window; Duplicate Window;arcKeyBindingID=newWindow;arcKeyBindingPriority=overrideWebView
+  - [1485] Blank Window | key=Cmd+Ctrl+N | id=newBlankWindow | action=blankWindow:->NSClassSwapper:_TtC3Arc11AppDelegate | rt: arcTypeTravelID=blankWindow;arcTypeTravelIcon=macwindow.on.rectangle;arcTypeTravelTriggers=Create Window;arcKeyBindingID=newBlankWindow
+  - [1029] New Incognito Window | key=Cmd+Shift+N | id=newIncognitoWindowMenuItemId | action=newIncognitoWindow:->NSClassSwapper:_TtC3Arc11AppDelegate | rt: arcTypeTravelID=newIncognitoWindow;arcTypeTravelIcon=macwindow.on.rectangle;arcTypeTravelTriggers=Create Incognito Window; New Private Window; Incognito;arcKeyBindingID=newIncognitoWindow;arcKeyBindingPriority=overrideWebView
+  - [463] New Little Arc Window | key=Cmd+Opt+N | id=showLittleArc | action=newLittleBrowserWindow:->NSClassSwapper:_TtC3Arc11AppDelegate | rt: arcTypeTravelID=newLittleBrowserWindow;arcTypeTravelIcon=macwindow.on.rectangle;arcTypeTravelTriggers=Quick Lookup, Mini Window, Floating Window;arcKeyBindingID=showLittleArc;arcKeyBindingPriority=overrideWebView
+  - [717] Restore Last Closed Tab | key=Cmd+Shift+T | id=- | action=reopenLastTab:->nil(first responder) | rt: arcTypeTravelID=reopenClosedTab;arcTypeTravelIcon=arrow.uturn.backward;arcTypeTravelTriggers=Reopen Closed Tab;arcKeyBindingID=reopenLastClosedTab;arcKeyBindingPriority=overrideWebView
+  --- (separator #2198)
+  - [240] Open Command Bar | key=Cmd+L | id=- | action=toggleOpenOmnibox:->nil(first responder) | rt: arcKeyBindingID=addressBar;arcKeyBindingPriority=overrideWebView
+  --- (separator #2199)
+  - [879] New Boost | key=- | id=newBoostMenuItem | action=newBoost:->nil(first responder) | flags=hidden | rt: arcTypeTravelID=newBoost;arcTypeTravelIcon=paintbrush;arcTypeTravelTriggers=Boost; New Boost; Create boost; extension; Boost the Current Page; Edit Boost
+  - [416] Edit Boost | key=- | id=editBoostMenuItem | action=editBoost:->nil(first responder) | flags=hidden | rt: arcTypeTravelID=editBoost;arcTypeTravelIcon=paintbrush;arcTypeTravelTriggers=Boost; New Boost; Create boost; extension; Boost the Current Page; Edit Boost
+  - [1182] New Legacy Boost (Advanced) | key=- | id=newLegacyBoostMenuItem | action=newLegacyBoost:->nil(first responder) | flags=hidden | rt: arcTypeTravelID=newLegacyBoost;arcTypeTravelIcon=burst;arcTypeTravelTriggers=Create legacy boost; legacy boost;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.5)]>
+  - [8] Boost Gallery | key=- | id=- | action=openBoostGallery:->nil(first responder) | flags=hidden | rt: arcTypeTravelID=openBoostGallery;arcTypeTravelIcon=paintbrush;arcTypeTravelTriggers=Boost Gallery; Boosts Gallery; Boost Store; Boosts Store
+  - [393] New Profile | key=- | id=- | action=newProfile:->nil(first responder) | rt: arcTypeTravelID=newProfile;arcTypeTravelIcon=person.fill;arcTypeTravelTriggers=Profile
+  - [690] New Note | key=Shift+Ctrl+N | id=newNoteMenuItem | action=newNote:->nil(first responder) | rt: arcTypeTravelID=newNote;arcTypeTravelIcon=note.text;arcTypeTravelTriggers=Create Note; Note; Scratchpad;arcKeyBindingID=newNote;arcKeyBindingPriority=promptAfterConsumedByWebView
+  - [1220] New Note (in Split) | key=Opt+Ctrl+N | id=newNoteInSplitView | action=newNoteInSplitView:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcTypeTravelID=newNoteInSplitView;arcTypeTravelIcon=note.text;arcTypeTravelTriggers=Create Note in Split View; Note Split; Scratchpad Split;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.9)]>;arcKeyBindingID=newNoteInSplitView;arcKeyBindingPriority=promptAfterConsumedByWebView
+  - [1263] New Easel | key=Shift+Ctrl+E | id=newEaselMenuItemId | action=newEasel:->nil(first responder) | rt: arcTypeTravelID=newEasel;arcTypeTravelIcon=scribble.variable;arcTypeTravelTriggers=Mood Board;arcKeyBindingID=newEasel
+  --- (separator #2200)
+  - [574] Close Window | key=Cmd+Shift+W | id=- | action=closeWindow:->nil(first responder) | rt: arcTypeTravelID=closeWindow;arcTypeTravelIcon=xmark.circle;arcTypeTravelTriggers=Exit Window;arcKeyBindingID=closeWindow;arcKeyBindingPriority=overrideWebView
+  - [968] Archive Tab | key=Cmd+W | id=- | action=closeCurrentItem:->nil(first responder) | flags=keyEquivWorksWhenHidden | rt: arcTypeTravelID=archiveTab;arcTypeTravelIcon=archivebox;arcTypeTravelTriggers=Exit Tab; Unload; Deselect; Close;arcKeyBindingID=archiveTab;arcKeyBindingPriority=overrideWebView
+  --- (separator #2201)
+  - [602] Share… | key=- | id=- | action=share:->nil(first responder) | rt: arcTypeTravelID=share;arcTypeTravelIcon=square.and.arrow.up;arcTypeTravelTriggers=Share;arcKeyBindingID=share;arcTypeTravelTitle=Share URL
+  - [1157] Send to Dia | key=- | id=- | action=sendCurrentTabToDia:->nil(first responder) | rt: arcTypeTravelID=sendCurrentTabToDia;arcTypeTravelIcon=sunrise;arcTypeTravelTriggers=Send Tab to Dia;arcTypeTravelTitle=Send Tab to Dia
+  - [263] Capture… | key=Cmd+Shift+2 | id=capturePage | action=capturePage:->nil(first responder) | rt: arcTypeTravelID=capturePage;arcTypeTravelIcon=camera;arcTypeTravelTriggers=Capture; Screenshot; Snapshot; Cut Out;;arcKeyBindingID=capturePage
+  - [1242] Capture Full Page | key=- | id=captureFullPage | action=captureFullPage:->nil(first responder) | rt: arcTypeTravelID=captureFullPage;arcTypeTravelIcon=newspaper;arcTypeTravelTriggers=Full Page Capture; Capture Entire Page; Screenshot Full Page; Capture Full Page; Screenshot;arcKeyBindingID=captureFullPage
+  - [914] Capture in Portrait Mode | key=- | id=capturePrettyScreenshot | action=capturePrettyScreenshot:->nil(first responder) | flags=keyEquivWorksWhenHidden | rt: arcTypeTravelID=capturePrettyScreenshot;arcTypeTravelIcon=camera.macro;arcTypeTravelTriggers=Screenshot in Portrait Mode; Capture Portrait; Portrait Mode; Screenshot;arcKeyBindingID=capturePrettyScreenshot
+  - [1207] Save Page As | key=Cmd+Shift+S | id=- | action=save:->nil(first responder) | rt: arcTypeTravelID=save;arcTypeTravelIcon=square.and.arrow.down;arcTypeTravelTriggers=Save Page; Save File;arcKeyBindingID=savePageAs
+  - [901] Print | key=Cmd+P | id=- | action=printPage:->nil(first responder) | rt: arcTypeTravelID=printPage;arcTypeTravelIcon=printer;arcTypeTravelTriggers=Print Page;arcKeyBindingID=printPage;arcKeyBindingPriority=promptAfterConsumedByWebView
+- [2202] Edit | key=- | id=- | action=-
+  (submenu #2206 "Edit" name=-)
+  - [1992] Undo | key=Cmd+Z | id=- | action=undo:->nil(first responder)
+  - [124] Redo | key=Cmd+Shift+Z | id=- | action=redo:->nil(first responder) | rt: arcTypeTravelID=redo;arcTypeTravelIcon=arrow.uturn.forward
+  --- (separator #2210)
+  - [1393] Cut | key=Cmd+X | id=- | action=cut:->nil(first responder) | rt: arcTypeTravelID=cut;arcTypeTravelIcon=scissors
+  - [1465] Copy | key=Cmd+C | id=- | action=copyAction:->nil(first responder) | rt: arcTypeTravelID=copy;arcTypeTravelIcon=doc.on.doc
+  - [890] Copy URL | key=Cmd+Shift+C | id=- | action=copyCurrentURL:->nil(first responder) | rt: arcTypeTravelID=copyCurrentURL;arcTypeTravelIcon=doc.on.doc;arcTypeTravelTriggers=Copy URL; Copy Link;arcKeyBindingID=copyCurrentURL;arcKeyBindingPriority=overrideWebView
+  - [402] Copy URL as Markdown | key=Cmd+Shift+Opt+C | id=- | action=copyCurrentURLAsMarkdown:->nil(first responder) | rt: arcTypeTravelID=copyCurrentURLAsMarkdown;arcTypeTravelIcon=doc.on.doc;arcTypeTravelTriggers=Copy Link as Markdown; Copy Markdown;arcKeyBindingID=copyCurrentURLMarkdown;arcKeyBindingPriority=overrideWebView
+  - [1412] Copy URL as Quote | key=Cmd+Shift+Ctrl+C | id=- | action=copyCurrentURLAsQuote:->nil(first responder) | flags=disabled | rt: arcTypeTravelID=copyCurrentURLAsQuote;arcTypeTravelIcon=quote.bubble;arcTypeTravelTriggers=Copy URL as Quote; Copy Quote; Copy Link to Highlight;arcKeyBindingID=copyCurrentURLAsQuote;arcKeyBindingPriority=overrideWebView
+  - [1074] Paste | key=Cmd+V | id=- | action=paste:->nil(first responder) | rt: arcTypeTravelID=paste;arcTypeTravelIcon=list.clipboard
+  - [740] Paste and Match Style | key=Cmd+Shift+V | id=- | action=pasteAsPlainText:->nil(first responder) | rt: arcTypeTravelID=pasteAndMatchStyle;arcTypeTravelIcon=list.clipboard;arcTypeTravelTriggers=Paste Without Formatting;arcKeyBindingID=pasteAndMatchStyle
+  - [1885] Delete | key=- | id=- | action=delete:->nil(first responder)
+  - [533] Select All | key=Cmd+A | id=- | action=selectAll:->nil(first responder) | rt: arcTypeTravelID=selectAll;arcTypeTravelIcon=square.grid.2x2.fill
+  --- (separator #2211)
+  - [2212] Find | key=- | id=- | action=-
+    (submenu #2216 "Find" name=-)
+    - [799] Find… | key=Cmd+F | id=- | action=arc_performFindPanelAction:->nil(first responder) | tag=1 | rt: arcTypeTravelID=find;arcTypeTravelIcon=magnifyingglass;arcTypeTravelTriggers=Find in Page;arcKeyBindingID=find
+    - [822] Find and Replace | key=Cmd+Opt+F | id=- | action=arc_performFindPanelAction:->nil(first responder) | tag=12 | rt: arcTypeTravelID=findAndReplace;arcTypeTravelIcon=magnifyingglass;arcKeyBindingID=findAndReplace
+    - [1254] Find Next | key=Cmd+G | id=- | action=arc_performFindPanelAction:->nil(first responder) | tag=2 | rt: arcTypeTravelID=findNext;arcTypeTravelIcon=arrow.right;arcTypeTravelTriggers=Next;arcKeyBindingID=findNext
+    - [487] Find Previous | key=Cmd+Shift+G | id=- | action=arc_performFindPanelAction:->nil(first responder) | tag=3 | rt: arcTypeTravelID=findPrevious;arcTypeTravelIcon=arrow.left;arcTypeTravelTriggers=Previous;arcKeyBindingID=findPrevious
+    - [926] Use Selection to Find | key=- | id=- | action=arc_performFindPanelAction:->nil(first responder) | tag=7 | rt: arcTypeTravelID=useSelectionForFind;arcTypeTravelIcon=magnifyingglass;arcTypeTravelTriggers=Find Selection; Find Selected;arcKeyBindingID=useSelectionForFind
+    - [543] Jump to Selection | key=Cmd+J | id=- | action=arc_performFindPanelAction:->nil(first responder) | rt: arcTypeTravelID=jumpToSelection;arcTypeTravelIcon=arrow.turn.right.down;arcTypeTravelTriggers=Jump to Selected; Selection;arcKeyBindingID=jumpToSelection
+  - [2220] Spelling and Grammar | key=- | id=- | action=-
+    (submenu #2224 "Spelling" name=-)
+    - [294] Show Spelling and Grammar | key=Cmd+: | id=- | action=showGuessPanel:->nil(first responder) | rt: arcTypeTravelID=showSpellingAndGrammar;arcTypeTravelIcon=textformat;arcTypeTravelTriggers=Show Spelling; Show Grammar; Spelling; Grammar
+    - [2023] Check Document Now | key=Cmd+; | id=- | action=checkSpelling:->nil(first responder)
+    --- (separator #2229)
+    - [2087] Check Spelling While Typing | key=- | id=- | action=toggleContinuousSpellChecking:->nil(first responder)
+    - [2044] Check Grammar With Spelling | key=- | id=- | action=toggleGrammarChecking:->nil(first responder)
+    - [1769] Correct Spelling Automatically | key=- | id=- | action=toggleAutomaticSpellingCorrection:->nil(first responder)
+  - [2230] Substitutions | key=- | id=- | action=-
+    (submenu #2234 "Substitutions" name=-)
+    - [2151] Show Substitutions | key=- | id=- | action=orderFrontSubstitutionsPanel:->nil(first responder)
+    --- (separator #2238)
+    - [1789] Smart Copy/Paste | key=- | id=- | action=toggleSmartInsertDelete:->nil(first responder)
+    - [2017] Smart Quotes | key=- | id=- | action=toggleAutomaticQuoteSubstitution:->nil(first responder)
+    - [2093] Smart Dashes | key=- | id=- | action=toggleAutomaticDashSubstitution:->nil(first responder)
+    - [1974] Smart Links | key=- | id=- | action=toggleAutomaticLinkDetection:->nil(first responder)
+    - [2109] Data Detectors | key=- | id=- | action=toggleAutomaticDataDetection:->nil(first responder)
+    - [1815] Text Replacement | key=- | id=- | action=toggleAutomaticTextReplacement:->nil(first responder)
+  - [2239] Transformations | key=- | id=- | action=-
+    (submenu #2243 "Transformations" name=-)
+    - [2127] Make Upper Case | key=- | id=- | action=uppercaseWord:->nil(first responder)
+    - [1980] Make Lower Case | key=- | id=- | action=lowercaseWord:->nil(first responder)
+    - [1910] Capitalize | key=- | id=- | action=capitalizeWord:->nil(first responder)
+  - [2247] Speech | key=- | id=- | action=-
+    (submenu #2251 "Speech" name=-)
+    - [1947] Start Speaking | key=- | id=- | action=startSpeaking:->nil(first responder)
+    - [1867] Stop Speaking | key=- | id=- | action=stopSpeaking:->nil(first responder)
+  - [2255] Format | key=- | id=- | action=-
+    (submenu #2259 "Format" name=-)
+    - [2263] Font | key=- | id=- | action=-
+      (submenu #2267 "Font" name=_NSFontMenu)
+      - [1839] Bold | key=Cmd+B | id=- | action=addFontTrait:->NSCustomObject:NSFontManager | tag=2
+      - [2139] Italic | key=Cmd+I | id=- | action=addFontTrait:->NSCustomObject:NSFontManager | tag=1
+      - [1797] Underline | key=Cmd+U | id=- | action=underline:->nil(first responder)
+- [2272] View | key=- | id=- | action=-
+  (submenu #2276 "View" name=-)
+  - [2280] Appearance | key=- | id=- | action=-
+    (submenu #2284 "" name=-)
+    - [2286] Websites, Easels, and Notes will use: | key=- | id=- | action=- | flags=keyEquivWorksWhenHidden,disabled
+    - [640] Automatic | key=- | id=- | action=setAutomaticAppearance:->nil(first responder) | rt: arcTypeTravelID=automaticMode;arcTypeTravelIcon=sparkles;arcTypeTravelTriggers=Switch to Automatic Appearance; Switch Automatic Mode; Automatic Mode;arcTypeTravelTitle=Switch to Automatic Appearance
+    - [1121] Light | key=- | id=- | action=setLightAppearance:->nil(first responder) | rt: arcTypeTravelID=lightMode;arcTypeTravelIcon=sun.max;arcTypeTravelTriggers=Switch to Light Mode; Switch Light Mode; Light Mode;arcTypeTravelTitle=Switch to Light Mode
+    - [305] Dark | key=- | id=- | action=setDarkAppearance:->nil(first responder) | rt: arcTypeTravelID=darkMode;arcTypeTravelIcon=moon.stars.fill;arcTypeTravelTriggers=Switch to Dark Mode; Switch Dark Mode; Dark Mode; Night Mode;arcTypeTravelTitle=Switch to Dark Mode
+  --- (separator #2290)
+  - [33] Show/Hide Sidebar | key=Cmd+S | id=- | action=toggleArcSidebar:->nil(first responder) | rt: arcTypeTravelID=toggleSidebar;arcTypeTravelIcon=sidebar.left;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.5)]>;arcKeyBindingID=showSidebar;arcKeyBindingPriority=promptAfterConsumedByWebView;arcTypeTravelTriggers=Toggle Sidebar;
+  - [1095] Show/Hide Toolbar | key=Cmd+Shift+D | id=- | action=toggleArcToolbar:->nil(first responder) | flags=hidden,disabled | rt: arcTypeTravelID=toggleToolbar;arcTypeTravelTriggers=Toggle Hide Show Toolbar;;arcTypeTravelIcon=rectangle.topthird.inset.filled;arcKeyBindingID=toggleToolbar;arcKeyBindingPriority=promptAfterConsumedByWebView
+  - [617] Expand Pinned Section | key=- | id=- | action=expandPinnedSection:->nil(first responder) | flags=hidden,disabled | rt: arcTypeTravelID=expandPinnedSection;arcTypeTravelTriggers=Expand Pinned Tabs; Show Pinned Tabs; Pinned;arcTypeTravelIcon=chevron.down
+  - [840] Collapse Pinned Section | key=- | id=- | action=collapsePinnedSection:->nil(first responder) | flags=hidden,disabled | rt: arcTypeTravelID=collapsePinnedSection;arcTypeTravelTriggers=Collapse Pinned Tabs; Hide Pinned Tabs; Pinned;arcTypeTravelIcon=chevron.right
+  - [778] Reveal Current Tab | key=Ctrl+Space | id=- | action=focusSidebar:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcTypeTravelID=focusSidebar;arcTypeTravelIcon=sidebar.left;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.5)]>;arcKeyBindingPriority=promptAfterConsumedByWebView;arcKeyBindingID=focusSidebar
+  --- (separator #2291)
+  - [512] Stop Loading | key=Cmd+. | id=- | action=stopLoadingCurrentTab:->nil(first responder) | rt: arcKeyBindingID=stopLoading
+  - [704] Refresh the Page | key=Cmd+R | id=- | action=reloadPage:->nil(first responder) | flags=disabled | rt: arcTypeTravelID=reloadPage;arcTypeTravelIcon=arrow.clockwise;arcTypeTravelTriggers=Reload Page;arcKeyBindingID=reloadPage
+  - [1039] Force Refresh the Page | key=Cmd+Shift+R | id=- | action=forceReloadPage:->nil(first responder) | flags=alternate,disabled | rt: arcKeyBindingID=forceReloadPage;arcTypeTravelTriggers=Force Reload; Force Refresh;arcTypeTravelID=forceReloadPage;arcTypeTravelIcon=arrow.clockwise
+  - [1436] Clear Cookies and Refresh | key=- | id=- | action=clearCookiesAndRefresh:->nil(first responder) | rt: arcKeyBindingID=clearCookies;arcTypeTravelTriggers=Clear Cookies;arcTypeTravelID=clearCookies;arcTypeTravelIcon=trash
+  - [1083] Clear Cache and Refresh | key=- | id=- | action=clearCacheAndRefresh:->nil(first responder) | rt: arcTypeTravelTriggers=Clear Cache;arcTypeTravelID=clearCache;arcTypeTravelIcon=trash
+  --- (separator #2292)
+  - [194] Add Split View | key=Shift+Ctrl+= | id=- | action=addSplitPanel:->nil(first responder) | rt: arcTypeTravelID=addSplitView;arcTypeTravelIcon=square.split.2x1;arcTypeTravelTriggers=Add Split View; Split View; Create Split View Pane; New Split View; Split;arcKeyBindingID=addSplitView;arcKeyBindingPriority=promptAfterConsumedByWebView
+  - [228] Close this Split Pane | key=Shift+Ctrl+- | id=- | action=closeFocusedSplitViewPanel:->nil(first responder) | flags=disabled | rt: arcTypeTravelID=removeSplitView;arcTypeTravelIcon=xmark.square;arcTypeTravelTriggers=Close Split View;arcKeyBindingID=removeSplitView;arcKeyBindingPriority=promptAfterConsumedByWebView
+  - [1300] Separate Page from Split View | key=- | id=- | action=separateTabFromSplitView:->nil(first responder) | flags=disabled | rt: arcTypeTravelID=separateTabFromSplitView;arcTypeTravelIcon=scissors;arcTypeTravelTriggers=Separate from split view; separate tab;arcKeyBindingID=separateTabFromSplitView
+  - [629] Expand Current Split | key=- | id=- | action=maximizeCurrentSplitViewPane:->nil(first responder) | rt: arcTypeTravelID=expandSplitViewPane;arcTypeTravelIcon=arrow.up.left.and.arrow.down.right;arcTypeTravelTriggers=Expand; Expand Split View; Maximize
+  --- (separator #2293)
+  - [764] Zoom to Actual Size | key=Cmd+0 | id=- | action=resetZoom:->nil(first responder) | rt: arcTypeTravelID=actualSize;arcTypeTravelIcon=magnifyingglass;arcTypeTravelTriggers=Reset Zoom;arcKeyBindingID=resetZoom
+  - [1051] Zoom In | key=Cmd++ | id=- | action=zoomIn:->nil(first responder) | rt: arcTypeTravelID=zoomIn;arcTypeTravelIcon=plus.magnifyingglass;arcKeyBindingID=zoomIn
+  - [2083] Zoom In | key=Cmd+= | id=- | action=zoomIn:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden
+  - [2070] Zoom In | key=Cmd+= | id=- | action=zoomIn:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden
+  - [93] Zoom Out | key=Cmd+- | id=- | action=zoomOut:->nil(first responder) | flags=keyEquivWorksWhenHidden | rt: arcTypeTravelID=zoomOut;arcTypeTravelIcon=minus.magnifyingglass;arcKeyBindingID=zoomOut
+  - [1881] Zoom Out | key=Cmd+Shift+- | id=- | action=zoomOut:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden
+  --- (separator #2294)
+  - [1371] Cast | key=- | id=- | action=cast:->nil(first responder) | rt: arcTypeTravelID=cast;arcKeyBindingID=cast;arcTypeTravelIcon=rectangle.portrait.and.arrow.right.fill
+  --- (separator #2295)
+  - [2296] Developer | key=- | id=- | action=-
+    (submenu #2300 "Developer" name=-)
+    - [655] View Source | key=Cmd+Opt+U | id=- | action=viewSource:->nil(first responder) | rt: arcTypeTravelID=viewSource;arcTypeTravelIcon=curlybraces;arcTypeTravelTriggers=View Source;;arcKeyBindingID=viewSource;arcKeyBindingPriority=promptAfterConsumedByWebView
+    - [1473] Developer Tools | key=Cmd+Opt+I | id=- | action=toggleDevTools:->nil(first responder) | rt: arcTypeTravelID=devTools;arcTypeTravelIcon=hammer.fill;arcTypeTravelTriggers=Developer Tools; Debug Tools; Devtools;arcKeyBindingID=developerTools;arcKeyBindingPriority=promptAfterConsumedByWebView
+    - [285] Developer Tools | key=F12 | id=- | action=toggleDevTools:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=developerTools_Alternate;arcKeyBindingPriority=promptAfterConsumedByWebView
+    - [1380] Inspect Elements | key=Cmd+Opt+C | id=- | action=inspectElements:->nil(first responder) | rt: arcTypeTravelID=inspectElements;arcTypeTravelIcon=scope;arcTypeTravelTriggers=Inspect Element;;arcKeyBindingID=inspectElements;arcKeyBindingPriority=promptAfterConsumedByWebView
+    - [1312] JavaScript Console | key=Cmd+Opt+J | id=- | action=javaScriptConsole:->nil(first responder) | rt: arcTypeTravelID=javaScriptConsole;arcTypeTravelIcon=terminal;arcTypeTravelTriggers=Toggle console; Console; Javascript Console; JS console;arcKeyBindingID=javaScriptConsole
+    - [521] Network Inspector | key=- | id=- | action=networkInspector:->nil(first responder) | rt: arcTypeTravelID=networkInspector;arcTypeTravelIcon=wifi;arcTypeTravelTriggers=Network Inspector;;arcKeyBindingID=networkInspector
+    - [2038] Allow JavaScript from Apple Events | key=- | id=- | action=allowJavascriptFromAppleEvents:->nil(first responder)
+    - [1276] Toggle Developer Mode | key=Ctrl+D | id=- | action=toggleDeveloperMode:->nil(first responder) | rt: arcTypeTravelID=toggleDeveloperMode;arcTypeTravelIcon=hammer.fill;arcTypeTravelTriggers=Developer Mode; Enable Developer Mode; Disable Developer Mode;;arcKeyBindingID=toggleDeveloperMode;arcKeyBindingPriority=promptAfterConsumedByWebView
+  --- (separator #2304)
+  - [428] Enter/Exit Full Screen | key=Cmd+Ctrl+F | id=- | action=toggleFullScreen:->nil(first responder) | rt: arcTypeTravelID=togglefullscreen;arcTypeTravelIcon=arrow.up.left.and.arrow.down.right;arcTypeTravelTriggers=Enter Full Screen; Exit Full Screen; Full Screen; Toggle Full Screen;arcTypeTravelDisregardCache=<NSNumber [('NS.boolval', True)]>;arcKeyBindingID=fullscreen;arcKeyBindingPriority=promptAfterConsumedByWebView
+  - [1324] Exit | key=Esc | id=- | action=exit:->nil(first responder) | flags=keyEquivWorksWhenHidden | rt: arcTypeTravelID=exit;arcTypeTravelIcon=escape;arcTypeTravelTriggers=Exit; Exit Modal; Exit Full Screen;arcTypeTravelDisregardCache=<NSNumber [('NS.boolval', True)]>;arcKeyBindingID=exit;arcKeyBindingPriority=promptAfterConsumedByWebView
+- [1674] Spaces | key=- | id=- | action=-
+  (submenu #1678 "Spaces" name=-)
+  - [1195] New Space… | key=- | id=- | action=newSpace:->nil(first responder) | rt: arcTypeTravelID=newSpace;arcTypeTravelIcon=plus.rectangle.portrait;arcTypeTravelTriggers=Create New Space;arcKeyBindingID=newSpace
+  - [1424] Edit Theme… | key=- | id=- | action=editSpaceTheme:->nil(first responder) | rt: arcTypeTravelID=editSpaceTheme;arcTypeTravelIcon=paintbrush.pointed.fill;arcTypeTravelTriggers=Theme; Edit Theme; Edit Space Theme
+  - [442] Rename Space | key=- | id=- | action=renameFocusedSpace:->nil(first responder) | rt: arcTypeTravelID=renameSpace;arcTypeTravelIcon=character.cursor.ibeam
+  - [84] Change Profile | key=- | id=- | action=changeProfileForCurrentSpace:->nil(first responder) | rt: arcTypeTravelID=changeProfile;arcTypeTravelIcon=person.fill
+  --- (separator #1682)
+  - [808] Next Space | key=Cmd+Opt+Right | id=- | action=nextSpace:->nil(first responder) | rt: arcTypeTravelID=nextSpace;arcTypeTravelIcon=arrow.right.to.line;arcTypeTravelTriggers=Focus Next Space;arcKeyBindingID=focusNextSpace
+  - [1108] Previous Space | key=Cmd+Opt+Left | id=- | action=previousSpace:->nil(first responder) | rt: arcTypeTravelID=previousSpace;arcTypeTravelIcon=arrow.left.to.line;arcTypeTravelTriggers=Focus Previous Space;arcKeyBindingID=focusPreviousSpace
+  --- (separator #1623)
+  - [554] Manage Spaces… | key=- | id=- | action=toggleSpaceManager:->nil(first responder) | rt: arcTypeTravelID=openSpaceManager;arcTypeTravelIcon=rectangle.portrait.on.rectangle.portrait;arcTypeTravelTriggers=Space Management; Organize; Toggle Space Manager; View Spaces;arcKeyBindingID=openSpaceManager
+- [1685] Tabs | key=- | id=- | action=-
+  (submenu #1689 "Tabs" name=-)
+  - [1693] New Tab… | key=Cmd+T | id=- | action=newWindowForTab:->nil(first responder)
+  - [52] New ChatGPT Message… | key=Cmd+Opt+G | id=gptMessage | action=gptMessage:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=gptMessage
+  - [1136] Join Meeting | key=Cmd+Ctrl+J | id=joinLiveMeeting | action=joinLiveMeeting:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=joinLiveMeeting;arcKeyBindingPriority=promptAfterConsumedByWebView
+  - [219] Peek Email… | key=Cmd+Shift+E | id=peekEmail | action=peekEmail:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=peekEmail;arcKeyBindingPriority=promptAfterConsumedByWebView
+  - [181] Pin/Unpin Tab | key=Cmd+D | id=- | action=toggleSelectedItemsPinned:->nil(first responder) | rt: arcTypeTravelID=pinTab;arcKeyBindingID=pinTab;arcKeyBindingPriority=promptAfterConsumedByWebView;arcTypeTravelIcon=pin;arcTypeTravelTriggers=save
+  - [1495] Open Little Arc or Peek in… | key=Cmd+O | id=- | action=openInCurrentSpace:->nil(first responder) | flags=keyEquivWorksWhenHidden | rt: arcKeyBindingID=openTabIn;arcKeyBindingPriority=promptAfterConsumedByWebView
+  - [959] New Folder… | key=Cmd+Shift+N | id=newListMenuItem | action=newList:->nil(first responder) | rt: arcKeyBindingID=newFolder
+  - [566] Duplicate | key=- | id=- | action=duplicate:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=duplicate
+  - [142] Rename Current Item | key=- | id=- | action=rename:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=rename
+  - [134] Collapse All Folders | key=- | id=- | action=collapseAllFolders:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=collapseAllFolders
+  - [164] Expand All Folders | key=- | id=- | action=expandAllFolders:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=expandAllFolders
+  --- (separator #1696)
+  - [1402] Next Tab | key=Cmd+Opt+Down | id=- | action=nextTab:->nil(first responder) | rt: arcTypeTravelID=nextTab;arcKeyBindingID=selectNextTab;arcKeyBindingPriority=overrideWebView;arcTypeTravelIcon=arrow.right
+  - [852] Previous Tab | key=Cmd+Opt+Up | id=- | action=previousTab:->nil(first responder) | rt: arcTypeTravelID=previousTab;arcKeyBindingID=selectPreviousTab;arcKeyBindingPriority=overrideWebView;arcTypeTravelIcon=arrow.left
+  - [1018] Tab Switcher (forward) | key=Ctrl+Tab | id=- | action=cycleToNextRecentTab:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=cycleNextTab;arcKeyBindingPriority=overrideWebView;arcTypeTravelTriggers=Toggle Tabs; Switch tabs; Recent tabs
+  - [207] Tab Switcher (backward) | key=Shift+Ctrl+Backtab | id=- | action=cycleToPreviousRecentTab:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=cyclePreviousTab;arcKeyBindingPriority=overrideWebView;arcTypeTravelTriggers=Toggle Tabs; Switch tabs; Recent tabs
+  - [871] Cycle Tab Forward | key=Cmd+Ctrl+Right | id=cycleTabForward | action=cycleTabForward:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=cycleTabForward;arcKeyBindingPriority=overrideWebView
+  - [172] Cycle Tab Backward | key=Cmd+Ctrl+Left | id=cycleTabBackward | action=cycleTabBackward:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=cycleTabBackward;arcKeyBindingPriority=overrideWebView
+  - [752] Reveal Tab in Sidebar | key=- | id=- | action=revealCurrentTabInSidebar:->nil(first responder) | rt: arcTypeTravelID=revealTabInSidebar;arcTypeTravelIcon=arrow.left.circle;arcTypeTravelTriggers=Show Tab in Sidebar; Reveal in Sidebar; Go to Current Tab;arcKeyBindingID=revealTabInSidebar
+  - [1697]  | key=- | id=- | action=- | flags=disabled
+    (submenu #1698 "" name=-)
+    - [1700] Item 1 | key=- | id=- | action=- | flags=disabled
+    - [1704] Item 2 | key=- | id=- | action=- | flags=disabled
+    - [1708] Item 3 | key=- | id=- | action=- | flags=disabled
+  - [498] Clear Unpinned Tabs | key=Cmd+Shift+K | id=- | action=clearExplore:->nil(first responder) | rt: arcTypeTravelID=clearUnpinnedTabs;arcTypeTravelIcon=bubbles.and.sparkles;arcTypeTravelTriggers=Close Unpinned Tabs; Clear Tabs; Clear Today;arcKeyBindingID=clearExplore
+  - [334] Reset all tabs in this Space | key=- | id=- | action=resetVisiblePinnedTabs:->nil(first responder) | rt: arcTypeTravelID=expandPinnedTabs;arcTypeTravelIcon=arrow.backward.to.line;arcKeyBindingID=resetSpace
+  - [1348] Reset Tab to Original URL | key=- | id=- | action=resetTab:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=resetTab;arcTypeTravelTriggers=Reset Tab;
+- [1538] Archive | key=- | id=- | action=-
+  (submenu #1542 "Archive" name=-)
+  - [946] Go Back | key=Cmd+[ | id=- | action=navigateTabBack:->nil(first responder) | rt: arcTypeTravelID=back;arcTypeTravelIcon=arrow.backward;arcTypeTravelTriggers=Go Back; Back; Navigate Back;arcKeyBindingID=goBack;arcKeyBindingPriority=overrideWebView
+  - [361] Go Back | key=Cmd+Left | id=- | action=navigateTabBackArrow:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=goBack_Alternate
+  - [61] Go Forward | key=Cmd+] | id=- | action=navigateTabForward:->nil(first responder) | rt: arcTypeTravelID=goForward;arcTypeTravelIcon=arrow.right;arcTypeTravelTriggers=Go Forward; Forward; Navigate Forward;arcKeyBindingID=goForward;arcKeyBindingPriority=overrideWebView
+  - [1447] Go Forward | key=Cmd+Right | id=- | action=navigateTabForwardArrow:->nil(first responder) | flags=hidden,keyEquivWorksWhenHidden | rt: arcKeyBindingID=goForward_Alternate
+  --- (separator #1546)
+  - [1144] View History | key=Cmd+Y | id=- | action=showAllHistory:->nil(first responder) | rt: arcTypeTravelID=history;arcTypeTravelIcon=book;arcTypeTravelTriggers=Show History; History;arcKeyBindingID=viewHistory
+  - [935] View Archive | key=- | id=- | action=showArchive:->nil(first responder) | rt: arcTypeTravelID=viewArchive;arcTypeTravelIcon=archivebox;arcTypeTravelDisregardCache=<NSNumber [('NS.boolval', True)]>;arcKeyBindingID=viewArchive;arcTypeTravelTriggers=Archive
+  - [1171] Clear Archive | key=- | id=- | action=clearArchive:->nil(first responder) | rt: arcTypeTravelID=clearArchive;arcTypeTravelIcon=archivebox;arcKeyBindingID=clearArchive;arcTypeTravelTriggers=Clear Archive; Delete Archive
+- [1576] Extensions | key=- | id=- | action=-
+  (submenu #1580 "Extensions" name=-)
+  - [1232] Add Extension… | key=- | id=- | action=navigateToChromeWebStore:->nil(first responder) | rt: arcTypeTravelID=addExtension;arcTypeTravelIcon=plus.circle;arcTypeTravelTriggers=Install Extensions; Extension Store; Plugins; Chrome Extensions; Chrome Store
+  - [978] Manage Extensions… | key=- | id=- | action=navigateToChromeExtensionsPage:->nil(first responder) | rt: arcTypeTravelID=manageExtensions;arcTypeTravelIcon=puzzlepiece;arcTypeTravelTriggers=Manage Extensions; Extensions; Plugins; Chrome Extensions
+- [1718] Window | key=- | id=- | action=-
+  (submenu #1722 "Window" name=_NSWindowsMenu)
+  - [999] Minimize Window | key=Cmd+M | id=- | action=performMiniaturize:->nil(first responder) | rt: arcTypeTravelID=minimize;arcTypeTravelIcon=arrow.down.right.and.arrow.up.left;arcKeyBindingPriority=overrideWebView;arcKeyBindingID=minimize
+  - [1726] Zoom | key=- | id=- | action=performZoom:->nil(first responder)
+  --- (separator #1730)
+  - [451] View Library | key=Cmd+Shift+L | id=- | action=toggleLibrary:->nil(first responder) | rt: arcTypeTravelID=openLibrary;arcTypeTravelIcon=archivebox;arcTypeTravelTriggers=Library;arcTypeTravelDisregardCache=<NSNumber [('NS.boolval', True)]>;arcKeyBindingID=viewLibrary
+  - [150] View Downloads | key=Cmd+Shift+J | id=- | action=toggleDownloads:->nil(first responder) | rt: arcTypeTravelID=openDownloads;arcTypeTravelIcon=arrow.down.circle;arcTypeTravelTriggers=Downloads;arcTypeTravelDisregardCache=<NSNumber [('NS.boolval', True)]>;arcKeyBindingID=viewDownloads
+  - [1516] View Easels & Notes | key=- | id=- | action=viewEaselsAndNotes:->nil(first responder) | rt: arcTypeTravelID=viewEaselsAndNotes;arcTypeTravelIcon=scribble.variable;arcTypeTravelTriggers=Easels; Notes
+  - [668] View Media | key=- | id=- | action=viewScreenshotsAndCaptures:->nil(first responder) | rt: arcTypeTravelID=viewScreenshotsAndCaptures;arcTypeTravelIcon=photo.on.rectangle.angled;arcTypeTravelTriggers=Screenshots; Captures; Videos; Media
+  - [862] View Boosts | key=- | id=- | action=viewBoosts:->nil(first responder) | rt: arcTypeTravelID=viewBoosts;arcTypeTravelTriggers=Boosts;arcTypeTravelIcon=paintbrush
+  --- (separator #1731)
+  - [1732] Bring All to Front | key=- | id=- | action=arrangeInFront:->nil(first responder)
+- [1592] Help | key=- | id=- | action=-
+  (submenu #1596 "Help" name=_NSHelpMenu)
+  - [787] Getting Started | key=- | id=- | action=showWelcomeToArc:->nil(first responder) | rt: arcTypeTravelID=welcomeToArc;arcTypeTravelIcon=safari;arcTypeTravelTriggers=Welcome to Arc
+  - [321] Essential Keyboard Shortcuts | key=- | id=- | action=keyboardShortcutsEDU:->nil(first responder) | rt: arcTypeTravelID=essentialKeyboardShortcuts;arcTypeTravelIcon=keyboard;arcTypeTravelTriggers=Essential Keyboard Shortcuts; keyboard; shortcuts;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.1)]>
+  - [1359] Release Notes | key=- | id=- | action=onSelectResource_releaseNotes:->nil(first responder) | rt: arcTypeTravelID=resourcesReleaseNotes;arcTypeTravelIcon=clock;arcTypeTravelTriggers=Changelog;Whats new;What's new;arc updates
+  - [1288] Contact the Team | key=- | id=- | action=contactTheTeam:->nil(first responder) | rt: arcTypeTravelID=contactTheTeam;arcTypeTravelIcon=ellipsis.message;arcTypeTravelTriggers=Idea; Feedback; Request; Feature Request; Send Feedback; Report Bug; Bug; Question
+  - [103] Visit Help Center | key=- | id=- | action=visitHelpCenter:->nil(first responder) | rt: arcTypeTravelID=visitHelpCenter;arcTypeTravelIcon=heart.circle;arcTypeTravelTriggers=Question; Inquiry; Help Center; Help; Resources
+  - [1504] Restore Data | key=- | id=- | action=presentRestoreDataFlow:->nil(first responder) | rt: arcTypeTravelID=restoreData;arcTypeTravelIcon=opticaldiscdrive;arcTypeTravelTriggers=Restore; Backup
+  - [1061] Export Arc Notes | key=- | id=- | action=exportArcNotes:->nil(first responder) | rt: arcTypeTravelID=exportArcNotes;arcTypeTravelIcon=arrow.down.doc;arcTypeTravelTriggers=Export Notes; Backup Notes; Download Notes;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 1.5)]>
+  --- (separator #1600)
+  - [1601] Troubleshooting | key=- | id=- | action=-
+    (submenu #1605 "Troubleshooting" name=-)
+    - [276] Record Trace | key=- | id=- | action=recordTrace:->nil(first responder) | rt: arcTypeTravelID=recordTrace;arcTypeTravelIcon=flag
+    - [75] Cancel Trace | key=- | id=- | action=cancelTrace:->nil(first responder) | flags=hidden | rt: arcTypeTravelID=cancelTrace;arcTypeTravelIcon=exclamationmark.triangle
+    - [382] Open Task Manager | key=- | id=- | action=openTaskManager:->nil(first responder) | rt: arcTypeTravelID=openTaskManager;arcTypeTravelIcon=exclamationmark.triangle;arcTypeTravelTriggers="Task; Manager; Task Manager; Cpu; Memory: RAM"
+    --- (separator #1609)
+    - [594] Reveal Arc Data | key=- | id=- | action=revealArcData:->nil(first responder) | rt: arcTypeTravelID=revealArcData;arcTypeTravelIcon=list.clipboard;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.1)]>
+    - [585] Copy Arc Info | key=- | id=- | action=copyArcInfo:->nil(first responder) | rt: arcTypeTravelID=copyArcInfo;arcTypeTravelIcon=list.clipboard;arcTypeTravelCandidateBump=<NSNumber [('NS.dblval', 0.1)]>
+
+# outlets into objects (for menus/items):
+194 NSMenuItem Add Split View [('addSplitViewMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1538 NSMenuItem Archive [('archiveMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+75 NSMenuItem Cancel Trace [('cancelTraceMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+84 NSMenuItem Change Profile [('changeProfile', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1083 NSMenuItem Clear Cache and Refresh [('clearCacheAndRefresh', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1436 NSMenuItem Clear Cookies and Refresh [('clearCookiesAndRefresh', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+968 NSMenuItem Archive Tab [('closeCurrentTabMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+574 NSMenuItem Close Window [('closeCurrentWindowMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+228 NSMenuItem Close this Split Pane [('closeFocusedSplitViewPanel', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+840 NSMenuItem Collapse Pinned Section [('collapsePinnedSectionMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1412 NSMenuItem Copy URL as Quote [('copyCurrentURLAsHighlightMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+402 NSMenuItem Copy URL as Markdown [('copyCurrentURLAsMarkdownMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+890 NSMenuItem Copy URL [('copyCurrentURLMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1473 NSMenuItem Developer Tools [('developerToolsMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1324 NSMenuItem Exit [('exitMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+617 NSMenuItem Expand Pinned Section [('expandPinnedSectionMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1576 NSMenuItem Extensions [('extensionsMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+778 NSMenuItem Reveal Current Tab [('focusSidebarMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+946 NSMenuItem Go Back [('goBackMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+61 NSMenuItem Go Forward [('goForwardMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1592 NSMenuItem Help [('helpMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+477 NSMenuItem Hide Arc [('hideArcMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1454 NSMenuItem Import from Another Browser… [('importMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1029 NSMenuItem New Incognito Window [('incognitoMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets'), ('newIncognitoWindowMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+321 NSMenuItem Essential Keyboard Shortcuts [('keyboardShortcutsEDUMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+463 NSMenuItem New Little Arc Window [('littleBrowserMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1623 NSMenuItem  [('manageSpacesDivider', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+554 NSMenuItem Manage Spaces… [('manageSpacesItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+879 NSMenuItem New Boost [('newBoostMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1263 NSMenuItem New Easel [('newEaselMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1182 NSMenuItem New Legacy Boost (Advanced) [('newLegacyBoostMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+959 NSMenuItem New Folder… [('newListMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+690 NSMenuItem New Note [('newNoteMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+393 NSMenuItem New Profile [('newProfile', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1195 NSMenuItem New Space… [('newSpaceMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+830 NSMenuItem New Tab… [('newTabMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+678 NSMenuItem New Window [('newWindowMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1018 NSMenuItem Tab Switcher (forward) [('nextRecentTabItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+240 NSMenuItem Open Command Bar [('openLocationMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+382 NSMenuItem Open Task Manager [('openTaskManagerMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+181 NSMenuItem Pin/Unpin Tab [('pinTabMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+207 NSMenuItem Tab Switcher (backward) [('previousRecentTabItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+901 NSMenuItem Print [('printMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+276 NSMenuItem Record Trace [('recordTraceMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+369 NSMenuItem Share Arc [('referralCodeMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+704 NSMenuItem Refresh the Page [('reloadPageMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+717 NSMenuItem Restore Last Closed Tab [('reopenClosedTabMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1402 NSMenuItem Next Tab [('selectNextTabMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+852 NSMenuItem Previous Tab [('selectPreviousTabMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1300 NSMenuItem Separate Page from Split View [('separateTabFromSplitViewMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+935 NSMenuItem View Archive [('showArchiveItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+33 NSMenuItem Show/Hide Sidebar [('showSidebarMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1095 NSMenuItem Show/Hide Toolbar [('showToolbarMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1674 NSMenuItem Spaces [('spacesMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1685 NSMenuItem Tabs [('tabsMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+428 NSMenuItem Enter/Exit Full Screen [('toggleFullScreenMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+988 NSMenuItem Quit Arc [('userQuitAppMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+1718 NSMenuItem Window [('windowMenuItem', 'NSClassSwapper:_TtC3Arc15MainMenuOutlets')]
+
+# all NSMenu objects:
+1542 Archive 
+1580 Extensions 
+1596 Help _NSHelpMenu
+1605 Troubleshooting 
+1678 Spaces 
+1689 Tabs 
+1698  
+1722 Window _NSWindowsMenu
+2161 Main Menu _NSMainMenu
+2170 Arc _NSAppleMenu
+2181 Services _NSServicesMenu
+2194 File 
+2206 Edit 
+2216 Find 
+2224 Spelling 
+2234 Substitutions 
+2243 Transformations 
+2251 Speech 
+2259 Format 
+2267 Font _NSFontMenu
+2276 View 
+2284  
+2300 Developer 
+
+# runtime attribute connectors on non-menu-items:

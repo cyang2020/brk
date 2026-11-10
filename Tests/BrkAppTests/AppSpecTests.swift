@@ -113,7 +113,7 @@ final class AppStoreTests: XCTestCase {
 
 @MainActor
 final class MenuTests: XCTestCase {
-    /// The menu bar is Arc's (anatomy-m 2.1, the nib tree in .audit/arc-evidence/a/mainmenu-tree.txt): every menu,
+    /// The menu bar is Arc's (anatomy-m 2.1, the nib tree in Tests/Fixtures/arc-menu/mainmenu-tree.txt): every menu,
     /// item, submenu, separator and key equivalent in Arc's order, hidden and repeated-key rows included, without the
     /// four rows the user dropped. The one difference is the wave 2 decision: New Folder… leaves Shift+Cmd+N to New
     /// Incognito Window.

@@ -89,6 +89,12 @@ enum SettingsBehaviourScenarios {
         try expect(try app.native().dockIcon == AppIconChoice.original.rawValue, "the Dock does not show the original icon at launch")
         guard case .dispatched = try app.send(.openSettings(pane: .icon)) else { throw Check(description: "openSettings did not dispatch") }
         try app.settle()
+        for icon in AppIconChoice.allCases where icon != .original {
+            try app.click(.settingsField("appIcon-\(icon.rawValue)"))
+            try app.waitUntil("\(icon.rawValue) is the Dock icon") { try app.native().dockIcon == icon.rawValue }
+            try expect(try settings(app).general.appIcon == icon, "\(icon.rawValue) was not saved")
+        }
+        app.passed("all six icon styles render and can be selected")
         try app.click(.settingsField("appIcon-neon"))
         try app.waitUntil("Neon is the Dock icon") { try app.native().dockIcon == AppIconChoice.neon.rawValue }
         try expect(try settings(app).general.appIcon == .neon, "the choice was not saved")

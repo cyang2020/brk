@@ -26,10 +26,13 @@ cp Sources/BrkBase/Resources/website-rules.json "$APP/Contents/Resources/website
 # the bundled media observer extension (its scripts are read at run time)
 cp Sources/BrkCEF/AudibilityExtension/* "$APP/Contents/Resources/BrkAudibility/" 2>/dev/null || true
 # the app icon, the same way scripts/build.sh makes it (branches without the icon script keep whatever the bundle has)
+if [ -d Sources/BrkSettings/Resources/AppIcons ]; then
+  rm -rf "$APP/Contents/Resources/AppIcons" && cp -R Sources/BrkSettings/Resources/AppIcons "$APP/Contents/Resources/"
+fi
 if [ -f scripts/app-icon/main.swift ] && [ -f Sources/BrkSettings/AppIconArt.swift ]; then
   ICONSET="$(mktemp -d)/$PRODUCT.iconset"
   if swiftc -O -o .build/brk-app-icon scripts/app-icon/main.swift Sources/BrkSettings/AppIconArt.swift 2>/dev/null \
-     && .build/brk-app-icon "$ICONSET" original \
+     && .build/brk-app-icon "$ICONSET" original "$PWD/Sources/BrkSettings/Resources/AppIcons" \
      && iconutil -c icns -o "$APP/Contents/Resources/$PRODUCT.icns" "$ICONSET"; then
     /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "$APP/Contents/Info.plist" >/dev/null 2>&1 || true
     /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string $PRODUCT" "$APP/Contents/Info.plist" >/dev/null 2>&1 || true

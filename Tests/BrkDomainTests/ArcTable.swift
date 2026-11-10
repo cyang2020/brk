@@ -4,7 +4,7 @@ import Foundation
 
 /// Arc's menu as the anatomy recorded it, read from the repository at test time so the tests compare the table with
 /// the source, not with a copy: `docs/arc-anatomy/model-and-shortcuts.md` section 2.3 (rows, keys, ids, priorities,
-/// flags) and `.audit/arc-evidence/a/mainmenu-items.tsv` (the nib's type-travel runtime attributes, one line per row).
+/// flags) and `Tests/Fixtures/arc-menu/mainmenu-items.tsv` (the nib's type-travel runtime attributes, one line per row).
 enum ArcTable {
     struct Row {
         let number: Int
@@ -50,7 +50,7 @@ enum ArcTable {
 
     /// Row number -> the nib's `arcTypeTravelIcon`, `arcTypeTravelTriggers` (split at ";" and ",") and `arcTypeTravelTitle`.
     static func typeTravel() throws -> [Int: TypeTravel] {
-        let text = try String(contentsOf: root.appendingPathComponent(".audit/arc-evidence/a/mainmenu-items.tsv"), encoding: .utf8)
+        let text = try String(contentsOf: root.appendingPathComponent("Tests/Fixtures/arc-menu/mainmenu-items.tsv"), encoding: .utf8)
         var out: [Int: TypeTravel] = [:]
         for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
             let columns = line.split(separator: "\t", omittingEmptySubsequences: false)

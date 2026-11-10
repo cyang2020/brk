@@ -2,7 +2,7 @@ import AppKit
 import BrkBase
 import BrkDomain
 
-/// Arc's menu nib as `.audit/arc-evidence/a/mainmenu-tree.txt` dumps it (every item with its key, separators,
+/// Arc's menu nib as `Tests/Fixtures/arc-menu/mainmenu-tree.txt` dumps it (every item with its key, separators,
 /// submenus), turned into the lines Brk's menu must show: "Title [Cmd+Shift+N]" per item, "-" per separator, two
 /// spaces of indent per submenu level. The rows the user dropped (Share Arc, Privacy Policy, Sign Out, Send to Dia)
 /// are left out, Arc's empty placeholder submenu in Tabs is the separator it is drawn as, separators that end up
@@ -12,7 +12,7 @@ enum ArcMenuTree {
 
     static func lines(productName: String) throws -> [String] {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let text = try String(contentsOf: root.appendingPathComponent(".audit/arc-evidence/a/mainmenu-tree.txt"), encoding: .utf8)
+        let text = try String(contentsOf: root.appendingPathComponent("Tests/Fixtures/arc-menu/mainmenu-tree.txt"), encoding: .utf8)
         var out: [String] = []
         var skipBelow: Int?
         for raw in text.split(separator: "\n") {

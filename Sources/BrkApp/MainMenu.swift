@@ -4,7 +4,7 @@ import BrkDomain
 import os
 
 /// Owner: F4 (wave 2). Builds Arc's main menu (anatomy-m 2.1, 2.3; the nib tree in
-/// `.audit/arc-evidence/a/mainmenu-tree.txt`): one NSMenu per `MenuName` in order. Inside a menu or submenu every
+/// `Tests/Fixtures/arc-menu/mainmenu-tree.txt`): one NSMenu per `MenuName` in order. Inside a menu or submenu every
 /// item sits at its Arc row number, and a separator falls between neighbours whose groups differ, so table actions
 /// (`ActionSpec.group`) and the AppKit items added here (Undo through Select All, the Spelling and Grammar,
 /// Substitutions, Transformations, Speech and Format > Font submenus, Services, Show All, Zoom, Bring All to Front)
