@@ -154,7 +154,8 @@ The bin (sidebar hidden):
 
 The end:
 - Each flight keeps the overlay until its landing plus 1 s (bin:0x101ce1d9c). When the last one is done the bin slides
-  out and the window closes about 0.23 s later (r2: the bin starts out at 3.20 s, the last frame with the icon is 3.43 s).
+  out, and the window closes when the bin's spring is done: the icon, left on its own at the corner, goes 1.13 s after
+  the bin started out in r2 (3.20 s and 4.33 s) and was still there 1.8 s after it in r3. Brk uses 1.13 s.
 - The Library button itself plays nothing when the icon lands (r1: its glyph is unchanged and the screen stops changing
   0.05 s after the landing); its badge sprang in when the download started. ARC_HomeButton's `downloads.json` Lottie is
   the Library's Downloads page icon (hover frames 1 to 11, click to 35, the arrow and the circle bounce), not the

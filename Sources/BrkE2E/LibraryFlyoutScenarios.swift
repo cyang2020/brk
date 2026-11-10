@@ -233,7 +233,13 @@ enum LibraryFlyoutScenarios {
         let area = n.computed.contentArea
         let link = CGPoint(x: area.minX + area.width * 0.5, y: area.minY + area.height * 0.5)
         let base = try picture(app, "LFF-base")
-        // Sidebar shown: the icon rises from the pointer, crosses the page to the left and falls into the Library button.
+        // Sidebar shown: the icon is thrown from the click along Arc's arc, crosses the page to the left and falls into
+        // the Library button. A window picture takes about 0.3 s, so each one is checked against the planned path
+        // around its time rather than frame by frame.
+        let height = n.contentSize.height
+        guard let plan = DownloadFlightPath.plan(pointer: CGPoint(x: link.x, y: height - link.y), window: n.contentSize, bin: false) else {
+            throw Check(description: "no planned path from \(link)")
+        }
         let started = try throwOne(app, link: link)
         var seen: [(t: Double, at: CGPoint)] = []
         var index = 0
@@ -245,10 +251,14 @@ enum LibraryFlyoutScenarios {
             }
         }
         app.note("icon seen at " + seen.map { String(format: "%.2fs (%.0f, %.0f)", $0.t, $0.at.x, $0.at.y) }.joined(separator: ", "))
-        try expect(seen.count >= 3, "the icon was seen in \(seen.count) of \(index) pictures of the page")
-        guard let top = seen.map(\.at).min(by: { $0.y < $1.y }) else { throw Check(description: "no icon seen") }
-        try expect(link.y - top.y > 100, "the icon rose only to \(top) from the click at \(link)")
-        try expect(seen.first.map { hypot($0.at.x - link.x, $0.at.y - link.y) < 260 } ?? false, "the first picture shows the icon far from the pointer: \(seen[0])")
+        try expect(seen.count >= 2, "the icon was seen in \(seen.count) of \(index) pictures of the page")
+        // Where the plan has the icon from 0.5 s before a picture's time to just after it (the flight starts before the
+        // snapshot that reports it, and the picture is taken after the time is read).
+        for sight in seen {
+            let from = max(0, Int((sight.t - 0.5) * 60)), to = min(plan.frames.count - 1, Int((sight.t + 0.05) * 60))
+            let off = from <= to ? plan.frames[from...to].map { hypot($0.position.x - sight.at.x, height - $0.position.y - sight.at.y) }.min() ?? .infinity : .infinity
+            try expect(off < 30, String(format: "the icon at (%.0f, %.0f) %.2f s in is %.0f points off Arc's path from the click", sight.at.x, sight.at.y, sight.t, off))
+        }
         try expect(seen.last.map { $0.at.x < link.x - 150 } ?? false, "the icon did not cross the page towards the Library button: \(seen.last!)")
         app.sleep(max(0, 2.6 - (ProcessInfo.processInfo.systemUptime - started)))
         let after = try picture(app, "LFF-after")
@@ -264,7 +274,6 @@ enum LibraryFlyoutScenarios {
         let wide = try app.native().computed.contentArea
         let hiddenLink = CGPoint(x: wide.minX + wide.width * 0.5, y: wide.minY + wide.height * 0.5)
         let hiddenBase = try picture(app, "LFF-hidden-base")
-        let height = try app.native().contentSize.height
         let binSpot = CGPoint(x: 40, y: height - 53), corner = CGRect(x: 50, y: height - 90, width: 40, height: 40)
         let thrown = try throwOne(app, link: hiddenLink)
         app.sleep(max(0, 0.35 - (ProcessInfo.processInfo.systemUptime - thrown)))
@@ -276,14 +285,14 @@ enum LibraryFlyoutScenarios {
         let resting = icon(rest, base: hiddenBase, in: corner)
         try expect(resting.map { hypot($0.x - 70, $0.y - (height - 70)) < 14 } ?? false, "the icon is not on the bin's corner (70, 70 from the bottom left) after 2 s: \(String(describing: resting))")
         app.passed("with the sidebar hidden the bin slides in at the bottom left corner and the icon comes to rest on its corner")
-        app.sleep(max(0, 3.6 - (ProcessInfo.processInfo.systemUptime - thrown)))
+        app.sleep(max(0, 4.0 - (ProcessInfo.processInfo.systemUptime - thrown)))
         let gone = try picture(app, "LFF-bin-gone")
         let back = gone.pixel(binSpot), was = hiddenBase.pixel(binSpot)
         try expect(abs(back.r - was.r) + abs(back.g - was.g) + abs(back.b - was.b) < 12 && icon(gone, base: hiddenBase, in: corner) == nil,
-                   "the bin or the icon is still there 3.6 s after the flight started: \(back) vs \(was)")
+                   "the bin or the icon is still there 4 s after the flight started: \(back) vs \(was)")
         try app.dispatch(.sidebar(.toggle))
         try app.waitUntil("the sidebar back") { try app.view().sidebar.visible }
-        app.passed("a second after the landing the bin slides out and the icon goes")
+        app.passed("a second after the landing the bin slides out, and the icon goes after it")
     }
 
     @Sendable static func running(_ app: AppUnderTest) throws {

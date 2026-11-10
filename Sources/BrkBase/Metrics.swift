@@ -636,8 +636,8 @@ public struct DownloadFlightMetrics: MetricGroup {
     public let iconDisc = Metric(["#FFFFFF", "#2C2C2E"], .anatomy("docs/arc-anatomy/library-flyout.md, the disc reads #FEFEFE on Arc's light Space; dark is ours"))
     /// Each flight keeps the overlay this long after it lands; when the last one is done the bin leaves.
     public let hold = Metric(1.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101ce1d9c: asyncAfter(now + projectileMotionDuration + 1.0) leaves the group"))
-    /// The icons go this long after the bin starts to leave (Arc closes its overlay window on the bin's completion).
-    public let clearDelay = Metric(0.23, .anatomy("docs/arc-anatomy/library-flyout.md, r2: the bin starts out at 3.20 s, the last frame with the icon is 3.43 s"))
+    /// The icons go this long after the bin starts to leave (Arc closes its overlay window when the bin's spring is done).
+    public let clearDelay = Metric(1.13, .anatomy("docs/arc-anatomy/library-flyout.md, r2: the bin starts out at 3.20 s and the icon goes at 4.33 s; in r3 it was still there 1.8 s after the bin left"))
     /// The bin while the sidebar is hidden: a rounded square this wide, its centre this far from the window's left and bottom edges.
     public let binSize = Metric(46.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101cdf438 and 0x101cdf48c: padding 8 in a 62 x 62 frame; Arc's bin spans x 31 to 76"))
     public let binRadius = Metric(12.0, .anatomy("docs/arc-anatomy/library-flyout.md, bin:0x101cdef98: RoundedRectangle(cornerRadius: 12, style: .continuous)"))
