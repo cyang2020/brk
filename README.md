@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/Swift%206-AppKit-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 6, AppKit">
   <img src="https://img.shields.io/badge/engine-Chromium%20154-4285F4?style=flat-square&logo=googlechrome&logoColor=white" alt="Chromium 154">
   <img src="https://img.shields.io/badge/account-none%20needed-2ea44f?style=flat-square" alt="No account">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -239,3 +240,7 @@ Which tests a change adds, and what runs before a merge, is in `docs/testing-pol
 The first version (October 2026) was an Electron app, kept at the tag `electron-v1`.
 
 </details>
+
+---
+
+<p align="center"><sub>MIT licensed. Brk is an independent project and is not affiliated with The Browser Company. Arc is a trademark of The Browser Company.</sub></p>
