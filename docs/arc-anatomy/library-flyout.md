@@ -13,7 +13,8 @@ The facts below were found on 2026-11-10 in two ways. Addresses (`bin:0x…`) ar
 `/Applications/Arc.app/Contents/MacOS/Arc` 1.170 (build 89123), read with llvm-objdump; short Swift strings were decoded
 from mov/movk pairs. "Probe" means the user's signed-in Arc, driven with real window-server mouse events and a local file
 server, captured with `screencapture` (window at 320,70, 1280 x 776, sidebar 228 wide, the Greyscale white fixture Space).
-The probe pictures and videos are outside the repo, in `~/brk-evidence/library-hover-preview/`.
+The Arc | Brk pictures, the frame-by-frame timing tables and the probe scripts are outside the repo, in
+`~/brk-evidence/library-hover-preview/`.
 
 ## When the list opens and closes
 
