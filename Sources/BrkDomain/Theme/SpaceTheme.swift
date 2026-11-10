@@ -69,7 +69,7 @@ public struct SpaceTheme: Hashable, Sendable, Codable {
     }
 
     /// A fresh profile's first space in Arc 1.170 is the light pink-beige of the Brand page's first swatch (#F2EAE4,
-    /// verify/visual-pairs/run-20261103 P07-b); grain, noise 0.5 and intensity 0.25 are still guesses.
+    /// 2a96a9d7f0:verify/visual-pairs/run-20261103 P07-b); grain, noise 0.5 and intensity 0.25 are still guesses.
     public static let `default` = SpaceTheme(colors: [ThemePresets.brand[0]], texture: .grain, intensity: 0.25, appearance: .auto)
 }
 
@@ -182,7 +182,7 @@ public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> 
     let base = (theme.colors.isEmpty ? SpaceTheme.default.colors : Array(theme.colors.prefix(3))).map(opaque)
     let primary = base[0]
     // A dark color keeps its light ink under Arc's automatic and light buttons alike; they draw the same sidebar
-    // (verify/visual-pairs/run-20261103/r5-6/REPORT.md, the navy preset under each button).
+    // (f588406ceb:verify/visual-pairs/run-20261103/r5-6/REPORT.md, the navy preset under each button).
     let darkPrimary = relativeLuminance(primary) < lightSchemeMinLuminance
     let scheme: Scheme = switch theme.appearance {
     case .light, .auto: darkPrimary ? .dark : .light
@@ -291,7 +291,7 @@ private func rgb(hue: Double, saturation s: Double, lightness l: Double) -> RGBA
 }
 
 /// The light sidebar's title ink: the space's primary hue and saturation, as dark as #1A1A1A (relative luminance
-/// 0.0103). Measured on Arc 1.170 (verify/visual-pairs/run-20261103): the #F2EAE4 theme writes its rows in #221910
+/// 0.0103). Measured on Arc 1.170 (2a96a9d7f0:verify/visual-pairs/run-20261103): the #F2EAE4 theme writes its rows in #221910
 /// (this gives #221811), a neutral theme in #1A1A1A, a teal one in #001E1D and a blank window's lavender in #090D4F;
 /// all four sit within 0.001 of that luminance.
 public func sidebarInk(_ primary: RGBA) -> RGBA {

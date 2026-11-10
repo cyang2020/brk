@@ -21,7 +21,7 @@ in `scripts/build.sh` or `swift test`, so `main` builds and passes with no Chrom
 | `engine/sync-header.sh` | copies the one interface header `Sources/CBrkCore/include/BrkCore.h` into the tree |
 | `engine/build-demo.sh` | the smallest program on the framework, `engine/demo/main.swift` |
 | `engine/assemble-app.sh` | `dist-core/Brk.app`: `dist/Brk.app` plus the framework |
-| `engine/run-native-core.py` | e2e scenarios on it, under the native lock, evidence in `verify/chromium/` |
+| `engine/run-native-core.py` | e2e scenarios on it, under the native lock, the report in `~/brk-evidence/chromium/` |
 | `engine/tools/check-brk.sh` | syntax-only compile of `brk/` files with a neighbouring file's flags |
 | `engine/tools/arc-inspect.sh` | the static inspection of Arc that the notes cite |
 

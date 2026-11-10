@@ -4,7 +4,7 @@ import BrkDomain
 import Foundation
 
 /// What only BrkCore does: an extension's action popup opens from the site controls, and the popup is Chromium's own (ledger row A097,
-/// verify/visual-pairs/run-20261103/r3-8/EXTENSION-POPUP.md). They skip on CEF, which cannot do it.
+/// 312e95f3ec:verify/visual-pairs/run-20261103/r3-8/EXTENSION-POPUP.md). They skip on CEF, which cannot do it.
 enum CoreScenarios {
     static let all = [
         Scenario("Core-popup", "an extension's action popup opens from the site controls; typed text and a click in it reach the page's content script", popupReceipt),
@@ -37,7 +37,7 @@ enum CoreScenarios {
     @Sendable static func popupReceipt(_ app: AppUnderTest) throws {
         guard app.engine == .core else { throw Skipped(description: "needs BrkCore; CEF cannot open an action popup") }
         let source = app.site.url("extension-popup.html")
-        let extensionFixture = fixture(app, "verify/completion/batch2-extensions-sites/toolbar/Fixtures/Extension")
+        let extensionFixture = fixture(app, "Tests/Fixtures/ExtensionPopup")
         let item = try app.load(source)
         let page = PageID(window: app.window!, item: item)
         try app.waitForPageInput(page, at: source)

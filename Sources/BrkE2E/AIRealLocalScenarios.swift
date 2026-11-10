@@ -38,7 +38,7 @@ enum AIRealLocalScenarios {
         ]
         for model in models {
             let source = cache.appendingPathComponent(model.folder).appendingPathComponent(model.file)
-            guard FileManager.default.fileExists(atPath: source.path) else { throw Check(description: "no \(source.path); download the models first (verify/ai-native/b-local-models)") }
+            guard FileManager.default.fileExists(atPath: source.path) else { throw Check(description: "no \(source.path); download the models first (b6baac6767:verify/ai-native/b-local-models)") }
             let folder = dataDirectory.appendingPathComponent("Local Models", isDirectory: true).appendingPathComponent(model.id, isDirectory: true)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let target = folder.appendingPathComponent(model.file)

@@ -143,7 +143,7 @@ The hidden host is not Chrome's usable browser shell. `ChromePage` sets `showsCh
 
 | Evidence | Exact useful coverage | Important limit |
 | --- | --- | --- |
-| `verify/swift/focus-parent/evidence/build.log` | 459 tests, three known skips, zero failures; includes `PageLedgerTests`, shortcut routing, profiles, library/domain, native focus controller tests. | Root package tests do not run the vendored package's separate suite. Export save-panel test is one skip. Domain effects do not prove CEF execution. |
+| `bf1ea87186:verify/swift/focus-parent/evidence/build.log` | 459 tests, three known skips, zero failures; includes `PageLedgerTests`, shortcut routing, profiles, library/domain, native focus controller tests. | Root package tests do not run the vendored package's separate suite. Export save-panel test is one skip. Domain effects do not prove CEF execution. |
 | `native/logs/N1.log`, `N2.log` | App-priority Cmd+T, page-first clearing, swallowed Cmd+S press-twice, repeated reload, command-bar focus round trip, no host-key violations. | No exhaustive Chrome accelerator, find, print, media, permission or extension coverage. |
 | `native/logs/W2-11.log` | Real downloads, custom directory, Library shortcut, file existence, numbered collision. | No actual cancellation, detached owner, ask-panel cancel, interruption reason or progress-after-profile-change test. |
 | `native/logs/W2-11Q.log`, `W2-11A.log` | Immediate quit after completed and active downloads in a restored persistent profile, exit zero and matching page closes. | Does not assert a transfer continues after just its originating tab closes. Preserve this regression gate. |
@@ -152,9 +152,9 @@ The hidden host is not Chrome's usable browser shell. `ChromePage` sets `showsCh
 | `native/logs/9.log`, `R8.log` | Lazy restore and off-screen frame recovery; R8 asserts at least 100 by 100 overlap with a display after restart. | Restore-off setting is unused. R8 plus `ArcGeometryTests.testWindowPlacementOffScreen` supports A054's narrow verified claim. |
 | `native/logs/W2-4.log`, `W2-5.log`, `W2-6.log` | Standard windows and independent focus; Little Brk size/Open In to space; Shift+click Peek and Esc teardown. | No same-page dual presentation, floating-on-top policy, Open In folder/live-state continuity, or activity-based auto-archive. |
 | `native/logs/W2-7.log`, `W2-12.log` | Injected external URL routing; Cmd+Y shows profile history rows inside Library. | No real default-browser confirmation/GetURL end-to-end test. No "all historical visits" model: history is deduplicated and capped at 500. |
-| `verify/completion/platform-grounding/probe-results.json` | Real reducer reproduces cancel/close/profile-change gaps and clear-data effect; raw members compile at API 14800. | Synthetic events do not establish CEF callback timing or lifetime. |
+| `31357013e5:verify/completion/platform-grounding/probe-results.json` | Real reducer reproduces cancel/close/profile-change gaps and clear-data effect; raw members compile at API 14800. | Synthetic events do not establish CEF callback timing or lifetime. |
 
-All abbreviated `native/` paths above are under `verify/swift/focus-parent/`. The proposal's artifact paths are full repository-relative paths. Existing screenshots are useful Brk state evidence; this pass did not compare them with an authenticated Arc reference.
+All abbreviated `native/` paths above are under `bf1ea87186:verify/swift/focus-parent/`. The proposal's artifact paths are full repository-relative paths. Existing screenshots are useful Brk state evidence; this pass did not compare them with an authenticated Arc reference.
 
 ## Non-obvious things
 

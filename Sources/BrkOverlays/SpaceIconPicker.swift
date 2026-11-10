@@ -13,9 +13,9 @@ import SwiftUI
 struct IconPickerMetrics: MetricGroup {
     let size = Metric(CGSize(width: 270, height: 272), .guess("popover content, measured on P10-c-arc.png and P24-b-arc.png (542 x 543 px at 2x)"))
     let columns = Metric(8, .guess("emoji per row, counted on P10 c"))
-    let cell = Metric(CGSize(width: 30.85, height: 33), .anatomy("verify/visual-pairs/run-20261103/P10/P10-c-arc.png: the emoji's centres are 61.7 px apart, the rows 66 px"))
-    let emojiSize = Metric(20.0, .anatomy("verify/visual-pairs/run-20261103/P10/P10-c-arc.png: an emoji is 40 px wide"))
-    let searchRadius = Metric(14.0, .anatomy("verify/visual-pairs/run-20261103/P10/P10-c-arc.png: the search field's ends are round"))
+    let cell = Metric(CGSize(width: 30.85, height: 33), .anatomy("scripts/station/arc-reference/P10/P10-c-arc.png: the emoji's centres are 61.7 px apart, the rows 66 px"))
+    let emojiSize = Metric(20.0, .anatomy("scripts/station/arc-reference/P10/P10-c-arc.png: an emoji is 40 px wide"))
+    let searchRadius = Metric(14.0, .anatomy("scripts/station/arc-reference/P10/P10-c-arc.png: the search field's ends are round"))
     let tabsHeight = Metric(24.0, .guess("Emoji / Icon switch height, measured on P10 c"))
     let searchHeight = Metric(28.0, .guess("search field height, measured on P10 c"))
     let categoriesHeight = Metric(34.0, .guess("category bar height, measured on P10 c"))

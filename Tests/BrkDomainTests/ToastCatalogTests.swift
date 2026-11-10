@@ -3,7 +3,7 @@ import BrkBase
 import XCTest
 
 /// Arc's toasts as its binary names them (`ToastController`) and the references show them (Q11-b, P15, P33-d), and the
-/// + popover's rows (Q11-a). verify/visual-pairs/run-20261103/r4-14/POPUPS.md has the table.
+/// + popover's rows (Q11-a). b6d7a49d43:verify/visual-pairs/run-20261103/r4-14/POPUPS.md has the table.
 final class ToastCatalogTests: XCTestCase {
     private func toast(_ d: Driver) -> ToastSnapshot? { d.view.tabTools.toast }
 

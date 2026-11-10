@@ -4,11 +4,11 @@ import BrkDomain
 import BrkOverlays
 import BrkUIKit
 
-/// Sizes of Arc 1.170's Ctrl+Tab switcher, measured on verify/visual-pairs/run-20261103 P09-a/b (2x captures).
+/// Sizes of Arc 1.170's Ctrl+Tab switcher, measured on 2a96a9d7f0:verify/visual-pairs/run-20261103 P09-a/b (2x captures).
 let SwitcherMetrics = SwitcherMetricsTable()
 
 struct SwitcherMetricsTable: MetricGroup {
-    private static let measured = "verify/visual-pairs/run-20261103/REPORT.md, Arc captures P09-a/b"
+    private static let measured = "7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, Arc captures P09-a/b"
     let maxCards = Metric(5, .anatomy("\(measured): five cards for a longer recent list"))
     let padding = Metric(16.0, .anatomy("\(measured): 16 between the strip's edge and the cards"))
     let slotWidth = Metric(182.0, .anatomy("\(measured): the selection spans x 733 to 1097 px, cards on the same 182 pitch"))
@@ -34,7 +34,7 @@ struct SwitcherMetricsTable: MetricGroup {
 let NoticeMetrics = NoticeMetricsTable()
 
 struct NoticeMetricsTable: MetricGroup {
-    private static let measured = "verify/visual-pairs/run-20261103/REPORT.md, Arc capture P43-a"
+    private static let measured = "7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, Arc capture P43-a"
     let height = Metric(42.0, .anatomy("\(measured): the banner is about 42 tall"))
     let radius = Metric(12.0, .anatomy("\(measured): the banner's corners"))
     let padding = Metric(16.0, .anatomy("\(measured): the message starts about 18 in, a label drawing 2 in"))

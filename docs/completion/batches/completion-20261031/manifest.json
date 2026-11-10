@@ -20,7 +20,7 @@
       ],
       "scenario_prefix": "BO",
       "brief": "browser-ops.md",
-      "evidence": "verify/completion/batch2-browser-ops/",
+      "evidence": "3ef85fca08:verify/completion/batch2-browser-ops/",
       "status": "framed"
     },
     {
@@ -34,7 +34,7 @@
       ],
       "scenario_prefix": "FP",
       "brief": "file-panels.md",
-      "evidence": "verify/completion/batch2-file-panels/",
+      "evidence": "1f7d43f7b0:verify/completion/batch2-file-panels/",
       "status": "framed"
     },
     {
@@ -49,7 +49,7 @@
       ],
       "scenario_prefix": "Data",
       "brief": "privacy-data.md",
-      "evidence": "verify/completion/batch2-privacy-data/",
+      "evidence": "7d235b1fa5:verify/completion/batch2-privacy-data/",
       "status": "framed"
     },
     {
@@ -67,7 +67,7 @@
       ],
       "scenario_prefix": "Ext",
       "brief": "extensions-sites.md",
-      "evidence": "verify/completion/batch2-extensions-sites/",
+      "evidence": "3fb66d7401:verify/completion/batch2-extensions-sites/",
       "status": "framed"
     },
     {
@@ -84,7 +84,7 @@
       ],
       "scenario_prefix": "SidebarTools",
       "brief": "sidebar-tabs.md",
-      "evidence": "verify/completion/batch2-sidebar-tabs/",
+      "evidence": "a4cc460bef:verify/completion/batch2-sidebar-tabs/",
       "status": "framed"
     },
     {
@@ -104,7 +104,7 @@
       ],
       "scenario_prefix": "AI",
       "brief": "ai-features.md",
-      "evidence": "verify/completion/batch2-ai-features/",
+      "evidence": "0caaf05bd8:verify/completion/batch2-ai-features/",
       "status": "framed"
     },
     {
@@ -120,7 +120,7 @@
       ],
       "scenario_prefix": "Capture",
       "brief": "captures-media.md",
-      "evidence": "verify/completion/batch2-captures-media/",
+      "evidence": "69ccd75e68:verify/completion/batch2-captures-media/",
       "status": "framed"
     },
     {
@@ -132,7 +132,7 @@
       ],
       "scenario_prefix": "Boost",
       "brief": "boosts.md",
-      "evidence": "verify/completion/batch2-boosts/",
+      "evidence": "08586d4ecc:verify/completion/batch2-boosts/",
       "status": "framed"
     },
     {

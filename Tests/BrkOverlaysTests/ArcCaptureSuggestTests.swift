@@ -4,7 +4,7 @@ import XCTest
 import BrkBase
 @testable import BrkDomain
 
-/// The rows Arc 1.170 showed in the 2026-11-03 captures (verify/visual-pairs/run-20261103), on the capture's sidebar:
+/// The rows Arc 1.170 showed in the 2026-11-03 captures (2a96a9d7f0:verify/visual-pairs/run-20261103), on the capture's sidebar:
 /// favorites Wikipedia, MDN, GitHub, Apple; Docs pinned; Visual fixture focused.
 final class ArcCaptureSuggestTests: XCTestCase {
     private let visual = "http://127.0.0.1:8764/visual.html"

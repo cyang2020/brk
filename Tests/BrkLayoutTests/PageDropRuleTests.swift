@@ -4,7 +4,7 @@ import CoreGraphics
 import XCTest
 @testable import BrkLayout
 
-/// Arc's observations over the page (verify/visual-pairs/run-20261103/Q17/NOTES.md, window points), run through the rule read
+/// Arc's observations over the page (cbf12fadb0:verify/visual-pairs/run-20261103/Q17/NOTES.md, window points), run through the rule read
 /// from its binary, on the same pointer paths and at the same event rate as the real drags.
 final class PageDropRuleTests: XCTestCase {
     private let area = CGRect(x: 228, y: 10, width: 1042, height: 756)

@@ -56,7 +56,7 @@ final class SpaceToolsLayoutTests: XCTestCase {
         XCTAssertEqual(swipe.update(horizontal: 0, vertical: 0, phase: .ended, startsInSidebar: true, precise: true), .cancel, "a short vertical touch is nothing")
     }
 
-    // MARK: Arc's rules, with what real Arc did under the same gestures (verify/visual-pairs/run-20261103/Q19/)
+    // MARK: Arc's rules, with what real Arc did under the same gestures (38d57390e3:verify/visual-pairs/run-20261103/Q19/)
 
     /// The Library, Space 1 and 对照: a Library 417 wide, the sidebar 228.
     private let origins = PageSwipeRule.origins(widths: [417, 228, 228])

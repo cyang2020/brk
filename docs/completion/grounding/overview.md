@@ -42,7 +42,7 @@ flowchart LR
 
 ### Logical selection does not establish a native host
 
-The AppKit probe reproduced two windows claiming the same page while only one owns its NSView. Re-selecting the row in the empty window changes no revision, so `AppStore` does not republish. Becoming key only retries focus; it does not reattach the view. On a changing publish, `CardView.host` moves the view, and the last dictionary-iterated claimant gets it. See `Sources/BrkContent/ContentAreaView.swift:129`, `AppStore.swift:176`, and `verify/completion/native-grounding/probe-output.txt`.
+The AppKit probe reproduced two windows claiming the same page while only one owns its NSView. Re-selecting the row in the empty window changes no revision, so `AppStore` does not republish. Becoming key only retries focus; it does not reattach the view. On a changing publish, `CardView.host` moves the view, and the last dictionary-iterated claimant gets it. See `Sources/BrkContent/ContentAreaView.swift:129`, `AppStore.swift:176`, and `a3966b7375:verify/completion/native-grounding/probe-output.txt`.
 
 Origin routing is a separate source-proven ambiguity. `AppStore.window(showing:)` chooses the first claiming snapshot for CEF shortcuts and Peek decisions. `Rules/Tabs.openRequested` chooses a sorted claimant for global openers. Neither lookup states which native window actually hosted the event. The probe did not reproduce a wrong-window shortcut. W2-4 uses distinct pages, so it cannot settle this question.
 

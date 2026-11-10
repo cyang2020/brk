@@ -13,7 +13,7 @@ import UniformTypeIdentifiers
 /// Esc `.commandBar(.dismiss)`, and so does a click anywhere outside the card. Opening plays Arc's bounce (scale 0.95
 /// -> 1, no fade).
 ///
-/// Two cards, as Arc 1.170 draws them (verify/visual-pairs/run-20261103 P02-b/c, Q01-a/b): centered (Cmd+T) the
+/// Two cards, as Arc 1.170 draws them (2a96a9d7f0:verify/visual-pairs/run-20261103 P02-b/c, Q01-a/b): centered (Cmd+T) the
 /// card fills the box, with a 64 pt input row (magnifier, 18 pt text, ⓘ) and a hairline over the rows, each recent
 /// tab with "Switch to Tab" and an arrow square, the highlight a shade of the theme (grey under a white theme). Over the URL pill (Cmd+L) the card is 350 wide
 /// from the pill's left edge (wider only when its input row needs it), its input row 50 tall with the page's icon

@@ -1,0 +1,10 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Video fixture</title>
+<style>body{font:20px -apple-system,sans-serif;margin:40px}button{font:inherit;padding:18px 34px;margin-right:16px}</style></head>
+<body>
+<h1>Video fixture</h1>
+<p>A small looping clip with a quiet tone, for comparing how a playing video shows.</p>
+<button id="play" onclick="document.getElementById('v').play();document.title='Video fixture (playing)'">Play</button>
+<button id="pause" onclick="document.getElementById('v').pause();document.title='Video fixture (paused)'">Pause</button>
+<p><video id="v" loop controls width="480" src="clip.mp4"></video></p>
+</body></html>

@@ -4,7 +4,7 @@ import BrkLayout
 import CoreGraphics
 import XCTest
 
-/// Arc's rules for the grid, as seen on Arc 1.170 on 2026-11-05 (verify/visual-pairs/run-20261103/Q13).
+/// Arc's rules for the grid, as seen on Arc 1.170 on 2026-11-05 (ec0662aa99:verify/visual-pairs/run-20261103/Q13).
 final class FavoritesGridTests: XCTestCase {
     private func ids(_ count: Int) -> [ItemID] { (0..<count).map { ItemID("t\($0)") } }
 

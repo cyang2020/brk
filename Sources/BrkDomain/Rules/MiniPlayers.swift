@@ -2,7 +2,7 @@ import BrkBase
 import Foundation
 
 // Owner: W1. Arc's mini players (`MediaControlsFeature`). What a card does was tried on Arc 1.170 and read from its
-// binary (verify/visual-pairs/run-20261103/r5-5/REPORT.md); the rules here are that list.
+// binary (650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md); the rules here are that list.
 
 extension LivePage {
     /// Something in the page is making sound or would be if the tab were not muted. A player the page itself keeps silent

@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Brk Action Ownership Probe",
+  "version": "1.0.0",
+  "permissions": ["activeTab", "storage"],
+  "action": {"default_popup": "popup.html", "default_title": "Brk Action Ownership Probe"},
+  "content_scripts": [{"matches": ["http://127.0.0.1/*"], "js": ["content.js"]}],
+  "incognito": "not_allowed"
+}

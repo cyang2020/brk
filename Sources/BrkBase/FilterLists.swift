@@ -2,7 +2,7 @@ import Foundation
 
 // EasyList / EasyPrivacy (Adblock Plus filter syntax): parsing, an indexed request matcher and element hiding.
 // Pure values; the engine runs `FilterLists.match` on CEF's IO thread and `hiddenSelectors` when it styles a page.
-// verify/visual-pairs/run-20261103/r3-8/FILTERS.md lists what is supported and what is skipped.
+// b97ba26463:verify/visual-pairs/run-20261103/r3-8/FILTERS.md lists what is supported and what is skipped.
 
 /// Request kinds as the filter type options name them.
 public enum FilterResourceType: String, Hashable, Sendable, Codable, CaseIterable {

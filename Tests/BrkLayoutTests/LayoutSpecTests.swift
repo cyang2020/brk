@@ -197,7 +197,7 @@ final class DropTargetTests: XCTestCase {
         XCTAssertEqual(d.view.favorites.tiles.map(\.id), [v[2], v[0], v[1]])
     }
 
-    /// The user's report (verify/visual-pairs/run-20261103/Q18): with no Favorites and the hint closed the tray has no
+    /// The user's report (6777d0968b:verify/visual-pairs/run-20261103/Q18): with no Favorites and the hint closed the tray has no
     /// height, so there was nowhere to drop a tab. The strip above the Space name (the URL pill) is the way in: a tab
     /// held there opens one full-width cell and a release makes it the first Favorite.
     func testAnEmptyTrayWithTheHintClosedTakesATabFromThePillStrip() throws {

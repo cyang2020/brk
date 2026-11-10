@@ -4,7 +4,7 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// The behaviour half of the 2026-11-03 Arc pairing (verify/visual-pairs/run-20261103/REPORT.md, "留到下一轮的"):
+/// The behaviour half of the 2026-11-03 Arc pairing (7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, "留到下一轮的"):
 /// the Ctrl+Tab switcher switches on release, Developer Mode shows the whole address, the Library card's Edit Space…
 /// is the theme panel, and Secure needs a clean certificate.
 final class ArcBehaviourAlignmentTests: XCTestCase {

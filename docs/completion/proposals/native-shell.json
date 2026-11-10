@@ -28,22 +28,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ArcGeometryTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios N3. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -76,22 +76,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios N2. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -124,22 +124,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "LayoutSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 9. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -171,22 +171,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "LayoutSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 5. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -219,22 +219,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "WindowRootViewTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios R2. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -266,15 +266,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ActionsTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -307,8 +307,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -340,22 +340,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 2. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -387,22 +387,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 8. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -434,22 +434,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 3. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -481,8 +481,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -513,15 +513,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -554,22 +554,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios N3. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -603,8 +603,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -635,8 +635,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -667,15 +667,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -708,22 +708,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "Wave1ReviewRegressionTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios R5a,R6. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -755,8 +755,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -787,8 +787,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -820,15 +820,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "Wave1ReviewAppRegressionTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -862,15 +862,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "SpaceDraftTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -903,22 +903,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "TreeTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios R5b. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -951,8 +951,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -984,8 +984,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1016,8 +1016,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1050,15 +1050,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -1090,15 +1090,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -1130,15 +1130,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -1171,8 +1171,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1205,8 +1205,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1239,8 +1239,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1273,22 +1273,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios R7b. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -1320,8 +1320,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1353,8 +1353,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1387,8 +1387,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1421,15 +1421,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "SpaceDraftTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -1462,22 +1462,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ThemeRendererTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 4,R9. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -1511,8 +1511,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1545,15 +1545,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "SpaceDraftTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -1586,15 +1586,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -1626,8 +1626,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1660,22 +1660,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ThemeRendererTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 4. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -1709,15 +1709,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "SpaceDraftTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -1749,8 +1749,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1781,8 +1781,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -1814,22 +1814,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 2,N2,W2-10a. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -1861,22 +1861,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "SuggestSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-10,W2-10a. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -1909,22 +1909,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ActionsTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-8. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -1956,22 +1956,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "CommandBarWave2SpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-10. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -2004,22 +2004,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "SettingsSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-10. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -2051,22 +2051,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 6. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -2098,15 +2098,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -2139,22 +2139,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 6. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -2186,15 +2186,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -2226,15 +2226,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -2267,8 +2267,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -2300,8 +2300,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -2333,22 +2333,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "SettingsSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 7,R5a,R5b. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -2380,22 +2380,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ArchivePageViewTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios 7. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -2427,15 +2427,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -2468,22 +2468,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "LibraryViewTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-12. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -2516,8 +2516,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -2549,15 +2549,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ReduceSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         }
       ],
@@ -2589,8 +2589,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -2621,15 +2621,15 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/run-probes.py",
-          "artifact": "verify/completion/native-grounding/probe-output.txt",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/run-probes.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/probe-output.txt",
           "scope": "Reproduces the documented limitation with unchanged production code; this pass is a successful reproduction, not feature acceptance."
         }
       ],
@@ -2662,8 +2662,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -2696,22 +2696,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "SettingsHostTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-1,W2-1-edit. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -2743,22 +2743,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "SettingsHostTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-1-edit. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -2791,22 +2791,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "SettingsSpecTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-10,W2-11. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -2839,22 +2839,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ActionsTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios N1,W2-9. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -2887,29 +2887,29 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "SettingsHostTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-1-edit. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         },
         {
           "kind": "unit",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/run-probes.py",
-          "artifact": "verify/completion/native-grounding/probe-output.txt",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/run-probes.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/probe-output.txt",
           "scope": "Reproduces the documented limitation with unchanged production code; this pass is a successful reproduction, not feature acceptance."
         }
       ],
@@ -2944,8 +2944,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -2974,8 +2974,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -3004,8 +3004,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -3038,8 +3038,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -3071,22 +3071,22 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         },
         {
           "kind": "unit",
           "result": "pass",
           "command": "swift test",
-          "artifact": "verify/completion/native-grounding/swift-test.log",
+          "artifact": "a3966b7375:verify/completion/native-grounding/swift-test.log",
           "scope": "ActionsTests and related inspected tests. See current_behavior and remaining for limits; this is not full native acceptance."
         },
         {
           "kind": "native",
           "result": "pass",
-          "command": "SKIP_BUILD=1 scripts/e2e.sh --out verify/swift/focus-parent/native",
-          "artifact": "verify/swift/focus-parent/native/REPORT.md",
+          "command": "SKIP_BUILD=1 scripts/e2e.sh --out bf1ea87186:verify/swift/focus-parent/native",
+          "artifact": "bf1ea87186:verify/swift/focus-parent/native/REPORT.md",
           "scope": "Existing parent CEF scenarios W2-8,W2-9. Source hashes match; not rerun in this grounding pass. The scenario assertions, not their titles, define coverage. Command is the supported reproduction command; the exact parent shell invocation was not independently recovered."
         }
       ],
@@ -3121,8 +3121,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -3155,8 +3155,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],
@@ -3188,8 +3188,8 @@
         {
           "kind": "static",
           "result": "pass",
-          "command": "python3 verify/completion/native-grounding/validate.py",
-          "artifact": "verify/completion/native-grounding/source-audit.json",
+          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
+          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
           "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
         }
       ],

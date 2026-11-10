@@ -4,7 +4,7 @@ import BrkDomain
 import Foundation
 
 /// The site controls' Secure / Insecure row against real certificates. The https fixture
-/// (`verify/visual-pairs/https-fixture`) serves a page on a certificate Brk trusts through its test switch
+/// (`Tests/Fixtures/https-fixture`) serves a page on a certificate Brk trusts through its test switch
 /// (`BRK_TEST_TRUSTED_SPKI`, set by the harness for these scenarios), one on a certificate nothing trusts, and https
 /// pages with plain HTTP parts. Each scenario reads Chromium's report through the snapshot, then what the popover
 /// shows: the overview's security button and, on the second page, the connection note.
@@ -74,18 +74,18 @@ enum SiteSecurityScenarios {
     }
 }
 
-/// One run of `verify/visual-pairs/https-fixture/serve.py` on free ports, owned by the scenario.
+/// One run of `Tests/Fixtures/https-fixture/serve.py` on free ports, owned by the scenario.
 final class HTTPSFixture {
     let process = Process()
     let https: Int, http: Int
     let requests: URL
 
     static func directory(_ app: AppUnderTest) -> URL {
-        app.site.root.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("verify/visual-pairs/https-fixture")
+        app.site.root.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Tests/Fixtures/https-fixture")
     }
     /// What the harness passes as `BRK_TEST_TRUSTED_SPKI`.
     static func trustedSPKI(siteRoot: URL) -> String? {
-        let file = siteRoot.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("verify/visual-pairs/https-fixture/trusted.spki")
+        let file = siteRoot.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Tests/Fixtures/https-fixture/trusted.spki")
         return (try? String(contentsOf: file, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -109,7 +109,7 @@ final class HTTPSFixture {
             throw Check(description: "the https fixture did not start")
         }
         self.https = https; self.http = http
-        app.note("https fixture: python3 -I verify/visual-pairs/https-fixture/serve.py --port 0 --http-port 0 (https \(https), http \(http)).")
+        app.note("https fixture: python3 -I Tests/Fixtures/https-fixture/serve.py --port 0 --http-port 0 (https \(https), http \(http)).")
     }
 
     func url(_ host: String, _ path: String) -> URL { URL(string: "https://\(host):\(https)\(path)")! }

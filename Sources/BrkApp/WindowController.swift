@@ -420,7 +420,7 @@ extension HostWindow {
     /// The buttons are not moved against AppKit: it lays its titlebar out again whenever it likes (the moment the
     /// pointer goes over the buttons, for one) and puts them back at its own spots, a fixed inset from the titlebar's
     /// left edge and centred in its height. So the titlebar itself is moved and sized until those spots are Arc's: the
-    /// user's report (verify/visual-pairs/run-20261103/Q16) was the colored buttons coming up 4 pt left of and 8 pt
+    /// user's report (26b91660a8:verify/visual-pairs/run-20261103/Q16) was the colored buttons coming up 4 pt left of and 8 pt
     /// above the grey circles, with the circles' own spots taking no click. AppKit sets the titlebar's frame back each
     /// time the pointer goes onto or off the buttons; `RestingTrafficLights` puts it right in the same display pass.
     func placeArcTrafficLights(origin: CGPoint?) {
@@ -465,7 +465,7 @@ extension HostWindow {
     }
 }
 
-/// Arc's traffic lights at rest (verify/visual-pairs/run-20261103: every capture with the pointer elsewhere, P01-a in
+/// Arc's traffic lights at rest (2a96a9d7f0:verify/visual-pairs/run-20261103: every capture with the pointer elsewhere, P01-a in
 /// the key window and P01-d with another app frontmost): three flat circles of black at 8.5% over the sidebar
 /// (#DCD5D3 on #F0EAE6), the colored buttons with their glyphs only while the pointer is over them (P01-c). Sits
 /// under the standard buttons, which stay clickable and turn transparent at rest.

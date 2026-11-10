@@ -253,7 +253,7 @@ extension Work {
         }
     }
 
-    /// The popup menus, item for item as Arc 1.170 shows them (verify/visual-pairs/run-20261103 P12, P11-b):
+    /// The popup menus, item for item as Arc 1.170 shows them (2a96a9d7f0:verify/visual-pairs/run-20261103 P12, P11-b):
     /// - Today tab: Copy Link, Share ▸ | Change Icon…, Rename…, Mute, Customize Page… | Open in Split View,
     ///   Duplicate, Move to ▸ | Archive Tab, Archive Tabs Below. Pinned and Favorites add Edit Pinned Page ▸ after
     ///   Customize Page… and end with Remove Pin or Remove Favorite instead of the archive rows;

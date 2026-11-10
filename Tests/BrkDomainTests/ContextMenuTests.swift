@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// The sidebar's context menus against Arc 1.170 (verify/visual-pairs/run-20261103 P11-b, P12) and the commands
+/// The sidebar's context menus against Arc 1.170 (2a96a9d7f0:verify/visual-pairs/run-20261103 P11-b, P12) and the commands
 /// behind their new rows.
 final class ContextMenuTests: XCTestCase {
 

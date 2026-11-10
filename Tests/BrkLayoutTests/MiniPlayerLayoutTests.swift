@@ -4,7 +4,7 @@ import CoreGraphics
 import XCTest
 @testable import BrkLayout
 
-/// Arc's mini player stack and the row's speaker (verify/visual-pairs/run-20261103/r5-5/REPORT.md; bin:0x1024942a4).
+/// Arc's mini player stack and the row's speaker (650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md; bin:0x1024942a4).
 final class MiniPlayerLayoutTests: XCTestCase {
     func testSliderTrackKnobAndPointer() {
         XCTAssertEqual(MiniPlayerLayout.sliderTrack(width: 212), CGRect(x: 8, y: 13.5, width: 196, height: 6), "Q18-media-j: x 16 to 212 on the card from 8")

@@ -2,7 +2,7 @@
 
 Candidate complete on branch `t3/design-brk-core-interface-1`.
 
-Starting SHA: `ae96ea121a87e23682c25eff1dfe774cb9899eea`. The final commit SHA is in the parent-facing handback. Only `docs/completion/core-candidate/` and `verify/completion/core-candidate/` are added. All 1,924 inherited files, including the inventory, plan, audit, source, and prior evidence, match the starting checkout. The worktree is clean after commit. No PR or publication was created.
+Starting SHA: `ae96ea121a87e23682c25eff1dfe774cb9899eea`. The final commit SHA is in the parent-facing handback. Only `docs/completion/core-candidate/` and `819ecffb9b:verify/completion/core-candidate/` are added. All 1,924 inherited files, including the inventory, plan, audit, source, and prior evidence, match the starting checkout. The worktree is clean after commit. No PR or publication was created.
 
 Read [README.md](README.md) for caller usage, recommendation, rationale, and the structurally different alternative. [Interface.swift](Interface.swift) is the executable typecheck with explicitly unimplemented bodies. [Ownership.md](Ownership.md) defines the behaviors and races; [Migration.md](Migration.md) assigns files, deletions, tests, and later-feature dependencies. [The evidence report](../../../verify/completion/core-candidate/REPORT.md) contains terminal/file/callback proof and unresolved feasibility gates. [COMMANDS.md](../../../verify/completion/core-candidate/COMMANDS.md) records the exact run sequence and failed-attempt disposition.
 

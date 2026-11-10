@@ -43,7 +43,7 @@ enum MediaScenarios {
         try expect(try row(app, first)?.mediaPlayers.isEmpty == true, "stale control resurrected a navigated player")
     }
 
-    // MARK: R5-5, Arc's speaker and mini player (verify/visual-pairs/run-20261103/Q18). Setup loads pages by command; every
+    // MARK: R5-5, Arc's speaker and mini player (6777d0968b:verify/visual-pairs/run-20261103/Q18). Setup loads pages by command; every
     // gesture under test goes through the window server.
 
     private typealias E = SidebarEvidenceScenarios

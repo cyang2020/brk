@@ -44,7 +44,7 @@ enum PageInjectionVerdict: Equatable, Sendable {
 ///
 /// - The phrase patterns run first over the whole text; a hit flags the page without asking any model.
 /// - JevK5 on this Mac answers when the page fits what it reads in a few seconds (it reads about 200 tokens a second on
-///   the M1; slice B measured 23 of 24 samples right, verify/ai-native/b2-local-wiring/results for longer pages).
+///   the M1; slice B measured 23 of 24 samples right, cf04c1ef94:verify/ai-native/b2-local-wiring/results for longer pages).
 /// - A longer page goes to the basic-features text model whole (up to `textCharacters`), when one is set up; without
 ///   one, JevK5 reads the page's start and end and the patterns stand for the rest.
 /// - No JevK5 and no text model: the patterns alone, as before.
@@ -60,7 +60,7 @@ final class PageInjectionModel {
     static let usage = "Page Safety Check"
     /// JevK5's probability of yes that flags a page. With the end line below, slice B's 24 samples read 0.58 to 0.94 for
     /// instructions and 0.16 at most for ordinary pages; 24 more (instructions that avoid the phrase patterns, pages that
-    /// instruct their human reader) read 0.26 to 0.85 and 0.09 at most (verify/ai-native/b2-local-wiring/results).
+    /// instruct their human reader) read 0.26 to 0.85 and 0.09 at most (cf04c1ef94:verify/ai-native/b2-local-wiring/results).
     /// 0.2 separates all 48. Fitted on these samples.
     static let flagAt = 0.2
     /// Page text JevK5 reads per check, in estimated tokens (about 7 s at a load of 2 to 5), and per window when a page

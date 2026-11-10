@@ -50,4 +50,4 @@ Current assessment: partial.
 
 ## Deliverable
 
-Commit implementation, production tests, native scenarios and evidence under `verify/completion/batch-import-sync/REPORT.md`. Include `proposal.json` with exactly the assigned IDs, truthful final status, remaining work and repository-local evidence for the parent. Do not edit the canonical inventory. Final reply: PASS/ISSUES/BLOCKED, starting/final commit, changed files, actual commands/results, limitations, and clean-worktree status. No PR or publishing.
+Commit implementation, production tests, native scenarios and evidence under `464881b882:verify/completion/batch-import-sync/REPORT.md`. Include `proposal.json` with exactly the assigned IDs, truthful final status, remaining work and repository-local evidence for the parent. Do not edit the canonical inventory. Final reply: PASS/ISSUES/BLOCKED, starting/final commit, changed files, actual commands/results, limitations, and clean-worktree status. No PR or publishing.

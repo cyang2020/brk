@@ -11,8 +11,8 @@ Read these documents in full, then inspect the relevant source and tests:
 - [Architecture overview](grounding/overview.md) and [historical constraints](grounding/lineage.md).
 - [Platform grounding](grounding/platform.md), [native-shell grounding](grounding/native-shell.md), and [integration grounding](grounding/integrations.md).
 - [Full completion plan](plan.md) and [feature inventory](features.json).
-- The history safety correction and its evidence under `verify/completion/history-safety/`.
-- The existing native focus, privacy, profile, and shutdown evidence under `verify/swift/focus-parent/` and the latest parent native run.
+- The history safety correction and its evidence under `ae96ea121a:verify/completion/history-safety/`.
+- The existing native focus, privacy, profile, and shutdown evidence under `bf1ea87186:verify/swift/focus-parent/` and the latest parent native run.
 
 The grounding reports describe immutable commit `6d2d6d5`. The starting checkout also contains later history-only clearing and its regression coverage. Cite the exact commit and binary used for every new probe. Historical source matches are not proof that a later experiment is unchanged.
 
@@ -31,7 +31,7 @@ Write your package under `docs/completion/core-candidate/` in your assigned work
 
 Include a short rationale, a structurally different alternative, the red-flag review, and a concrete migration plan. Name old paths to delete, existing callers to migrate, file ownership for implementation workers, and tests that prove each unit. State what is proven, inferred, or still unknown. Any unresolved feasibility question must have a bounded next experiment and must not silently become an assumed contract.
 
-Put reproducible probes and captured results under `verify/completion/core-candidate/`. Experimental changes to this worktree are allowed. Label them and keep them distinct from the proposed final contracts. Use the checkout's bundle, isolated data, and only processes started by your probe. Do not change global browser settings, original Arc data, credentials, OS protections, or other workers' apps. Do not reuse the parent bundle for an experiment with changed source.
+Put reproducible probes and captured results under `819ecffb9b:verify/completion/core-candidate/`. Experimental changes to this worktree are allowed. Label them and keep them distinct from the proposed final contracts. Use the checkout's bundle, isolated data, and only processes started by your probe. Do not change global browser settings, original Arc data, credentials, OS protections, or other workers' apps. Do not reuse the parent bundle for an experiment with changed source.
 
 Native GUI experiments across candidates share a display. Acquire the common advisory lock `/tmp/brk-core-native.lock` with Python `fcntl.flock` before launching a native experiment and release it afterward. Use nonblocking lock attempts with a bounded wait, continuing source work if another runner owns it. Do not hold the lock during a build. Close your own test windows, then release it. Independent compiler and reducer checks can run concurrently.
 

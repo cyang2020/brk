@@ -21,7 +21,7 @@ public enum PageDropTarget: Equatable, Sendable {
 }
 
 /// The rule Arc 1.170 runs for a drag over the page, read from `ARCUI.SplitViewController`
-/// (verify/visual-pairs/run-20261103/r5-4/REPORT.md has the addresses and the pseudocode). Two things make the preview
+/// (8d6b8b2e9b:verify/visual-pairs/run-20261103/r5-4/REPORT.md has the addresses and the pseudocode). Two things make the preview
 /// depend on the path:
 /// - the rule looks at the panes as they are now, and a slot is a pane: once a slot shows, the pointer is over the slot or
 ///   over the narrower page, and each has its own zones;

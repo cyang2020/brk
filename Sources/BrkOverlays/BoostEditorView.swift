@@ -826,7 +826,7 @@ public final class BoostZapOverlayView: NSView {
     }
     @available(*, unavailable) public required init?(coder: NSCoder) { fatalError("not used") }
     public override var isFlipped: Bool { true }
-    static let hintShift = Metric(-30.0, .anatomy("verify/visual-pairs/run-20261103/P37/P37-c-arc.png: 'Click elements on the page to Zap them' spans x 1198 to 1679 px, the card 456 to 2540 px"))
+    static let hintShift = Metric(-30.0, .anatomy("scripts/station/arc-reference/P37/P37-c-arc.png: 'Click elements on the page to Zap them' spans x 1198 to 1679 px, the card 456 to 2540 px"))
     /// `card`: the page rect of the content card showing the Boost's page.
     public func render(_ editor: BoostEditor?, card: CGRect?) {
         guard let editor, editor.picking, editor.pickPurpose == .zap, let card else { isHidden = true; return }

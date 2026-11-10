@@ -1,0 +1,489 @@
+{
+ "doc": {
+  "archive": [],
+  "deletingProfiles": {},
+  "downloads": [],
+  "favorites": {
+   "default": "CD34FD35-9FEA-444C-8F83-4272922AB89C"
+  },
+  "history": [],
+  "historyVisits": [],
+  "items": {
+   "034134CC-84C8-4C75-9689-9D7050F82277": {
+    "children": [],
+    "createdAt": 1793685491221,
+    "kind": "tab",
+    "parent": "B082E7D1-30A9-4D35-88D5-6766FD9D71E3",
+    "tab": {
+     "favicon": "http://127.0.0.1:8764/favicon.ico",
+     "lastActiveAt": 1793685491431,
+     "muted": false,
+     "title": "Long title for truncation and readable sidebar ellipsis",
+     "url": "http://127.0.0.1:8764/long.html"
+    }
+   },
+   "08041FD5-CDDD-40D0-AFBE-C2665DC51EA8": {
+    "children": [],
+    "createdAt": 1793679117504,
+    "kind": "tab",
+    "parent": "B80B85F1-52E4-489D-A0C5-A3304AB19E26",
+    "tab": {
+     "lastActiveAt": 1793683130198,
+     "muted": false,
+     "pinnedURL": "http://127.0.0.1:8764/interface.html",
+     "title": "",
+     "url": "http://127.0.0.1:8764/interface.html"
+    }
+   },
+   "25B90BA7-75F7-490B-BD79-334468DD6191": {
+    "children": [],
+    "createdAt": 1793685491582,
+    "kind": "tab",
+    "parent": "B082E7D1-30A9-4D35-88D5-6766FD9D71E3",
+    "tab": {
+     "favicon": "http://127.0.0.1:8764/favicon.ico",
+     "lastActiveAt": 1793685971983,
+     "muted": false,
+     "title": "Visual fixture",
+     "url": "http://127.0.0.1:8764/visual.html"
+    }
+   },
+   "27F0A28A-99EF-4FF3-9138-77E4BABF8C93": {
+    "children": [
+     "C26E0968-79B8-4964-9FAA-D3656B7F2DCE",
+     "91112C3F-945F-4CC2-AA9E-BBD7188945BF",
+     "B80B85F1-52E4-489D-A0C5-A3304AB19E26"
+    ],
+    "createdAt": 1793679065102,
+    "kind": "section",
+    "section": {
+     "kind": "pinned",
+     "space": "1A0391CB-4FEF-451D-B476-D7BA1D9A7156"
+    }
+   },
+   "2AF4D883-E27E-437B-BA5A-211E1AF6B64A": {
+    "children": [],
+    "createdAt": 1793685491129,
+    "kind": "tab",
+    "parent": "B082E7D1-30A9-4D35-88D5-6766FD9D71E3",
+    "tab": {
+     "favicon": "http://127.0.0.1:8764/favicon.ico",
+     "lastActiveAt": 1793685491221,
+     "muted": false,
+     "title": "Inbox",
+     "url": "http://127.0.0.1:8764/inbox.html"
+    }
+   },
+   "33A5D2B3-D59A-4EF8-8D1F-26471DB020D7": {
+    "children": [
+     "E4DFBF30-62FA-49BF-94FF-781934FE5FD7"
+    ],
+    "createdAt": 1793678790139,
+    "kind": "section",
+    "section": {
+     "kind": "today",
+     "space": "D84198CE-6852-46D4-AB7D-C44AC625D9E9"
+    }
+   },
+   "3C9B67E4-2417-48A4-AA23-13FABDF0535F": {
+    "children": [],
+    "createdAt": 1793679121866,
+    "kind": "tab",
+    "parent": "CD34FD35-9FEA-444C-8F83-4272922AB89C",
+    "tab": {
+     "lastActiveAt": 1793679122727,
+     "muted": false,
+     "pinnedURL": "https://www.apple.com/",
+     "title": "",
+     "url": "https://www.apple.com/"
+    }
+   },
+   "40F17CEA-7944-4A00-AA57-7DF87EE45285": {
+    "children": [
+     "AC665364-0036-4DEB-906E-8AFBF262F26D"
+    ],
+    "createdAt": 1793678790139,
+    "kind": "section",
+    "section": {
+     "kind": "pinned",
+     "space": "D84198CE-6852-46D4-AB7D-C44AC625D9E9"
+    }
+   },
+   "57FF9A30-AB74-4155-8CA4-DA27C3C7B917": {
+    "children": [],
+    "createdAt": 1793679117110,
+    "kind": "tab",
+    "parent": "B80B85F1-52E4-489D-A0C5-A3304AB19E26",
+    "tab": {
+     "lastActiveAt": 1793679117504,
+     "muted": false,
+     "pinnedURL": "http://127.0.0.1:8764/design.html",
+     "title": "",
+     "url": "http://127.0.0.1:8764/design.html"
+    }
+   },
+   "6772CAA7-8C83-4C77-B476-81131E8BB99D": {
+    "children": [],
+    "createdAt": 1793679118997,
+    "kind": "tab",
+    "parent": "CD34FD35-9FEA-444C-8F83-4272922AB89C",
+    "tab": {
+     "lastActiveAt": 1793680622197,
+     "muted": false,
+     "pinnedURL": "https://www.wikipedia.org/",
+     "title": "",
+     "url": "https://www.wikipedia.org/"
+    }
+   },
+   "91112C3F-945F-4CC2-AA9E-BBD7188945BF": {
+    "children": [],
+    "createdAt": 1793679116790,
+    "kind": "tab",
+    "parent": "27F0A28A-99EF-4FF3-9138-77E4BABF8C93",
+    "tab": {
+     "lastActiveAt": 1793685386033,
+     "muted": false,
+     "pinnedURL": "http://127.0.0.1:8764/docs.html",
+     "title": "",
+     "url": "http://127.0.0.1:8764/docs.html"
+    }
+   },
+   "911B08CB-9669-4917-9C3B-91AEE83E3F27": {
+    "children": [],
+    "createdAt": 1793679120778,
+    "kind": "tab",
+    "parent": "CD34FD35-9FEA-444C-8F83-4272922AB89C",
+    "tab": {
+     "lastActiveAt": 1793679121866,
+     "muted": false,
+     "pinnedURL": "https://github.com/",
+     "title": "",
+     "url": "https://github.com/"
+    }
+   },
+   "AC665364-0036-4DEB-906E-8AFBF262F26D": {
+    "children": [],
+    "createdAt": 1793678964333,
+    "kind": "tab",
+    "parent": "40F17CEA-7944-4A00-AA57-7DF87EE45285",
+    "tab": {
+     "lastActiveAt": 1793679065078,
+     "muted": false,
+     "pinnedURL": "http://127.0.0.1:8764/docs.html",
+     "title": "",
+     "url": "http://127.0.0.1:8764/docs.html"
+    }
+   },
+   "B082E7D1-30A9-4D35-88D5-6766FD9D71E3": {
+    "children": [
+     "2AF4D883-E27E-437B-BA5A-211E1AF6B64A",
+     "034134CC-84C8-4C75-9689-9D7050F82277",
+     "F46293AA-4808-40EE-B096-70FE9BAC1DB1",
+     "25B90BA7-75F7-490B-BD79-334468DD6191"
+    ],
+    "createdAt": 1793679065102,
+    "kind": "section",
+    "section": {
+     "kind": "today",
+     "space": "1A0391CB-4FEF-451D-B476-D7BA1D9A7156"
+    }
+   },
+   "B80B85F1-52E4-489D-A0C5-A3304AB19E26": {
+    "children": [
+     "57FF9A30-AB74-4155-8CA4-DA27C3C7B917",
+     "08041FD5-CDDD-40D0-AFBE-C2665DC51EA8"
+    ],
+    "createdAt": 1793679117066,
+    "folder": {
+     "collapsed": false,
+     "group": false,
+     "title": "资料"
+    },
+    "kind": "folder",
+    "parent": "27F0A28A-99EF-4FF3-9138-77E4BABF8C93"
+   },
+   "C26E0968-79B8-4964-9FAA-D3656B7F2DCE": {
+    "children": [],
+    "createdAt": 1793679116498,
+    "kind": "tab",
+    "parent": "27F0A28A-99EF-4FF3-9138-77E4BABF8C93",
+    "tab": {
+     "lastActiveAt": 1793681950071,
+     "muted": false,
+     "pinnedURL": "http://127.0.0.1:8764/home.html",
+     "title": "",
+     "url": "http://127.0.0.1:8764/home.html"
+    }
+   },
+   "C4C7016C-48C6-4254-B5A7-A84D3A470D46": {
+    "children": [],
+    "createdAt": 1793679119544,
+    "kind": "tab",
+    "parent": "CD34FD35-9FEA-444C-8F83-4272922AB89C",
+    "tab": {
+     "lastActiveAt": 1793679120778,
+     "muted": false,
+     "pinnedURL": "https://developer.mozilla.org/en-US/",
+     "title": "",
+     "url": "https://developer.mozilla.org/en-US/"
+    }
+   },
+   "CD34FD35-9FEA-444C-8F83-4272922AB89C": {
+    "children": [
+     "6772CAA7-8C83-4C77-B476-81131E8BB99D",
+     "C4C7016C-48C6-4254-B5A7-A84D3A470D46",
+     "911B08CB-9669-4917-9C3B-91AEE83E3F27",
+     "3C9B67E4-2417-48A4-AA23-13FABDF0535F"
+    ],
+    "createdAt": 1793678790139,
+    "kind": "section",
+    "section": {
+     "kind": "favorites",
+     "profile": "default"
+    }
+   },
+   "E4DFBF30-62FA-49BF-94FF-781934FE5FD7": {
+    "children": [],
+    "createdAt": 1793678790139,
+    "kind": "tab",
+    "parent": "33A5D2B3-D59A-4EF8-8D1F-26471DB020D7",
+    "tab": {
+     "lastActiveAt": 1793680628342,
+     "muted": false,
+     "title": "",
+     "url": "http://127.0.0.1:8764/home.html"
+    }
+   },
+   "F46293AA-4808-40EE-B096-70FE9BAC1DB1": {
+    "children": [],
+    "createdAt": 1793685491431,
+    "kind": "tab",
+    "parent": "B082E7D1-30A9-4D35-88D5-6766FD9D71E3",
+    "tab": {
+     "favicon": "http://127.0.0.1:8764/favicon.ico",
+     "lastActiveAt": 1793685491582,
+     "muted": false,
+     "title": "Secondary reference",
+     "url": "http://127.0.0.1:8764/secondary.html"
+    }
+   }
+  },
+  "keyOverrides": {},
+  "linkRoutes": [],
+  "profiles": {
+   "default": {
+    "name": "Default"
+   }
+  },
+  "settings": {
+   "advanced": {
+    "autoPictureInPicture": true,
+    "boostsEnabled": true,
+    "hapticsOnReorder": true,
+    "restoreWindowsOnLaunch": true,
+    "sharedQuotes": true,
+    "showFullURLInToolbar": false,
+    "soundEffects": true,
+    "themeToCSS": false,
+    "windowDraggingFromPages": true
+   },
+   "general": {
+    "defaultBrowserPromptDismissed": false,
+    "warnBeforeQuitting": false,
+    "webAppearance": "automatic"
+   },
+   "links": {
+    "externalLinksInLittleArc": true,
+    "littleArcAutoArchive": "twelveHours",
+    "optionCommandClickLittleArc": true,
+    "peekFromPinnedAndFavorites": true,
+    "shiftClickPeek": true
+   },
+   "max": {
+    "provider": "auto",
+    "renamePinnedTabs": false,
+    "tidyTabs": false
+   },
+   "profiles": {
+    "default": {
+     "autoArchive": "twelveHours",
+     "promptForDownloadLocation": false,
+     "searchEngine": "google",
+     "searchSuggestions": true
+    }
+   }
+  },
+  "sidebarData": {
+   "onboardingCompleted": true
+  },
+  "sitePreferences": {
+   "default": {
+    "appearance": "automatic",
+    "rules": {}
+   }
+  },
+  "spaceOrder": [
+   "D84198CE-6852-46D4-AB7D-C44AC625D9E9",
+   "1A0391CB-4FEF-451D-B476-D7BA1D9A7156"
+  ],
+  "spaces": {
+   "1A0391CB-4FEF-451D-B476-D7BA1D9A7156": {
+    "icon": {
+     "none": {}
+    },
+    "pinnedCollapsed": false,
+    "pinnedRoot": "27F0A28A-99EF-4FF3-9138-77E4BABF8C93",
+    "profile": "default",
+    "theme": {
+     "appearance": "auto",
+     "colors": [
+      {
+       "alpha": 1,
+       "blue": 0.8941176470588236,
+       "green": 0.9176470588235294,
+       "red": 0.9490196078431372
+      }
+     ],
+     "intensity": 0.25,
+     "noise": 0.5,
+     "texture": "grain",
+     "wheel": "analogous"
+    },
+    "title": "对照",
+    "todayRoot": "B082E7D1-30A9-4D35-88D5-6766FD9D71E3"
+   },
+   "D84198CE-6852-46D4-AB7D-C44AC625D9E9": {
+    "icon": {
+     "none": {}
+    },
+    "pinnedCollapsed": false,
+    "pinnedRoot": "40F17CEA-7944-4A00-AA57-7DF87EE45285",
+    "profile": "default",
+    "theme": {
+     "appearance": "auto",
+     "colors": [
+      {
+       "red": 0.9490196078431372,
+       "green": 0.9176470588235294,
+       "blue": 0.8941176470588236,
+       "alpha": 1
+      }
+     ],
+     "intensity": 0.25,
+     "noise": 0.5,
+     "texture": "grain",
+     "wheel": "analogous"
+    },
+    "title": "",
+    "todayRoot": "33A5D2B3-D59A-4EF8-8D1F-26471DB020D7"
+   }
+  },
+  "tabPreferences": {
+   "archiveEducationDismissed": true,
+   "hoverPreviews": true,
+   "includeFavoritesInNumbers": true
+  },
+  "windows": {
+   "8154639F-3B31-47F0-ADF7-90BB5D55E2A1": {
+    "activeBySpace": {
+     "1A0391CB-4FEF-451D-B476-D7BA1D9A7156": "25B90BA7-75F7-490B-BD79-334468DD6191",
+     "D84198CE-6852-46D4-AB7D-C44AC625D9E9": "E4DFBF30-62FA-49BF-94FF-781934FE5FD7"
+    },
+    "bounds": [
+     [
+      320,
+      234
+     ],
+     [
+      1280,
+      776
+     ]
+    ],
+    "emptySelections": [],
+    "folderExpansion": {
+     "B80B85F1-52E4-489D-A0C5-A3304AB19E26": true
+    },
+    "sidebarVisible": true,
+    "sidebarWidth": 228,
+    "slots": {
+     "034134CC-84C8-4C75-9689-9D7050F82277": {
+      "committedURL": "http://127.0.0.1:8764/long.html",
+      "favicon": "http://127.0.0.1:8764/favicon.ico",
+      "observedTitle": "Long title for truncation and readable sidebar ellipsis"
+     },
+     "08041FD5-CDDD-40D0-AFBE-C2665DC51EA8": {
+      "committedURL": "http://127.0.0.1:8764/interface.html",
+      "favicon": "http://127.0.0.1:8764/favicon.ico",
+      "observedTitle": "Interface comparison"
+     },
+     "25B90BA7-75F7-490B-BD79-334468DD6191": {
+      "committedURL": "http://127.0.0.1:8764/visual.html",
+      "favicon": "http://127.0.0.1:8764/favicon.ico",
+      "observedTitle": "Visual fixture"
+     },
+     "2AF4D883-E27E-437B-BA5A-211E1AF6B64A": {
+      "committedURL": "http://127.0.0.1:8764/inbox.html",
+      "favicon": "http://127.0.0.1:8764/favicon.ico",
+      "observedTitle": "Inbox"
+     },
+     "3C9B67E4-2417-48A4-AA23-13FABDF0535F": {
+      "committedURL": "https://www.apple.com/",
+      "favicon": "https://www.apple.com/favicon.ico",
+      "observedTitle": "Apple"
+     },
+     "57FF9A30-AB74-4155-8CA4-DA27C3C7B917": {
+      "committedURL": "http://127.0.0.1:8764/design.html",
+      "favicon": "http://127.0.0.1:8764/favicon.ico",
+      "observedTitle": "Design notes"
+     },
+     "6772CAA7-8C83-4C77-B476-81131E8BB99D": {
+      "committedURL": "https://www.wikipedia.org/",
+      "favicon": "https://www.wikipedia.org/static/favicon/wikipedia.ico",
+      "observedTitle": "Wikipedia"
+     },
+     "91112C3F-945F-4CC2-AA9E-BBD7188945BF": {
+      "committedURL": "http://127.0.0.1:8764/docs.html",
+      "favicon": "http://127.0.0.1:8764/favicon.ico",
+      "observedTitle": "Docs"
+     },
+     "911B08CB-9669-4917-9C3B-91AEE83E3F27": {
+      "committedURL": "https://github.com/",
+      "favicon": "https://github.githubassets.com/favicons/favicon.svg",
+      "observedTitle": "GitHub · Change is constant. GitHub keeps you ahead. · GitHub · GitHub"
+     },
+     "AC665364-0036-4DEB-906E-8AFBF262F26D": {
+      "committedURL": "http://127.0.0.1:8764/docs.html",
+      "favicon": "http://127.0.0.1:8764/favicon.ico",
+      "observedTitle": "Docs"
+     },
+     "C26E0968-79B8-4964-9FAA-D3656B7F2DCE": {
+      "committedURL": "http://127.0.0.1:8764/home.html",
+      "favicon": "http://127.0.0.1:8764/favicon.ico",
+      "observedTitle": "Home"
+     },
+     "C4C7016C-48C6-4254-B5A7-A84D3A470D46": {
+      "committedURL": "https://developer.mozilla.org/en-US/",
+      "favicon": "https://developer.mozilla.org/favicon.svg",
+      "observedTitle": "MDN Web Docs"
+     },
+     "E4DFBF30-62FA-49BF-94FF-781934FE5FD7": {
+      "committedURL": "http://127.0.0.1:8764/home.html",
+      "favicon": "http://127.0.0.1:8764/favicon.ico",
+      "observedTitle": "Home"
+     },
+     "F46293AA-4808-40EE-B096-70FE9BAC1DB1": {
+      "committedURL": "http://127.0.0.1:8764/secondary.html",
+      "favicon": "http://127.0.0.1:8764/favicon.ico",
+      "observedTitle": "Secondary reference"
+     }
+    },
+    "space": "1A0391CB-4FEF-451D-B476-D7BA1D9A7156",
+    "spaceHeaderVisible": true,
+    "splitFocus": {},
+    "stayOnTop": false,
+    "toolbarVisible": false
+   }
+  }
+ },
+ "version": 3
+}

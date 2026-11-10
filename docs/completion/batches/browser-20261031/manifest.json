@@ -14,7 +14,7 @@
     "acceptance": "verified: 537 tests with3known skips,14 ownership tests,79 native passes",
     "parent_review_repair": "190f8e79820e4113caa919f615be20883c67e9dc",
     "parent_tested_commit": "30db64d76588aefd24e0c228c45b3664d482e7f2",
-    "evidence": "verify/completion/find-parent/REPORT.md"
+    "evidence": "c35743dc51:verify/completion/find-parent/REPORT.md"
   },
   "slices": [
     {
@@ -97,7 +97,7 @@
       "brief": "tabs.md",
       "status": "delivered; review repairs pass in isolated copy; main integration pending",
       "delivered_commit": "06656768e11dc854498e6e5cfb2dd9e64af53257",
-      "review": "verify/completion/tabs-parent/review/REPORT.md"
+      "review": "bb23bfee3b:verify/completion/tabs-parent/review/REPORT.md"
     },
     {
       "id": "spaces",
@@ -137,9 +137,9 @@
       "brief": "splits.md",
       "status": "verified after parent repairs and combined native acceptance",
       "delivered_commit": "06a749beb16edd452c66ba77fc8070a31ef36253",
-      "review": "verify/completion/splits-parent/review/REPORT.md",
+      "review": "c35743dc51:verify/completion/splits-parent/review/REPORT.md",
       "parent_commit": "a78a021724a9125743297586aed8fd63618d7084",
-      "evidence": "verify/completion/splits-parent/REPORT.md"
+      "evidence": "10869446ec:verify/completion/splits-parent/REPORT.md"
     },
     {
       "id": "sites-extensions",

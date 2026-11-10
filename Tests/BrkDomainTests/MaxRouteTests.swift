@@ -4,7 +4,7 @@ import XCTest
 @testable import BrkDomain
 
 /// What a person meets on the way to each Max feature (found by driving a real launch with real input, 2026-11-07,
-/// verify/completion/max-ui-20261107): where a switch that is off is said to be, what Turn Off Max leaves, and what a
+/// 8dc9260d6a:verify/completion/max-ui-20261107): where a switch that is off is said to be, what Turn Off Max leaves, and what a
 /// feature working in the background says when it fails or succeeds.
 final class MaxRouteTests: XCTestCase {
     private func request(_ transition: Transition) throws -> (AIRequestID, AITask) {

@@ -11,8 +11,8 @@ import BrkUIKit
 struct SpaceAlertMetrics: MetricGroup {
     let renameField = Metric([24.0, 36.0], .guess("Rename field's gap under the title and height (the field 375 wide, its top 100 pt down), measured on P26 a"))
     let renameButtonGap = Metric(21.5, .guess("Rename buttons' gap under the field, measured on P26 a"))
-    let deleteBodyGap = Metric(17.0, .anatomy("verify/visual-pairs/run-20261103/P27/P27-a-arc.png: the title's ink ends at y 776 px, the text's starts at 817 px"))
-    let deleteButtonGap = Metric(37.5, .anatomy("verify/visual-pairs/run-20261103/P27/P27-a-arc.png: the text's ink ends at y 838 px, the buttons start at 919 px; the card stays 273 points tall"))
+    let deleteBodyGap = Metric(17.0, .anatomy("scripts/station/arc-reference/P27/P27-a-arc.png: the title's ink ends at y 776 px, the text's starts at 817 px"))
+    let deleteButtonGap = Metric(37.5, .anatomy("scripts/station/arc-reference/P27/P27-a-arc.png: the text's ink ends at y 838 px, the buttons start at 919 px; the card stays 273 points tall"))
 }
 
 let SpaceAlert = SpaceAlertMetrics()

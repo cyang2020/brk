@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// The domain side of the 2026-11-03 command bar captures (verify/visual-pairs/run-20261103 P43-a, Q01-a/b, P02-c).
+/// The domain side of the 2026-11-03 command bar captures (2a96a9d7f0:verify/visual-pairs/run-20261103 P43-a, Q01-a/b, P02-c).
 final class CommandBarCaptureTests: XCTestCase {
     /// P43-a: with Ask in Command Bar off (or the provider off), Opt+Cmd+G is a notice with a way to the Max pane,
     /// not an input; on, it opens the bar

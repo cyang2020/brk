@@ -93,7 +93,7 @@ enum NativeScenarios {
     /// N3R: the window buttons stay at Arc's spots under the pointer and through resizes. AppKit lays the titlebar out
     /// again the moment the pointer goes over the buttons and puts them back at the system's spots (x 9, centre y 16),
     /// so the colored buttons came up beside the grey circles and the circles' own spots took no click (the user's
-    /// report, verify/visual-pairs/run-20261103/Q16). The pointer here is the real one, moved through the window server.
+    /// report, 26b91660a8:verify/visual-pairs/run-20261103/Q16). The pointer here is the real one, moved through the window server.
     @Sendable static func lightsStayUnderThePointer(_ app: AppUnderTest) throws {
         guard WindowServerKeys.allowed, let owner = app.window else { throw Check(description: "window-server input unavailable") }
         let w = Metrics.window, lights = ["window-close-button", "window-minimize-button", "window-zoom-button"]

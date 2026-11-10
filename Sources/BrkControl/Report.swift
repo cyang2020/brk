@@ -61,7 +61,7 @@ public struct E2EMachine: Sendable, Equatable {
 }
 
 public enum E2EReport {
-    /// verify/swift/REPORT.md: a header line with the machine, engine, total time and counts; one list line per
+    /// REPORT.md (brk-e2e --out): a header line with the machine, engine, total time and counts; one list line per
     /// scenario (`- PASS 0 title · 1.2 s · notes · shots`, with ` — message` on FAIL and SKIPPED); then the owners
     /// whose unfinished code failed scenarios, grouped.
     public static func markdown(_ results: [E2EResult], machine: E2EMachine, totalSeconds: Double) -> String {

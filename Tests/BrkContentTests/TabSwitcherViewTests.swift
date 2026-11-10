@@ -6,7 +6,7 @@ import BrkUIKit
 import XCTest
 @testable import BrkContent
 
-/// The Ctrl+Tab switcher and the top-right notice as Arc draws them (verify/visual-pairs/run-20261103 P09-a/b, P43-a).
+/// The Ctrl+Tab switcher and the top-right notice as Arc draws them (2a96a9d7f0:verify/visual-pairs/run-20261103 P09-a/b, P43-a).
 @MainActor
 final class TabSwitcherViewTests: XCTestCase {
     private let bounds = CGRect(x: 0, y: 0, width: 1280, height: 776)

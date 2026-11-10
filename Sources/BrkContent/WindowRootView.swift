@@ -574,7 +574,7 @@ public enum ThemeAccent {
 let ThemeAccentDraw = ThemeAccentMetrics()
 
 struct ThemeAccentMetrics: MetricGroup {
-    let ringLuminance = Metric(0.097, .anatomy("verify/visual-pairs/run-20261103/P23: the split focus ring #725137 (P23-a) and #006362 (P23-c) both have relative luminance 0.096 to 0.098"))
+    let ringLuminance = Metric(0.097, .anatomy("eaad5e542c:verify/visual-pairs/run-20261103/P23: the split focus ring #725137 (P23-a) and #006362 (P23-c) both have relative luminance 0.096 to 0.098"))
 }
 
 /// Arc's Peek and Little Arc copy shared by the card and the Little Arc panel (visual-and-copy.md "Little Arc").
@@ -595,7 +595,7 @@ public enum EaselExport {
 /// Arc's window background changes with two states while the sidebar's text and the cards do not: the background,
 /// and with it the sidebar's translucent rows, tiles and the margins round the cards, turns lighter while the app is
 /// not frontmost and darker while View > Appearance sets websites to Dark. Measured on Arc 1.170 with the #F2EAE4
-/// theme (verify/visual-pairs/run-20261103): P01-d against P01-a, #F0EAE6 reads #F7F2EE and the favorites' tile
+/// theme (2a96a9d7f0:verify/visual-pairs/run-20261103): P01-d against P01-a, #F0EAE6 reads #F7F2EE and the favorites' tile
 /// #E6E1DF reads #EDE8E5 (white at 40% lands within 2 of each channel); P19-b against P19-c, #F0EBE7 reads #DCD6D3
 /// and the tile #E5E0DE reads #D2CDCA (black at 8.6%). Dark themes keep their look (no Arc capture of one).
 @MainActor

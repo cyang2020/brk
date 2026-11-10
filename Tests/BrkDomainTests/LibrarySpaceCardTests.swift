@@ -4,7 +4,7 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// Owner: F5. The … menu of a card on the Library's Spaces page, as Arc 1.170 shows it (verify/visual-pairs/run-20261103
+/// Owner: F5. The … menu of a card on the Library's Spaces page, as Arc 1.170 shows it (2a96a9d7f0:verify/visual-pairs/run-20261103
 /// P30-c): every row a command that does something to the card's space while the Library stays open.
 final class LibrarySpaceCardTests: XCTestCase {
     private func library(_ d: Driver) -> LibrarySnapshot? {

@@ -6,7 +6,7 @@ import BrkLayout
 @testable import BrkSidebar
 import XCTest
 
-/// R4-12, the two problems a user reported (verify/visual-pairs/run-20261103: P05-f, P07-b, P23-e/f): at every sidebar
+/// R4-12, the two problems a user reported (2a96a9d7f0:verify/visual-pairs/run-20261103: P05-f, P07-b, P23-e/f): at every sidebar
 /// width from Arc's 228 down to the 164 minimum no sidebar text leaves its frame and the empty Favorites box keeps
 /// Arc's composition inside it; dragging one tab row onto the middle of another shows a slot in the half under the
 /// pointer and the release joins them on that side, while a row's edges still reorder and a folder's middle still takes the tab in.

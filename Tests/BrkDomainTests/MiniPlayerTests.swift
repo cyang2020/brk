@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// Arc's mini players, as tried on Arc 1.170 (verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-*).
+/// Arc's mini players, as tried on Arc 1.170 (650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-*).
 final class MiniPlayerTests: XCTestCase {
     private struct Fixture {
         let driver: Driver

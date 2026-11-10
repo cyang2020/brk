@@ -30,7 +30,7 @@ public enum VectorMath {
 /// new tab before the decision model picks one, and near-duplicate candidates.
 public enum EmbeddingGroups {
     /// Average-linkage clustering on cosine similarity: clusters merge while some pair is at least `threshold` similar
-    /// on average. Measured on 3 labelled Today lists of 33 tabs (verify/ai-native/b-local-models): with titles embedded
+    /// on average. Measured on 3 labelled Today lists of 33 tabs (b6baac6767:verify/ai-native/b-local-models): with titles embedded
     /// as `.document(title: nil, text: title)`, 0.70 gave the best shared adjusted Rand index (0.62, 0.54, 0.55).
     /// Returns clusters of indices, biggest first, each in input order.
     public static func clusters(_ vectors: [[Float]], threshold: Float = 0.70) -> [[Int]] {

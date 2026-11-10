@@ -21,9 +21,9 @@
 4. **工具栏默认隐藏**（Arc 默认就是隐藏；Shift+Cmd+D 切换）。只有专门写了"工具栏显示"的那张图才打开。
 5. **系统外观用浅色**。只有写了"深色"的那几张图才切到系统深色。
 6. **同一个 Space 主题**。两边各建一个叫"对照"的 Space，主题选预设第一页的第一个色块，强度和噪点都保持默认，不加纹理。
-7. **同样的页面内容**。本仓库 `verify/visual-pairs/fixture-site/` 下有 9 个不含任何个人数据的测试页。先在终端启动一个本地站点，两边都打开同样的地址：
+7. **同样的页面内容**。本仓库 `scripts/station/fixture-site/` 下有 9 个不含任何个人数据的测试页。先在终端启动一个本地站点，两边都打开同样的地址：
    ```sh
-   python3 -m http.server 8764 --directory verify/visual-pairs/fixture-site
+   python3 -m http.server 8764 --directory scripts/station/fixture-site
    ```
    地址是 `http://127.0.0.1:8764/home.html` 等。页面标题分别是 Home、Docs、Design notes、Inbox、Interaction states、Interface comparison、Long title for truncation and readable sidebar ellipsis、Secondary reference、Visual fixture。
 8. **同样的侧栏内容**。两边都摆成：
@@ -43,7 +43,7 @@
 
 ### 怎么存
 
-目录 `verify/visual-pairs/<编号>/`，文件名 `<编号>-<状态字母>-arc.png` 和 `<编号>-<状态字母>-brk.png`，例如 `P02/P02-b-arc.png` 与 `P02/P02-b-brk.png`。录屏同名改成 `.mov`。拍完一组在 `verify/visual-pairs/results.tsv` 里记一行：编号、状态字母、结论（一致 / 有意不同 / 要修）、差异描述、处理。
+目录 `2a96a9d7f0:verify/visual-pairs/<编号>/`，文件名 `<编号>-<状态字母>-arc.png` 和 `<编号>-<状态字母>-brk.png`，例如 `P02/P02-b-arc.png` 与 `P02/P02-b-brk.png`。录屏同名改成 `.mov`。拍完一组在 `9c78e46476:verify/visual-pairs/results.tsv` 里记一行：编号、状态字母、结论（一致 / 有意不同 / 要修）、差异描述、处理。
 
 ### 怎么比
 

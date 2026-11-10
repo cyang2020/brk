@@ -3,7 +3,7 @@ import BrkBase
 import BrkDomain
 import BrkSettings
 
-/// The About window, laid out as Arc 1.170's (P39-a in verify/visual-pairs/run-20261103): 360 by 262 points, the
+/// The About window, laid out as Arc 1.170's (P39-a in 2a96a9d7f0:verify/visual-pairs/run-20261103): 360 by 262 points, the
 /// app icon, the name, "Version <version> (<build>)", "Chromium Engine Version <version>", the copyright line and the
 /// credits paragraph whose links open Chromium's site and its credits page in a tab. The name and versions are Brk's
 /// own; the icon is the one the Icon pane chose.
@@ -156,7 +156,7 @@ private var About: AboutMetricsTable { AboutMetrics }
 let AboutMetrics = AboutMetricsTable()
 
 struct AboutMetricsTable: MetricGroup {
-    private static let capture = "verify/visual-pairs/run-20261103/P39/P39-a-arc.png"
+    private static let capture = "scripts/station/arc-reference/P39/P39-a-arc.png"
     let window = Metric(CGSize(width: 360, height: 262), .anatomy("\(capture): 720 x 524 px"))
     let icon = Metric(64.0, .anatomy("\(capture): the icon's tile spans x 308 to 412 px, a 64-point canvas"))
     let iconTop = Metric(16.5, .anatomy("\(capture): the title bar ends at y 64 px, the tile starts near 122 px"))

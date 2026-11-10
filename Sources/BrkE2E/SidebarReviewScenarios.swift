@@ -5,7 +5,7 @@ import BrkLayout
 import CoreGraphics
 import Foundation
 
-/// Round 4, R4-9: the R4-6 review of the sidebar and window rows (verify/completion/review-r4/sidebar-windows/
+/// Round 4, R4-9: the R4-6 review of the sidebar and window rows (1e644875d5:verify/completion/review-r4/sidebar-windows/
 /// REVIEW.md). The first group proves the five defects fixed (A014 A015 A021 A031 A063); the rest give the native
 /// evidence the review found missing, each driven at least once by a real key, pointer or menu path: in-process
 /// key and mouse events through AppKit (`press`, `click`, `pointer`), real main-menu items (`menuAction`), real

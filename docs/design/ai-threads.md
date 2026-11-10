@@ -81,7 +81,7 @@ Brk 不在最前面时，agent 一等批准，Brk 就发一条 macOS 通知。�
 - 命令栏能按正文搜到对话。
 - 用真实的 Claude 在两个 Space 各开一个对话，把上面的流程走一遍。
 
-截图放在 `verify/ai-native/threads/`，浅色和深色 Space 各一套，每套包括列表页、顶上的小条、带圈的 Space 圆点和 Library 页，和设计稿并排比较。另外照例跑完整的单元测试、AI 相关的真实场景，以及和 main 在同一块屏幕上的截图对比。
+截图放在 `9de510626b:verify/ai-native/threads/`，浅色和深色 Space 各一套，每套包括列表页、顶上的小条、带圈的 Space 圆点和 Library 页，和设计稿并排比较。另外照例跑完整的单元测试、AI 相关的真实场景，以及和 main 在同一块屏幕上的截图对比。
 
 ## 实现时补的决定
 

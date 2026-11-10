@@ -480,7 +480,7 @@ public enum AICleanup {
         return (duplicates, stale)
     }
 
-    /// Slice B's address rule (verify/ai-native/b-local-models/bench/dup_rule.py; 26 of 30 pairs alone, no false
+    /// Slice B's address rule (a75547183a:verify/ai-native/b-local-models/bench/dup_rule.py; 26 of 30 pairs alone, no false
     /// duplicate): two addresses are the same page when they match without the fragment, tracking parameters, a
     /// leading www. or m., and a trailing index.html. Nil for anything but http(s).
     public static func addressKey(_ url: URL) -> String? {

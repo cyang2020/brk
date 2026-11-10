@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 @testable import BrkDomain
 
-/// Round 4, R4-9: the R4-6 review's defects in the domain (verify/completion/review-r4/sidebar-windows/REVIEW.md):
+/// Round 4, R4-9: the R4-6 review's defects in the domain (1e644875d5:verify/completion/review-r4/sidebar-windows/REVIEW.md):
 /// a cancelled reconnect keeps a good badge (A014), Ctrl+Cmd+J answers in every window and tells an unreadable file
 /// from an expired one (A015), Gmail and Outlook Favorites get a mail card (A031). The last Today tab's successor is
 /// Arc's as it was (checked on real Arc by the parent); its tests document that rule.

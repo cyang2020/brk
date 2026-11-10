@@ -1,0 +1,259 @@
+{
+  "source": "Arc 1.170.0 (89123) arm64",
+  "defaultConfiguration": {
+    "archetype": {
+      "weight": 35.0,
+      "items": {
+        "searchAutocomplete": 73.0,
+        "tab": 101.0,
+        "list": 101.0,
+        "project": 101.0,
+        "navigateWhatYouTyped": 1.0,
+        "searchWhatYouTyped": 1.0,
+        "askGPTWhatYouTyped": 2.0,
+        "document": 103.5,
+        "easel": 103.5,
+        "typeTravel": 104.0,
+        "topDomains": 96.1,
+        "scopedSearch": 1.0,
+        "please": 1.0,
+        "instantLinks": 1.0,
+        "memoryStore": 105.0,
+        "askAssistant": 106.0,
+        "assistantHistory": 107.0,
+        "chromiumSearchWhatYouTyped": 100.0,
+        "chromiumSearchSuggestion": 95.0,
+        "chromiumSearchHistory": 99.0,
+        "chromiumHistory": 100.0,
+        "chromiumNavigateWhatYouTyped": 100.0,
+        "chromiumNavigateSuggestion": 96.0,
+        "chromiumSearchOtherEngine": 96.2,
+        "chromiumSearchCalculatorAnswer": 1.0
+      }
+    },
+    "match": {
+      "weight": 2.0,
+      "items": {
+        "urlMatchScore": 1.0,
+        "urlMatchPosition": 1.0,
+        "urlMatchPercentage": 1.0,
+        "titleMatchScore": 0.5,
+        "titleMatchPosition": 0.5,
+        "titleMatchPercentage": 0.5,
+        "hotWordsMatchScore": 1.5,
+        "hotWordsMatchPosition": 1.5,
+        "hotWordsMatchPercentage": 1.5,
+        "fuzzySearchConfidence": 20.0
+      }
+    },
+    "importance": {
+      "weight": 10.0,
+      "items": {
+        "frequencyEver": 3.0,
+        "typedCountEver": 4.0,
+        "mostVisitedRank": 2.0,
+        "siteEngagementScore": 2.0,
+        "globalSiteRank": 1.0,
+        "typeTravelCandidateBump": 1.0
+      }
+    },
+    "recency": {
+      "weight": 15.0,
+      "items": {
+        "lastNavigated": 3.0
+      }
+    },
+    "chromium": {
+      "weight": 25.0,
+      "items": {
+        "chromiumRank": 5.0,
+        "chromiumRelevanceScore": 3.0
+      }
+    },
+    "save": {
+      "weight": 15.0,
+      "items": {
+        "level": 3.0
+      }
+    },
+    "boosts": [
+      {
+        "boost": "exactBaseDomain",
+        "weight": 100.0,
+        "score": 15.0
+      },
+      {
+        "boost": "exactURL",
+        "weight": 40.0,
+        "score": 3.0
+      },
+      {
+        "boost": "exactHotWord",
+        "weight": 100.0,
+        "score": 15.0
+      },
+      {
+        "boost": "baseDomain",
+        "weight": 40.0,
+        "score": 3.0
+      },
+      {
+        "boost": "autocompleteDefault",
+        "weight": 15.0,
+        "score": 3.0
+      },
+      {
+        "boost": "autocompleteSearchOnly",
+        "weight": 15.0,
+        "score": 2.0
+      },
+      {
+        "boost": "chromiumSpecialSearchFunction",
+        "weight": 40.0,
+        "score": 3.0
+      },
+      {
+        "boost": "customTitlePrefix",
+        "weight": 15.0,
+        "score": 3.0
+      },
+      {
+        "boost": "veryRecentTabOrDocumentBoost",
+        "weight": 15.0,
+        "score": 3.0
+      },
+      {
+        "boost": "topApp",
+        "weight": 15.0,
+        "score": 3.0
+      },
+      {
+        "boost": "recentlyUseTypeTravel",
+        "weight": 15.0,
+        "score": 3.0
+      },
+      {
+        "boost": "typeTravelPrefixForLongQuery",
+        "weight": 40.0,
+        "score": 3.0
+      },
+      {
+        "boost": "unboxingPromotedAction",
+        "weight": 40.0,
+        "score": 3.0
+      },
+      {
+        "boost": "highFuzzySearchConfidence",
+        "weight": 100.0,
+        "score": 15.0
+      }
+    ]
+  },
+  "features": [
+    {
+      "feature": "archetype",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "urlMatchScore",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "urlMatchPosition",
+      "valueWhenMissing": 30.0,
+      "lowerIsBetter": true
+    },
+    {
+      "feature": "urlMatchPercentage",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "titleMatchScore",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "titleMatchPosition",
+      "valueWhenMissing": 30.0,
+      "lowerIsBetter": true
+    },
+    {
+      "feature": "titleMatchPercentage",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "hotWordsMatchScore",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "hotWordsMatchPosition",
+      "valueWhenMissing": 30.0,
+      "lowerIsBetter": true
+    },
+    {
+      "feature": "hotWordsMatchPercentage",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "fuzzySearchConfidence",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "lastNavigated",
+      "valueWhenMissing": 5184000.0,
+      "lowerIsBetter": true
+    },
+    {
+      "feature": "frequencyEver",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "typedCountEver",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "mostVisitedRank",
+      "valueWhenMissing": 20.0,
+      "lowerIsBetter": true
+    },
+    {
+      "feature": "siteEngagementScore",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "globalSiteRank",
+      "valueWhenMissing": 505.0,
+      "lowerIsBetter": true
+    },
+    {
+      "feature": "typeTravelCandidateBump",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "chromiumRank",
+      "valueWhenMissing": 11.0,
+      "lowerIsBetter": true
+    },
+    {
+      "feature": "chromiumRelevanceScore",
+      "valueWhenMissing": 0.0,
+      "lowerIsBetter": false
+    },
+    {
+      "feature": "saveLevel",
+      "valueWhenMissing": 8.0,
+      "lowerIsBetter": true
+    }
+  ]
+}

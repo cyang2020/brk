@@ -271,7 +271,7 @@ public enum FavoritesGrid {
     /// The way into Favorites when there is nothing to aim at: with no Favorites and the "Drag to add Favorites" box
     /// dismissed the tray has no height, and a tab is made the first Favorite by holding it on the strip above the Space
     /// name: the URL pill, or the title row when the toolbar holds the pill. The tray then opens one cell under it. (The
-    /// user's report, verify/visual-pairs/run-20261103/Q18: after closing the hint there was nowhere left to drop a tab.
+    /// user's report, 6777d0968b:verify/visual-pairs/run-20261103/Q18: after closing the hint there was nowhere left to drop a tab.
     /// Where exactly Arc's zone lies has not been seen: its hint cannot be dismissed there without changing the profile.)
     public static func emptyDropZone(frames: SidebarFrames, favorites: FavoritesSnapshot) -> CGRect? {
         guard favorites.tiles.isEmpty, favorites.hintDismissed else { return nil }
@@ -348,7 +348,7 @@ public enum TablistLayout {
         add(.topSpacer, height: t.topSpacerHeight.value)
         if !space.pinned.collapsed || space.pinned.peeked { addRows(space.pinned.rows, depth: 0) }
         // Arc draws the divider, with Clear and Max's Tidy on it, over any Today that has tabs, Pinned empty or not (a new
-        // Space with two Today tabs, verify/completion/max-ui-20261107/arc-no-pinned-*.png); with Today empty there is
+        // Space with two Today tabs, 8dc9260d6a:verify/completion/max-ui-20261107/arc-no-pinned-*.png); with Today empty there is
         // none (Q02 b, P24 e).
         if divider && !space.today.rows.isEmpty { add(.divider, height: t.dividerRowHeight.value + (space.today.tidyEnabled ? t.tidyDividerExtra.value : 0)) }
         add(.newTab, height: t.rowHeight.value)

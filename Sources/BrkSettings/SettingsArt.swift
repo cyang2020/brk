@@ -457,7 +457,7 @@ enum MoreCircle {
 let ArtMetrics = SettingsArtMetricsTable()
 
 struct SettingsArtMetricsTable: MetricGroup {
-    private static let capture = "verify/visual-pairs/run-20261103/P38"
+    private static let capture = "83835ef31d:verify/visual-pairs/run-20261103/P38"
     let wavePeriod = Metric(20.0, .anatomy("\(capture)/P38-b-arc.png: wave crests at x 10, 50, 90 px"))
     let waveAmplitude = Metric(2.5, .anatomy("\(capture)/P38-b-arc.png: the edge runs between y 417 and 427 px"))
     let maxWavePhase = Metric(5.0, .anatomy("\(capture)/P38-b-arc.png: the edge is highest (417 px) at x 10, 50, 90 px and lowest (427 px) at 30, 70 px"))

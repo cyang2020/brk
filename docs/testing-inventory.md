@@ -6,13 +6,13 @@
 
 - 单元测试 1,726 个，分布在 `Tests/` 下 201 个文件里；
 - 原生端到端场景 85 个文件、26,560 行，默认登记 397 个场景，另有 9 类要设环境变量才跑的真实 agent 场景；
-- `verify/` 下 29,188 个受 git 管的文件，其中 8,227 张图片，约 9.5 GB；
+- `933155f61c:verify/` 下 29,188 个受 git 管的文件，其中 8,227 张图片，约 9.5 GB；
 - 合并门要跑整套单测、53 个以上的原生场景、真实 agent 和与 main 的同屏截图对比（station）。
 
 这份文档记录删减前的清点结果和删减清单：每组测试有多少、跑多久、实际防的是什么问题，留哪些、删哪些、为什么。数字的来源如下：
 
 - 单元测试的个数和耗时在这台 Mac mini（M1）上实测，命令是 `swift test --skip-build`，删前删后各跑一次；
-- 原生场景的耗时取 `verify/` 里 555 份历史运行报告中每个场景通过时的耗时中位数。最近一次把所有场景跑完是 10 月 31 日（187 个场景，20 分钟），之后场景翻了一倍多，再没人全跑过；
+- 原生场景的耗时取 `933155f61c:verify/` 里 555 份历史运行报告中每个场景通过时的耗时中位数。最近一次把所有场景跑完是 10 月 31 日（187 个场景，20 分钟），之后场景翻了一倍多，再没人全跑过；
 - "以前坏过"来自 git log 里的修复提交、记忆笔记里记下的用户报告，以及历史报告里的失败记录。
 
 ## 留下一条测试的规则
@@ -125,18 +125,18 @@ main 上原有一个失败的测试：它要求每个命令都在别处有行为
 
 ## 测试记录（verify/）
 
-现状：`verify/` 有 29,217 个受 git 管的文件（合并 933155f6 后），约 9.5 GB，其中 `verify/completion` 一个目录就有 24,843 个、7.4 GB。绝大部分是一次性运行留下的图片、日志、报告、补丁和 manifest。台账 `docs/completion/features.json` 里有 333 处路径指向这里，`scripts/check-completion.py` 要求每个 verified 行的证据文件存在于仓库里。
+现状：`933155f61c:verify/` 有 29,217 个受 git 管的文件（合并 933155f6 后），约 9.5 GB，其中 `1b71cb97bd:verify/completion` 一个目录就有 24,843 个、7.4 GB。绝大部分是一次性运行留下的图片、日志、报告、补丁和 manifest。台账 `docs/completion/features.json` 里有 333 处路径指向这里，`scripts/check-completion.py` 要求每个 verified 行的证据文件存在于仓库里。
 
-用户的决定：`verify/` 全部可以删掉。删的是工作树的最新版本，git 历史不改写，旧文件用 `git show <提交>:<路径>` 仍能看到。
+用户的决定：`933155f61c:verify/` 全部可以删掉。删的是工作树的最新版本，git 历史不改写，旧文件用 `git show <提交>:<路径>` 仍能看到。
 
 还在用的东西搬出来：
 
-- station 工具（`verify/visual-pairs/run-20261103/tools/`）搬到 `scripts/station/`。其中只服务 11 月 3 日那次 Arc 截图的几个脚本（写死了那次的临时目录：cap.sh、capwide.sh、lib.sh、menucap.sh、step.sh、rec.py、drive.py）随记录一起删。
+- station 工具（`scripts/station/`）搬到 `scripts/station/`。其中只服务 11 月 3 日那次 Arc 截图的几个脚本（写死了那次的临时目录：cap.sh、capwide.sh、lib.sh、menucap.sh、step.sh、rec.py、drive.py）随记录一起删。
 - station 对比用的真 Arc 1.170 截图搬到 `scripts/station/arc-reference/`，只留 station 现有 53 个画面用得到的 316 张（273 MB）。它们不是运行记录，而是 station 这一步门的输入，重拍需要用户登录 Arc。这是唯一保留的一批图片。
 - station 用的夹具网站搬到 `scripts/station/fixture-site/`，https 夹具（证书场景和 station 都用）搬到 `Tests/Fixtures/https-fixture/`，Brk 自己引擎的扩展弹窗夹具搬到 `Tests/Fixtures/ExtensionPopup/`。
 - 各处复制的 `run-native.py` 合成一个 `scripts/run-native.py`，按 `scripts/native-sets.txt` 的分组跑，结果写到仓库外的 `~/brk-evidence/native/<名字>/`；`bounded-phase.py` 搬到 `scripts/`。
-- 命令栏排序研究（`verify/arc-command-bar-ranking/`）不是测试记录，搬到 `docs/research/arc-command-bar-ranking/`，下一步工作要用它的 `ase2-defaults.json`。图片只留 README 里嵌入的 4 张。
-- `scripts/accept-batch-proposal.py` 只服务第二批（11 月 1 日）的提案验收，读的是已删除的 `verify/completion/batch2-*` 目录，一起删。
+- 命令栏排序研究（`docs/research/arc-command-bar-ranking/`）不是测试记录，搬到 `docs/research/arc-command-bar-ranking/`，下一步工作要用它的 `ase2-defaults.json`。图片只留 README 里嵌入的 4 张。
+- `scripts/accept-batch-proposal.py` 只服务第二批（11 月 1 日）的提案验收，读的是已删除的 `1b71cb97bd:verify/completion/batch2-*` 目录，一起删。
 
 台账里每条指向已删文件的证据，改成记下当时提交这份证据的提交号和路径，`check-completion.py` 改为接受这种写法，并用 `git cat-file` 核对那个提交里确实有这个文件。文档和代码注释里提到的旧路径：搬走的改成新路径，删掉的改成 `<提交号>:<路径>`，复制到 `git show` 后面就能看到原文件。
 

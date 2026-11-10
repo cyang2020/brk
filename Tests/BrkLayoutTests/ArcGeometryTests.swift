@@ -40,7 +40,7 @@ final class ArcGeometryTests: XCTestCase {
         d.user(.space(.togglePinnedSection(.current)))
         XCTAssertEqual(TablistLayout.rows(d.view.space, width: 228).map(\.kind), [.topSpacer, .divider, .newTab, .item(e), .item(c)])
     }
-    /// Arc 1.170, a new Space with Today tabs and nothing pinned (verify/completion/max-ui-20261107/arc-no-pinned-*.png):
+    /// Arc 1.170, a new Space with Today tabs and nothing pinned (8dc9260d6a:verify/completion/max-ui-20261107/arc-no-pinned-*.png):
     /// the divider is there, with Clear and, with Tidy Tabs on, Tidy, so a person without pinned tabs can tidy.
     func testTheDividerShowsWithoutPinnedTabs() throws {
         let d = LayoutDriver()

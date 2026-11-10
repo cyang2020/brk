@@ -556,24 +556,24 @@ let LoadingBarDraw = LoadingBarMetrics()
 let SplitDropDraw = SplitDropMetrics()
 
 struct SplitDropMetrics: MetricGroup {
-    let handleThickness = Metric(2.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: the divider handle is 4 px wide at 2x, centred in the 10 pt gap"))
-    let handleLength = Metric(24.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png and P23-splitmenu-arc.png: between side-by-side panes it spans y 376...400, centred"))
-    let handleAlpha = Metric(0.18, .anatomy("verify/visual-pairs/run-20261103/P23: #B2AFAC over #DCD5D2 and #BBBBBB over #E1E1E1, black at about 18%"))
-    let stackedHandleLength = Metric(64.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-c-arc.png: between stacked panes it spans x 717...781, centred"))
-    let stackedHandleAlpha = Metric(0.39, .anatomy("verify/visual-pairs/run-20261103/P23/P23-c-arc.png: #8B8B8B over #E3E3E3"))
+    let handleThickness = Metric(2.0, .anatomy("scripts/station/arc-reference/P23/P23-a-arc.png: the divider handle is 4 px wide at 2x, centred in the 10 pt gap"))
+    let handleLength = Metric(24.0, .anatomy("scripts/station/arc-reference/P23/P23-a-arc.png and P23-splitmenu-arc.png: between side-by-side panes it spans y 376...400, centred"))
+    let handleAlpha = Metric(0.18, .anatomy("eaad5e542c:verify/visual-pairs/run-20261103/P23: #B2AFAC over #DCD5D2 and #BBBBBB over #E1E1E1, black at about 18%"))
+    let stackedHandleLength = Metric(64.0, .anatomy("scripts/station/arc-reference/P23/P23-c-arc.png: between stacked panes it spans x 717...781, centred"))
+    let stackedHandleAlpha = Metric(0.39, .anatomy("scripts/station/arc-reference/P23/P23-c-arc.png: #8B8B8B over #E3E3E3"))
     /// The focused pane of a split casts a wider shadow than a card does (P23-a, P23-c: 13% just over it and 15%
     /// just under it, 4% still 9 pt away; with the other pane's own shadow the 10 pt gap reads #D0CBC7 to #DBD6D2).
-    let liftedShadowBlur = Metric(8.0, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: the focused pane's edges fade like an 8 pt Gaussian"))
-    let liftedShadowAlpha = Metric(0.33, .anatomy("verify/visual-pairs/run-20261103/P23/P23-a-arc.png: 13% above plus 15% below the focused pane"))
-    let middleBorder = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/Q13/Q13-e-arc.png: that ring is 3 pt"))
-    let slotBorderAlpha = Metric(0.45, .anatomy("verify/visual-pairs/run-20261103/P23/P23-d-arc.png: the slot's 2 pt ring is #8CB4B2, the #006362 focus ring at 45% over #FCFCFC"))
+    let liftedShadowBlur = Metric(8.0, .anatomy("scripts/station/arc-reference/P23/P23-a-arc.png: the focused pane's edges fade like an 8 pt Gaussian"))
+    let liftedShadowAlpha = Metric(0.33, .anatomy("scripts/station/arc-reference/P23/P23-a-arc.png: 13% above plus 15% below the focused pane"))
+    let middleBorder = Metric(3.0, .anatomy("scripts/station/arc-reference/Q13/Q13-e-arc.png: that ring is 3 pt"))
+    let slotBorderAlpha = Metric(0.45, .anatomy("scripts/station/arc-reference/P23/P23-d-arc.png: the slot's 2 pt ring is #8CB4B2, the #006362 focus ring at 45% over #FCFCFC"))
 }
 
 struct LoadingBarMetrics: MetricGroup {
-    let width = Metric(48.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P06-a: a 48 pt dark capsule centred over the card"))
-    let trackWidth = Metric(128.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P06-b: later a 128 pt track with the progress filled dark"))
-    let height = Metric(4.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P06-a: the capsule spans y 3 to 7"))
-    let top = Metric(3.0, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P06-a: the capsule starts 3 below the window top"))
-    let trackAlpha = Metric(0.2, .anatomy("verify/visual-pairs/run-20261103/REPORT.md, P06-b: the track is #C4C0BD over #F2EDE9"))
+    let width = Metric(48.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P06-a: a 48 pt dark capsule centred over the card"))
+    let trackWidth = Metric(128.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P06-b: later a 128 pt track with the progress filled dark"))
+    let height = Metric(4.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P06-a: the capsule spans y 3 to 7"))
+    let top = Metric(3.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P06-a: the capsule starts 3 below the window top"))
+    let trackAlpha = Metric(0.2, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P06-b: the track is #C4C0BD over #F2EDE9"))
     let trackFrom = Metric(0.1, .guess("progress at which the capsule becomes a track; Arc's own threshold was not traced"))
 }

@@ -564,7 +564,7 @@ public enum AITask: Hashable, Sendable, Codable {
     }
 }
 
-/// Place New Tabs for JevK5 (slice B's measurement, verify/ai-native/b-local-models): the five groups nearest the new
+/// Place New Tabs for JevK5 (slice B's measurement, b6baac6767:verify/ai-native/b-local-models): the five groups nearest the new
 /// tab by meaning, then JevK5 picks among them. The new tab, and each `group` option's tabs by option name.
 public enum AIDecisionHint: Hashable, Sendable, Codable {
     case placement(question: String, subject: AITab, members: [String: [AITab]], profile: ProfileID)

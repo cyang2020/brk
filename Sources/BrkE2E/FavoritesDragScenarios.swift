@@ -5,7 +5,7 @@ import BrkLayout
 import CoreGraphics
 import Foundation
 
-/// R5-3: Arc's Favorites and sidebar rows under a real mouse (verify/visual-pairs/run-20261103/Q13). Setup moves tabs by
+/// R5-3: Arc's Favorites and sidebar rows under a real mouse (ec0662aa99:verify/visual-pairs/run-20261103/Q13). Setup moves tabs by
 /// command; every gesture under test is posted through the window server, so it is the same path a person's mouse takes.
 enum FavoritesDragScenarios {
     static let all = [
