@@ -10,7 +10,7 @@ import Foundation
 /// with Return, as a user would.
 enum CommandBarEvidenceScenarios {
     static let all = [
-        Scenario("R49-Suggestions", "history, bookmark, top-domain, calculator and engine rows rank under the typed row and Return runs them", cefOnly: "native command bar", suggestions),
+        Scenario("R49-Suggestions", "history, bookmark, top-domain, calculator and engine rows are listed and Return runs them", cefOnly: "native command bar", suggestions),
         Scenario("R49-Actions", "Focus on and Move to a space, Move to a folder, Replace Pinned Tab, Undo, Add Right and Bottom Split and an extension row run from the bar", cefOnly: "native command bar", actions),
         Scenario("R49-Engines", "the Profiles pane's engine pop-up changes which engine the bar asks and searches, per profile; the suggestions switch stops the requests", cefOnly: "native settings pop-up and command bar", engines),
     ]
@@ -87,17 +87,17 @@ enum CommandBarEvidenceScenarios {
         try app.dispatch(.space(.focus(first)))
         try app.waitUntil("back in the first space") { try app.view().space.id == first }
         _ = marks
-        (index, rows) = try type(app, "Bookmark Beta", until: "Bookmark Beta")
-        record += "Bookmark Beta rows: \(rows)\n"
+        (index, rows) = try type(app, "bookmark be", until: "Bookmark Beta")
+        record += "bookmark be rows: \(rows)\n"
         S.log(app, "rows.txt", record)
-        // The typed row reads the query too; a bookmark row is a second exact one after it, and not a tab row.
-        let plain = rows.indices.filter { rows[$0].contains("Bookmark Beta") && !rows[$0].contains("Switch to Tab") }
+        // The saved page ranks as the saved tab it is (Arc's ranking); its row is the one reading its title.
         if let tabRow = rows.firstIndex(where: { $0.contains("Bookmark Beta") && $0.contains("Switch to Tab") }) {
             app.note("Bookmark Beta is listed as a tab row (Switch to Tab), not a bookmark row: \(rows)")
             try run(app, row: tabRow)
         } else {
-            try expect(plain.count >= 2, "no bookmark row after the typed row: \(rows)")
-            try run(app, row: plain.last!)
+            let saved = rows.firstIndex { $0.contains("Bookmark Beta") }
+            try expect(saved != nil, "no bookmark row: \(rows)")
+            try run(app, row: saved!)
         }
         try app.waitUntil("Return showed the saved page") { try currentTab(app.view())?.url == app.site.url("page2.html?bm=beta") }
         try app.dispatch(.space(.focus(first)))

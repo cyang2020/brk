@@ -14,7 +14,7 @@ enum QuickBarScenarios {
         Scenario("QuickBar-Answers", "percent, root, units, CSS, dates and times answer inline, Return copies; bare words sit under the typed row; searches stay searches", cefOnly: "native command bar", answers),
         Scenario("QuickBar-Currency", "a currency question answers from the rates file with its date, Return copies", cefOnly: "native command bar", currency),
         Scenario("QuickBar-NoRates", "with no rates there is no currency row and the search stays", cefOnly: "native command bar", noRates),
-        Scenario("QuickBar-Files", "file rows from the fixture folder: last places, hidden and Library left out, Return opens, Cmd+Return reveals, Option+Return copies, the file mode, no stale rows", cefOnly: "native command bar", files),
+        Scenario("QuickBar-Files", "file rows from the fixture folder: ranked as commands, hidden and Library left out, Return opens, Cmd+Return reveals, Option+Return copies, the file mode, no stale rows", cefOnly: "native command bar", files),
         Scenario("QuickBar-Spotlight", "the file rows through the real Spotlight index, in a fixture folder outside the home folder", cefOnly: "native command bar", spotlight),
         Scenario("QuickBar-Apps", "an app by name with Return launching it", cefOnly: "native command bar", apps),
         Scenario("QuickBar-AskTab", "Tab sends the text to the local AI; site search first; no text, Max off and an address stay as they were", cefOnly: "native command bar", askTab),
@@ -23,7 +23,7 @@ enum QuickBarScenarios {
         Scenario("QuickBar-Prefix", "a whole word and Tab enters through site search's pill; a real Space never does, so the words can begin a search; Backspace and Esc give it back; an engine of the same name wins; part of a word is offered", cefOnly: "native command bar", prefixKeys),
         Scenario("QuickBar-AIPrefix", "claude, gpt, ask and ai ask; page and summarize read the page; Max off and a missing agent leave the word plain", cefOnly: "native command bar", aiPrefix),
         Scenario("QuickBar-Split", "split opens an address in a new pane on the named side, Return with no text adds a pane, a tab's title, and the split commands", cefOnly: "native command bar", split),
-        Scenario("QuickBar-Window", "window places Brk's own window on the visible frame, with full screen, minimize and stay on top; an exact phrase shows low down", cefOnly: "native command bar", windowPlaces),
+        Scenario("QuickBar-Window", "window places Brk's own window on the visible frame, with full screen, minimize and stay on top; an exact phrase leads", cefOnly: "native command bar", windowPlaces),
         Scenario("QuickBar-Translate", "translate shows a pending row, then the answer, Return copies; a change asks again; translate page runs the page translation", cefOnly: "native command bar", translate),
         Scenario("QuickBar-Define", "define shows the offline dictionary's first lines; Return opens Dictionary.app", cefOnly: "native command bar", define),
         Scenario("QuickBar-Color", "colours with no prefix and after color, each form copied; bare #abc still searches", cefOnly: "native command bar", color),
@@ -347,11 +347,11 @@ enum QuickBarScenarios {
                 try dismiss(app)
             }
 
-            // Plain arithmetic is one row, as before.
+            // Plain arithmetic leads, the search under it.
             try open(app)
             try type(app, "2+3*4")
             let plain = try waitForRows(app, "arithmetic") { $0.first.map { has($0, "14") } ?? false }
-            try expect(plain.count == 1, "arithmetic has other rows: \(plain)")
+            try expect(plain.count > 1 && plain[1].contains("2+3*4"), "the search should follow the answer: \(plain)")
             try press(app, [], .returnKey)
             try app.waitUntil("the arithmetic copied") { try pasteboard(app) == "14" }
             app.passed("Percent, root, units, CSS, days, timespan, time zones and bare words answered through real keys; searches and addresses did not")
@@ -410,15 +410,13 @@ enum QuickBarScenarios {
         let bundle = try makeApp(root, name: "Quickbarviewer", marker: marker)
         defer { removeFixture(root, app: bundle) }
         try keepingPasteboard(app) {
-            // Inline: last places, at most two, never the first row.
+            // Inline: ranked as commands are (Arc's typeTravel archetype), at most two, the search still listed.
             try open(app)
             try type(app, "quickbar")
-            let inline = try waitForRows(app, "file rows under the typed row") { $0.contains { has($0, fileCaption) } }
-            try expect(!has(inline[0], fileCaption), "a file row came first: \(inline)")
-            try expect(inline[0].contains("quickbar"), "the typed row should lead: \(inline)")
+            let inline = try waitForRows(app, "file rows with the typed row") { $0.contains { has($0, fileCaption) } }
+            try expect(inline.contains { $0.contains("quickbar") }, "the typed row should be listed: \(inline)")
             let fileRows = inline.indices.filter { has(inline[$0], fileCaption) }
             try expect(fileRows.count <= 2, "more than two inline: \(inline)")
-            try expect(fileRows.last == inline.count - 1, "file rows should be last: \(inline)")
             try assertNothingExcluded(inline)
             _ = try app.screenshot("inline-files")
 
@@ -547,7 +545,6 @@ enum QuickBarScenarios {
         try type(app, "quickbarla")
         let shown = try waitForRows(app, "the app's row") { $0.contains { has($0, "Quickbarlauncher") && has($0, "Open App") } }
         let index = shown.firstIndex { has($0, "Quickbarlauncher") }!
-        try expect(index > 0, "the app came first: \(shown)")
         _ = try app.screenshot("app-row")
         try dismiss(app)
         // The app prefix lists only apps, first.
@@ -559,8 +556,8 @@ enum QuickBarScenarios {
         try dismiss(app)
         try open(app)
         try type(app, "quickbarla")
-        try waitForRows(app, "the app's row again") { $0.contains { has($0, "Quickbarlauncher") } }
-        for _ in 0..<index { try press(app, [], .downArrow) }
+        let again = try waitForRows(app, "the app's row again") { $0.contains { has($0, "Quickbarlauncher") } }
+        for _ in 0..<(again.firstIndex { has($0, "Quickbarlauncher") } ?? index) { try press(app, [], .downArrow) }
         app.sleep(0.2)
         try press(app, [], .returnKey)
         try app.waitUntil("Return launched the app", timeout: 10) { (try? String(contentsOf: marker, encoding: .utf8))?.contains("launched") == true }
@@ -1129,12 +1126,13 @@ enum QuickBarScenarios {
         try dismiss(app)
         try open(app)
         try type(app, "left half")
-        let exact = try waitForRows(app, "the phrase's row") { $0.last.map { has($0, "Left Half") } ?? false }
-        try expect(exact.count > 1 && exact[0].contains("left half"), "the search should lead: \(exact)")
+        // The place's exact name is a command typed in full: it leads, as Arc's commands do ("dark mode").
+        let exact = try waitForRows(app, "the phrase's row") { $0.first.map { has($0, "Left Half") } ?? false }
+        try expect(exact.count > 1 && exact.contains { $0.contains("left half") }, "the search should stay listed: \(exact)")
         _ = try app.screenshot("exact-phrase")
         try dismiss(app)
         try app.setWindowFrame(original)
-        app.passed("Halves, maximize and centre landed on the visible frame; stay on top, full screen and minimize ran; ordinary text met none of it, left half showed low down")
+        app.passed("Halves, maximize and centre landed on the visible frame; stay on top, full screen and minimize ran; ordinary text met none of it, left half led as a command typed in full")
     }
 
     // MARK: Translate

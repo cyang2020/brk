@@ -438,9 +438,11 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
 
     private func choose(_ index: Int) {
         guard results.indices.contains(index) else { return }
-        // A command row is learned first (the bar stays open for `.commandBar` commands), then it runs.
-        if let key = results[index].usageKey { dispatch(.commandBar(.ran(key))) }
-        dispatch(results[index].command)
+        // A command row is learned first (the bar stays open for `.commandBar` commands), then it runs. The row is read
+        // before: learning re-ranks the rows.
+        let row = results[index]
+        if let key = row.usageKey { dispatch(.commandBar(.ran(key))) }
+        dispatch(row.command)
     }
 
     private func setHighlight(_ index: Int) {

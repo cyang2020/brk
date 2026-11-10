@@ -111,7 +111,7 @@ public enum Suggest {
         }
 
         let built = candidates(text, bar: bar, appName: appName, resolve: resolve, completing: completing, timeZone: timeZone, locale: locale)
-        let scores = ArcRanking.scores(built.map(\.candidate), query: text)
+        let scores = ArcRanking.scores(built.map(\.candidate), query: text, input: inlineCompletion(built) ?? text)
         var rows = ArcRanking.order(built.map(\.candidate), scores: scores, limit: Int.max).map { built[$0].row }
         // Answers worked out from the text are Brk's own and take no part in Arc's scoring (their scores would change every
         // other row's): one the text can only be leads, otherwise it sits right under the typed row.
@@ -539,6 +539,13 @@ public enum Suggest {
         return (leading, below)
     }
 
+    /// What Chromium's inline completion makes of the input: the address of its default row when that row opens a page the
+    /// text completes (relevance above the text as typed), else nothing.
+    static func inlineCompletion(_ built: [Built]) -> String? {
+        built.first { $0.candidate.features[.chromiumRank] == 0 && ($0.candidate.features[.chromiumRelevanceScore] ?? 0) > Relevance.whatYouTyped && !$0.candidate.archetype.isSearch }?
+            .candidate.autocompleteText
+    }
+
     /// How many candidates each source gives the ranking. Arc's providers' own limits were not read; Chromium's result
     /// holds about ten rows.
     private static let tabCandidates = 8, historyCandidates = 10, suggestionCandidates = 10, topDomainCandidates = 5, commandCandidates = 5,
@@ -560,11 +567,9 @@ public enum Suggest {
 
     static func searchKey(_ text: String) -> String { "search:" + fold(text.trimmingCharacters(in: .whitespacesAndNewlines)) }
 
-    /// What a command row's runs are saved under: its command, as stable JSON.
+    /// What a command row's runs are saved under: its command, written out (the same command reads the same each time).
     public static func usageKey(_ command: Command) -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        return (try? encoder.encode(command)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: command)
+        String(describing: command)
     }
 
     private static func fileRow(_ hit: LocalHit) -> Suggestion {

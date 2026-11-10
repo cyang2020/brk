@@ -49,7 +49,14 @@ final class ArcRankingTests: XCTestCase {
         let command = ArcRanking.Candidate(archetype: .typeTravel, autocompleteText: "New Space…", hotWords: ["New Space"],
                                            customTitle: "New Space…", runs: 2, dedupKey: "c")
         XCTAssertEqual(Set(ArcRanking.boosts(command, query: "new space")),
-                       [.exactHotWord, .autocompleteDefault, .recentlyUseTypeTravel, .typeTravelPrefixForLongQuery])
+                       [.exactHotWord, .recentlyUseTypeTravel, .typeTravelPrefixForLongQuery])
+        let suggestion = ArcRanking.Candidate(archetype: .chromiumSearchSuggestion, autocompleteText: "visual fixation", dedupKey: "s")
+        XCTAssertEqual(ArcRanking.boosts(suggestion, query: "visual fix"), [], "a suggestion that starts with the query keeps the engine's order")
+        // "time" completed to "time.com" by the input: the completed site gets the default boost; without the completion
+        // it does not, since the query does not start with its address.
+        let site = ArcRanking.Candidate(archetype: .topDomain, url: URL(string: "https://time.com")!, autocompleteText: "time.com", dedupKey: "t")
+        XCTAssertTrue(ArcRanking.boosts(site, query: "time", input: "time.com").contains(.autocompleteDefault))
+        XCTAssertFalse(ArcRanking.boosts(site, query: "time").contains(.autocompleteDefault))
         XCTAssertFalse(ArcRanking.boosts(ArcRanking.Candidate(archetype: .typeTravel, customTitle: "Switch to Dark Mode", runs: 1, dedupKey: "c"), query: "swi")
             .contains(.typeTravelPrefixForLongQuery), "one word is not a long query (the real Arc leaves the search first)")
         XCTAssertTrue(ArcRanking.boosts(ArcRanking.Candidate(archetype: .typeTravel, customTitle: "Switch to Dark Mode", runs: 1, dedupKey: "c"), query: "switch to d")

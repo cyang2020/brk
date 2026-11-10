@@ -385,8 +385,10 @@ public enum ArcRanking {
     ///   address starts with the query, and for a row that is not a tab it is not the whole address. A tab gets
     ///   exactURL and baseDomain, never exactBaseDomain.
     /// - exactHotWord: the lowercased query is one of the hot words.
-    /// - autocompleteDefault (rows that open a page or run a command) and autocompleteSearchOnly (searches): the row's
-    ///   text starts with the query.
+    /// - autocompleteDefault (rows that open a page or run a command) and autocompleteSearchOnly (searches): the input, as
+    ///   Chromium's inline completion leaves it (`input`: "time" completed to "time.com"), is the row's text or starts
+    ///   with it. So the completed site, or else the text as typed, gets it; a suggestion that merely starts with the
+    ///   query does not (Arc keeps "visual field" above "visual fixation" for "visual fix").
     /// - chromiumSpecialSearchFunction: Chromium's second row, for a `word:word` query.
     /// - customTitlePrefix: a tab's own title starts with the query.
     /// - veryRecentTabOrDocumentBoost: a tab used in the last hour. topApp: a Favorite.
@@ -397,8 +399,9 @@ public enum ArcRanking {
     ///   Dark Mode; Night Mode" starts with each), so Brk applies it from two words.
     /// - highFuzzySearchConfidence: fuzzySearchConfidence above 0.8. No code in Arc 1.170 sets that feature, so it never
     ///   applies; Brk keeps the rule. unboxingPromotedAction: Arc's onboarding list, which Brk does not have.
-    public static func boosts(_ candidate: Candidate, query: String) -> [Boost] {
+    public static func boosts(_ candidate: Candidate, query: String, input: String? = nil) -> [Boost] {
         let q = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let shown = (input ?? query).lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, candidate.archetype.takesBoosts else { return [] }
         var out: [Boost] = []
         let isTab = candidate.archetype == .tab
@@ -409,8 +412,8 @@ public enum ArcRanking {
             if prefix, isTab || !exact { out.append(.baseDomain) }
         }
         if candidate.hotWords.contains(where: { $0.lowercased() == q }) { out.append(.exactHotWord) }
-        let text = candidate.autocompleteText.lowercased()
-        if !text.isEmpty, text.hasPrefix(q) { out.append(candidate.archetype.isSearch ? .autocompleteSearchOnly : .autocompleteDefault) }
+        let text = candidate.autocompleteText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty, shown == text || shown.hasPrefix(text) { out.append(candidate.archetype.isSearch ? .autocompleteSearchOnly : .autocompleteDefault) }
         if candidate.features[.chromiumRank] == 1, isSpecialSearch(q) { out.append(.chromiumSpecialSearchFunction) }
         if isTab, let title = candidate.customTitle?.lowercased(), title.hasPrefix(q) { out.append(.customTitlePrefix) }
         if isTab, let seconds = candidate.features[.lastNavigated], seconds < 3600 { out.append(.veryRecentTabOrDocumentBoost) }
@@ -446,7 +449,7 @@ public enum ArcRanking {
 
     /// One score per candidate: missing features filled, z-scored over the candidates, averaged inside each category,
     /// then one weighted mean of the archetype, the five categories and every boost that applies. NaN becomes 0.
-    public static func scores(_ candidates: [Candidate], query: String) -> [Double] {
+    public static func scores(_ candidates: [Candidate], query: String, input: String? = nil) -> [Double] {
         var z: [Feature: [Double]] = [:]
         for feature in Feature.allCases {
             let values = candidates.map { feature == .archetype ? $0.archetype.base : $0.features[feature] ?? feature.valueWhenMissing }
@@ -459,7 +462,7 @@ public enum ArcRanking {
                 let score = weightedMean(items.map { (z[$0]![i], $0.weight) })
                 parts.append((score, category.weight))
             }
-            for boost in boosts(candidates[i], query: query) { parts.append((boost.score, boost.weight)) }
+            for boost in boosts(candidates[i], query: query, input: input) { parts.append((boost.score, boost.weight)) }
             let score = weightedMean(parts)
             return score.isNaN ? 0 : score
         }
@@ -469,23 +472,31 @@ public enum ArcRanking {
 
     /// Indices of the rows to show, best first: sorted by score (ties keep the given order), one row per duplicate key at
     /// the best one's place, a candidate lifted to its preferred row, at most `limit`. Which duplicate Arc shows was not
-    /// read; both merges the real Arc showed (a Favorite and the same site as a popular site) show the tab, so a tab's
-    /// row wins the place, else the best one's.
+    /// read; fitted to what the real Arc showed: a tab's row takes the place of the same site as a popular site (the
+    /// Favorites GitHub and Wikipedia), and an address typed in full takes the place of a visited page at that address
+    /// but stays beside the open tab that shows it (the typed address first, Switch to Tab second).
     public static func order(_ candidates: [Candidate], scores: [Double], limit: Int) -> [Int] {
         let sorted = candidates.indices.sorted { scores[$0] != scores[$1] ? scores[$0] > scores[$1] : $0 < $1 }
-        var place: [String: Int] = [:], rows: [Int] = []
+        var place: [String: Int] = [:], typedPlace: [String: Int] = [:], rows: [Int] = []
         for i in sorted {
-            if let at = place[candidates[i].dedupKey] {
-                let pair = Set([candidates[i].archetype, candidates[rows[at]].archetype])
-                // An address typed in full stays beside the open tab that shows it: opening it again is a choice.
-                if pair == [.tab, .chromiumNavigateWhatYouTyped] {
-                    rows.append(i)
-                    continue
-                }
-                if candidates[i].archetype == .tab, candidates[rows[at]].archetype != .tab { rows[at] = i }
+            let key = candidates[i].dedupKey, archetype = candidates[i].archetype
+            if archetype == .chromiumNavigateWhatYouTyped {
+                if let at = place[key], candidates[rows[at]].archetype != .tab { rows[at] = i; typedPlace[key] = at; continue }
+                typedPlace[key] = rows.count
+                if place[key] == nil { place[key] = rows.count }
+                rows.append(i)
                 continue
             }
-            place[candidates[i].dedupKey] = rows.count
+            if archetype == .tab, place[key] != nil, place[key] == typedPlace[key] {
+                place[key] = rows.count
+                rows.append(i)
+                continue
+            }
+            if let at = place[key] {
+                if archetype == .tab, candidates[rows[at]].archetype != .tab, candidates[rows[at]].archetype != .chromiumNavigateWhatYouTyped { rows[at] = i }
+                continue
+            }
+            place[key] = rows.count
             rows.append(i)
         }
         let lifted = rows.filter { candidates[$0].preferredRow != nil }.sorted { candidates[$0].preferredRow! < candidates[$1].preferredRow! }
