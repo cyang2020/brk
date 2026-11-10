@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help
+    url: https://github.com/cyang2020/brk/discussions/categories/q-a
+    about: Ask how something works in Discussions.
+  - name: Open-ended idea
+    url: https://github.com/cyang2020/brk/discussions/categories/ideas
+    about: Talk an idea through before it becomes a feature request.
+  - name: Security problem
+    url: https://github.com/cyang2020/brk/security/advisories/new
+    about: Report a vulnerability privately. Please do not open a public issue.

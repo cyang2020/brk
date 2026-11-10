@@ -1,0 +1,47 @@
+name: Feature request or feedback
+description: An idea, something that feels off, or anything else you want to tell us about Brk.
+labels:
+  - enhancement
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Help › Send Feedback…** in Brk opens this form with your Brk version filled in.
+        Broken behaviour belongs in a [bug report](https://github.com/cyang2020/brk/issues/new?template=bug_report.yml).
+        Open-ended ideas and questions also work well in [Discussions](https://github.com/cyang2020/brk/discussions).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you want to do
+      description: The situation and what gets in the way today. A real example helps more than a solution.
+      placeholder: When I research something across many tabs, I lose track of which tabs I already read.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How you picture it working, if you have a picture. Sketches and screenshots welcome.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Command bar (⌘T)
+        - Sidebar, Spaces, tabs
+        - AI (agents, local models, AI pages)
+        - Library, downloads
+        - Settings, profiles
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Brk version
+      placeholder: Brk 1.0 (1), commit 1a2b3c4d

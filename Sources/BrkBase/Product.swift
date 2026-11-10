@@ -47,6 +47,9 @@ public struct LaunchOptions: Sendable, Equatable {
     /// `BRK_CURRENCY_RATES_FILE=/file`: under the control socket the exchange rates come from this file, never the
     /// network. Without it there are none.
     public var currencyRatesFile: URL?
+    /// `BRK_CRASH_REPORTS_DIR=/folder`: the launch after a crash reads this folder instead of
+    /// ~/Library/Logs/DiagnosticReports, and offers a report even under the control socket.
+    public var crashReportsDirectory: URL?
 
     public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         engine = EngineKind(rawValue: environment["BRK_ENGINE"] ?? "") ?? .cef
@@ -58,5 +61,6 @@ public struct LaunchOptions: Sendable, Equatable {
         localSearchFixture = environment["BRK_LOCAL_SEARCH_FIXTURE"].map { URL(fileURLWithPath: $0, isDirectory: true) }
         localSearchSpotlight = environment["BRK_LOCAL_SEARCH_SPOTLIGHT"] == "1"
         currencyRatesFile = environment["BRK_CURRENCY_RATES_FILE"].map { URL(fileURLWithPath: $0) }
+        crashReportsDirectory = environment["BRK_CRASH_REPORTS_DIR"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) }
     }
 }

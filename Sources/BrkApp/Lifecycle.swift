@@ -90,6 +90,21 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         getURL = handler
     }
 
+    /// The launch after a crash (`CrashReportOffer`): the folder is read off the main thread, then Help's alert asks.
+    private func offerCrashReport(dataDirectory: URL) {
+        let previous = CrashReportOffer.recordLaunch(dataDirectory: dataDirectory)
+        guard let previous, CrashReportOffer.enabled, options.controlSocket == nil || options.crashReportsDirectory != nil else { return }
+        let directory = options.crashReportsDirectory ?? CrashReportOffer.systemDirectory
+        let name = Product.name, bundleID = Bundle.main.bundleIdentifier
+        Task.detached(priority: .utility) { [weak self] in
+            guard let report = CrashReportOffer.latest(in: directory, since: previous, name: name, bundleID: bundleID) else { return }
+            await MainActor.run {
+                guard let self, !self.quitting, let store = self.store, let window = store.windowController(nil)?.id else { return }
+                store.help.offerCrashReport(report, in: window)
+            }
+        }
+    }
+
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // CEF replaces signal handlers during bootstrap. Restore the app's crash trace after CEF initializes.
         CrashBacktrace.install()
@@ -191,6 +206,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             Quit.request()
         }
         store.start()
+        offerCrashReport(dataDirectory: directory)
         // AppKit can consume fullscreen Escape before it reaches NSWindow.sendEvent.
         overlayEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let handled = MainActor.assumeIsolated {

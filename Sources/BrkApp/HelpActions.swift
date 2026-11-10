@@ -10,8 +10,11 @@ import Foundation
 /// - Release Notes: `Help/release-notes.html` in the bundle, written by `scripts/declare-scripting.sh` from the
 ///   build's git history.
 /// - Visit Help Center: Arc's help center, as the command bar's Help Center row.
-/// - Contact the Team: a new issue on the repository the build came from (`BrkRepositoryURL` in Info.plist), its body
-///   Copy {app} Info's text. Brk has no team mailbox.
+/// - Report a Bug… and Send Feedback… (Contact the Team is the second): GitHub's issue forms on the repository the
+///   build came from (`BrkRepositoryURL` in Info.plist), opened in a tab with the build, macOS, the Mac's chip and the
+///   engine filled in (`HelpLinks.newIssue`). Nothing is sent; the user reads, edits and submits the form. Brk has no
+///   team mailbox.
+/// - After a crash, the next launch offers once to report it (`offerCrashReport`), the report's first lines filled in.
 /// - Check for Updates…: Brk has no update feed; an alert names the build and how a newer one is made.
 /// - Restore Data, Record and Cancel Trace, Open Task Manager: their windows and recorder below.
 @MainActor
@@ -51,12 +54,8 @@ final class HelpActions {
                              "Only builds made with scripts/build.sh carry Help/release-notes.html.", in: window)
             }
             send(window, .app(.help(.open(notes))))
-        case .contactTeam:
-            guard let issue = HelpLinks.newIssue(BuildInfo.current(engine: engine.engineVersion)) else {
-                return alert("This build does not name a repository",
-                             "Builds made with scripts/build.sh record their git remote; this one has none to write to.", in: window)
-            }
-            send(window, .app(.help(.open(issue))))
+        case .reportBug: openIssue(.bug, in: window)
+        case .sendFeedback: openIssue(.feedback, in: window)
         case .checkForUpdates:
             let info = BuildInfo.current(engine: engine.engineVersion)
             let notes: String? = HelpLinks.releaseNotes() == nil ? nil : "Release Notes"
@@ -76,6 +75,35 @@ final class HelpActions {
             panel.confirmed = { [weak self] url in self?.restoreConfirmed?(url) }
             panel.show()
         }
+    }
+
+    private func openIssue(_ form: IssueForm, title: String = "", logs: String? = nil, in window: WindowID) {
+        guard let issue = HelpLinks.newIssue(form, BuildInfo.current(engine: engine.engineVersion), title: title, logs: logs) else {
+            return alert("This build does not name a repository",
+                         "Builds made with scripts/build.sh record their git remote; this one has none to write to.", in: window)
+        }
+        send(window, .app(.help(.open(issue))))
+    }
+
+    /// The launch after a crash: one alert on `window` naming the report. Report… opens the bug form with the report's
+    /// first lines in its Logs field; "Don't offer again" turns the offer off (`CrashReportOffer.enabledKey`).
+    func offerCrashReport(_ report: CrashReport, in window: WindowID) {
+        let alert = NSAlert()
+        alert.messageText = "\(Product.name) quit unexpectedly last time"
+        alert.informativeText = "Report it on GitHub? A new tab opens the bug report form with the crash report's first lines filled in. Nothing is sent until you submit the form, and you can edit or remove anything first."
+        alert.addButton(withTitle: "Report…")
+        alert.addButton(withTitle: "Not Now")
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = "Don't offer again"
+        let finish: (NSApplication.ModalResponse) -> Void = { [weak self, weak alert] response in
+            MainActor.assumeIsolated {
+                if alert?.suppressionButton?.state == .on { UserDefaults.standard.set(false, forKey: CrashReportOffer.enabledKey) }
+                guard response == .alertFirstButtonReturn else { return }
+                self?.openIssue(.bug, title: report.title, logs: report.summary, in: window)
+            }
+        }
+        if let host = owner(window), host.isVisible, host.attachedSheet == nil { alert.beginSheetModal(for: host, completionHandler: finish) }
+        else { finish(alert.runModal()) }
     }
 
     private func alert(_ title: String, _ text: String, in window: WindowID, second: String? = nil, then: (@MainActor () -> Void)? = nil) {
@@ -107,12 +135,33 @@ enum HelpLinks {
         bundle.url(forResource: "credits", withExtension: "html", subdirectory: "Help")
     }
 
-    /// `<repository>/issues/new` with the build's info as the body; nil without a repository.
-    static func newIssue(_ info: BuildInfo) -> URL? {
-        guard let repository = info.repository, var parts = URLComponents(url: repository.appendingPathComponent("issues/new"), resolvingAgainstBaseURL: false) else { return nil }
-        parts.queryItems = [URLQueryItem(name: "title", value: ""),
-                            URLQueryItem(name: "body", value: "Describe what happened:\n\n\n---\n" + info.text)]
-        return parts.url
+    /// GitHub keeps prefilled addresses working up to about 8,000 characters; the Logs field is cut to stay under this.
+    static let issueURLLimit = 6_000
+
+    /// `<repository>/issues/new?template=<form>` with the form's fields filled from the build (GitHub fills an issue
+    /// form's fields from query parameters named by the fields' ids). The data folder is left out: its path names the
+    /// user's home folder. `logs` (the bug form's Logs field) loses lines from its end until the address fits
+    /// `issueURLLimit`. Nil without a repository.
+    static func newIssue(_ form: IssueForm, _ info: BuildInfo, title: String = "", logs: String? = nil) -> URL? {
+        guard let repository = info.repository,
+              var parts = URLComponents(url: repository.appendingPathComponent("issues/new"), resolvingAgainstBaseURL: false) else { return nil }
+        var fields = [("template", form.rawValue)]
+        if !title.isEmpty { fields.append(("title", title)) }
+        fields.append(("version", info.versionLine + (info.commit.map { ", commit \($0)" } ?? "")))
+        if form == .bug {
+            fields += [("macos", info.system), ("mac", info.chip), ("engine", info.engineLine)]
+        }
+        func url(logs: String?) -> URL? {
+            parts.queryItems = (fields + (logs.map { [("logs", $0)] } ?? [])).map { URLQueryItem(name: $0.0, value: $0.1) }
+            // URLComponents leaves "+" as it is, and GitHub reads a "+" in a query as a space ("symbol + 12" in a crash).
+            parts.percentEncodedQuery = parts.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+            return parts.url
+        }
+        guard form == .bug, var lines = logs?.components(separatedBy: "\n") else { return url(logs: nil) }
+        while let full = url(logs: lines.joined(separator: "\n")), full.absoluteString.count > issueURLLimit, !lines.isEmpty {
+            lines.removeLast()
+        }
+        return url(logs: lines.isEmpty ? nil : lines.joined(separator: "\n"))
     }
 
     static func updateText(_ info: BuildInfo) -> String {
@@ -120,8 +169,15 @@ enum HelpLinks {
     }
 }
 
+/// The issue forms in the repository's `.github/ISSUE_TEMPLATE/`. The query parameters `HelpLinks.newIssue` writes are
+/// those forms' field ids (`version`, `macos`, `mac`, `engine`, `logs`); renaming a field there breaks the prefill.
+enum IssueForm: String {
+    case bug = "bug_report.yml"
+    case feedback = "feature_request.yml"
+}
+
 /// What Copy {app} Info puts on the pasteboard (Arc: "Copied Arc Info!"): the build, the engine, the system and
-/// where the data is.
+/// where the data is. The issue forms take the same facts except the data folder.
 struct BuildInfo: Equatable {
     var name: String
     var version: String
@@ -132,8 +188,24 @@ struct BuildInfo: Equatable {
     var system: String
     var architecture: String
     var dataDirectory: String
+    /// `LaunchOptions.EngineKind`'s raw value: cef, core (Brk's own Chromium) or stub.
+    var engineKind = "cef"
+    /// An Intel build running under Rosetta on an Apple silicon Mac.
+    var translated = false
 
     var versionLine: String { "\(name) \(version) (\(build))" }
+
+    /// The Mac as the bug form asks for it: Apple silicon or Intel, and the build's architecture.
+    var chip: String {
+        if architecture == "arm64" { return "Apple silicon (arm64)" }
+        return translated ? "Apple silicon, Intel build under Rosetta (x86_64)" : "Intel (x86_64)"
+    }
+
+    /// The engine as the bug form asks for it: Chromium's version and which embedding runs it.
+    var engineLine: String {
+        let kind = ["cef": "CEF", "core": "BrkCore", "stub": "stub engine, no Chromium"][engineKind] ?? engineKind
+        return engine.map { "Chromium \($0) (\(kind))" } ?? kind
+    }
 
     var text: String {
         var lines = [versionLine]
@@ -156,6 +228,12 @@ struct BuildInfo: Equatable {
                          build: info["CFBundleVersion"] as? String ?? "1", commit: info["BrkGitCommit"] as? String,
                          repository: (info["BrkRepositoryURL"] as? String).flatMap(URL.init(string:)), engine: engine,
                          system: ProcessInfo.processInfo.operatingSystemVersionString, architecture: architecture,
-                         dataDirectory: Product.dataDirectory().path)
+                         dataDirectory: Product.dataDirectory().path, engineKind: LaunchOptions().engine.rawValue, translated: runsUnderRosetta)
+    }
+
+    private static var runsUnderRosetta: Bool {
+        var translated: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        return sysctlbyname("sysctl.proc_translated", &translated, &size, nil, 0) == 0 && translated == 1
     }
 }

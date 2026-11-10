@@ -1,0 +1,83 @@
+# A first look at each new issue from outside contributors, so the maintainer does not have to ask for the same
+# things every time:
+# - an issue from the AI area of the feature form gets the `ai` label; one that skipped the forms gets `triage`
+#   (the forms add `triage` and their own label themselves);
+# - a bug report without a commit in its version field, or with neither logs nor a picture, and an Arc parity report
+#   without pictures, get one comment listing what is missing.
+#
+# Safety: it runs only when an issue is opened, never on pull requests, so a fork cannot run changed code here
+# (issue events always run this file from main). The token may only write issues; the workflow names no secrets,
+# so the signing secrets are never in its environment. The issue text is read from the event inside the script and
+# never pasted into a shell command.
+name: Issue triage
+
+on:
+  issues:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  first-look:
+    name: First look
+    # Issues from the maintainer and collaborators are left alone.
+    if: ${{ !contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body ?? "";
+            const labels = issue.labels.map((label) => label.name);
+
+            // Issue forms write each field as "### <label>", a blank line, then the answer or "_No response_".
+            const fields = {};
+            for (const part of body.split(/^### /m).slice(1)) {
+              const end = part.indexOf("\n");
+              fields[part.slice(0, end).trim()] = part.slice(end + 1).trim();
+            }
+            const empty = (value) => !value || value === "_No response_";
+            const fromForm = Object.keys(fields).length > 0;
+            const hasPicture = /!\[|<img|user-attachments\/|\.(png|jpe?g|gif|mov|mp4)\b/i.test(body);
+
+            const add = [];
+            if (!fromForm) add.push("triage");
+            if ((fields["Area"] ?? "").startsWith("AI")) add.push("ai");
+
+            const missing = [];
+            if (labels.includes("bug")) {
+              const version = fields["Brk version and commit"] ?? "";
+              if (!/\b[0-9a-f]{7,40}\b/i.test(version)) {
+                missing.push("the Brk version **and commit**: Help › Troubleshooting › Copy Brk Info, or file the report with Help › Report a Bug…, which fills it in");
+              }
+              if (empty(fields["Logs or crash report"]) && !hasPicture) {
+                missing.push("a screenshot, a short screen recording, or the relevant log lines");
+              }
+            }
+            if (labels.includes("arc-parity") && !hasPicture) {
+              missing.push("screenshots or a recording of Arc and Brk doing the same thing");
+            }
+
+            const { owner, repo } = context.repo;
+            if (add.length) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number: issue.number, labels: add });
+            }
+
+            let text = "";
+            if (!fromForm) {
+              text = "Thanks for opening this. It did not come through one of the issue forms, so a few details may be missing. " +
+                "If it is a bug, please edit it to include the Brk version and commit, your macOS version, Apple silicon or Intel, " +
+                "the steps, what you expected and what happened. In Brk, Help › Report a Bug… opens a form with most of that filled in.";
+            } else if (missing.length) {
+              text = "Thanks for the report! To help reproduce it, could you edit the issue to add:\n\n" +
+                missing.map((item) => `- ${item}`).join("\n");
+            }
+            if (text) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issue.number,
+                body: `${text}\n\n<sub>This is an automatic first reply; a person reads every issue.</sub>`,
+              });
+            }

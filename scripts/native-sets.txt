@@ -51,6 +51,7 @@ windows W2-7
 windows R36-LittleEntry
 windows PB3
 windows SettingsQuit
+windows HelpReport
 
 # profiles：设置窗口、Profile、无痕、站点数据
 profiles W2-1
