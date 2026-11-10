@@ -1,94 +1,139 @@
-<img src="assets/icon.png" width="64" height="64" alt="Brk barking B logo">
+<p align="center">
+  <img src="assets/icon.png" width="128" height="128" alt="Brk">
+</p>
 
-# Brk
+<h1 align="center">Brk</h1>
 
-**Arc, but better.**
+<p align="center">
+  <b>Arc, but better.</b><br>
+  The Arc browser, rebuilt natively for macOS, with a Raycast-style command bar<br>
+  and AI that runs on your Mac and on the subscription you already have.
+</p>
 
-Brk is a native macOS rebuild of the Arc browser, version 1.170. It is written in Swift 6 and AppKit and runs on the Chromium Embedded Framework (CEF 154). It follows Arc feature by feature and pixel by pixel. The sizes, colours, timings and rules come from Arc's own binary, and Brk's screens are compared with the real Arc on the same display.
+<p align="center">
+  <a href="https://github.com/cyang2020/brk/releases/latest"><img src="https://img.shields.io/badge/Download-for%20Mac-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac"></a>
+</p>
 
-The feature ledger (`docs/completion/features.json`) lists 148 Arc features. 124 of them are marked verified, and the other 24 are listed under "Not in Brk yet" below with their reasons. On top of the replica, Brk adds 58 features of its own. Most of them are AI features that run on the Claude Code or Codex you already have installed. Brk has no account and no sign-in.
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-Apple%20silicon%20%26%20Intel-555?style=flat-square" alt="Apple silicon and Intel">
+  <img src="https://img.shields.io/badge/Swift%206-AppKit-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 6, AppKit">
+  <img src="https://img.shields.io/badge/engine-Chromium%20154-4285F4?style=flat-square&logo=googlechrome&logoColor=white" alt="Chromium 154">
+  <img src="https://img.shields.io/badge/account-none%20needed-2ea44f?style=flat-square" alt="No account">
+</p>
 
-The first version (October 2026) was an Electron app. It is kept at the git tag `electron-v1` and is no longer developed.
+<p align="center">
+  <a href="#t-upgraded">⌘T, upgraded</a> ·
+  <a href="#everyday-upgrades">Everyday upgrades</a> ·
+  <a href="#ai-on-your-mac">AI on your Mac</a> ·
+  <a href="#more-ai-better-than-dia">More AI</a> ·
+  <a href="#arc-pixel-for-pixel">Arc, pixel for pixel</a> ·
+  <a href="#not-in-brk-yet">Not yet</a>
+</p>
 
-## Arc and Brk side by side
+<p align="center">
+  <img src="docs/media/ai-panel-answer.png" width="900" alt="Brk with the sidebar, a Wikipedia page and the AI panel answering with a table">
+</p>
 
-![Arc 1.170 on the left and Brk on the right, showing the same window](docs/media/arc-brk-window.png)
+Everything you know from Arc is here: the sidebar, Spaces, Favorites, Pinned tabs, split view, Little Arc, Peek, Boosts, the Library, the command bar and the shortcuts. Brk rebuilds Arc 1.170 feature by feature, from Arc's own measurements. On top of that it adds the things Arc never had.
 
-Arc 1.170 is on the left and Brk is on the right. Both windows are the same size and show the same test pages. A script compares the two pictures pixel by pixel, and 0.14% of the pixels differ. The clearest visible difference is Arc's "New Arc Version Available" button at the bottom of the sidebar, because Brk has no updater.
+---
 
-## Why it's better
+## ⌘T, upgraded
 
-### AI on your own Claude Code or Codex, with no account
+<p align="center">
+  <img src="docs/media/cmdt-quick-actions.gif" width="800" alt="Quick actions in the command bar">
+</p>
 
-![Brk's Max settings: Claude as the local AI tool, Haiku 5.5 for the model and for basic features, and the two optional models on this Mac](docs/media/local-agents-and-models.png)
+Inspired by Raycast, the command bar does much more than open pages. Type, and the answer is already there. Type a word and press **Tab** to switch the bar into a mode.
 
-Brk runs the coding agent that is already installed on the Mac, either Claude Code or Codex, under the account you are already signed in to. You don't need an API key or an account with Brk. The picture shows Settings → Max with Claude Code 2.1.318 signed in. Haiku 5.5 is set for conversations and for the "basic features". Basic features are small jobs, such as naming tabs, groups and conversations, that go to a small model with a JSON schema. The tab names in the demo pictures below, such as "Perseverance Rover Wikipedia Article", were written that way. If you would rather pay per token, Settings also takes an Anthropic or OpenAI API key and keeps it in the macOS Keychain. The two models under "On This Mac" are covered in "Local models" below.
+| Type | You get |
+| --- | --- |
+| `2^10 * 3`, `15% of 240` | The answer in the bar. Return copies it. |
+| `100 usd in eur`, `5 km in miles`, `time in tokyo` | Currency, unit and time-zone conversions. |
+| `file` + Tab, then a name | Files on your Mac by name, from the Spotlight index in about a tenth of a second. Return opens, ⌘Return reveals in Finder, ⌥Return copies the path. |
+| `app` + Tab, or just the app's name | Open any app. |
+| `emoji` + Tab | Find an emoji and copy it. |
+| `translate` + Tab | Translate text, or the whole page. |
+| `define` + Tab | The macOS dictionary. |
+| `color` + Tab, or `#ff5500` | A colour in hex, RGB and HSL. |
+| `window` + Tab, or `left half` | Put the window on a half, centre it, maximise it or move it to the next display. |
+| `split` + Tab | Open a tab or a page beside the current one. |
+| `claude`, `gpt`, `gemini`, `cursor` + Tab | Ask that agent, with the current tab attached. |
+| `page`, `summarize` + Tab | Ask about the page you are on, or summarise it. |
+| A site's name + Tab | Search inside that site. |
+| A command, such as `dark mode` or `new space` | Run it. Every menu command is reachable by name. |
+| Words from an old AI conversation | Find the conversation and continue it. |
 
-### Conversations that use your tabs
+Most modes also answer to Chinese words: 问, 翻译, 查, 分屏, 窗口, 文件, 应用, 表情, 算, 颜色.
 
-![The AI panel on the right answering a question about two open Wikipedia tabs with a table](docs/media/ai-panel-answer.png)
+The ordinary results (open tabs, history, suggestions, top sites) are ranked by a port of Arc's own scoring, so the first row is the one Arc would pick. It learns from you: pages you type often and commands you run rise to the top.
 
-The AI panel is a column on the right of the window, drawn in the Space's own theme colours. Here Claude (Haiku 5.5) got two Wikipedia tabs and the question shown at the top. Claude read both tabs and answered with a table and links back to the two tabs. The small model named the conversation "Mars Rover Comparison Table".
+## Everyday upgrades
 
-The agent works on the browser through Brk's own tools. With them it can list, search, read, open, focus, close, move, group and split tabs, and read earlier conversations. Brk saves every conversation. Each Space has its own list of conversations, which you reach with a swipe or the list icon. You can also find a conversation from the command bar or the Library, and continue it on another day. ⌥⌘A, the chat button at the right end of the sidebar's top row, or View › Show AI Conversations opens the panel. You can drag the panel wider, up to half the window.
+<p align="center">
+  <img src="docs/media/library-download-flight.gif" width="800" alt="A download flies into the Library button, and resting on the button lists recent downloads">
+</p>
 
-### Drag tabs in, or type @
+**Downloads where you look.** A new download flies from your click into the Library button. Rest the pointer on the button to see your four newest downloads and captures, with progress, preview and drag-out.
 
-![Dragging a tab to the window's right edge opens the panel, and a second tab dragged onto the panel becomes a second chip](docs/media/ai-drag-tabs.gif)
+<p align="center">
+  <img src="docs/media/side-buttons-spaces.gif" width="800" alt="Mouse side buttons step through Spaces over the sidebar">
+</p>
 
-While the panel is closed, a tab dragged to the window's right edge shows a dashed drop area, and letting go opens a new conversation with that tab attached. A second tab dragged onto the open panel joins it as a second chip. You can also attach tabs by typing @ and part of a tab's name in the input, or by choosing Ask AI on a tab, folder, selection or Space.
+**Your mouse works everywhere.** Back and forward buttons and mouse-driver swipes go back and forward over a page and switch Spaces over the sidebar. ⇧⌘] and ⇧⌘[ step through tabs, and a middle-click on a tab closes it.
 
-### See which tabs a conversation used
+## AI on your Mac
 
-![The pointer moves over two conversations in the list, and each one lights its own two tabs in the sidebar](docs/media/ai-hover-tabs.gif)
+<p align="center">
+  <img src="docs/media/local-agents-and-models.png" width="800" alt="Settings: Claude Code as the AI, and the models on this Mac">
+</p>
 
-When the pointer rests on a conversation in the list, the tabs that conversation used light up in the sidebar, and the row says "Used 2 tabs". "Used" means tabs you gave it and tabs the agent read, opened or showed. Here the first conversation was about Ingenuity and Mars Sample Return, and the second about Perseverance and Curiosity.
+**No new subscription.** Brk uses the Claude Code or Codex already installed on your Mac, signed in to the Claude or ChatGPT plan you already pay for. No API key and no Brk account.
 
-### AI pages that update themselves
+**The small jobs never leave your Mac.** Naming tabs and groups, tidying Today into groups and spotting duplicate tabs can run on small models on your Mac (Settings → Max → On This Mac). They don't call a large model, cost nothing and keep working offline.
 
-![A page made by the agent and kept as a tab: two bar charts and three facts per rover, with "Daily at 09:00" in its top row](docs/media/ai-page.png)
+<p align="center">
+  <img src="docs/media/search-by-meaning.png" width="700" alt="The command bar finding a tab by what it is about">
+</p>
 
-The agent can make a page instead of a text answer, and you can keep that page as a tab in the sidebar. Claude made this page from the two rover tabs after one request, "Make a small page comparing these two rovers ... Keep it as a tab that refreshes every day." Claude set the schedule itself, shown as "Daily at 09:00" in the page's top row. The button at the top right of the page goes back to the conversation that made it.
+**Search by meaning.** Type what a page was about, not its title, and the command bar finds the tab or the page you visited. The index lives on your Mac.
 
-A kept page can refresh every hour, every day or every week, or when you choose Refresh Now from the row's menu. When a refresh changes the data, a dot appears on the sidebar row. Brk saves the ticks and notes you make inside a page, and you can set a page to show in Today only on chosen days. A scheduled refresh can only read your tabs and update the page's data. It cannot run commands or open new addresses. Pages the agent writes run in a WebKit sandbox with no network.
+## More AI (better than Dia)
 
-### Safety around agents
+<p align="center">
+  <img src="docs/media/ai-drag-tabs.gif" width="800" alt="Dragging tabs into the AI panel">
+</p>
 
-![An approval card in the panel: "Claude wants to run a command", the command, and Deny and Allow buttons](docs/media/approval.png)
+**An agent that can see your tabs.** Open the AI panel with ⌥⌘A, or drag a tab to the right edge of the window. Drag in more tabs, or type @ and part of a tab's name. The agent reads them, compares them, and can open, close, group, move and split tabs for you.
 
-Once page text is part of a conversation, every tool outside Brk's own asks first, each time, and the allow rules in your own Claude settings do not apply. Here Claude wanted to run `ls` and `find` in a conversation that had a Wikipedia tab attached. After Deny, it said it had not run the search. Brk's own tools that change your layout ask too. A request to put four tabs side by side came with Deny, Allow in This Conversation and Allow. An address the agent has not visited before also asks before it opens.
+<p align="center">
+  <img src="docs/media/ai-hover-tabs.gif" width="800" alt="Hovering a conversation lights up the tabs it used">
+</p>
 
-Before page text reaches the agent, Brk checks it for instructions written to an AI. Fixed phrase patterns run first. After that, a short page is read by JevK5 on this Mac and a long page by the small model. If a page is flagged, every tool in that conversation asks first, and if the check cannot finish, Brk treats the page as unsafe.
+**Every conversation is kept, per Space.** Come back tomorrow and carry on. Rest the pointer on a conversation and the tabs it used light up in the sidebar.
 
-### Cmd+T quick actions
+<p align="center">
+  <img src="docs/media/ai-page.png" width="800" alt="An AI page saved as a tab">
+</p>
 
-![The command bar answering a sum, a unit conversion, the time in Tokyo, a colour, an emoji and a dictionary entry](docs/media/cmdt-quick-actions.gif)
+**Pages that keep themselves up to date.** Ask for a price watch or a weekly reading list. The agent builds a page, you save it as a tab, and it refreshes itself on the schedule you pick. Tick things off and take notes right in it.
 
-The ⌘T bar answers many queries without opening a page. It does sums, unit conversions, the time in other cities and colours (`#ff5500` also gives its rgb and hsl values). A prefix word followed by Tab switches the bar to that prefix: `emoji`, `define` (the macOS dictionary, offline), `translate` (answered by the agent) and `window` (places Brk's window, for example on the left half). Typing an app's name opens the app. Pressing Tab on ordinary text sends it to the agent ("Ask Claude").
+<p align="center">
+  <img src="docs/media/approval.png" width="700" alt="An approval card in the AI panel">
+</p>
 
-### Local models
+**You stay in charge.** Page text is checked for hidden instructions before an agent sees it, and once a conversation has read a page, every tool the agent wants to run waits for your OK.
 
-![The command bar finding the National Geographic tab for the query "wildlife magazine"](docs/media/search-by-meaning.png)
+## Arc, pixel for pixel
 
-Settings → Max offers two optional downloads that run on the Mac in a llama.cpp helper: EmbeddingGemma 2 (310 MB) and JevK5 4B (2.7 GB). What they read never leaves the Mac. EmbeddingGemma 2 finds tabs, history and archived tabs by meaning. In the picture, "wildlife magazine" finds the open National Geographic tab, although the two share no word. JevK5 answers yes/no questions, such as "is this a duplicate?" and the short-page safety check.
+<p align="center">
+  <img src="docs/media/arc-brk-window.png" width="900" alt="Arc 1.170 on the left, Brk on the right">
+</p>
 
-With both models downloaded and no agent and no key, Tidy, new-tab placement and duplicate finding still work. Tidy is coarser without a text model, though. In the plan's measurements its groups matched hand-made ones at 0.54 to 0.62, against 0.84 to 0.93 for Haiku, and in one run it put eight developer tabs into a single group, "For Developers".
+Arc 1.170 on the left, Brk on the right, same window and same pages: 0.14% of the pixels differ, and the visible one is Arc's update button. Sizes, colours, timings and rules are read from Arc's own app and compared with the real Arc on the same screen. Of the 148 Arc features in the ledger (`docs/completion/features.json`), 124 are verified.
 
-### Arc details rebuilt recently
-
-![A download's icon flies from the Download button into the Library button, and resting on the Library button then lists the recent downloads](docs/media/library-download-flight.gif)
-
-**Library button.** When a download starts, its icon flies from the point you clicked into the Library button at the bottom left, on the path and timing measured in Arc. Resting the pointer on the button lists the newest downloads and captures above it, as in Arc. In the picture, a click on Wikipedia's "Download as PDF" button starts the download, and the list then shows four PDFs.
-
-![Mouse side buttons over the sidebar step from the Research Space to Code, to Home, and back](docs/media/side-buttons-spaces.gif)
-
-**Mouse side buttons.** With the pointer over the sidebar, the back and forward buttons on the mouse step through the Spaces, as they do in Arc. Over a page, they go back and forward in history.
-
-![The command bar for "doc" in Arc on the left and in Brk on the right](docs/media/arc-brk-command-bar.png)
-
-**Command bar ranking.** Brk ranks the command bar's rows with Arc 1.170's own scoring, using the same 21 signals, weights and boosts, read from Arc's binary. The check typed 39 sets of queries into the real Arc, and Brk's order matches Arc's for most of them. The picture shows where it still differs. For "doc", the first three rows are the same in both. Below them, Arc lists the MDN Favorite twice where Brk lists a visited page and a search, and Arc's first row shows Google's icon where Brk's shows a globe.
-
-## Not in Brk yet
+<details id="not-in-brk-yet">
+<summary><b>Not in Brk yet</b></summary>
 
 These are the 24 Arc features that Brk has not verified, with the reasons recorded in the ledger, followed by two smaller gaps.
 
@@ -134,7 +179,10 @@ These are the 24 Arc features that Brk has not verified, with the reasons record
 - **Little Arc's download pill.** Being built now.
 - **macOS screenshots in the Library list.** Listing them needs permission for the Desktop folder, so the list shows only Brk's own captures.
 
-## Build and run
+</details>
+
+<details>
+<summary><b>Build from source</b></summary>
 
 Needs macOS on Apple silicon and Xcode with Swift 6. The first build downloads CEF (132 MB).
 
@@ -144,7 +192,7 @@ SKIP_TESTS=1 scripts/build.sh    # the same without the unit tests
 open dist/Brk.app
 ```
 
-## Test
+Tests:
 
 ```sh
 swift test                                            # unit tests
@@ -152,11 +200,12 @@ swift build -c release --product brk-e2e
 python3 scripts/run-native.py <name> --set smoke      # native scenarios with real input on a real launch
 ```
 
-Which tests a change adds, and what runs before a merge, is in `docs/testing-policy.md`. Test evidence (pictures, logs, reports) stays outside the repository.
+Which tests a change adds, and what runs before a merge, is in `docs/testing-policy.md`.
 
-## Layout
+- `Sources/`: the SwiftPM targets. `Brk` is the app; `BrkDomain` holds the state and its rules; `BrkSidebar`, `BrkContent`, `BrkOverlays`, `BrkLibrary` and `BrkSettings` are the UI; `BrkCEF` is the CEF engine.
+- `engine/`: Brk's own Chromium build, experimental. CEF is the shipped engine.
+- `docs/`: the design (`docs/design/`), Arc facts (`docs/arc-anatomy/`), the feature ledger and the testing rules.
 
-- `Sources/`: the SwiftPM targets. `Brk` is the app. `BrkDomain` holds the state and its rules. `BrkSidebar`, `BrkContent`, `BrkOverlays`, `BrkLibrary` and `BrkSettings` are the UI. `BrkCEF` is the CEF engine, `BrkCoreEngine` runs Brk's own Chromium build, and `BrkE2E` drives native scenarios.
-- `engine/`: Brk's own Chromium build (BrkCore.framework) and its patch series. CEF stays the default engine.
-- `docs/`: the design (`docs/design/`, with the AI plan in `docs/design/ai-native.md`), Arc facts read from the binary (`docs/arc-anatomy/`), the feature ledger (`docs/completion/features.json`), the testing rules (`docs/testing-policy.md`) and the pictures on this page (`docs/media/`).
-- `scripts/`: the build, the native scenario runner and the station, which compares Brk's screens with Arc's on the same display.
+The first version (October 2026) was an Electron app, kept at the tag `electron-v1`.
+
+</details>
