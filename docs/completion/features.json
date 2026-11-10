@@ -4707,6 +4707,13 @@
           "command": "python3 scripts/run-native.py gate-batch2 --set downloads",
           "artifact": "docs/checks/2026-11-10-library-flyout-and-input.md",
           "scope": "Downloads also show in the Library button's hover list (LibraryFlyout-Hover, LibraryFlyout-Running)."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/run-native.py <name> --set smoke,downloads,windows",
+          "artifact": "docs/arc-anatomy/little-arc-downloads.md",
+          "scope": "After a download Brk shows no card, like Arc 1.170 (Chromium's download bubble is off per profile); staged files carry the real name, so nothing shows 'payload'. TransfersTests.testStagedFileCarriesTheDestinationName; LittleDownloads-Pill checks no new window appears after a download."
         }
       ],
       "remaining": [
@@ -8368,7 +8375,7 @@
       "description": "Links from other apps, global hotkey, Opt+Cmd+click, menu bar item",
       "historical_status": "planned",
       "status": "verified",
-      "acceptance": "External links, global hotkey, Option+Cmd link click and menu-bar entry can open Little Brk, with correct destination profile and private-link protections.",
+      "acceptance": "External links, global hotkey, Option+Cmd link click and menu-bar entry can open Little Brk, with correct destination profile and private-link protections. Downloads in Little Arc show Arc's pills: 250 x 56 at 20, 20 from the bottom left, one sideways row, progress ring and text, the kind when done, x on hover (cancels a running one), a click opens a finished file.",
       "owner": "platform-grounding",
       "required_checks": [
         "unit",
@@ -8416,6 +8423,13 @@
           "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock -- python3 /tmp/brk-manual/session.py e08d09d99e:verify/completion/review-r4/manual/parent-session-3  # 脚本副本在同目录 session.py",
           "artifact": "e08d09d99e:verify/completion/review-r4/manual/parent-session-3/session.log",
           "scope": "父任务手工会话：从 shell 用 open -a <本实例的 app 包> 发一条 http 链接，本实例新开一个 Little 窗口显示该页（截图 A085-external-link.png，窗口顶部 Open in 对照 ⌘O）。默认浏览器未改。"
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/run-native.py <name> --set smoke,downloads,windows",
+          "artifact": "docs/arc-anatomy/little-arc-downloads.md",
+          "scope": "LittleDownloads-Pill: two real downloads by real clicks in a real Little Arc window; pill place, size, name, progress, kind, hover x and its click. LittleDownloadsTests."
         }
       ],
       "remaining": [
