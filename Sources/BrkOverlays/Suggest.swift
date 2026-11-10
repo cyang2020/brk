@@ -443,7 +443,6 @@ public enum Suggest {
         for saved in matching(bar.bookmarks, needle, texts: { [$0.title, $0.url.absoluteString] }).prefix(tabCandidates) {
             var candidate = page(.tab, url: saved.url, title: saved.title, hotWords: words(saved.title))
             candidate.isFavorite = saved.isFavorite
-            candidate.features[.lastNavigated] = since(saved.visitedAt)
             candidate.features[.saveLevel] = saved.saveLevel.map(Double.init)
             let row = Suggestion(kind: .bookmark, title: saved.title, subtitle: nil, symbol: "bookmark", favicon: nil, hint: nil,
                                  command: .commandBar(.submit(saved.url.absoluteString)))

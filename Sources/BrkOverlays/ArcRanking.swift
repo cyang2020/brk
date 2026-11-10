@@ -386,10 +386,10 @@ public enum ArcRanking {
     ///   exactURL and baseDomain, never exactBaseDomain.
     /// - exactHotWord: the lowercased query is one of the hot words.
     /// - autocompleteDefault (rows that open a page or run a command) and autocompleteSearchOnly (searches): the input, as
-    ///   Chromium's inline completion leaves it (`input`: "time" completed to "time.com"), is the row's text (a search) or
-    ///   is or starts with it (a row that opens a page). So the completed site, or else the text as typed, gets it; a
-    ///   suggestion does not (Arc keeps "visual field" above "visual fixation" for "visual fix", and "ETS" in its place
-    ///   when "etsy" completes to etsy.com).
+    ///   Chromium's inline completion leaves it (`input`: "time" completed to "time.com"), is or starts with the row's
+    ///   text (a row that opens a page), or the row is the search as typed. So the completed site and the text as typed
+    ///   get it; a suggestion does not (Arc keeps "visual field" above "visual fixation" for "visual fix", and "ETS" in
+    ///   its place when "etsy" completes to etsy.com).
     /// - chromiumSpecialSearchFunction: Chromium's second row, for a `word:word` query.
     /// - customTitlePrefix: a tab's own title starts with the query.
     /// - veryRecentTabOrDocumentBoost: a tab used in the last hour. topApp: a Favorite.
@@ -415,7 +415,7 @@ public enum ArcRanking {
         if candidate.hotWords.contains(where: { $0.lowercased() == q }) { out.append(.exactHotWord) }
         let text = candidate.autocompleteText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         if candidate.archetype.isSearch {
-            if !text.isEmpty, shown == text { out.append(.autocompleteSearchOnly) }
+            if !text.isEmpty, q == text || shown == text { out.append(.autocompleteSearchOnly) }
         } else if !text.isEmpty, shown == text || shown.hasPrefix(text) {
             out.append(.autocompleteDefault)
         }
