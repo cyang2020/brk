@@ -55,6 +55,8 @@ public struct LibraryFlyoutSnapshot: Sendable, Equatable, Codable {
     /// newest first); nil while no preview is open.
     public var preview: LibraryFlyoutItem? = nil
     public var previewSequence: [LibraryItemKey] = []
+    /// Downloads that started in the window lately, oldest first: the view throws each new one's icon once.
+    public var flights: [DownloadFlight] = []
 }
 
 extension LibraryFlyoutItem {
@@ -85,6 +87,7 @@ extension AppState {
         let items = Array(all.prefix(Metrics.libraryFlyout.rows.value).reversed())
         let badge = session.libraryBadges[profile].flatMap { key in all.first { $0.key == key } }
         var snapshot = LibraryFlyoutSnapshot(items: items, badge: badge)
+        snapshot.flights = session.windows[window]?.downloadFlights ?? []
         if let key = session.windows[window]?.itemPreview, let item = all.first(where: { $0.key == key }) {
             snapshot.preview = item
             snapshot.previewSequence = Array(all.prefix(Metrics.libraryFlyout.rows.value)).map(\.key)
@@ -124,6 +127,13 @@ extension Work {
             }
         case .preview(let key):
             state.session.windows[window]?.itemPreview = key
+        case .openSource(let key):
+            guard case .capture(let id) = key,
+                  let record = state.session.captures.records.first(where: { $0.id == id && $0.profile == profile }),
+                  isOpenableURL(record.url), let doc = state.doc.windows[window] else { return }
+            state.session.windows[window]?.itemPreview = nil
+            if doc.kind == .standard { openTab(record.url, inSpace: doc.space, window: window, focus: true) }
+            else { openScratchTab(record.url, in: window, focus: true) }
         case .trash(let key):
             switch key {
             case .download(let id):

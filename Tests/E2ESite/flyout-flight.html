@@ -1,0 +1,7 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Flight</title>
+<!-- LibraryFlyout-Flight: one large link to a site file sent as an attachment (?file=, default notes.txt). -->
+<style>html,body{margin:0;height:100%;background:#fff}a{position:absolute;left:35%;top:40%;width:30%;height:20%;background:#3060c0;color:#fff;display:flex;align-items:center;justify-content:center;font:18px -apple-system,sans-serif;text-decoration:none}</style>
+<a id="get" href="/attach/flyout/notes.txt">download</a>
+<script>const f = new URLSearchParams(location.search).get('file'); if (f) document.getElementById('get').href = '/attach/flyout/' + f;</script>

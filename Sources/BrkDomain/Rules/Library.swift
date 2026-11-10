@@ -151,6 +151,7 @@ extension Work {
                                                 startedAt: ctx.now, profile: profile), at: 0)
             index = 0
             offerLibraryBadge(.download(update.id), profile: profile, date: ctx.now)
+            startDownloadFlight(update.id, in: page.window)
         }
         state.session.downloadRevisions[update.id] = update.revision
         switch update.stage {
