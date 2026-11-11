@@ -24,7 +24,8 @@ final class ImportRulesTests: XCTestCase {
         "BrkContent": ["BrkBase", "BrkDomain", "BrkLayout", "BrkTheme", "BrkUIKit", "BrkSidebar", "BrkOverlays", "BrkLibrary", "AppKit", "Foundation", "CoreGraphics", "WebKit", "QuickLookUI"],
         "BrkControl": ["BrkBase", "BrkDomain", "BrkLayout", "Foundation", "CoreGraphics"],
         "BrkLocalModels": ["BrkBase", "Foundation", "CryptoKit", "Accelerate"],
-        "BrkApp": ["NaturalLanguage", "PDFKit", "Carbon", "CoreServices", "UserNotifications", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "LocalAuthentication", "Security", "os"],
+        "BrkImport": ["BrkBase", "BrkDomain", "Foundation", "SQLite3", "CommonCrypto"],
+        "BrkApp": ["NaturalLanguage", "PDFKit", "Carbon", "CoreServices", "UserNotifications", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "BrkImport", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "LocalAuthentication", "Security", "os"],
         "Brk": ["BrkApp", "BrkBase", "BrkCEF", "BrkCoreEngine", "BrkEngine", "AppKit", "Foundation"],
         "BrkCoreEngine": ["PDFKit", "BrkBase", "BrkEngine", "CBrkCore", "AppKit", "Foundation", "os"],
         // BrkCore.framework's interface: an Objective-C header, no Swift.

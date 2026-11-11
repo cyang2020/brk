@@ -28,7 +28,7 @@ enum BrkTour {
       ['Give work a Space','Use the + button at the bottom of the sidebar to create a Space. Each Space keeps its own Pinned and Today tabs. Profiles keep browsing data separate.'],
       ['Read side by side','Press <kbd>⌃⇧=</kbd> to add a split pane, then enter another address. Click a pane before using page commands.'],
       ['Close and restore','Press <kbd>⌘W</kbd>. Today tabs move to Archive; Pinned tabs stay in the sidebar. Use the Library to restore an archived tab or inspect History and Downloads.'],
-      ['Bring your sidebar','Use Brk → Import from Another Browser to preview exported files. Preferences → General → Sidebar Data connects a local folder. Use Share… to save selected links as JSON or HTML.']
+      ['Bring your sidebar','Use Brk → Import from Another Browser… to bring bookmarks, history, passwords and logins from Arc, Chrome, Safari, Firefox and others. Preferences → General → Sidebar Data connects a local folder. Use Share… to save selected links as JSON or HTML.']
     ];
     let step=0;
     function show(){document.querySelector('#demo').innerHTML='<h2>'+steps[step][0]+'</h2><p>'+steps[step][1]+'</p>';document.querySelector('#count').textContent='Step '+(step+1)+' of 6';document.querySelector('#progress').value=step+1;document.querySelector('#back').disabled=step===0;document.querySelector('#next').textContent=step===5?'Finish tour':'Continue';}

@@ -181,7 +181,17 @@ final class AppUnderTest {
         environment["BRK_TEST_CLOCK"] = "1"
         environment["BRK_TEST_FILE_PANEL_DIRECTORY"] = dataDirectory.path
         if let remoteDebuggingPort { environment["BRK_REMOTE_DEBUGGING_PORT"] = String(remoteDebuggingPort) }
-        if scenarioID != "ImportSync-Onboarding" { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
+        if !["Onboarding-Import", "Onboarding-RealArc"].contains(scenarioID) { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
+        if scenarioID == "Onboarding-Import" {
+            // A made-up Chrome profile under this run's folder; the source key is a fixture password, never the keychain.
+            environment["BRK_TEST_IMPORT_ROOT"] = try OnboardingScenarios.makeChromeFixture(in: dataDirectory, site: site).path
+            environment["BRK_TEST_IMPORT_KEY"] = OnboardingScenarios.fixtureKey
+        }
+        if scenarioID == "Onboarding-RealArc" {
+            // Opt-in: reads this Mac's real Arc profile (copies only) into this run's own data folder.
+            guard ProcessInfo.processInfo.environment["BRK_E2E_REAL_IMPORT"] == "1" else { throw Skipped(description: "opt-in: set BRK_E2E_REAL_IMPORT=1 to import this Mac's Arc profile") }
+            environment["BRK_TEST_IMPORT_ROOT"] = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true).path
+        }
         if scenarioID == "I5" { environment["BRK_MAIN_FRAME_TRACE"] = dataDirectory.appendingPathComponent("main-frame-trace.jsonl").path }
         if scenarioID.hasPrefix("QuickBar") {
             environment["BRK_LOCAL_SEARCH_FIXTURE"] = QuickBarScenarios.fixtureFolder(self).path
@@ -503,6 +513,15 @@ final class AppUnderTest {
         guard case .screenshot(_, let w, let h) = result else { throw Check(description: "screenshot answered \(Self.describe(result))") }
         if !screenshots.contains(url) { screenshots.append(url) }
         return (url, w, h)
+    }
+
+    /// Any visible window of the app by window number (the onboarding window), as `<scenario>-<name>.png`.
+    @discardableResult
+    func windowScreenshot(_ name: String, number: Int) throws -> URL {
+        let url = shotsDirectory.appendingPathComponent("\(scenarioID)-\(name).png")
+        guard case .screenshot = try send(.mediaWindowScreenshot(number: number, path: url.path)) else { throw Check(description: "window capture failed") }
+        if !screenshots.contains(url) { screenshots.append(url) }
+        return url
     }
 
     @discardableResult

@@ -3,6 +3,7 @@ import BrkBase
 import BrkDomain
 import BrkEngine
 import BrkContent
+import BrkControl
 import BrkLayout
 import BrkSettings
 import os
@@ -107,7 +108,19 @@ public final class AppStore {
         self?.dispatch(.system(.sidebarData(event)))
     }, command: { [weak self] window, command in
         self?.dispatch(.user(window, command))
-    }, target: { [weak self] window in self?.state.sidebarImportTarget(in: window) })
+    }, target: { [weak self] window in self?.state.sidebarImportTarget(in: window) }, now: { [clock] in clock.now() })
+    /// The first-run onboarding window and the Import from Another Browser… window.
+    private lazy var onboarding = OnboardingController(host: .init(
+        snapshot: { [unowned self] in self.snapshot },
+        target: { [weak self] window in self?.state.sidebarImportTarget(in: window) },
+        dispatch: { [weak self] input in self?.dispatch(input) },
+        engine: engine,
+        now: { [clock] in clock.now() },
+        showBrowserWindow: { [weak self] id in
+            guard let window = self?.windows[id]?.window else { return }
+            window.makeKeyAndOrderFront(nil)
+            self?.inputWindow = window
+        }))
     private let spacePanels = SpaceToolsPanels()
     private var appearanceObservation: NSKeyValueObservation?
     let sounds = SoundEffects()
@@ -185,6 +198,15 @@ public final class AppStore {
             if snapshot.sidebarData.needsOnboarding { dispatch(.user(window, .sidebarData(.welcome))) }
             else { dispatch(.system(.sidebarData(.syncPoll))) }
         }
+    }
+
+    /// The onboarding or import window's facts, for the control socket.
+    func onboardingFacts(activate: Bool) -> OnboardingFacts {
+        if activate, let window = onboarding.window {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        }
+        return onboarding.facts()
     }
 
     /// Every user command, system event and page event enters here.
@@ -344,6 +366,7 @@ public final class AppStore {
     private func quitNow() {
         // AppKit can defer termination while a save sheet remains attached.
         sidebarPanels.cancelForQuit()
+        onboarding.close()
         exports.cancelAll()
         spacePanels.cancelAll()
         Quit.request()
@@ -450,7 +473,8 @@ public final class AppStore {
                 : WindowController(id: id, kind: kind, engine: engine, send: send, routeKey: routeKey)
             windows[id] = controller
             controller.place(snapshot.windows[id]!)
-            controller.window.makeKeyAndOrderFront(nil)
+            // On first run the onboarding window comes first (Arc's Unboxing); the browser window shows when it finishes.
+            if !(snapshot.sidebarData.needsOnboarding && windows.count == 1) { controller.window.makeKeyAndOrderFront(nil) }
             inputWindow = controller.window
         }
         renderWindows()
@@ -842,6 +866,11 @@ public final class AppStore {
         guard !sidebarShuttingDown else { return }
         switch effect {
         case .panel(let owner, let panel):
+            if panel == .importBrowser || (panel == .welcome && snapshot.sidebarData.needsOnboarding) {
+                guard windows[owner] != nil else { return }
+                onboarding.open(mode: panel == .welcome ? .firstRun : .importOnly, owner: owner)
+                return
+            }
             guard let window = windows[owner]?.window else { return }
             sidebarPanels.show(panel, owner: owner, window: window, status: snapshot.sidebarData)
         case .importSelected(let owner, let url, let format, let target):

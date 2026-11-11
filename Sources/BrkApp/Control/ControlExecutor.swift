@@ -104,6 +104,7 @@ final class ControlExecutor {
     private func execute(_ op: ControlOp) async throws -> ControlResult {
         switch op {
         case .sidebarData: return .sidebarData(store.snapshot.sidebarData)
+        case .onboarding(let activate): return .onboarding(store.onboardingFacts(activate: activate))
         case .sidebarPanel(let owner, let action):
             let window = try controller(owner).window
             return try await SidebarPanelControl.run(action, in: window)

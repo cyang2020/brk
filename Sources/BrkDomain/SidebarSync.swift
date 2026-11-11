@@ -122,10 +122,18 @@ struct SidebarDataSaved: Sendable, Equatable, Codable {
     /// Missing in existing v3 files means the existing installation already passed first run.
     var onboardingCompleted = true
     var sync: SidebarSyncLocal?
+    /// The name onboarding's "What should we call you?" stored, on this Mac only (Arc's sign-up Name field). Nil: none given.
+    var userName: String? = nil
+    /// Source Space ("arc:<id>") to the Brk Space an import made from it, so importing again fills that Space.
+    var importedSpaces: [String: SpaceID]? = nil
 }
 
 public struct SidebarDataSnapshot: Sendable, Equatable, Codable {
     public var needsOnboarding: Bool
+    /// The local name from onboarding, for "Welcome to Brk, %@".
+    public var userName: String? = nil
+    /// What the last browser import added (this launch only).
+    public var lastImport: BrowserImportSummary? = nil
     public var connected: Bool
     public var status: String
     public var profileName: String?
@@ -139,15 +147,20 @@ public struct OnboardingChoices: Hashable, Sendable, Codable {
     public var tour: Bool
     public var importAfter: Bool
     public var defaultBrowser: Bool
+    /// "What should we call you?": kept on this Mac only; blank stores nothing.
+    public var userName: String = ""
+    /// The Favorites step's picks, added to the profile's Favorites.
+    public var topApps: [ImportNode] = []
     public init(spaceName: String = "Personal", starterTabs: Bool = true, favorites: Bool = true, tour: Bool = true,
-                importAfter: Bool = false, defaultBrowser: Bool = false) {
+                importAfter: Bool = false, defaultBrowser: Bool = false, userName: String = "", topApps: [ImportNode] = []) {
         self.spaceName = spaceName; self.starterTabs = starterTabs; self.favorites = favorites; self.tour = tour
-        self.importAfter = importAfter; self.defaultBrowser = defaultBrowser
+        self.importAfter = importAfter; self.defaultBrowser = defaultBrowser; self.userName = userName; self.topApps = topApps
     }
 }
 
 public enum SidebarDataCommand: Hashable, Sendable, Codable {
-    case welcome, tour, importFile, syncSettings, syncNow, disconnect
+    /// `importBrowser`: Brk > Import from Another Browser… and Settings: the import screens without the rest of onboarding.
+    case welcome, tour, importFile, importBrowser, syncSettings, syncNow, disconnect
     case completeOnboarding(OnboardingChoices)
     /// Post-selection intents, shared by the system picker and explicitly selected URLs.
     case importSelected(URL, format: SidebarImportFormat)
@@ -157,11 +170,13 @@ public enum SidebarDataCommand: Hashable, Sendable, Codable {
     case cancelFilePanel
 }
 
-public enum SidebarPanel: Hashable, Sendable { case welcome, importFile, syncSettings }
+public enum SidebarPanel: Hashable, Sendable { case welcome, importFile, importBrowser, syncSettings }
 
 public enum SidebarDataEvent: Sendable, Equatable {
     case syncPoll
     case imported(WindowID, target: SidebarImportTarget, SidebarImportPreview, favorites: Bool)
+    /// A browser import read and its passwords and cookies written; the rest lands here.
+    case browserImported(WindowID, BrowserImportResult)
     case connected(WindowID, folder: String)
     case syncRead(epoch: String, SidebarSyncDocument)
     case syncWritten(epoch: String, revision: UInt64, published: SidebarSyncDocument)
@@ -186,7 +201,8 @@ extension AppState {
     }
     public var sidebarDataSnapshot: SidebarDataSnapshot {
         let sync = doc.sidebarData.sync
-        return SidebarDataSnapshot(needsOnboarding: !doc.sidebarData.onboardingCompleted, connected: sync?.folder != nil,
+        return SidebarDataSnapshot(needsOnboarding: !doc.sidebarData.onboardingCompleted, userName: doc.sidebarData.userName,
+                                   lastImport: session.browserImportSummary, connected: sync?.folder != nil,
                                    status: session.sidebarDataStatus, profileName: sync.flatMap { doc.profiles[$0.profile]?.name },
                                    excluded: sync.map { syncProjection(profile: $0.profile).excluded } ?? 0)
     }

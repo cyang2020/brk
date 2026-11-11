@@ -190,7 +190,7 @@ extension ActionID {
             entry(3, "Preferences…", .app, 1, [key(cmd, .comma, .page)], .settings(.openPane(.general)), bar: listing("gearshape", "Settings"))
         case .setAsDefaultBrowser: entry(5, "Set as Default Browser", .app, 1, [], .app(.setAsDefaultBrowser), bar: listing("heart", "Default Browser"))
         case .importFromBrowser:
-            entry(6, "Import from Another Browser…", .app, 2, [], .sidebarData(.importFile),
+            entry(6, "Import from Another Browser…", .app, 2, [], .sidebarData(.importBrowser),
                   bar: listing("arrow.turn.right.down", "Import Bookmarks", "Import Settings", "Import Logins", "Import Passwords", "Transfer Bookmarks",
                                "Transfer Settings", "Transfer Logins", "Transfer Passwords", "Bookmarks"))
         case .checkForUpdates: entry(7, "Check for Updates…", .app, 2, [], .app(.help(.checkForUpdates)), bar: listing("sparkles", "Download", "Update", "Check for Updates"))

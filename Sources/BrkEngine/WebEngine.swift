@@ -81,6 +81,9 @@ public protocol WebEngine: AnyObject {
     func cancelSiteData(_ id: String)
     func clearSiteData(_ request: ClearSiteData) async -> ClearSiteDataResult
     func clearProfileData(_ request: ClearProfileData) async -> ClearProfileDataResult
+    /// Import from another browser: sets each cookie in the profile's cookie store (the "stay logged in" part of an
+    /// import) and flushes the store. Answers how many Chromium accepted; throws when the profile cannot take cookies.
+    func importCookies(_ cookies: [ImportedCookie], profile: ProfileID) async throws -> Int
     func setPictureInPicture(_ active: Bool, document: DocumentToken)
     func editExtension(_ id: String, edit: ExtensionEdit, context: BrowsingContext) async -> String?
     func extensionCatalog(context: BrowsingContext) async -> ExtensionCatalog
@@ -225,11 +228,38 @@ extension WebEngine {
     public func clearSiteData(_ request: ClearSiteData) async -> ClearSiteDataResult {
         ClearSiteDataResult(request: request, completed: [], error: "This engine has no website storage")
     }
+    public func importCookies(_ cookies: [ImportedCookie], profile: ProfileID) async throws -> Int {
+        throw CocoaError(.featureUnsupported, userInfo: [NSLocalizedDescriptionKey: "This engine has no cookie store"])
+    }
     public func editExtension(_ id: String, edit: ExtensionEdit, context: BrowsingContext) async -> String? { "This engine has no extensions" }
     public func extensionCatalog(context: BrowsingContext) async -> ExtensionCatalog { ExtensionCatalog(context: context, extensions: [], error: "This engine has no extensions") }
     public func invokeExtension(_ id: String, target: SiteTarget) async -> String? { "This engine has no extension actions" }
     public func removeExtension(_ id: String, context: BrowsingContext, in page: PageID) async -> String? { "This engine has no extensions" }
     public func installExtension(at directory: URL, context: BrowsingContext, in page: PageID) async -> String? { "This engine cannot install extensions" }
+}
+
+/// A cookie read from another browser, for `WebEngine.importCookies`. `domain` is Chromium's host key: ".example.com"
+/// for a domain cookie, "example.com" for a host-only one. A nil `expires` is a session cookie.
+public struct ImportedCookie: Sendable, Hashable {
+    public var domain: String
+    public var name: String
+    public var value: String
+    public var path: String
+    public var expires: Instant?
+    public var creation: Instant?
+    public var lastAccess: Instant?
+    public var secure: Bool
+    public var httpOnly: Bool
+    /// -1 unspecified, 0 none, 1 lax, 2 strict (Chromium's CookieSameSite).
+    public var sameSite: Int
+    /// 0 low, 1 medium, 2 high.
+    public var priority: Int
+    public init(domain: String, name: String, value: String, path: String, expires: Instant?, creation: Instant?, lastAccess: Instant?,
+                secure: Bool, httpOnly: Bool, sameSite: Int, priority: Int) {
+        self.domain = domain; self.name = name; self.value = value; self.path = path; self.expires = expires
+        self.creation = creation; self.lastAccess = lastAccess; self.secure = secure; self.httpOnly = httpOnly
+        self.sameSite = sameSite; self.priority = priority
+    }
 }
 
 /// What `WebEngine.hoveredLink` reports.

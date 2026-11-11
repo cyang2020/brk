@@ -8,6 +8,7 @@ extension Work {
         case .welcome: effects.append(.sidebarData(.panel(window, .welcome)))
         case .tour: effects.append(.sidebarData(.tour(window)))
         case .importFile: effects.append(.sidebarData(.panel(window, .importFile)))
+        case .importBrowser: effects.append(.sidebarData(.panel(window, .importBrowser)))
         case .syncSettings: effects.append(.sidebarData(.panel(window, .syncSettings)))
         case .importSelected(let url, let format):
             guard url.isFileURL, let target = state.sidebarImportTarget(in: window) else { return }
@@ -38,6 +39,9 @@ extension Work {
             if choices.favorites, let root = state.doc.favorites[model.profile] {
                 insertImported([.link(title: "Wikipedia", url: URL(string: "https://www.wikipedia.org/")!)], root: root)
             }
+            if !choices.topApps.isEmpty, let root = state.doc.favorites[model.profile] { insertImportNodes(choices.topApps, root: root) }
+            let person = String(choices.userName.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
+            state.doc.sidebarData.userName = person.isEmpty ? nil : person
             state.session.sidebarDataStatus = "Setup complete."
             if choices.defaultBrowser { effects.append(.app(.registerAsDefaultBrowser)) }
             if choices.tour { effects.append(.sidebarData(.tour(window))) }
@@ -53,18 +57,13 @@ extension Work {
             // Credential writes have already succeeded (or were cancelled) before this event is dispatched.
             let root = favorites ? state.doc.favorites[space.profile] ?? space.pinnedRoot : space.pinnedRoot
             let imported = insertImported(preview.entries, root: root)
-            let existingVisits = state.doc.history.filter { $0.profile == space.profile }
-            let previousHistory = Set(existingVisits.map(\.url))
-            var known = Dictionary(grouping: existingVisits, by: \.url).mapValues { Set($0.map(\.visitedAt)) }
-            for visit in preview.visits.sorted(by: { $0.visitedAt < $1.visitedAt }) where SidebarImport.publicURL(visit.url) && Instant.supported.contains(visit.visitedAt) {
-                guard known[visit.url, default: []].insert(visit.visitedAt).inserted else { continue }
-                state.doc.history.append(HistoryEntry(id: HistoryVisitID(ctx.newID()), url: visit.url, title: visit.title,
-                                                     visitedAt: visit.visitedAt, profile: space.profile))
-            }
-            state.doc.history.sort { $0.visitedAt == $1.visitedAt ? $0.url.absoluteString < $1.url.absoluteString : $0.visitedAt > $1.visitedAt }
+            let previousHistory = Set(state.doc.history.filter { $0.profile == space.profile }.map(\.url))
+            insertVisits(preview.visits, profile: space.profile)
             let addedHistory = Set(state.doc.history.filter { $0.profile == space.profile }.map(\.url)).subtracting(previousHistory).count
             state.session.sidebarDataStatus = "Imported \(imported) bookmarks, \(addedHistory) new history URLs, \(preview.passwords) passwords. Skipped \(preview.rejected) invalid entries and \(preview.bookmarkCount - imported) duplicate or unplaced bookmarks."
             toast(preview.rejected == 0 ? ToastCopy.importSucceeded : ToastCopy.importPartly, in: window)
+        case .browserImported(let window, let result):
+            applyBrowserImport(result, in: window)
         case .connected(let window, let folder):
             guard let w = state.doc.windows[window], w.kind == .standard, let profile = state.doc.spaces[w.space]?.profile,
                   URL(fileURLWithPath: folder).isFileURL, folder.hasPrefix("/") else { return }

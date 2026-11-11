@@ -1,6 +1,7 @@
 import AppKit
 import BrkBase
 import BrkDomain
+import BrkImport
 import Foundation
 import UniformTypeIdentifiers
 
@@ -17,11 +18,13 @@ final class SidebarDataPanels {
     let send: @MainActor (SidebarDataEvent) -> Void
     let command: @MainActor (WindowID, Command) -> Void
     let target: @MainActor (WindowID) -> SidebarImportTarget?
+    let now: @MainActor () -> Instant
 
     init(send: @escaping @MainActor (SidebarDataEvent) -> Void,
          command: @escaping @MainActor (WindowID, Command) -> Void,
-         target: @escaping @MainActor (WindowID) -> SidebarImportTarget?) {
-        self.send = send; self.command = command; self.target = target
+         target: @escaping @MainActor (WindowID) -> SidebarImportTarget?,
+         now: @escaping @MainActor () -> Instant) {
+        self.send = send; self.command = command; self.target = target; self.now = now
     }
 
     func ownerGone(_ id: WindowID) {
@@ -59,6 +62,7 @@ final class SidebarDataPanels {
         switch panel {
         case .welcome: welcome(owner: owner, window: window, needsSetup: status.needsOnboarding)
         case .importFile: chooseImport(owner: owner, window: window)
+        case .importBrowser: break   // AppStore opens the import window instead
         case .syncSettings: sync(owner: owner, window: window, status: status)
         }
     }
@@ -134,8 +138,8 @@ final class SidebarDataPanels {
         SidebarPanelControl.configureTestDirectory(panel)
         let format = NSPopUpButton()
         format.identifier = NSUserInterfaceItemIdentifier("import-format")
-        format.addItems(withTitles: ["Bookmarks HTML", "Bookmarks JSON (Chromium or Brk)", "History JSON (Takeout or array)", "Passwords CSV (local Keychain)"])
-        panel.accessoryView = stack([label("Select the format of the file you exported. Brk never scans browser profiles or reads browser password databases."), format])
+        format.addItems(withTitles: ["Bookmarks HTML", "Bookmarks JSON (Chromium or Brk)", "History JSON (Takeout or array)", "Passwords CSV"])
+        panel.accessoryView = stack([label("Select the format of the file you exported. To read another browser directly, use Import from Another Browser… instead."), format])
         let ticket = UUID()
         operations[owner] = Operation(id: ticket, sheet: panel)
         panel.beginSheetModal(for: window) { [weak self, weak window] response in
@@ -195,23 +199,23 @@ final class SidebarDataPanels {
         let preview = source.preview
         let alert = NSAlert()
         alert.messageText = "Preview \(filename)"
-        alert.informativeText = "\(preview.bookmarkCount) bookmarks, \(preview.visits.count) history entries, \(preview.passwords) passwords.\n\(preview.rejected) invalid entries skipped. Existing bookmarks/history URLs and Keychain entries are deduplicated.\nThe source file stays unchanged. Cancel makes no changes."
+        alert.informativeText = "\(preview.bookmarkCount) bookmarks, \(preview.visits.count) history entries, \(preview.passwords) passwords.\n\(preview.rejected) invalid entries skipped. Existing bookmarks, history URLs and saved passwords are deduplicated.\nThe source file stays unchanged. Cancel makes no changes."
         let destination = NSPopUpButton()
         destination.identifier = NSUserInterfaceItemIdentifier("import-destination")
         destination.addItems(withTitles: ["Pinned in \(captured.title)", "Favorites of this profile"])
         let details = preview.entries.prefix(6).map { entry -> String in
             switch entry { case .folder(let title, _): return "Folder: \(title)"; case .link(let title, let url): return "\(title)  (\(url.host ?? "site"))" }
         }.joined(separator: "\n")
-        alert.accessoryView = stack([destination, label(details.isEmpty ? "History is imported into this Space's profile. Passwords require macOS authentication and are stored in Brk's protected local Keychain collection." : details)])
+        alert.accessoryView = stack([destination, label(details.isEmpty ? "History is imported into this Space's profile. Passwords go into this profile's own password store, where Brk fills them in on websites." : details)])
         alert.addButton(withTitle: "Import"); alert.addButton(withTitle: "Cancel")
         begin(alert, owner: owner, window: window) { [weak self, weak window] response in
             guard let self, response == .alertFirstButtonReturn, self.target(owner) == captured else { return }
             self.tasks[owner] = Task { @MainActor [weak self, weak window] in
                 guard let self else { return }
                 do {
-                    let stored = try await ImportedPasswordVault.store(source.passwords, profile: captured.profile) { [weak self, weak window] in
-                        !Task.isCancelled && window?.isVisible == true && self?.target(owner) == captured
-                    }
+                    let logins = source.passwords.compactMap { SourceLogin(csvURL: $0.url, username: $0.username, password: $0.password, now: self.now()) }
+                    let outcome = try PasswordImport.write(logins, profile: captured.profile)
+                    let stored = outcome.written + outcome.staged
                     guard !Task.isCancelled, self.target(owner) == captured else { return }
                     var result = preview; result.passwords = stored
                     self.send(.imported(owner, target: captured, result, favorites: destination.indexOfSelectedItem == 1))

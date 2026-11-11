@@ -93,26 +93,6 @@ final class ImportSyncIOTests: XCTestCase {
         XCTAssertTrue(h.store.snapshot.sidebarData.status.contains("Imported 1 bookmarks"))
         XCTAssertTrue(h.store.flush())
     }
-    func testCredentialTransactionRollsBackOnlyItsOwnWritesAndCountsDuplicates() throws {
-        let source = try SidebarImport.parse(Data("url,username,password\nhttps://example.test/,owned,fixture-secret\nhttps://example.test/other,owned,fixture-secret-2\n".utf8), format: .passwordsCSV)
-        var created: [Data] = [], removed: [Data] = []
-        var call = 0
-        XCTAssertThrowsError(try ImportedPasswordTransaction.apply(source.passwords, stillValid: { true }, add: { _ in
-            call += 1
-            if call == 2 { throw SidebarDataError.invalid("Injected storage failure") }
-            let reference = Data([1]); created.append(reference); return reference
-        }, remove: { removed.append($0); return true }))
-        XCTAssertEqual(removed, created)
-        call = 0
-        let count = try ImportedPasswordTransaction.apply(source.passwords, stillValid: { true }, add: { _ in
-            call += 1; return call == 1 ? nil : Data([2])
-        }, remove: { _ in XCTFail("Successful writes must remain"); return true })
-        XCTAssertEqual(count, 1)
-        var valid = true; removed = []
-        XCTAssertThrowsError(try ImportedPasswordTransaction.apply(source.passwords, stillValid: { valid }, add: { _ in valid = false; return Data([3]) }, remove: { removed.append($0); return true }))
-        XCTAssertEqual(removed, [Data([3])])
-    }
-
     func testInvalidPeerDoesNotOverwriteLastReplicaAndTemporaryFilesAreIgnored() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("brk-sync-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

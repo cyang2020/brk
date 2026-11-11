@@ -124,7 +124,7 @@ library EaselReopen
 library Boost-CSS
 library FP-OpenGesture
 library FP-SaveGesture
-library ImportSync-Onboarding
+library Onboarding-Import
 library TextLayout
 
 # ai：夹具 agent 的 AI 功能（不花额度）

@@ -20,6 +20,8 @@ MainActor.assumeIsolated {
     var coreRuntime: BrkCoreRuntime?
     switch options.engine {
     case .cef:
+        // Logins an import staged while Chromium held a profile's Login Data go in now, before CEF opens it.
+        BrowserImportStartup.applyPendingLogins()
         do {
             engine = try CEFEngine.bootstrap(.init(
                 cacheDirectory: Product.dataDirectory().appendingPathComponent("Chromium", isDirectory: true),

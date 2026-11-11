@@ -333,6 +333,10 @@ struct MoreSettings: View {
                 SettingsButton(title: SettingsCopy.exportData, field: "sidebarData") { context.dispatch(.sidebarData(.syncSettings)) }
             }
             CardDivider()
+            ButtonRow(title: SettingsCopy.importBrowserTitle, button: SettingsCopy.importBrowser, field: "importBrowser") {
+                context.dispatch(.sidebarData(.importBrowser))
+            }
+            CardDivider()
             ButtonRow(title: SettingsCopy.importBrowserFileTitle, button: SettingsCopy.importBrowserFile, field: "importBrowserFile") {
                 context.dispatch(.sidebarData(.importFile))
             }

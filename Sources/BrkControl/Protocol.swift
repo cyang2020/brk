@@ -22,6 +22,9 @@ public struct ControlRequest: Codable, Sendable, Equatable {
 
 public enum ControlOp: Codable, Sendable, Equatable {
     case sidebarData
+    /// The onboarding or Import from Another Browser… window: its step and each control's screen rectangle, for real
+    /// clicks; `activate` first makes Brk the active app with that window key. Reply: `onboarding`.
+    case onboarding(activate: Bool)
     /// Opt-in native verification only. Operates on the initiating browser's real attached sheet controls.
     case sidebarPanel(window: WindowID?, action: SidebarPanelControlAction)
     /// Process facts: pid, windows, engine kind, data directory. The runner's readiness probe.
@@ -169,6 +172,25 @@ public enum ControlOp: Codable, Sendable, Equatable {
 }
 
 public enum CrashTarget: String, Codable, Sendable, Equatable { case renderer, gpu }
+
+/// What `onboarding` answers. Rectangles are window-server coordinates (top-left origin); `step` is nil when no
+/// onboarding or import window is open.
+public struct OnboardingFacts: Codable, Sendable, Equatable {
+    public var step: String?
+    public var windowNumber: Int
+    public var frame: CGRect
+    public var controls: [String: CGRect]
+    public var summary: [String]
+    public var failures: [String]
+    public var isKey: Bool
+    /// The progress step finished reading and writing.
+    public var progressDone: Bool
+    public init(step: String? = nil, windowNumber: Int = 0, frame: CGRect = .zero, controls: [String: CGRect] = [:], summary: [String] = [],
+                failures: [String] = [], isKey: Bool = false, progressDone: Bool = false) {
+        self.step = step; self.windowNumber = windowNumber; self.frame = frame; self.controls = controls
+        self.summary = summary; self.failures = failures; self.isKey = isKey; self.progressDone = progressDone
+    }
+}
 public enum PointerPhase: String, Codable, Sendable, Equatable { case down, dragged, up }
 /// `locate` answers the control's screen rectangle (window-server coordinates, top-left origin) and whether it holds
 /// keyboard focus, so a test can click it with a real pointer event:
@@ -186,6 +208,7 @@ public struct ControlReply: Codable, Sendable, Equatable {
 
 public enum ControlResult: Codable, Sendable, Equatable {
     case sidebarData(SidebarDataSnapshot)
+    case onboarding(OnboardingFacts)
     case ok
     case hello(Hello)
     case view(WindowSnapshot)

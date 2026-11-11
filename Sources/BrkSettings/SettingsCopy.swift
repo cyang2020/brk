@@ -311,6 +311,8 @@ public enum SettingsCopy {
     public static var isDefaultBrowser: String { "\(Product.name) is your default web browser." }
     public static let importBrowserFile = "Import File…"
     public static let importBrowserFileTitle = "Import an exported browser file"
+    public static let importBrowser = "Import…"
+    public static let importBrowserTitle = "Import from another browser"
     public static let tourTitle = "Learn the basics"
     public static let sidebarData = "Sidebar Data: Import, Sync and Export"
     public static var tour: String { "Open \(Product.name) 101" }

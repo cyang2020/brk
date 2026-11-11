@@ -4,9 +4,8 @@ import BrkDomain
 import Foundation
 
 enum ImportSyncScenarios {
-    static let all = [
-        Scenario("ImportSync-Onboarding", "first-run native choices seed once, restart without duplicates, complete the local tour", cefOnly: "local tour DOM execution", onboarding),
-    ]
+    /// First run is OnboardingScenarios' Onboarding-Import now (the onboarding window replaced the Welcome alert).
+    static let all: [Scenario] = []
 
     static func data(_ app: AppUnderTest) throws -> SidebarDataSnapshot {
         guard case .sidebarData(let data) = try app.send(.sidebarData) else { throw Check(description: "Missing Sidebar Data projection") }
@@ -32,29 +31,6 @@ enum ImportSyncScenarios {
             guard case .menuItems(let controls) = try app.send(.sidebarPanel(window: nil, action: .inspect)) else { return false }
             return controls.contains { $0.contains(text) }
         }
-    }
-
-    @Sendable static func onboarding(_ app: AppUnderTest) throws {
-        try waitPanel(app, "Finish setup")
-        try expect(try data(app).needsOnboarding, "first-run marker missing")
-        try panel(app, .text(identifier: "onboarding-space", value: "Owned setup"))
-        // Starter rows stay lazy while the tour loads, so this makes no external website requests.
-        try panel(app, .button("Finish setup"))
-        try app.waitUntil("local tour loaded") { try currentTab(app.view())?.title == "Brk 101" }
-        try expect(try app.view().space.title == "Owned setup", "Space choice was not applied")
-        try expect(try allTabs(app.view()).count == 4, "selected starter tabs/Favorite were not created")
-        try expect(try !data(app).needsOnboarding, "setup marker not saved")
-        let view = try app.view()
-        guard let tab = currentTab(view) else { throw Check(description: "Missing tour tab") }
-        let page = PageID(window: view.id, item: tab.id)
-        try app.evaluate(page, "for(let i=0;i<6;i++)document.querySelector('#next').click()")
-        try app.waitUntil("tour DOM completed") { try currentTab(app.view())?.title == "Brk 101 complete" }
-        _ = try app.screenshot("tour-complete")
-        let ids = try allTabs(app.view()).map(\.id)
-        try app.flush(); try app.restart(); try app.settle()
-        try expect(try allTabs(app.view()).map(\.id) == ids, "restart duplicated the tour or starter tabs")
-        try expect(try !data(app).needsOnboarding, "restart reopened onboarding")
-        app.note("Real onboarding sheet used owned choices; tour DOM reached Brk 101 complete; restart kept identical sidebar IDs. Default-browser checkbox remained off.")
     }
 
     @Sendable static func bookmarks(_ app: AppUnderTest) throws {

@@ -38,7 +38,7 @@ enum CommandInventory {
         .page(.pictureInPicture(.document)),
         .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
         .commandBar(.splitTab(.right, ItemID("ghost"))), .commandBar(.copyAnswer("3.048 m")), .commandBar(.local(.open, path: "/ghost/file.txt")), .commandBar(.prefixQuery(.files, "x")), .commandBar(.splitOpen(.right, "example.com")), .window(.place(.leftHalf)), .commandBar(.openDictionary("word")),
-        .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.syncSettings),
+        .sidebarData(.welcome), .sidebarData(.tour), .sidebarData(.importFile), .sidebarData(.importBrowser), .sidebarData(.syncSettings),
         .sidebarData(.importSelected(URL(fileURLWithPath: "/tmp/fixture"), format: .bookmarksHTML)),
         .sidebarData(.connectSelectedFolder(URL(fileURLWithPath: "/tmp/fixture"))), .sidebarData(.exportSelected(URL(fileURLWithPath: "/tmp/fixture.json"))), .sidebarData(.cancelFilePanel),
         .sidebarData(.syncNow), .sidebarData(.disconnect), .sidebarData(.completeOnboarding(OnboardingChoices())),
@@ -311,6 +311,7 @@ enum CommandInventory {
             case .welcome: "welcome"
             case .tour: "tour"
             case .importFile: "importFile"
+            case .importBrowser: "importBrowser"
             case .importSelected: "importSelected"
             case .connectSelectedFolder: "connectSelectedFolder"
             case .exportSelected: "exportSelected"

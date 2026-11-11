@@ -1,4 +1,5 @@
 import BrkBase
+import BrkEngine
 import CCef
 import Foundation
 import os
@@ -219,7 +220,7 @@ final class ProfileDataStore {
         }
     }
 
-    private func completion(_ start: (UnsafeMutablePointer<cef_completion_callback_t>) -> Bool) async throws {
+    func completion(_ start: (UnsafeMutablePointer<cef_completion_callback_t>) -> Bool) async throws {
         try await withCheckedThrowingContinuation { continuation in
             let owner = Completion(continuation)
             let callback = Self.allocate(cef_completion_callback_t.self, owner: owner)
@@ -254,5 +255,91 @@ final class ProfileDataStore {
             fatalError("Brk: out of memory allocating a data-removal callback")
         }
         return raw.assumingMemoryBound(to: T.self)
+    }
+}
+
+/// Import from another browser: cookies set through the profile's own cookie manager (CEF's supported way in; the
+/// store is Chromium's), then flushed to disk.
+extension ProfileDataStore {
+    func setCookies(_ cookies: [ImportedCookie]) async throws -> Int {
+        try await completion { callback in
+            guard let get = context.pointee.get_cookie_manager else { releaseRef(callback); return false }
+            guard let manager = get(context, callback) else { return false }
+            releaseRef(manager)
+            return true
+        }
+        guard let manager = context.pointee.get_cookie_manager?(context, nil), let set = manager.pointee.set_cookie else {
+            throw CocoaError(.featureUnsupported)
+        }
+        defer { releaseRef(manager) }
+        var accepted = 0
+        var start = 0
+        while start < cookies.count {
+            let batch = Array(cookies[start..<min(cookies.count, start + 200)])
+            start += batch.count
+            accepted += await withCheckedContinuation { (continuation: CheckedContinuation<Int, Never>) in
+                let counter = CookieBatch(expected: batch.count, continuation)
+                for cookie in batch {
+                    let box = Unmanaged.passRetained(counter as AnyObject).toOpaque()
+                    guard let raw = ccef_object_alloc(MemoryLayout<cef_set_cookie_callback_t>.stride, box, { opaque in
+                        if let opaque { Unmanaged<AnyObject>.fromOpaque(opaque).release() }
+                    }) else { Unmanaged<AnyObject>.fromOpaque(box).release(); counter.done(false); continue }
+                    let callback = raw.assumingMemoryBound(to: cef_set_cookie_callback_t.self)
+                    callback.pointee.on_complete = { object, success in
+                        guard let object, let opaque = ccef_object_get_swift(object),
+                              let batch = Unmanaged<AnyObject>.fromOpaque(opaque).takeUnretainedValue() as? CookieBatch else { return }
+                        MainActor.assumeIsolated { batch.done(success != 0) }
+                    }
+                    let host = cookie.domain.hasPrefix(".") ? String(cookie.domain.dropFirst()) : cookie.domain
+                    let address = (cookie.secure ? "https://" : "http://") + host + (cookie.path.hasPrefix("/") ? cookie.path : "/")
+                    var value = cef_cookie_t()
+                    value.size = MemoryLayout<cef_cookie_t>.stride
+                    func assign(_ text: String, _ target: inout cef_string_t) {
+                        let units = Array(text.utf16)
+                        _ = units.withUnsafeBufferPointer { ccef_string_set_utf16($0.baseAddress, $0.count, &target) }
+                    }
+                    assign(cookie.name, &value.name); assign(cookie.value, &value.value)
+                    assign(cookie.domain.hasPrefix(".") ? cookie.domain : "", &value.domain); assign(cookie.path, &value.path)
+                    value.secure = cookie.secure ? 1 : 0
+                    value.httponly = cookie.httpOnly ? 1 : 0
+                    // base::Time: microseconds since 1601-01-01 UTC.
+                    func time(_ instant: Instant?) -> cef_basetime_t { cef_basetime_t(val: instant.map { ($0.milliseconds + 11_644_473_600_000) * 1000 } ?? 0) }
+                    value.creation = time(cookie.creation); value.last_access = time(cookie.lastAccess)
+                    value.has_expires = cookie.expires == nil ? 0 : 1
+                    value.expires = time(cookie.expires)
+                    value.same_site = cef_cookie_same_site_t(rawValue: UInt32(max(0, min(3, cookie.sameSite + 1))))
+                    value.priority = cef_cookie_priority_t(rawValue: Int32(max(-1, min(1, cookie.priority - 1))))
+                    var url = cef_string_t()
+                    assign(address, &url)
+                    if set(manager, &url, &value, callback) == 0 { counter.done(false) }
+                    ccef_string_clear(&url)
+                    ccef_string_clear(&value.name); ccef_string_clear(&value.value); ccef_string_clear(&value.domain); ccef_string_clear(&value.path)
+                }
+            }
+        }
+        try? await completion { callback in
+            guard let flush = manager.pointee.flush_store else { releaseRef(callback); return false }
+            return flush(manager, callback) != 0
+        }
+        return accepted
+    }
+
+    private final class CookieBatch {
+        private var remaining: Int
+        private var accepted = 0
+        private var continuation: CheckedContinuation<Int, Never>?
+        init(expected: Int, _ continuation: CheckedContinuation<Int, Never>) {
+            remaining = expected; self.continuation = continuation
+            if expected == 0 { finish() }
+        }
+        func done(_ success: Bool) {
+            guard remaining > 0 else { return }
+            remaining -= 1
+            if success { accepted += 1 }
+            if remaining == 0 { finish() }
+        }
+        private func finish() {
+            continuation?.resume(returning: accepted); continuation = nil
+        }
     }
 }

@@ -70,10 +70,14 @@ let package = Package(
         // Local models (docs/design/ai-native.md, 模型分工): downloads with consent, a llama.cpp helper process per model,
         // the Jev-shaped decider, embeddings, the search-by-meaning index, clustering. No AppKit; BrkApp wires it in.
         .target(name: "BrkLocalModels", dependencies: ["BrkBase"], swiftSettings: strict),
+        // Import from another browser: finds Chromium-family, Arc, Firefox and Safari data, reads copies of their databases
+        // (never the originals), opens Chromium's encrypted values, and writes logins into a Brk profile's Login Data.
+        // No AppKit; BrkApp runs it and asks the keychain.
+        .target(name: "BrkImport", dependencies: ["BrkBase", "BrkDomain"], swiftSettings: strict, linkerSettings: [.linkedLibrary("sqlite3")]),
         // The running app: the state owner, windows, key routing, menu, persistence, clock, control server.
         .target(
             name: "BrkApp",
-            dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels"],
+            dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "BrkImport"],
             exclude: ["SoundAssets", "Scripting/Brk.sdef"],
             swiftSettings: strict
         ),
@@ -102,6 +106,7 @@ let package = Package(
         .testTarget(name: "BrkEngineTests", dependencies: ["BrkBase", "BrkEngine"], swiftSettings: strict),
         .testTarget(name: "BrkCEFTests", dependencies: ["BrkBase", "BrkDomain", "BrkCEF", .product(name: "CefKit", package: "CefSwift")], exclude: ["CaptureFixture.png"], swiftSettings: strict),
         .testTarget(name: "BrkLocalModelsTests", dependencies: ["BrkBase", "BrkLocalModels"], swiftSettings: strict),
+        .testTarget(name: "BrkImportTests", dependencies: ["BrkBase", "BrkDomain", "BrkImport"], swiftSettings: strict, linkerSettings: [.linkedLibrary("sqlite3")]),
         .testTarget(name: "BrkAppTests", dependencies: ["BrkBase", "BrkDomain", "BrkApp", "BrkSettings", "BrkLocalModels"], swiftSettings: strict),
         // Scans every `import` under Sources/ against the dependency rules in module-map.md.
         .testTarget(name: "ArchitectureTests", dependencies: ["BrkBase"], swiftSettings: strict),

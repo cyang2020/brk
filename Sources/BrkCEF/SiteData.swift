@@ -47,6 +47,15 @@ extension CEFEngine {
         } catch { return result(error.localizedDescription) }
     }
 
+    public func importCookies(_ cookies: [ImportedCookie], profile: ProfileID) async throws -> Int {
+        let context = BrowsingContext.profile(profile)
+        guard phase == .running, contexts.permitsWork(context) else { throw CefProtocolError(message: "The profile is closing") }
+        guard !cookies.isEmpty else { return 0 }
+        let store = try await dataStore(for: profile)
+        defer { store.release() }
+        return try await store.setCookies(cookies)
+    }
+
     public func cancelSiteData(_ id: String) {
         if clearingContexts.values.contains(id) { cancelledSiteClears.insert(id) }
     }

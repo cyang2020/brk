@@ -173,6 +173,41 @@ final class ImportSyncTests: XCTestCase {
         XCTAssertEqual(StateCodec.currentVersion, 3)
     }
 
+    /// An Arc import lands Space by Space (the empty starting Space takes the first one), keeps folders and splits, makes
+    /// the other Arc profile's Brk profile by name, and a second import of the same data adds nothing.
+    func testBrowserImportMapsArcSpacesOnceAndImportingAgainAddsNothing() throws {
+        let d = Driver(startURL: nil)
+        let home = d.view.space.id
+        let visit = ImportedVisit(url: url("https://read.example.test/"), title: "Read", visitedAt: Instant(milliseconds: 1_790_000_000_000))
+        let result = BrowserImportResult(source: "Arc", bookmarks: [.tab(title: "Doc", url: url("https://doc.example.test/"))], spaces: [
+            ImportedSpace(key: "arc:A", title: "Personal", icon: .custom(.emoji("🌀")), pinned: [
+                .folder(title: "Specs", children: [.tab(title: "Spec", url: url("https://spec.example.test/"))]),
+                .split(orientation: .horizontal, panes: [.tab(title: "L", url: url("https://left.example.test/")), .tab(title: "R", url: url("https://right.example.test/"))]),
+            ], today: [.tab(title: "Today", url: url("https://today.example.test/"))]),
+            ImportedSpace(key: "arc:B", title: "Work", profileName: "Work", pinned: [.tab(title: "Tracker", url: url("https://tracker.example.test/"))]),
+        ], profiles: [ImportedProfileData(favorites: [.tab(title: "Mail", url: url("https://mail.example.test/"))], visits: [visit]),
+                      ImportedProfileData(profileName: "Work", favorites: [.tab(title: "Chat", url: url("https://chat.example.test/"))])])
+        d.system(.sidebarData(.browserImported(d.window, result)))
+        XCTAssertEqual(d.state.doc.spaceOrder.count, 2)
+        XCTAssertEqual(d.state.doc.spaces[home]?.title, "Personal", "the empty starting Space took Arc's first Space")
+        let work = try XCTUnwrap(d.state.doc.profiles.values.first { $0.name == "Work" })
+        let workSpace = try XCTUnwrap(d.state.doc.spaces.values.first { $0.title == "Work" })
+        XCTAssertEqual(workSpace.profile, work.id)
+        let pinned = try XCTUnwrap(d.state.doc.tree[try XCTUnwrap(d.state.doc.spaces[home]?.pinnedRoot)]?.children)
+        XCTAssertEqual(pinned.compactMap { d.state.doc.tree[$0]?.kind }, [.folder, .split, .folder], "Specs, the split, then Imported from Arc")
+        XCTAssertEqual(d.state.doc.tree[try XCTUnwrap(d.state.doc.favorites[work.id])]?.children.count, 1)
+        XCTAssertEqual(d.state.doc.history.count, 1)
+        XCTAssertEqual(d.snapshot.sidebarData.lastImport?.tabs, 5)
+        let items = d.state.doc.tree.items.count
+        d.system(.sidebarData(.browserImported(d.window, result)))
+        XCTAssertEqual(d.state.doc.tree.items.count, items, "re-import created rows")
+        XCTAssertEqual(d.state.doc.spaceOrder.count, 2)
+        XCTAssertEqual(d.state.doc.history.count, 1)
+        XCTAssertEqual(d.state.doc.profiles.count, 2)
+        let restored = Driver(file: d.savedFile, startURL: nil)
+        XCTAssertEqual(restored.state.doc.sidebarData.importedSpaces?.count, 2, "the Space ledger survives a restart")
+    }
+
     func testHTMLAndJSONRoundTripFoldersAndRejectExecutableLinks() throws {
         let document = ExportDocument(title: "Reading", entries: [.folder(title: "Swift & Co", children: [
             .link(title: "Docs <A>", url: url("https://example.test/docs?a=1&b=2")),

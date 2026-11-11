@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>login</title></head>
+<body>
+<p>Login fixture (onboarding import): Chromium's password manager fills the imported login on load; a page script can
+read autofilled values only after a real user gesture, so a click reports them in the title.</p>
+<form action="/import-login-submit" method="post">
+  <input id="username" name="username" type="text" autocomplete="username">
+  <input id="password" name="password" type="password" autocomplete="current-password">
+  <button type="submit">Sign in</button>
+</form>
+<script>
+  document.addEventListener("click", () => setTimeout(() => {
+    const user = document.getElementById("username").value, pass = document.getElementById("password").value;
+    document.title = "login:" + user + ":" + (pass === "fixture-pass-123" ? "filled" : (pass ? "other" : "empty"));
+  }, 100));
+</script>
+</body>
+</html>

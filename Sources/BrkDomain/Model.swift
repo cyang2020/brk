@@ -274,6 +274,8 @@ struct Session: Sendable, Equatable {
     /// The item each profile's Library button shows as its badge (Arc: `HomeBadgingItemsState.visibleBadgeItemID`); not saved.
     var libraryBadges: [ProfileID: LibraryItemKey] = [:]
     var sidebarDataStatus = "Not connected."
+    /// What the last browser import brought in, for the onboarding finish screen; not saved.
+    var browserImportSummary: BrowserImportSummary?
     var sites = SiteSession()
     /// Incremented by every reduce that changes state; becomes the snapshot's `rev`.
     var rev: Int
