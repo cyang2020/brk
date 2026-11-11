@@ -260,9 +260,21 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
+  # The download counts of the files this publish replaces, read before they go (download-stats.yml). It does not hold
+  # the publish up: if it fails, the publish still runs and the daily reading catches up, minus the replaced files.
+  downloads:
+    name: Download counts before publishing
+    needs: build
+    permissions:
+      contents: write # download-stats.yml pushes only the stats branch
+    uses: ./.github/workflows/download-stats.yml
+    with:
+      event: before-publish ${{ needs.build.outputs.label }}
+
   publish:
     name: Publish
-    needs: build
+    needs: [build, downloads]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

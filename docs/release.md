@@ -71,9 +71,17 @@ The hardened runtime's library validation means a signed Brk loads only framewor
 The repository may become public, so the workflow is written to be safe with the signing secrets in a public repository:
 
 - **Triggers.** Only `push` (to `main`, tags `v*`) and `workflow_dispatch` start it. There is no `pull_request` and no `pull_request_target`, so code from a fork never runs with the secrets or a write token. Pushing and manual runs need write access to the repository.
-- **Permissions.** The workflow's token is read-only (`permissions: contents: read`). Only the `publish` job gets `contents: write`, and it never receives a signing secret and runs no code from the repository. The `build` job checks out with `persist-credentials: false`, so the build scripts cannot find a token in `.git/config`.
+- **Permissions.** The workflow's token is read-only (`permissions: contents: read`). Two jobs get `contents: write`, and neither receives a signing secret: `publish`, which runs no code from the repository, and `downloads` (download-stats.yml), which runs `scripts/download-stats.py` from `main` and pushes only the `stats` branch. The `build` job checks out with `persist-credentials: false`, so the build scripts cannot find a token in `.git/config`.
 - **Pinned actions.** Every action is pinned to a full commit SHA, with its version in a comment: `actions/checkout`, `actions/cache`, `actions/upload-artifact` and `actions/download-artifact`, all from GitHub. There are no third-party actions. Signing, notarization and the release upload are plain shell, `security`, `codesign`, `xcrun` and `gh`.
 - **Secrets stay hidden.** The secrets reach only the steps that use them, through `env` on those steps, never at job or workflow level. The step that decides whether signing is on receives only whether each secret is set, not its value. Nothing echoes a secret. The decoded .p12 and .p8 are written under `$RUNNER_TEMP` with `umask 077`. The .p12 is deleted right after the import, and the temporary keychain's password is registered with `::add-mask::`. A cleanup step that runs whatever happens (`if: always()`) deletes the keychain and both files. Apple's Developer ID G2 intermediate, downloaded from apple.com, is checked against a pinned SHA-256.
+
+## Download counts
+
+GitHub counts how often each release file is downloaded, but the count belongs to the file, and every push to `main` replaces the two zips of Latest build, so their counts would be lost. `.github/workflows/download-stats.yml` reads the counts of every release file every day at 23:50 UTC, and the Release workflow calls it once more right before it publishes, while the old zips still exist. It can also be run by hand (Actions > Download stats > Run workflow).
+
+The readings go to the `stats` branch, which holds no code: `downloads.tsv` (time, reason, release, file id, file name, downloads; one row per file per reading), `repo.tsv` (stars and forks) and a `README.md` with the totals, Apple silicon and Intel, and new downloads per day, so [the branch's page](https://github.com/cyang2020/brk/tree/stats) shows them. A file's count only grows while it exists, so the total is the sum of the highest count recorded for each file. Counting began on 2026-11-11; downloads of files replaced before then are not included. If the reading before a publish fails, the publish still runs, and the downloads of the replaced files since the last daily reading are lost.
+
+The script is `scripts/download-stats.py`; it needs only the workflow's own token. GitHub's visitor numbers for the repository page (Insights > Traffic) cover 14 days and are not recorded here: the workflow's token cannot read them.
 
 ## Cost and time
 

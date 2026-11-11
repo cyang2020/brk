@@ -1,0 +1,56 @@
+# Download counts of the release zips (docs/release.md, "Download counts"), kept on the `stats` branch.
+# GitHub's count belongs to a file, and Release replaces the zips of "Latest build" on every push to main, so the
+# counts are read every day and by Release right before it publishes (it calls this workflow), then appended to
+# stats/downloads.tsv with a summary in its README.md. Only main's code runs here; no secret is used.
+name: Download stats
+
+on:
+  schedule:
+    - cron: '50 23 * * *' # every day, 23:50 UTC
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      event:
+        description: What the reading is for (shown in downloads.tsv)
+        type: string
+        default: before-publish
+
+permissions: {}
+
+jobs:
+  record:
+    name: Record download counts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # pushes the stats branch
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      EVENT: ${{ inputs.event || (github.event_name == 'schedule' && 'daily' || 'manual') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main # the script from main, also when Release runs for a tag
+
+      - name: Read the counts and push them
+        run: |
+          cp scripts/download-stats.py "$RUNNER_TEMP/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Another reading may push in between (a publish during the daily run): read again on top of it.
+          for attempt in 1 2 3 4 5; do
+            if git fetch -q --depth=1 origin stats 2> /dev/null; then
+              git checkout -q -f -B stats FETCH_HEAD
+            else
+              git checkout -q -f --orphan stats && git rm -rfq .
+            fi
+            python3 "$RUNNER_TEMP/download-stats.py" . "$EVENT" > "$RUNNER_TEMP/summary.md"
+            git add downloads.tsv repo.tsv README.md
+            git commit -q -m "Download counts, $EVENT, $(date -u +%Y-%m-%dT%H:%MZ)"
+            if git push -q origin HEAD:refs/heads/stats; then
+              cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"; exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push the stats branch"; exit 1
