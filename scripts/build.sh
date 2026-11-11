@@ -20,8 +20,8 @@
 # 2. swift build with the explicit target-dependency import check, so a module that imports something its
 #    target does not declare fails here even if it compiled by accident.
 # 3. swift test (the unit tests and ArchitectureTests run before anything is bundled).
-# 4. `swift package cef bundle` (vendored CefSwift plugin): downloads CEF 154.0.34 minimal for ARCH into .cef/ on first
-#    use (132 MB arm64, 139 MB x86_64, SHA-1 from Vendor/CefSwift/CEF_VERSION.json), builds the product and `cef-helper`, assembles
+# 4. `swift package cef bundle` (vendored CefSwift plugin): downloads CEF 156.0.28 minimal for ARCH into .cef/ on first
+#    use (135 MB arm64, 142 MB x86_64, SHA-1 from Vendor/CefSwift/CEF_VERSION.json), builds the product and `cef-helper`, assembles
 #    dist/<Product>.app with "<Product> Helper", "(Alerts)", "(GPU)", "(Plugin)", "(Renderer)", sets
 #    LSEnvironment MallocNanoZone=0, signs ad hoc (--sign -).
 # 5. scripts/declare-url-types.sh adds CFBundleURLTypes for http and https to the bundle's Info.plist (the plugin

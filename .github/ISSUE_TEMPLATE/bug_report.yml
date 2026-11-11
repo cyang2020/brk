@@ -43,7 +43,7 @@ body:
     attributes:
       label: Engine
       description: Filled in by Help › Report a Bug…. Leave it as it is if you are not sure.
-      placeholder: Chromium 154.0.7795.0 (CEF)
+      placeholder: Chromium 156.0.8078.88 (CEF)
 
   - type: textarea
     id: steps

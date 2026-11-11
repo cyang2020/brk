@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>autofill</title>
+<style>
+  body { margin: 0; }
+  #email { position: absolute; left: 40px; top: 40px; width: 400px; height: 40px; box-sizing: border-box; font: 20px -apple-system, sans-serif; }
+</style>
+</head>
+<body>
+<!-- Autofill fixture (Autofill-Pick): submitting the form makes Chromium keep the address as an autocomplete entry;
+     the next time the empty field is clicked Chromium offers it, and picking it fills the field. The title reports. -->
+<form action="autofill-email.html" method="get">
+  <input id="email" name="email" type="email" autocomplete="email">
+</form>
+<script>
+  const field = document.getElementById("email");
+  if (location.search.includes("email=")) document.title = "autofill:submitted";
+  for (const kind of ["input", "change"]) field.addEventListener(kind, () => { document.title = "email:" + field.value; });
+</script>
+</body>
+</html>

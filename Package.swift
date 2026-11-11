@@ -20,7 +20,7 @@ let package = Package(
         .executable(name: "brk-e2e", targets: ["BrkE2E"]),
     ],
     dependencies: [
-        // Vendored CefSwift at ba6ebff (CEF 154.0.34, C API 14800). Its CefKit is the only Chromium API we
+        // Vendored CefSwift at ba6ebff, CEF moved to 156.0.28 (C API 14800 still pinned). Its CefKit is the only Chromium API we
         // call, and only from BrkCEF. Its `cef` command plugin downloads the SHA-1-pinned CEF and assembles
         // the .app with helpers (scripts/build.sh). Vendored because upstream has had no human commit since June
         // and we must own CEF bumps; its dlopen loader means `swift build`/`swift test` need no CEF download.
