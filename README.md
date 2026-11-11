@@ -6,6 +6,15 @@
 
 <p align="center">
   <a href="https://github.com/cyang2020/brk/releases/tag/latest"><img src="https://img.shields.io/badge/Download-for%20Mac-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac"></a>
+  <a href="https://cyang2020.github.io/brk/"><img src="https://img.shields.io/badge/Website-cyang2020.github.io%2Fbrk-1a4fe0?style=for-the-badge" alt="Website"></a>
+</p>
+
+<p align="center">
+  <b><a href="https://github.com/cyang2020/brk/releases/tag/latest">Download</a></b> ·
+  <a href="https://cyang2020.github.io/brk/">Website</a> ·
+  <a href="https://github.com/cyang2020/brk/issues/new/choose">Report a bug</a> ·
+  <a href="https://github.com/cyang2020/brk/discussions">Discussions</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 <p align="center">
@@ -22,7 +31,9 @@
   <a href="#ai-on-your-mac">AI on your Mac</a> ·
   <a href="#more-ai-better-than-dia">More AI</a> ·
   <a href="#arc-pixel-for-pixel">Arc, pixel for pixel</a> ·
-  <a href="#not-in-brk-yet">Not yet</a>
+  <a href="#not-in-brk-yet">Not yet</a> ·
+  <a href="#download">Download</a> ·
+  <a href="#feedback-and-bug-reports">Feedback</a>
 </p>
 
 <picture>
@@ -160,6 +171,31 @@ The ordinary results (open tabs, history, suggestions, top sites) are ranked by 
 </p>
 
 Arc 1.170 on the left, Brk on the right, same window and same pages: 0.14% of the pixels differ, and the visible one is Arc's update button. Sizes, colours, timings and rules are read from Arc's own app and compared with the real Arc on the same screen. Of the 148 Arc features in the ledger (`docs/completion/features.json`), 124 are verified.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/media/readme/divider-light.svg">
+  <img alt="" src="docs/media/readme/divider-light.svg" width="100%">
+</picture>
+
+## Download
+
+Get the newest build from **[Releases › Latest build](https://github.com/cyang2020/brk/releases/tag/latest)**:
+
+| Your Mac | File |
+| --- | --- |
+| Apple silicon (M1 and later) | `Brk-<version>-arm64.zip` |
+| Intel | `Brk-<version>-x86_64.zip` |
+
+Unzip it and drag **Brk** into Applications. Builds are signed with a Developer ID and notarized by Apple, so they open with a double-click. Needs macOS 14 Sonoma or later. "Latest build" is rebuilt from `main` after every change; versioned releases appear on the same page when they are tagged. How the pipeline works is in [`docs/release.md`](docs/release.md).
+
+## Feedback and bug reports
+
+- **From inside Brk:** Help › **Report a Bug…** or **Send Feedback…** opens a GitHub issue with your Brk version, macOS version and Mac type already filled in. Nothing is sent until you submit it. After a crash, Brk offers once to report it on the next launch.
+- **On GitHub:** [open an issue](https://github.com/cyang2020/brk/issues/new/choose) and pick **Bug report**, **Feature request or feedback**, or **Arc parity**. The last one is for "Arc does X, Brk does Y", with a screenshot.
+- **Questions and ideas:** [Discussions](https://github.com/cyang2020/brk/discussions).
+- **Security issues:** report them privately through [GitHub's security advisories](https://github.com/cyang2020/brk/security/advisories/new), as described in [`SECURITY.md`](.github/SECURITY.md).
+- **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING.md). Brk is MIT licensed.
 
 ## Not in Brk yet
 
