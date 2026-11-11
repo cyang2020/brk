@@ -32,6 +32,7 @@
   <a href="#ai-on-your-mac">AI on your Mac</a> ·
   <a href="#more-ai-better-than-dia">More AI</a> ·
   <a href="#arc-pixel-for-pixel">Arc, pixel for pixel</a> ·
+  <a href="#move-in-from-arc-chrome-or-safari">Move in</a> ·
   <a href="#not-in-brk-yet">Not yet</a> ·
   <a href="#download">Download</a> ·
   <a href="#feedback-and-bug-reports">Feedback</a>
@@ -179,6 +180,36 @@ Arc 1.170 on the left, Brk on the right, same window and same pages: 0.14% of th
   <img alt="" src="docs/media/readme/divider-light.svg" width="100%">
 </picture>
 
+## Move in from Arc, Chrome or Safari
+
+<p align="center">
+  <img src="docs/media/onboarding-import.gif" width="800" alt="Brk's first-run screens: welcome, your name, pick a browser, unlock passwords, progress, bookmarks, Favorites, theme, Max, the summary and Brk 101">
+</p>
+
+The first time you open Brk, a full-window setup walks you through it in Arc's order: a welcome, what to call you (kept on your Mac, there is no account), which browser to bring along, your bookmarks, Favorites, a theme, the ad blocker, Max and the default browser. It ends on a summary of what came over, then opens Brk 101. Most steps can be skipped.
+
+<p align="center">
+  <img src="docs/media/arc-import.png" width="900" alt="Picking Arc as the browser to import from, and the summary after importing: 2 Spaces, 11 pinned and Today tabs, 4 Favorites, 184 history visits">
+</p>
+
+**Brk reads the other browser directly**, with no export step for most of them:
+
+| From | What comes over |
+| --- | --- |
+| **Arc** | Spaces, pinned tabs, Today, folders, split views and Favorites, one to one, plus history, passwords and site logins |
+| **Chrome, Brave, Edge, Vivaldi, Opera, Opera GX** | Bookmarks (into Pinned, in a folder "Imported from Chrome" and so on), history, passwords and site logins, profile by profile |
+| **Safari** | Export your browsing data from Safari (File › Export Browsing Data) and drop the ZIP in: bookmarks, history and passwords. Safari 17 and older go through Full Disk Access instead |
+| **Firefox** | Bookmarks and history (quit Firefox first) |
+| **A file** | An exported HTML, JSON or CSV file |
+
+History covers the last 90 days. Passwords and site logins are encrypted by the other browser, so macOS asks for your Mac's password once per profile; Brk explains this before the prompt appears and you can switch them off. Passwords go into Brk's own Chromium password store, so login forms fill in by themselves; passwords imported while Brk is running start filling in after a restart. Brk copies the other browser's files before reading them, so Arc, Chrome and Safari can stay open, and nothing in them is changed. To import again later, choose **Brk › Import from Another Browser…**; a second import adds only what is new.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/media/readme/divider-light.svg">
+  <img alt="" src="docs/media/readme/divider-light.svg" width="100%">
+</picture>
+
 ## Download
 
 Download the disk image for your Mac:
@@ -220,7 +251,7 @@ These are the 24 Arc features that Brk has not verified, with the reasons record
 
 **Deferred**
 
-- **Software updates and the update banner (A127, A128).** The user deferred these. Brk does not update itself. To get a newer version, build it from source.
+- **Software updates and the update banner (A127, A128).** The user deferred these. Brk does not update itself. To get a newer version, download the newest disk image and drag Brk into Applications again; your tabs and settings stay.
 
 **Partly done**
 
@@ -239,8 +270,8 @@ These are the 24 Arc features that Brk has not verified, with the reasons record
 - **Picture in picture (A104).** Picture in picture for Google Meet needs a signed-in Meet call and has not been checked.
 - **Site permissions (A108).** Camera, microphone, location and notifications have not been checked through macOS's own permission prompts, since that would change system settings.
 - **Per-site rules (A110).** The keep-alive, picture-in-picture and suspension rules work, but the "page is using the camera or microphone" case needs macOS permission and has not been checked.
-- **Onboarding (A119).** Everything passes except the optional "make Brk the default browser" step, which tests leave off.
-- **Import from other browsers (A122).** Importing bookmarks and history works. Importing passwords needs a real Keychain and Touch ID or password prompt, which tests cannot answer.
+- **Onboarding (A119).** The full-window setup is driven screen by screen with real clicks and typing in a test. The "make Brk the default browser" step is left off in tests, because it changes the Mac's settings.
+- **Import from other browsers (A122).** Importing from a real Arc profile was checked: 2 Spaces with their folders and a split view, 11 pinned and Today tabs, 4 Favorites and 184 history visits, and a second import added nothing. Chrome-family import was checked on a made-up Chrome profile, including a cookie that keeps a site logged in and a password that fills in after a restart. Not yet checked with real data: Arc's own passwords and cookies (they need someone to type the Mac's password at the Keychain prompt), Chrome (not installed on the test Mac), a real Safari export and Firefox. Extensions, open tabs and payment cards are not imported yet.
 
 **Smaller known gaps**
 
