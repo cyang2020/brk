@@ -32,7 +32,7 @@ The `publish` job then runs on a Linux runner. It takes the artifact and puts th
 
 Three caches keep later runs fast: SwiftPM's `.build` (saved per commit, restored from the newest one), the CEF downloads (`.cef/dist`, per CEF version) and the llama.cpp archives (`~/.cache/brk-llama`). A fresh checkout gives every file a new modification time, and SwiftPM would rebuild everything because of it. To avoid that, the workflow sets each file's time from its git content hash, so unchanged files look unchanged to the cached build.
 
-Pushes that only touch `docs/`, `Tests/`, Markdown files or `.gitignore` build nothing, because they cannot change the app. A newer push to `main` cancels a run that is still going. Tag runs always finish.
+Pushes that only touch `docs/`, `Tests/`, the website (`site/`), Markdown files or `.gitignore` build nothing, because they cannot change the app. A newer push to `main` cancels a run that is still going. Tag runs always finish.
 
 ## Cutting a release
 

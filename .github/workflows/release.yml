@@ -17,6 +17,7 @@ on:
       - 'docs/**'
       - '**/*.md'
       - 'Tests/**'
+      - 'site/**' # the website (pages.yml)
       - '.gitignore'
   workflow_dispatch:
 
