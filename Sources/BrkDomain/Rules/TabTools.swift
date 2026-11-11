@@ -263,6 +263,11 @@ extension Work {
             state.doc.windows[window]?.folderExpansion[parent] = true
             state.session.windows[window]?.renaming = folder
             reveal(folder, in: window)
+        case .newTabInFolder(let folder):
+            guard w.kind == .standard, state.locate(folder) == .global, case .folder? = state.doc.tree[folder]?.body else { return }
+            run(.commandBar(.open(.newTab)), in: window)
+            guard case .commandBar(_, .newTab)? = state.session.windows[window]?.overlay else { return }
+            state.session.windows[window]?.newTabFolder = folder
         case .folderToSpace(let folder):
             guard w.kind == .standard, state.locate(folder) == .global, case .folder(let f)? = state.doc.tree[folder]?.body,
                   let source = state.doc.tree.role(of: folder)?.space, let from = state.doc.spaces[source] else { return }

@@ -63,6 +63,9 @@ public enum TabToolsCommand: Hashable, Sendable, Codable {
     case openInSplit(TabTargets)
     /// Folder menu "New Nested Folder…": a folder at the top of the folder, in rename mode.
     case newNestedFolder(ItemID)
+    /// Folder menu "New Tab" (Brk's own; Arc's folder menu has none): the new-tab bar, whose tab opens at the top of the
+    /// folder.
+    case newTabInFolder(ItemID)
     /// Folder menu "Turn “X” into Space": a new space named after the folder whose Pinned holds its contents.
     case folderToSpace(ItemID)
     /// Tab menu "Customize Page…": shows the tab and opens its site's Boost (a new one when there is none).

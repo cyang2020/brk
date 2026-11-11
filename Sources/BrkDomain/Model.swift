@@ -354,6 +354,8 @@ struct WindowSession: Sendable, Equatable {
     /// Incremented every time an overlay opens or is replaced; becomes the new overlay's `openID`.
     var overlayOpens: Int
     var peek: Bool
+    /// The folder the open new-tab bar puts its tab in (folder menu "New Tab"); nil puts it in Today.
+    var newTabFolder: ItemID? = nil
     var renaming: ItemID?
     /// The tabs with a mini player at the bottom of this window's sidebar, oldest first; the last is the front card
     /// (`repairMiniPlayers`, Arc: `MediaControlsFeature.State.miniPlayers`).

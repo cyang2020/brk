@@ -54,7 +54,7 @@ enum CommandInventory {
         .tabTools(.leaveSidebar), .tabTools(.folders(expanded: true)), .tabTools(.cancelRecent), .tabTools(.chooseIcon(item)),
         .tabTools(.dismissLittleTip), .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.quoteLinkCopied), .tabTools(.dismissArchiveEducation), .tabTools(.dismissFavoritesHint), .tabTools(.undoToast),
         .tabTools(.preferences(includeFavorites: true, previews: false)), .tabTools(.copyLinks(.items([item]))), .tabTools(.openInSplit(.items([item]))),
-        .tabTools(.newNestedFolder(item)), .tabTools(.folderToSpace(item)), .tabTools(.customize(item)), .tabTools(.addToSplit(item)),
+        .tabTools(.newNestedFolder(item)), .tabTools(.newTabInFolder(item)), .tabTools(.folderToSpace(item)), .tabTools(.customize(item)), .tabTools(.addToSplit(item)),
         .tabTools(.spaceIntoFolder(space, into: space)),
         .tabTools(.siteDisplay(host: "github.com", .unreadBadge, on: false)), .tabTools(.closeGroup(item)), .tabTools(.removeGroupHeader(item)),
         .tabTools(.openFolder(item)), .tabTools(.replacePinned(item)), .tabTools(.muteAll(true)), .split(.addPaneAt(.left)),
@@ -378,6 +378,7 @@ enum CommandInventory {
             case .copyLinks: "copyLinks"
             case .openInSplit: "openInSplit"
             case .newNestedFolder: "newNestedFolder"
+            case .newTabInFolder: "newTabInFolder"
             case .folderToSpace: "folderToSpace"
             case .customize: "customize"
             case .addToSplit: "addToSplit"

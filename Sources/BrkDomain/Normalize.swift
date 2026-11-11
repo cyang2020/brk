@@ -161,6 +161,9 @@ private func repairSessionTargets(_ state: inout AppState) {
         case .commandBar(_, .ai), .commandBar(_, .newTab), .library, nil:
             break
         }
+        if let folder = session.newTabFolder, state.doc.tree[folder] == nil || { if case .commandBar(_, .newTab)? = session.overlay { false } else { true } }() {
+            session.newTabFolder = nil
+        }
         if case .commandBar? = session.overlay {} else {
             if session.suggestions != nil { session.suggestions = nil }
             if session.localResults != nil { session.localResults = nil }

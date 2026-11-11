@@ -33,6 +33,8 @@ extension Work {
             if mode == .editCurrent, let tab = state.focusedPane(in: window) {
                 target = .navigate(tab: tab, overPill: state.doc.windows[window].map { $0.sidebarVisible || $0.toolbarVisible } ?? false)
             }
+            // Cmd+T over a folder's bar keeps the text and puts the tab back in Today.
+            state.session.windows[window]?.newTabFolder = nil
             if case .commandBar(_, let open)? = state.session.windows[window]?.overlay, open == target { return }
             openOverlay({ .commandBar(openID: $0, target: target) }, in: window)
             // A new opening starts with an empty query, so the last opening's suggestions answer nothing.
@@ -188,6 +190,11 @@ extension Work {
             guard let doc = state.doc.windows[window] else { return }
             if doc.kind == .standard {
                 opened = openTab(url, inSpace: doc.space, window: window, focus: true)
+                // Folder menu "New Tab": the tab moves to the top of that folder, which opens.
+                if case .newTab = target, let folder = session.newTabFolder, let tab = opened, case .folder? = state.doc.tree[folder]?.body {
+                    items(.move(tab, to: .into(parent: folder, index: 0)), in: window)
+                    reveal(tab, in: window)
+                }
             } else {
                 // An ephemeral window's new tab lives in its own container.
                 opened = openScratchTab(url, in: window, focus: true)

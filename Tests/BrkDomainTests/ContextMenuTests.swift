@@ -53,6 +53,39 @@ final class ContextMenuTests: XCTestCase {
         XCTAssertNil(d.state.doc.tree[outer], "the emptied folder goes")
     }
 
+    /// Folder menu "New Tab" (Brk's own): the bar's tab opens at the top of the folder, which expands; Esc adds nothing,
+    /// and Cmd+T over that bar puts the tab back in Today.
+    func testNewTabInFolderOpensAtTheTopOfTheFolder() throws {
+        let d = Driver()
+        let a = d.todayIDs[0]
+        d.user(.item(.newFolder))
+        let folder = d.pinnedIDs[0]
+        d.user(.item(.move(a, to: .into(parent: folder, index: 0))))
+        d.user(.item(.toggleFolder(folder)))
+        let menu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(folder), at: .zero)))))
+        XCTAssertEqual(layout(menu).first, "New Tab")
+        d.user(try XCTUnwrap(command(menu, "New Tab")))
+        XCTAssertNotNil(d.bar)
+        d.user(.commandBar(.dismiss))
+        XCTAssertEqual(d.state.doc.tree[folder]?.children, [a], "Esc leaves the folder as it was")
+
+        d.user(.tabTools(.newTabInFolder(folder)))
+        d.user(.commandBar(.submit("http://127.0.0.1:9/new")))
+        let children = try XCTUnwrap(d.state.doc.tree[folder]?.children)
+        XCTAssertEqual(children.count, 2)
+        XCTAssertEqual(children.last, a)
+        XCTAssertEqual(d.paneIDs, [children[0]], "the new tab is shown")
+        guard case .folder(let row)? = d.view.space.pinned.rows.first else { return XCTFail("no folder row") }
+        XCTAssertFalse(row.collapsed, "the folder opens")
+
+        let today = d.todayIDs
+        d.user(.tabTools(.newTabInFolder(folder)))
+        d.user(.commandBar(.open(.newTab)))
+        d.user(.commandBar(.submit("http://127.0.0.1:9/plain")))
+        XCTAssertEqual(d.state.doc.tree[folder]?.children.count, 2)
+        XCTAssertEqual(d.todayIDs.count, today.count + 1)
+    }
+
     func testExportSpaceIntoFolderOfAnotherSpace() throws {
         let d = Driver()
         let home = d.view.space.id

@@ -441,6 +441,7 @@ extension Work {
                 return MenuModel(entries: state.groupMenu(id, folder: f, tree: tree, links: tree.tabs(under: id).contains { link($0) != nil }))
             case .folder(let f):
                 return MenuModel(entries: (f.liveRepository == nil ? [] : [entry("Refresh GitHub Folder", .tabTools(.site(.refreshFolder(id)))), .separator]) + [
+                    entry("New Tab", .tabTools(.newTabInFolder(id)), enabled: scope == .global && standard),
                     entry("Share Folder…", .app(.export(.items([id]))), enabled: scope == .global), .separator,
                     entry("New Nested Folder…", .tabTools(.newNestedFolder(id))),
                     entry("Turn “\(f.title)” into Space", .tabTools(.folderToSpace(id)), enabled: scope == .global && standard),
