@@ -14,6 +14,7 @@
   <b><a href="#download">Download</a></b> ·
   <a href="https://cyang2020.github.io/brk/">Website</a> ·
   <a href="https://github.com/cyang2020/brk/issues/new/choose">Report a bug</a> ·
+  <a href="https://github.com/cyang2020/brk/issues/2">Bug fixes</a> ·
   <a href="https://github.com/cyang2020/brk/discussions">Discussions</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
@@ -226,6 +227,7 @@ Open it and drag **Brk** into Applications. Builds are signed with a Developer I
 - **From inside Brk:** Help › **Report a Bug…** or **Send Feedback…** opens a GitHub issue with your Brk version, macOS version and Mac type already filled in. Nothing is sent until you submit it. After a crash, Brk offers once to report it on the next launch.
 - **On GitHub:** [open an issue](https://github.com/cyang2020/brk/issues/new/choose) and pick **Bug report**, **Feature request or feedback**, or **Arc parity**. The last one is for "Arc does X, Brk does Y", with a screenshot.
 - **Questions and ideas:** [Discussions](https://github.com/cyang2020/brk/discussions).
+- **What has been fixed:** every fix is listed in [Bug fixes](https://github.com/cyang2020/brk/issues/2), newest first, with the first build that has it. Click **Subscribe** there to get a notification for each new one.
 - **Security issues:** report them privately through [GitHub's security advisories](https://github.com/cyang2020/brk/security/advisories/new), as described in [`SECURITY.md`](.github/SECURITY.md).
 - **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING.md). Brk is MIT licensed.
 
