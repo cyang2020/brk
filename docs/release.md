@@ -6,10 +6,17 @@ Every push to `main` that changes the app builds Brk for Apple silicon (arm64) a
 
 All builds are on the [Releases page](https://github.com/cyang2020/brk/releases).
 
-- **Latest build** (tag `latest`) is a pre-release that always holds the newest build of `main`. Each push moves the tag to its commit and replaces the two zips. Its notes list the commits since the previous build.
+- **Latest build** (tag `latest`) is a pre-release that always holds the newest build of `main`. Each push moves the tag to its commit and replaces the two disk images. Its notes list the commits since the previous build.
 - **v\* releases** (`v1.0.0` and so on) are normal releases, one per tag. Their notes list the commits since the previous `v*` tag.
 
-Each build has two zips, `Brk-<version>-arm64.zip` and `Brk-<version>-x86_64.zip`. The zips are made with `ditto -c -k --keepParent`, which keeps the signature and the framework's symlinks. The version is:
+Each build has two disk images, `Brk-arm64.dmg` and `Brk-x86_64.dmg`. Opening one shows Brk next to a link to the Applications folder, over an arrow and the line "Drag Brk into Applications"; dragging Brk onto the folder installs it, as with most Mac apps. The file names carry no version, so these links always download the newest build of `main`, and the website, the README and the release notes use them:
+
+- https://github.com/cyang2020/brk/releases/download/latest/Brk-arm64.dmg
+- https://github.com/cyang2020/brk/releases/download/latest/Brk-x86_64.dmg
+
+`scripts/make-dmg.sh <app> <dmg>` builds an image. It uses [dmgbuild](https://github.com/dmgbuild/dmgbuild), which writes the window's layout (Finder's `.DS_Store`) itself, so no Finder or AppleScript is needed on the runner. dmgbuild and its two dependencies are installed into a throwaway virtual environment, pinned by hash in `scripts/dmg/requirements.txt`; they need Python 3.10 or later from `PATH` (Xcode's `/usr/bin/python3` is 3.9). The layout is `scripts/dmg/settings.py` (a 660 by 400 window, 128-point icons, the app at x 170 and Applications at x 490). The background is drawn by `scripts/dmg/background.swift`, which writes `background.png` and `background@2x.png`; rerun it after changing the picture. The image is APFS, compressed with LZFSE (`ULFO`).
+
+The version is:
 
 - for `main`, `<last v tag, or 0.1.0>-<run number>.<commit>`, for example `0.1.0-57.1a2b3c4`;
 - for a tag, the tag without its `v`.
@@ -24,11 +31,11 @@ A run has two jobs. The `build` job runs on one `macos-26` runner (Apple silicon
 2. `scripts/build.sh` runs the unit tests and builds the arm64 app.
 3. `ARCH=x86_64 scripts/build.sh` builds the Intel app. It is cross-compiled on the same machine: the Swift products are built with `--triple x86_64-apple-macosx14.0` and bundled with the `macosx64` CEF, the Intel Dock tile plug-in and llama.cpp's Intel runtime. The unit tests run only once, in step 2.
 4. With signing on, both apps are signed with the Developer ID, notarized and stapled.
-5. The job zips both apps, writes the notes (`scripts/release-notes.sh`) and hands them on as a workflow artifact (kept three days).
+5. The job packs each app into its disk image (signed and notarized too when signing is on), writes the notes (`scripts/release-notes.sh`) and hands them on as a workflow artifact (kept three days).
 
 When GitHub has no Apple-silicon runner free (it happens: a job can wait 15 minutes and be cancelled with "not acquired by Runner"), set the repository variable `BRK_MACOS_RUNNER` to `macos-26-intel` (Settings > Secrets and variables > Actions > Variables). The job then runs the tests and builds the Intel app natively and cross-compiles the arm64 one. Delete the variable to go back.
 
-The `publish` job then runs on a Linux runner. It takes the artifact and puts the zips and notes on the release with `gh`. It moves the `latest` tag through the GitHub API.
+The `publish` job then runs on a Linux runner. It takes the artifact and puts the disk images and notes on the release with `gh`, and deletes files the build no longer makes (the zips of earlier builds). It moves the `latest` tag through the GitHub API.
 
 Three caches keep later runs fast: SwiftPM's `.build` (saved per commit, restored from the newest one), the CEF downloads (`.cef/dist`, per CEF version) and the llama.cpp archives (`~/.cache/brk-llama`). A fresh checkout gives every file a new modification time, and SwiftPM would rebuild everything because of it. To avoid that, the workflow sets each file's time from its git content hash, so unchanged files look unchanged to the cached build.
 
@@ -41,7 +48,7 @@ git tag v1.0.0 <commit on main>
 git push origin v1.0.0
 ```
 
-The run builds that commit and creates the release "Brk 1.0.0" with both zips. A manual run (Actions > Release > Run workflow) on `main` refreshes Latest build. On any other branch it makes a draft release named `ci-test-<run id>` and creates no tag.
+The run builds that commit and creates the release "Brk 1.0.0" with both disk images. A manual run (Actions > Release > Run workflow) on `main` refreshes Latest build. On any other branch it makes a draft release named `ci-test-<run id>` and creates no tag.
 
 ## Signing and notarization
 
@@ -62,7 +69,8 @@ The team ID comes from the certificate, so it needs no secret. With signing on:
 - the .p12 goes into a temporary keychain that is deleted at the end of the job;
 - `scripts/sign-developer-id.sh` signs every piece of code inside-out, with the hardened runtime and a secure timestamp. It starts with the CEF framework's libraries and the llama.cpp runtime, then the framework, the Dock tile plug-in and the five helpers, and ends with the app. Notarization rejects nested code that was signed only through `codesign --deep`;
 - the entitlements follow Chromium's own Mac build. The renderer, GPU and plugin helpers get `com.apple.security.cs.allow-jit` (`scripts/signing/helper-jit.entitlements`). The app gets camera, microphone, location, Bluetooth, USB, printing and Photos (`scripts/signing/app.entitlements`), because under the hardened runtime macOS refuses those devices to an app signed without them;
-- `scripts/notarize.sh` submits each app with `xcrun notarytool` and the API key, waits for Apple's answer, staples the ticket and checks it with `spctl`. Only then is the app zipped.
+- `scripts/notarize.sh` submits each app with `xcrun notarytool` and the API key, waits for Apple's answer, staples the ticket and checks it with `spctl`. Only then is the app packed into its disk image;
+- `scripts/make-dmg.sh` signs the disk image with the same identity, and `scripts/notarize.sh` notarizes and staples the image as well, so neither opening the image nor the app copied out of it needs a network check.
 
 The hardened runtime's library validation means a signed Brk loads only frameworks signed by the same team. That includes Brk's own Chromium build (`BRK_ENGINE=core`), so that engine only works in local, ad hoc builds.
 
@@ -77,7 +85,7 @@ The repository may become public, so the workflow is written to be safe with the
 
 ## Download counts
 
-GitHub counts how often each release file is downloaded, but the count belongs to the file, and every push to `main` replaces the two zips of Latest build, so their counts would be lost. `.github/workflows/download-stats.yml` reads the counts of every release file every day at 23:50 UTC, and the Release workflow calls it once more right before it publishes, while the old zips still exist. It can also be run by hand (Actions > Download stats > Run workflow).
+GitHub counts how often each release file is downloaded, but the count belongs to the file, and every push to `main` replaces the two disk images of Latest build, so their counts would be lost. `.github/workflows/download-stats.yml` reads the counts of every release file every day at 23:50 UTC, and the Release workflow calls it once more right before it publishes, while the old files still exist. It can also be run by hand (Actions > Download stats > Run workflow).
 
 The readings go to the `stats` branch, which holds no code: `downloads.tsv` (time, reason, release, file id, file name, downloads; one row per file per reading), `repo.tsv` (stars and forks) and a `README.md` with the totals, Apple silicon and Intel, and new downloads per day, so [the branch's page](https://github.com/cyang2020/brk/tree/stats) shows them. A file's count only grows while it exists, so the total is the sum of the highest count recorded for each file. Counting began on 2026-11-11; downloads of files replaced before then are not included. If the reading before a publish fails, the publish still runs, and the downloads of the replaced files since the last daily reading are lost.
 
@@ -96,7 +104,7 @@ Measured on `macos-26` on 2026-11-10 (build job; the publish job adds about 25 s
 | The x86_64 app | 4:57 | 0:25 |
 | Saving the SwiftPM build | 0:29 | 0:11 |
 | Signing and notarizing both apps | 1:50 | 1:36 |
-| Zips, notes and the artifact | 0:34 | 0:31 |
+| Zips, notes and the artifact (measured before the switch to disk images) | 0:34 | 0:31 |
 | **Whole job** | **about 19 minutes** | **6 minutes** |
 
 Tests that GitHub's runners cannot run are skipped only there (`GITHUB_ACTIONS`): `PageSandboxTests.testAPageCannotReachTheNetworkByAnyWayItHas` loads its page locally in 3 seconds, but on the runners the page's load event never fires, for reasons not yet found. The Little Arc size checks need a bigger screen than the runners' 1024x768.

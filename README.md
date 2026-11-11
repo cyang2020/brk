@@ -5,12 +5,13 @@
 </picture>
 
 <p align="center">
-  <a href="https://github.com/cyang2020/brk/releases/tag/latest"><img src="https://img.shields.io/badge/Download-for%20Mac-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac"></a>
+  <a href="https://github.com/cyang2020/brk/releases/download/latest/Brk-arm64.dmg"><img src="https://img.shields.io/badge/Download-Apple%20silicon-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Apple silicon"></a>
+  <a href="https://github.com/cyang2020/brk/releases/download/latest/Brk-x86_64.dmg"><img src="https://img.shields.io/badge/Download-Intel-555555?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Intel"></a>
   <a href="https://cyang2020.github.io/brk/"><img src="https://img.shields.io/badge/Website-cyang2020.github.io%2Fbrk-1a4fe0?style=for-the-badge" alt="Website"></a>
 </p>
 
 <p align="center">
-  <b><a href="https://github.com/cyang2020/brk/releases/tag/latest">Download</a></b> ·
+  <b><a href="#download">Download</a></b> ·
   <a href="https://cyang2020.github.io/brk/">Website</a> ·
   <a href="https://github.com/cyang2020/brk/issues/new/choose">Report a bug</a> ·
   <a href="https://github.com/cyang2020/brk/discussions">Discussions</a> ·
@@ -180,14 +181,14 @@ Arc 1.170 on the left, Brk on the right, same window and same pages: 0.14% of th
 
 ## Download
 
-Get the newest build from **[Releases › Latest build](https://github.com/cyang2020/brk/releases/tag/latest)**:
+Download the disk image for your Mac:
 
-| Your Mac | File |
+| Your Mac | Download |
 | --- | --- |
-| Apple silicon (M1 and later) | `Brk-<version>-arm64.zip` |
-| Intel | `Brk-<version>-x86_64.zip` |
+| Apple silicon (M1 and later) | **[Brk-arm64.dmg](https://github.com/cyang2020/brk/releases/download/latest/Brk-arm64.dmg)** |
+| Intel | **[Brk-x86_64.dmg](https://github.com/cyang2020/brk/releases/download/latest/Brk-x86_64.dmg)** |
 
-Unzip it and drag **Brk** into Applications. Builds are signed with a Developer ID and notarized by Apple, so they open with a double-click. Needs macOS 14 Sonoma or later. "Latest build" is rebuilt from `main` after every change; versioned releases appear on the same page when they are tagged. How the pipeline works is in [`docs/release.md`](docs/release.md).
+Open it and drag **Brk** into Applications. Builds are signed with a Developer ID and notarized by Apple, so they open with a double-click. Needs macOS 14 Sonoma or later. The links always fetch the newest build: [Latest build](https://github.com/cyang2020/brk/releases/tag/latest) is rebuilt from `main` after every change, and versioned releases appear on the same page when they are tagged. How the pipeline works is in [`docs/release.md`](docs/release.md).
 
 ## Feedback and bug reports
 

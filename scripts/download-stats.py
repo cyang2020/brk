@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Records how often each release zip was downloaded, and writes a summary (docs/release.md, "Download counts").
+"""Records how often each release file was downloaded, and writes a summary (docs/release.md, "Download counts").
 
     GH_TOKEN=... GH_REPO=cyang2020/brk scripts/download-stats.py <stats folder> <event>
 
 GitHub counts the downloads of each release file, but the count belongs to the file: the release workflow replaces
-the zips of "Latest build" on every push to main, and the replaced files take their counts with them. So the counts
+the files of "Latest build" on every push to main, and the replaced files take their counts with them. So the counts
 are read every day and once more right before a publish replaces anything, and appended to `downloads.tsv` in the
 stats folder (a checkout of the `stats` branch). A file's count only grows while it exists, so the highest count
 recorded for it is what it had; the total is the sum of those over every file ever recorded.
@@ -90,7 +90,7 @@ def summary(rows, repo_rows, repo):
     lines = [
         '# Brk download counts',
         '',
-        f'Downloads of the release zips of [{repo}](https://github.com/{repo}/releases), recorded every day and before '
+        f'Downloads of the release files of [{repo}](https://github.com/{repo}/releases), recorded every day and before '
         f'every publish by `.github/workflows/download-stats.yml`. Counting began on {first}; downloads of files that '
         'were replaced before then are not included.',
         '',

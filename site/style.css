@@ -121,6 +121,7 @@ h3 { font-size: 20px; margin: 20px 0 6px; }
 .feature .lede { margin-left: 0; }
 
 .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.other-mac { color: var(--muted); font-size: 14px; margin: 14px 0 0; }
 
 .meta { display: flex; gap: 10px 22px; justify-content: center; flex-wrap: wrap; color: var(--muted); font-size: 15px; margin: 22px 0 48px; }
 .meta span::before { content: "✓ "; color: var(--accent); font-weight: 700; }

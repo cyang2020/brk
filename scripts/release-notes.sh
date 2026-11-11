@@ -1,6 +1,6 @@
 #!/bin/bash
 # Writes the GitHub release notes for a build (.github/workflows/release.yml; docs/release.md): what the build is,
-# which zip to download, how to open it, and the commits since the previous build.
+# which disk image to download, how to install it, and the commits since the previous build.
 #
 #   scripts/release-notes.sh <label> <previous build: commit, tag or empty> <signed: true|false> > notes.md
 #
@@ -16,10 +16,10 @@ MAX=200
 
 echo "$PRODUCT $LABEL for macOS 14 or later, built from \`$HEAD_SHORT\`${GITHUB_RUN_NUMBER:+ (build $GITHUB_RUN_NUMBER)}."
 echo
-echo "- Apple silicon (M1 and later): \`$PRODUCT-$LABEL-arm64.zip\`"
-echo "- Intel: \`$PRODUCT-$LABEL-x86_64.zip\`"
+echo "- Apple silicon (M1 and later): \`$PRODUCT-arm64.dmg\`"
+echo "- Intel: \`$PRODUCT-x86_64.dmg\`"
 echo
-echo "Unzip it and move $PRODUCT.app to Applications."
+echo "Open the disk image and drag $PRODUCT into Applications."
 echo
 if [ "$SIGNED" = "true" ]; then
   echo "Signed with a Developer ID and notarized by Apple, so it opens like any downloaded app."

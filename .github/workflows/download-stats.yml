@@ -1,5 +1,5 @@
-# Download counts of the release zips (docs/release.md, "Download counts"), kept on the `stats` branch.
-# GitHub's count belongs to a file, and Release replaces the zips of "Latest build" on every push to main, so the
+# Download counts of the release files (docs/release.md, "Download counts"), kept on the `stats` branch.
+# GitHub's count belongs to a file, and Release replaces the disk images of "Latest build" on every push to main, so the
 # counts are read every day and by Release right before it publishes (it calls this workflow), then appended to
 # stats/downloads.tsv with a summary in its README.md. Only main's code runs here; no secret is used.
 name: Download stats

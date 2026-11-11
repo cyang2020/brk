@@ -1,10 +1,12 @@
 # Builds Brk for Apple silicon and Intel on every push to main and publishes both (docs/release.md).
-# - push to main: the rolling pre-release "Latest build" (tag `latest`, moved to the commit) gets the new zips;
+# - push to main: the rolling pre-release "Latest build" (tag `latest`, moved to the commit) gets the new disk images;
 # - tag v*: a normal release named after the tag;
 # - any other branch or a manual run off main: a draft release named ci-test-<run id>, which creates no tag.
 # Two jobs. `build` (macOS, read-only token) runs `swift test` once, builds the arm64 app and the x86_64 app
-# cross-compiled (ARCH=x86_64 scripts/build.sh), signs and notarizes them when the signing secrets are set, and hands
-# the zips and notes on as an artifact. `publish` (Linux, the only job that may write) puts them on the release and
+# cross-compiled (ARCH=x86_64 scripts/build.sh), signs and notarizes them when the signing secrets are set, packs each
+# into a drag-to-Applications disk image (scripts/make-dmg.sh; signed and notarized too) and hands the images and
+# notes on as an artifact. The images keep fixed names (Brk-arm64.dmg, Brk-x86_64.dmg), so
+# https://github.com/<repo>/releases/download/latest/Brk-arm64.dmg always downloads the newest build. `publish` (Linux, the only job that may write) puts them on the release and
 # never sees a signing secret. Security rules: docs/release.md, "Security".
 name: Release
 
@@ -226,38 +228,65 @@ jobs:
           cat "$RUNNER_TEMP/notarize-arm64.log" "$RUNNER_TEMP/notarize-x86_64.log"
           exit "$status"
 
+      # Signed with the same identity when signing is on (the keychain is still there), ad hoc builds get unsigned
+      # images. dmgbuild lays the window out without Finder (scripts/dmg/settings.py).
+      - name: Disk images
+        env:
+          SIGN_IDENTITY: ${{ steps.keychain.outputs.identity }}
+          SIGN_KEYCHAIN: ${{ steps.keychain.outputs.keychain }}
+        run: |
+          for arch in arm64 x86_64; do scripts/make-dmg.sh "out/$arch/Brk.app" "out/Brk-$arch.dmg"; done
+
+      # The apps inside are notarized and stapled already; the images get their own ticket, so opening a downloaded
+      # image needs no network check either.
+      - name: Notarize the disk images
+        if: steps.mode.outputs.signing == 'true'
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          umask 077
+          export NOTARY_KEY="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$NOTARY_KEY"
+          scripts/notarize.sh out/Brk-arm64.dmg > "$RUNNER_TEMP/notarize-dmg-arm64.log" 2>&1 & arm=$!
+          scripts/notarize.sh out/Brk-x86_64.dmg > "$RUNNER_TEMP/notarize-dmg-x86_64.log" 2>&1 & intel=$!
+          status=0
+          wait "$arm" || status=1
+          wait "$intel" || status=1
+          rm -f "$NOTARY_KEY"
+          cat "$RUNNER_TEMP/notarize-dmg-arm64.log" "$RUNNER_TEMP/notarize-dmg-x86_64.log"
+          exit "$status"
+
       - name: Remove the signing keychain and keys
         if: always() && steps.mode.outputs.signing == 'true'
         run: |
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
           rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/AuthKey.p8"
 
-      - name: Zips and release notes
+      - name: Release notes
         env:
           LABEL: ${{ steps.version.outputs.label }}
           PREVIOUS: ${{ steps.version.outputs.previous }}
           SIGNED: ${{ steps.mode.outputs.signing }}
         run: |
-          for arch in arm64 x86_64; do
-            ditto -c -k --keepParent "out/$arch/Brk.app" "out/Brk-$LABEL-$arch.zip"
-          done
           scripts/release-notes.sh "$LABEL" "$PREVIOUS" "$SIGNED" > out/notes.md
           {
             echo; echo "### SHA-256"; echo; echo '```'
-            (cd out && shasum -a 256 Brk-*.zip)
+            (cd out && shasum -a 256 Brk-*.dmg)
             echo '```'
             echo; echo "Built by [run ${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
           } >> out/notes.md
-          ls -l out/*.zip
+          ls -l out/*.dmg
           cat out/notes.md >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-${{ github.run_id }}
           path: |
-            out/Brk-*.zip
+            out/Brk-*.dmg
             out/notes.md
-          compression-level: 0 # the zips are compressed already
+          compression-level: 0 # the disk images are compressed already
           retention-days: 3
           if-no-files-found: error
 
@@ -294,7 +323,7 @@ jobs:
 
       - name: Publish
         run: |
-          assets=(out/Brk-*.zip)
+          assets=(out/Brk-*.dmg)
           ls -l "${assets[@]}"
           move_latest_tag() {
             if gh api "repos/$GH_REPO/git/ref/tags/latest" > /dev/null 2>&1; then
