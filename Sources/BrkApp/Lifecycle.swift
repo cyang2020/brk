@@ -145,6 +145,8 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         menuTarget.perform = { [weak self] action, event in
             // Exit (Esc) closes an open icon popover first, as the Escape key does wherever it arrives.
             if action == .exit, TabIconPicker.isOpen { TabIconPicker.close(); return }
+            // Exit (Esc) answers No on a save-password card over the key window.
+            if action == .exit, self?.store?.savePromptCards.cancelKeyWindowCard() == true { return }
             guard let self, let window = self.store?.windowController(nil)?.id else { return }
             self.router?.menuAction(action, in: window, event: event)
         }

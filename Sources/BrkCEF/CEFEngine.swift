@@ -40,6 +40,8 @@ public final class CEFEngine: WebEngine {
         Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
     }
     let transfers = Transfers()
+    /// Chromium's save-password bubble, asked as Arc's card instead (`SavePrompts`).
+    private let savePrompts = SavePrompts()
     let filterLists = FilterListCache()
     private let outputs = DocumentOutputs()
     private var outputAdapters: [OutputID: AnyObject] = [:]
@@ -139,6 +141,16 @@ public final class CEFEngine: WebEngine {
     }
 
     private init() {
+        savePrompts.pages = { [weak self] in
+            guard let self, self.phase == .running else { return [] }
+            return self.live.map { (page: $0.key, host: $0.value.hostWindow, url: $0.value.browser.url) }
+        }
+        savePrompts.offer = { [weak self] prompt, reply in
+            guard let self, let delegate = self.delegate else { reply(.notNow); return }
+            delegate.engine(self, save: prompt, reply: reply)
+        }
+        savePrompts.withdraw = { [weak self] id in guard let self else { return }; self.delegate?.engine(self, dismissSave: id) }
+        savePrompts.start()
         filterLists.loaded = { [weak self] in
             guard let self, self.phase == .running else { return }
             for page in self.live.values { page.configureRequestFilter(page.browser.url); page.refreshWebsitePolicy() }

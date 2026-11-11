@@ -139,6 +139,12 @@ public final class AppStore {
         self?.dispatch(.user(window, command))
     }, owner: { [weak self] window in self?.windows[window]?.window ?? self?.windowController(nil)?.window })
     let siteDialogs = SiteDialogs()
+    /// Arc's save-password card in place of Chromium's bubble (SavePromptCards.swift).
+    lazy var savePromptCards: SavePromptCards = {
+        let cards = SavePromptCards()
+        cards.refocus = { [weak self] window in self?.windows.values.first { $0.window === window }?.reapplyFocus() }
+        return cards
+    }()
     lazy var sitePanels: SitePanels = {
         let panels = SitePanels()
         panels.send = { [weak self] id, command in self?.dispatch(.user(id, command)) }

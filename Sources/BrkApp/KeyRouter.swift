@@ -74,6 +74,13 @@ final class KeyRouter: WebEngineDelegate {
         }
     }
     func engine(_ engine: any WebEngine, dismissPermission id: String) { store.siteDialogs.dismiss(id) }
+    func engine(_ engine: any WebEngine, save prompt: SavePrompt, reply: @escaping @MainActor (SavePromptAnswer) -> Void) {
+        guard !store.isTerminating else { reply(.notNow); return }
+        let window = prompt.page.window
+        store.savePromptCards.present(prompt, in: store.windowController(window)?.window,
+                                      scheme: store.snapshot.windows[window]?.theme.scheme ?? .light, reply: reply)
+    }
+    func engine(_ engine: any WebEngine, dismissSave id: String) { store.savePromptCards.dismiss(id) }
     func engine(_ engine: any WebEngine, contextDisposed result: ContextDisposalResult) { store.dispatch(.system(.contextDisposed(result))) }
 
     /// Arc's Links setting "Open a Peek window when clicking on links to other sites" ("This only affects Favorites

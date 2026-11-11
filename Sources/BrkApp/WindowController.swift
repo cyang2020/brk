@@ -4,6 +4,7 @@ import BrkContent
 import BrkDomain
 import BrkEngine
 import BrkLayout
+import BrkOverlays
 import BrkUIKit
 import os
 
@@ -90,6 +91,11 @@ public class WindowController: NSObject, NSWindowDelegate {
         // ⌘Z and ⇧⌘Z while Edit Theme is open step through the panel's edits, before the page or the Edit menu's
         // Undo sees them (the panel is never key, so the browser window has the keys).
         window.onKeyBeforePage = { [weak self] event in
+            // A save card over the window (SavePromptCards) saves on Return, before the key table sees it.
+            if event.keyCode == 36 || event.keyCode == 76, event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty,
+               let card = self?.window.contentView?.subviews.last(where: { $0 is SavePromptCard }) as? SavePromptCard {
+                card.accept(); return true
+            }
             guard let self, event.keyCode == Key.z.code else { return false }
             let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
             guard flags == .command || flags == [.command, .shift] else { return false }
@@ -104,6 +110,8 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.onEscapeBeforePage = { [weak self] event in
             // The icon popover takes Escape first, from the menu path, the window and the key monitor alike.
             if TabIconPicker.isOpen { TabIconPicker.close(); return true }
+            // A save card over the window (SavePromptCards) declines on Escape, before the key table sees it.
+            if let card = self?.window.contentView?.subviews.last(where: { $0 is SavePromptCard }) as? SavePromptCard { card.decline(); return true }
             // Site search keeps its first Escape (it leaves the mode, the bar stays) whichever monitor runs first.
             if let self, self.root.commandBar.takeEscape(event) { return true }
             guard let self, self.lastSnapshot?.overlay != nil || self.pageFullscreen.nativeExitShouldExitDocument,
@@ -220,6 +228,9 @@ public class WindowController: NSObject, NSWindowDelegate {
         lastSnapshot = snapshot
         lastFrames = frames
     }
+
+    /// The snapshot's focus again, after a card over the window (SavePromptCards) held the keyboard.
+    func reapplyFocus() { if let last = lastSnapshot { applyFocus(last.focus) } }
 
     /// Keyboard focus follows the snapshot: a page gets it through the engine, a native view through the root's
     /// narrow focus API; nothing else in BrkApp touches a view's responder status.

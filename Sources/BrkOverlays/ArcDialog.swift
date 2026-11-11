@@ -35,6 +35,13 @@ struct ArcDialogMetrics: MetricGroup {
     let primary = Metric(RGBAValue(0x31, 0x39, 0xFB), .guess("confirm button blue #3139FB, sampled on P26 a (Arc's PrimaryButton)"))
     let destructive = Metric(RGBAValue(0xF5, 0x37, 0x15), .guess("Delete button red #F53715, sampled on P27 a"))
     let fieldRadius = Metric(8.0, .guess("text field corner radius, measured on P26 a"))
+    let keyTile = Metric(RGBAValue(0xE8, 0xE8, 0xEF), .anatomy("~/brk-arc-reference/save-password/save-password-arc.png: the key's tile at (1560, 730) px"))
+    let keyInk = Metric(RGBAValue(0x1F, 0x21, 0x26), .anatomy("~/brk-arc-reference/save-password/save-password-arc.png: the key at (1610, 790) px"))
+    /// Each symbol's height and the shift of its middle from the tile's (negative is up).
+    let keyGlyph = Metric([33.5, -1.75], .anatomy("~/brk-arc-reference/save-password/save-password-arc.png: the key's ink spans y 746-813 px, its middle 1.75 pt above the tile's"))
+    let houseGlyph = Metric([28.5, -1.25], .anatomy("~/brk-arc-reference/save-password/save-address-arc.png: the house's ink spans y 733-790 px, its middle 1.25 pt above the tile's"))
+    let cardGlyph = Metric([23.0, -1.0], .anatomy("~/brk-arc-reference/save-password/save-card-arc.png: the card's ink spans y 757-803 px, its middle 1 pt above the tile's"))
+    let keyTileRadius = Metric(13.0, .guess("the key tile's corner radius, measured on save-password-arc.png"))
 }
 
 let ArcDialog = ArcDialogMetrics()
@@ -59,6 +66,8 @@ struct ArcDialogRow {
 enum ArcDialogIcon: Equatable {
     case app
     case profile(badge: String, color: RGBAValue)
+    /// The save cards' pictures, an SF Symbol on a grey tile: the password's key, the address's house, the card's card.
+    case key, house, creditCard
 }
 
 @MainActor
@@ -73,13 +82,20 @@ final class ArcDialogView: NSView {
     private let buttonGap: Double
     let cancel: AlertButton
     let confirm: AlertButton
+    /// A third button at the bottom left, without a key cap (the save-password card's Never on this site).
+    let extra: AlertButton?
     var onCancel: () -> Void = {}
     var onConfirm: () -> Void = {}
+    var onExtra: () -> Void = {}
     /// The field that takes focus first (its text selected), if any.
     var firstField: NSTextField?
+    /// Esc presses the decline button here, for a dialog outside the app's state (the save cards), which the menu's
+    /// Exit does not know about.
+    var escapeCancels = false
 
     init(scheme: Scheme, icon picture: ArcDialogIcon?, title text: NSAttributedString, rows: [ArcDialogRow], buttonGap: Double,
-         buttonRight: Double, confirm confirmTitle: String, destructive: Bool = false, cancel cancelTitle: String = ArcDialogCopy.cancel) {
+         buttonRight: Double, confirm confirmTitle: String, destructive: Bool = false, cancel cancelTitle: String = ArcDialogCopy.cancel,
+         extra extraTitle: String? = nil) {
         self.rows = rows
         hasIcon = picture != nil
         self.buttonRight = buttonRight
@@ -87,6 +103,7 @@ final class ArcDialogView: NSView {
         let colors = OverlayColors.of(scheme)
         cancel = AlertButton(title: cancelTitle, key: "ESC", style: .plain, scheme: scheme)
         confirm = AlertButton(title: confirmTitle, key: "↵", style: destructive ? .destructive : .primary, scheme: scheme)
+        extra = extraTitle.map { AlertButton(title: $0, key: "", style: .plain, scheme: scheme) }
         super.init(frame: .zero)
         appearance = .of(scheme)
         wantsLayer = true
@@ -103,6 +120,9 @@ final class ArcDialogView: NSView {
         switch picture {
         case .app?: icon.image = NSApp.applicationIconImage
         case .profile(let badge, let color)?: icon.image = ProfileFace.image(badge: badge, color: color.color)
+        case .key?: icon.image = SymbolTile.image("key.fill", glyph: ArcDialog.keyGlyph.value, scheme: scheme)
+        case .house?: icon.image = SymbolTile.image("house.fill", glyph: ArcDialog.houseGlyph.value, scheme: scheme)
+        case .creditCard?: icon.image = SymbolTile.image("creditcard.fill", glyph: ArcDialog.cardGlyph.value, scheme: scheme)
         case nil: break
         }
         icon.imageScaling = .scaleProportionallyUpOrDown
@@ -116,6 +136,10 @@ final class ArcDialogView: NSView {
         confirm.identify(.spaceToolsControl("alert-confirm"))
         card.addSubview(cancel)
         card.addSubview(confirm)
+        if let extra {
+            extra.action = { [weak self] in self?.onExtra() }
+            card.addSubview(extra)
+        }
     }
 
     @available(*, unavailable)
@@ -136,7 +160,9 @@ final class ArcDialogView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 36 || event.keyCode == 76 { if confirm.isEnabled { onConfirm() } } else { super.keyDown(with: event) }
+        if event.keyCode == 36 || event.keyCode == 76 { if confirm.isEnabled { onConfirm() } }
+        else if event.keyCode == 53, escapeCancels { onCancel() }
+        else { super.keyDown(with: event) }
     }
 
     /// A click on the dimmed window outside the card cancels.
@@ -185,6 +211,7 @@ final class ArcDialogView: NSView {
             let confirmWidth = confirm.fittingWidth, cancelWidth = cancel.fittingWidth
             confirm.frame = CGRect(x: width - buttonRight - confirmWidth, y: top, width: confirmWidth, height: buttonHeight)
             cancel.frame = CGRect(x: confirm.frame.minX - m.buttonGap.value - cancelWidth, y: top, width: cancelWidth, height: buttonHeight)
+            if let extra { extra.frame = CGRect(x: buttonRight, y: top, width: extra.fittingWidth, height: buttonHeight) }
         }
         return top + buttonHeight + m.buttonBottom.value
     }
@@ -305,6 +332,7 @@ final class AlertButton: NSView {
         addSubview(label)
         addSubview(capBox)
         capBox.addSubview(cap)
+        capBox.isHidden = key.isEmpty
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
         setAccessibilityLabel(title)
@@ -340,9 +368,12 @@ final class AlertButton: NSView {
 
     override var isFlipped: Bool { true }
 
-    private var capWidth: Double { ArcDialog.keyCap.value[cap.stringValue == "ESC" ? 0 : 1] }
+    private var hasCap: Bool { !cap.stringValue.isEmpty }
+    private var capWidth: Double { hasCap ? ArcDialog.keyCap.value[cap.stringValue == "ESC" ? 0 : 1] : 0 }
+    /// A button without a key cap has the label's padding on both sides (Arc's Never on this site: 129 pt).
     var fittingWidth: Double {
         let p = ArcDialog.buttonPadding.value
+        guard hasCap else { return (2 * p[0] + ceil(label.intrinsicContentSize.width)).rounded() }
         return (p[0] + ceil(label.intrinsicContentSize.width) + p[1] + capWidth + p[2]).rounded()
     }
 
@@ -403,6 +434,29 @@ enum ProfileFace {
             let glyph = NSAttributedString(string: badge, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .heavy), .foregroundColor: NSColor.white])
             let size = glyph.size()
             glyph.draw(at: CGPoint(x: 51.5 - size.width / 2, y: 51.5 - size.height / 2))
+            return true
+        }
+    }
+}
+
+/// The save cards' picture (Arc 1.170 on fixture forms, 2026-11-12): an SF Symbol in near-black on a 60 pt grey tile
+/// with rounded corners. `glyph`: the symbol's height and its middle's shift from the tile's (negative is up).
+enum SymbolTile {
+    @MainActor
+    static func image(_ name: String, glyph size: [Double], scheme: Scheme) -> NSImage {
+        let m = ArcDialog
+        let tile = scheme == .light ? m.keyTile.value.color : NSColor.white.withAlphaComponent(0.12)
+        let ink = scheme == .light ? m.keyInk.value.color : NSColor.white
+        let glyph = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [ink]))
+        return NSImage(size: NSSize(width: 60, height: 60), flipped: false) { rect in
+            tile.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: m.keyTileRadius.value, yRadius: m.keyTileRadius.value).fill()
+            if let glyph, glyph.size.height > 0 {
+                let height = size[0], width = glyph.size.width * height / glyph.size.height
+                // Flipped is false here: subtracting the (negative) shift lifts the symbol.
+                glyph.draw(in: CGRect(x: (rect.width - width) / 2, y: (rect.height - height) / 2 - size[1], width: width, height: height))
+            }
             return true
         }
     }

@@ -146,6 +146,11 @@ public protocol WebEngineDelegate: AnyObject {
     func engine(_ engine: any WebEngine, permission prompt: SitePermissionPrompt, reply: @escaping @MainActor (SitePermission) -> Void)
     func engine(_ engine: any WebEngine, dismissPermission id: String)
 
+    /// Chromium offers to save the login a page just sent (`SavePrompt`); the app shows Arc's card and replies with the
+    /// button pressed. `dismissSave` withdraws a prompt Chromium closed by itself (another page, another tab).
+    func engine(_ engine: any WebEngine, save prompt: SavePrompt, reply: @escaping @MainActor (SavePromptAnswer) -> Void)
+    func engine(_ engine: any WebEngine, dismissSave id: String)
+
     /// A page's main frame is about to navigate (CEF's OnBeforeBrowse, synchronous). False cancels it; the app
     /// uses this for Arc's "Open a Peek window when clicking on links to other sites" on Pinned and Favorites tabs
     /// (the Peek opens instead). Redirects are never asked about. F3.
@@ -176,6 +181,8 @@ extension WebEngineDelegate {
     public func engine(_ engine: any WebEngine, dismissOutput id: OutputID) {}
     public func engine(_ engine: any WebEngine, permission prompt: SitePermissionPrompt, reply: @escaping @MainActor (SitePermission) -> Void) { reply(.deny) }
     public func engine(_ engine: any WebEngine, dismissPermission id: String) {}
+    public func engine(_ engine: any WebEngine, save prompt: SavePrompt, reply: @escaping @MainActor (SavePromptAnswer) -> Void) { reply(.notNow) }
+    public func engine(_ engine: any WebEngine, dismissSave id: String) {}
     public func engine(_ engine: any WebEngine, ownerWindow id: WindowID) -> NSWindow? { nil }
     public func engine(_ engine: any WebEngine, find update: FindUpdate) {}
     public func engine(_ engine: any WebEngine, download update: DownloadUpdate) {}

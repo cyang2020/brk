@@ -264,6 +264,8 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     var browser: CefBrowser { chrome.browser }
+    /// CEF's empty host window for this page; Chromium's bubbles for the page are its child windows (`SavePrompts`).
+    var hostWindow: NSWindow? { chrome.nsWindow }
     var readyDocument: DocumentToken? { mainDocument.readyDocument }
 
     var facts: PageFacts {
