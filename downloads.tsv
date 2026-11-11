@@ -9,3 +9,5 @@ time	event	release	asset_id	asset	downloads
 2026-11-11T13:25:28Z	before-publish 0.1.0-15.dc5e6b4	latest	735510934	Brk-0.1.0-14.89cbcf8-x86_64.zip	0
 2026-11-11T15:16:51Z	before-publish 0.1.0-16.0e4a327	latest	735621927	Brk-0.1.0-15.dc5e6b4-arm64.zip	2
 2026-11-11T15:16:51Z	before-publish 0.1.0-16.0e4a327	latest	735621929	Brk-0.1.0-15.dc5e6b4-x86_64.zip	0
+2026-11-11T18:08:10Z	before-publish 0.1.0-17.d113c87	latest	735934630	Brk-arm64.dmg	4
+2026-11-11T18:08:10Z	before-publish 0.1.0-17.d113c87	latest	735934636	Brk-x86_64.dmg	0
