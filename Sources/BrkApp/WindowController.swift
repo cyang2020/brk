@@ -4,7 +4,6 @@ import BrkContent
 import BrkDomain
 import BrkEngine
 import BrkLayout
-import BrkOverlays
 import BrkUIKit
 import os
 
@@ -93,9 +92,7 @@ public class WindowController: NSObject, NSWindowDelegate {
         window.onKeyBeforePage = { [weak self] event in
             // A save card over the window (SavePromptCards) saves on Return, before the key table sees it.
             if event.keyCode == 36 || event.keyCode == 76, event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty,
-               let card = self?.window.contentView?.subviews.last(where: { $0 is SavePromptCard }) as? SavePromptCard {
-                card.accept(); return true
-            }
+               self?.root.savePromptKey(save: true) == true { return true }
             guard let self, event.keyCode == Key.z.code else { return false }
             let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
             guard flags == .command || flags == [.command, .shift] else { return false }
@@ -111,7 +108,7 @@ public class WindowController: NSObject, NSWindowDelegate {
             // The icon popover takes Escape first, from the menu path, the window and the key monitor alike.
             if TabIconPicker.isOpen { TabIconPicker.close(); return true }
             // A save card over the window (SavePromptCards) declines on Escape, before the key table sees it.
-            if let card = self?.window.contentView?.subviews.last(where: { $0 is SavePromptCard }) as? SavePromptCard { card.decline(); return true }
+            if self?.root.savePromptKey(save: false) == true { return true }
             // Site search keeps its first Escape (it leaves the mode, the bar stays) whichever monitor runs first.
             if let self, self.root.commandBar.takeEscape(event) { return true }
             guard let self, self.lastSnapshot?.overlay != nil || self.pageFullscreen.nativeExitShouldExitDocument,

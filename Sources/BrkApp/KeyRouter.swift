@@ -77,7 +77,7 @@ final class KeyRouter: WebEngineDelegate {
     func engine(_ engine: any WebEngine, save prompt: SavePrompt, reply: @escaping @MainActor (SavePromptAnswer) -> Void) {
         guard !store.isTerminating else { reply(.notNow); return }
         let window = prompt.page.window
-        store.savePromptCards.present(prompt, in: store.windowController(window)?.window,
+        store.savePromptCards.present(prompt, in: store.windowController(window)?.root,
                                       scheme: store.snapshot.windows[window]?.theme.scheme ?? .light, reply: reply)
     }
     func engine(_ engine: any WebEngine, dismissSave id: String) { store.savePromptCards.dismiss(id) }

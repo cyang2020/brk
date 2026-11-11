@@ -29,6 +29,8 @@ public final class WindowRootView: NSView {
     public let findBar: FindBarView
     public let commandBar: CommandBarView
     public let spaceDialog: SpaceDialogHost
+    /// The open save card, if any (`showSavePrompt`).
+    private var savePromptCard: SavePromptCard?
     private let zapOverlay: BoostZapOverlayView
     private let boostPanel: BoostPanel
     private let aiAnswer: AIPanelView
@@ -159,6 +161,34 @@ public final class WindowRootView: NSView {
 
     public override var isFlipped: Bool { true }
     public func cancelDrag() -> Bool { sidebar.cancelDrag() }
+
+    // MARK: Save cards
+
+    /// Arc's save card (password, address, card) over the whole window, above everything else, while Chromium's own
+    /// bubble waits for the answer (BrkApp/SavePromptCards.swift). Replaces a card already shown.
+    public func showSavePrompt(_ prompt: SavePrompt, scheme: Scheme, onAnswer: @escaping (SavePromptAnswer) -> Void) {
+        savePromptCard?.removeFromSuperview()
+        let card = SavePromptCard(prompt, scheme: scheme)
+        card.frame = bounds
+        card.autoresizingMask = [.width, .height]
+        card.onAnswer = onAnswer
+        addSubview(card)
+        savePromptCard = card
+        _ = card.focus()
+    }
+    public var savePromptID: String? { savePromptCard?.prompt.id }
+    public func removeSavePrompt() {
+        savePromptCard?.removeFromSuperview()
+        savePromptCard = nil
+    }
+    /// The card takes the keyboard again (the window became key and handed focus back to the page).
+    public func focusSavePrompt() -> Bool { savePromptCard?.focus() ?? false }
+    /// Return (`save`) or Escape on an open card, before the window's key table takes the key; false when none is shown.
+    public func savePromptKey(save: Bool) -> Bool {
+        guard let card = savePromptCard else { return false }
+        if save { card.accept() } else { card.decline() }
+        return true
+    }
 
     /// The tabs a drag near the window's right edge gives to a new conversation while the panel is closed, with the drop
     /// area shown meanwhile (docs/design/ai-right-panel.md): the dragged row's whole Cmd+click selection, a Favorite, a

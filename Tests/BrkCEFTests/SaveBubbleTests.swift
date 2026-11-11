@@ -24,13 +24,13 @@ final class SaveBubbleTests: XCTestCase {
 
     func testThePasswordBubbleIsFoundWithItsButtonsLeftToRight() throws {
         let buttons = try XCTUnwrap(SaveBubble.passwordButtons(in: bubble(actions: [1471, 1162, 1364])))
-        XCTAssertEqual([buttons.never.frame.minX, buttons.notNow.frame.minX, buttons.save.frame.minX], [1162, 1364, 1471])
+        XCTAssertEqual([try XCTUnwrap(buttons.never).frame.minX, buttons.notNow.frame.minX, buttons.save.frame.minX], [1162, 1364, 1471])
     }
 
     func testRightToLeftReadsTheRowTheOtherWay() throws {
         let buttons = try XCTUnwrap(SaveBubble.passwordButtons(in: bubble(actions: [1162, 1364, 1471]), rightToLeft: true))
         XCTAssertEqual(buttons.save.frame.minX, 1162)
-        XCTAssertEqual(buttons.never.frame.minX, 1471)
+        XCTAssertEqual(try XCTUnwrap(buttons.never).frame.minX, 1471)
     }
 
     /// Save address? (an Edit button beside the close button) and Save card? (the card network's image), as Chromium 156
