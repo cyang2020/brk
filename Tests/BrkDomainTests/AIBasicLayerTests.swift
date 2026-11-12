@@ -116,6 +116,20 @@ final class AIBasicLayerTests: XCTestCase {
         }
     }
 
+    /// After a failed request nothing is asked for five minutes; the timer used to wake every 100 ms of them.
+    func testAfterAFailureTheNextNamingTickIsThePausesEnd() throws {
+        let d = driver([.tabNames])
+        settle(d, d.open("https://one.example/page"), title: "One")
+        let request = try XCTUnwrap(aiEffects(tick(d)).first)
+        d.system(.aiResult(request.0, .failed("Not signed in.")))
+        var timers: [Int] = []
+        func collect(_ effects: [Effect]) { timers += effects.compactMap { if case .aiBasicTimer(let ms) = $0 { ms } else { nil } } }
+        collect(settle(d, d.open("https://two.example/page"), title: "Two"))
+        collect(tick(d).effects)
+        XCTAssertFalse(timers.isEmpty)
+        XCTAssertTrue(timers.allSatisfy { $0 >= 290_000 }, "\(timers)")
+    }
+
     func testAUserTitleIsNeverTouchedAndAMoveToAnotherSiteNamesAgain() throws {
         let d = driver([.tabNames])
         let tab = d.open("https://news.example/story")

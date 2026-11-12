@@ -14,16 +14,18 @@ public enum AIPageSchedule: Hashable, Sendable, Codable {
     /// `weekday` as `Calendar` numbers it: 1 is Sunday, 2 Monday, … 7 Saturday.
     case weekly(weekday: Int, hour: Int, minute: Int)
 
-    /// The latest slot at or before `now`. A page whose last run is before it is due.
+    /// The latest slot at or before `now`. A page whose last run is before it is due. A schedule with no slot (an
+    /// hour or weekday out of range in a saved record) gives the distant past: never due, rather than due at every check.
     public func latestSlot(atOrBefore now: Instant, calendar: Calendar) -> Instant {
+        let never = Instant(milliseconds: 0)
         let date = Date(timeIntervalSince1970: Double(now.milliseconds) / 1000)
         func instant(_ date: Date) -> Instant { Instant(milliseconds: Int64((date.timeIntervalSince1970 * 1000).rounded(.down))) }
         switch self {
         case .hourly:
             let parts = calendar.dateComponents([.era, .year, .month, .day, .hour], from: date)
-            return calendar.date(from: parts).map(instant) ?? now
+            return calendar.date(from: parts).map(instant) ?? never
         case .daily(let hour, let minute):
-            guard var slot = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) else { return now }
+            guard var slot = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) else { return never }
             if slot > date { slot = calendar.date(byAdding: .day, value: -1, to: slot) ?? slot }
             return instant(slot)
         case .weekly(let weekday, let hour, let minute):
@@ -32,7 +34,7 @@ public enum AIPageSchedule: Hashable, Sendable, Codable {
                       let slot = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) else { continue }
                 if calendar.component(.weekday, from: slot) == weekday, slot <= date { return instant(slot) }
             }
-            return now
+            return never
         }
     }
 

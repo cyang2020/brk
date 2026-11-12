@@ -47,7 +47,7 @@ extension Work {
     /// false when this is not a group-onto-group drop.
     mutating func mergeGroup(_ id: ItemID, into target: ItemID, at index: Int) -> Bool {
         guard id != target, isGroup(id), isGroup(target), let scope = state.locate(id), state.locate(target) == scope,
-              let children = state.tree(scope)?[id]?.children else { return false }
+              let tree = state.tree(scope), !tree.isDescendant(target, of: id), let children = tree[id]?.children else { return false }
         let start = min(max(0, index), state.tree(scope)?[target]?.children.count ?? 0)
         for (offset, child) in children.enumerated() { _ = moveItem(child, to: .into(parent: target, index: start + offset)) }
         _ = removeItem(id)

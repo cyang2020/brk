@@ -1006,29 +1006,3 @@ enum LocalIcons {
         }
     }
 }
-
-/// Favicons for result rows, archive entries and the tab switcher, fetched once per URL.
-@MainActor
-public final class FaviconCache {
-    public static let shared = FaviconCache()
-    private var images: [URL: NSImage] = [:]
-    private var waiting: [URL: [(NSImage) -> Void]] = [:]
-
-    /// The cached image, or nil now and `then` once it arrives (never, if the fetch fails).
-    public func image(for url: URL, then: @escaping (NSImage) -> Void) -> NSImage? {
-        if let image = images[url] { return image }
-        if waiting[url] != nil {
-            waiting[url]?.append(then)
-            return nil
-        }
-        waiting[url] = [then]
-        Task {
-            let data = try? await URLSession.shared.data(from: url).0
-            let callbacks = waiting.removeValue(forKey: url) ?? []
-            guard let data, let image = NSImage(data: data) else { return }
-            images[url] = image
-            for callback in callbacks { callback(image) }
-        }
-        return nil
-    }
-}

@@ -22,6 +22,13 @@ final class UnixHTTPTests: XCTestCase {
             guard case .connect = failure else { return XCTFail("\(failure)") }
         }
     }
+
+    /// A negative chunk size made the reader slice backwards and crash Brk; a size past the end overflowed.
+    func testABadChunkSizeIsABadReplyNotACrash() {
+        XCTAssertEqual(UnixHTTP.dechunk(Data("3\r\nabc\r\n0\r\n\r\n".utf8)), Data("abc".utf8))
+        XCTAssertNil(UnixHTTP.dechunk(Data("-5\r\nabcdefgh\r\n0\r\n\r\n".utf8)))
+        XCTAssertNil(UnixHTTP.dechunk(Data("7fffffffffffffff\r\nabc\r\n".utf8)))
+    }
 }
 
 /// Accepts one connection, reads the request, writes `reply`, closes.

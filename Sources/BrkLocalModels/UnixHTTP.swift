@@ -147,7 +147,7 @@ public struct UnixHTTP: Sendable {
             guard let size = Int(sizeText.trimmingCharacters(in: .whitespaces), radix: 16) else { return nil }
             let start = line.upperBound
             if size == 0 { return out }
-            guard data.distance(from: start, to: data.endIndex) >= size + 2 else { return nil }
+            guard size > 0, data.distance(from: start, to: data.endIndex) - 2 >= size else { return nil }
             let end = data.index(start, offsetBy: size)
             out.append(data[start..<end])
             index = data.index(end, offsetBy: 2)

@@ -25,6 +25,13 @@ final class LivePagesTests: XCTestCase {
         XCTAssertFalse(AIPageSchedule.weekly(weekday: 8, hour: 9, minute: 0).isValid)
     }
 
+    /// A saved record with an out-of-range schedule was due at every check, so its page refreshed back to back.
+    func testAScheduleWithNoSlotIsNeverDue() {
+        let lastRun = at("2026-09-21T14:13:00Z")
+        XCTAssertFalse(AIPageSchedule.weekly(weekday: 9, hour: 9, minute: 0).isDue(lastRun: lastRun, now: T0, calendar: calendar))
+        XCTAssertFalse(AIPageSchedule.daily(hour: 30, minute: 0).isDue(lastRun: lastRun, now: T0, calendar: calendar))
+    }
+
     func testWeekdaysParse() {
         XCTAssertEqual(AIPageWeekdays.parse("monday"), 2)
         XCTAssertEqual(AIPageWeekdays.parse("Sun"), 1)

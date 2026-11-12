@@ -170,8 +170,10 @@ extension Work {
     }
 
     private mutating func armNamingTimer() {
-        guard !state.session.ai.basic.timerArmed, let next = state.session.ai.basic.namingDue.values.min(),
+        guard !state.session.ai.basic.timerArmed, var next = state.session.ai.basic.namingDue.values.min(),
               state.session.ai.basic.naming.count < AINaming.inFlight else { return }
+        // After a failure the next tick is the pause's end, not every 100 ms of it.
+        if let paused = state.session.ai.basic.pausedUntil, paused > next { next = paused }
         state.session.ai.basic.timerArmed = true
         let wait = max(next.since(ctx.now), .milliseconds(100))
         effects.append(.aiBasicTimer(milliseconds: Int(wait.components.seconds * 1000 + wait.components.attoseconds / 1_000_000_000_000_000)))

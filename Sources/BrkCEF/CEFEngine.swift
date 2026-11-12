@@ -151,9 +151,12 @@ public final class CEFEngine: WebEngine {
         }
         savePrompts.withdraw = { [weak self] id in guard let self else { return }; self.delegate?.engine(self, dismissSave: id) }
         savePrompts.start()
-        filterLists.loaded = { [weak self] in
+        filterLists.inUse = { [weak self] in Set(self?.live.values.flatMap(\.websitePolicy.preferences.activeFilterKeys) ?? []) }
+        filterLists.loaded = { [weak self] key in
             guard let self, self.phase == .running else { return }
-            for page in self.live.values { page.configureRequestFilter(page.browser.url); page.refreshWebsitePolicy() }
+            for page in self.live.values where page.websitePolicy.preferences.activeFilterKeys.contains(key) {
+                page.configureRequestFilter(page.browser.url); page.refreshWebsitePolicy()
+            }
         }
         resources.leasesDidChange = { [weak self] browser in
             guard let self, self.phase == .running, let page = self.resources.entries[browser]?.resource else { return }

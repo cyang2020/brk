@@ -84,8 +84,12 @@ public enum SafariReader {
         guard FileManager.default.isReadableFile(atPath: plist.path), let data = try? Data(contentsOf: plist) else { throw Failure.needsFullDiskAccess }
         var out = ProfileRead()
         if let root = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] {
+            // A binary plist can name one list from many places; a budget keeps a file that nests such a list in
+            // itself from building 2^32 nodes.
+            var budget = 200_000
             func node(_ item: [String: Any], depth: Int) -> ImportNode? {
-                guard depth < 32 else { return nil }
+                guard depth < 32, budget > 0 else { return nil }
+                budget -= 1
                 switch item["WebBookmarkType"] as? String {
                 case "WebBookmarkTypeList":
                     let title: String = switch item["Title"] as? String ?? "" {

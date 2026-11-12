@@ -246,12 +246,17 @@ public final class AppStore {
         return handled
     }
 
-    /// Re-projects with a fresh `now` and re-renders (clock ticks keep archive buckets right).
+    /// Re-projects with a fresh `now` and re-renders (clock ticks keep archive buckets right, the appearance changes).
+    /// A dispatch cycle like `start`: what the render reports queues behind it instead of rendering inside it.
     public func refresh() {
+        let outer = dispatching
+        dispatching = true
         snapshot = projected()
         reconcileCaptureSheets()
         engine.reconcile(snapshot.pages)
         renderWindows()
+        dispatching = outer
+        drain()
     }
 
     /// Writes state.json synchronously. First step of the ordered quit, before the engine shuts down. A failure is
@@ -382,12 +387,29 @@ public final class AppStore {
 
     // MARK: Private
 
+    /// Applies every queued input, and those they queue. An input that queues itself again on every pass (a render
+    /// that reports something that changes each time) would keep this loop going and freeze Brk: past `drainLimit`
+    /// inputs in one drain it stops, logs the inputs it dropped, and fails a debug build.
     private func drain() {
         guard !dispatching else { return }
         dispatching = true
-        while !queue.isEmpty { _ = apply(queue.removeFirst()) }
+        var applied = 0
+        while !queue.isEmpty {
+            guard applied < Self.drainLimit else {
+                let dropped = queue.prefix(5).map { String(describing: $0).prefix(160) }.joined(separator: " | ")
+                log.fault("One drain applied \(applied) inputs without settling; dropped \(self.queue.count): \(dropped, privacy: .public)")
+                assertionFailure("AppStore drain did not settle: \(dropped)")
+                queue.removeAll()
+                break
+            }
+            _ = apply(queue.removeFirst())
+            applied += 1
+        }
         dispatching = false
     }
+
+    /// Far past any real burst (a restore or an import is one input each).
+    static let drainLimit = 10_000
 
     private func apply(_ input: Input) -> KeyHandling {
         if case .system(.window(let owner, .closed)) = input { spacePanels.ownerGone(owner) }

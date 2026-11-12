@@ -234,7 +234,6 @@ final class SiteDialogs: NSObject, NSPopoverDelegate {
 
     func dismiss(_ id: String) {
         guard let prompt = prompts.removeValue(forKey: id) else { return }
-        popovers[id] = nil
         prompt.close()
         prompt.cancel()
     }

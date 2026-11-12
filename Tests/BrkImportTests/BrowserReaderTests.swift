@@ -189,6 +189,20 @@ final class BrowserReaderTests: XCTestCase {
         XCTAssertEqual(result.favorites["Default"], [.tab(title: "Mail", url: URL(string: "https://mail.example.test/")!)])
     }
 
+    /// A sidebar file that lists a folder under itself twice made the import build that folder 2^32 times.
+    func testArcSidebarPlacesAnItemListedTwiceOnce() throws {
+        let sidebar: [String: Any] = ["sidebar": ["containers": [["global": [:]], [
+            "spaces": ["S1", ["id": "S1", "title": "Work", "containerIDs": ["unpinned", "U1", "pinned", "P1"]]],
+            "items": [
+                "P1", ["id": "P1", "childrenIds": ["F1"], "data": ["itemContainer": ["containerType": ["spaceItems": ["_0": "S1"]]]]],
+                "U1", ["id": "U1", "childrenIds": [], "data": ["itemContainer": ["containerType": ["spaceItems": ["_0": "S1"]]]]],
+                "F1", ["id": "F1", "parentID": "P1", "title": "Loop", "childrenIds": ["F1", "F1", "t1", "t1"], "data": ["list": [:]]],
+                "t1", ["id": "t1", "parentID": "F1", "childrenIds": [], "data": ["tab": ["savedURL": "https://one.example.test/", "savedTitle": "One"]]],
+            ]]]]]
+        let result = try ArcSidebar.read(try JSONSerialization.data(withJSONObject: sidebar))
+        XCTAssertEqual(result.spaces.first?.pinned, [.folder(title: "Loop", children: [.tab(title: "One", url: URL(string: "https://one.example.test/")!)])])
+    }
+
     // MARK: Fixture helpers
 
     /// Login Data's `logins` table exactly as Brk's Chromium 154 makes it (schema version 43, read from a Brk profile):

@@ -4,26 +4,44 @@ import CefKit
 import Foundation
 
 /// Compiled filter lists by store key, read and compiled off the main thread the first time a page needs one. Until a
-/// list is ready the page blocks with the others; `loaded` lets the engine reapply when it is. A few recent lists are
-/// kept: a profile has at most three, and an updated list arrives under a new key.
+/// list is ready the page blocks with the others; `loaded` lets the engine reapply the pages that use it. Up to `kept`
+/// lists stay, more while live pages use more: a profile has at most three, and an updated list arrives under a new key.
 @MainActor
 final class FilterListCache {
+    static let kept = 8
     private var lists: [String: CompiledFilterList] = [:]
     private var recent: [String] = []
     private var loading: Set<String> = []
     private var unreadable: Set<String> = []
-    var loaded: (() -> Void)?
+    /// The keys live pages use.
+    var inUse: () -> Set<String> = { [] }
+    var loaded: ((String) -> Void)?
 
     func lists(_ keys: [String]) -> [CompiledFilterList] {
-        keys.compactMap { key in
+        let found = keys.compactMap { key -> CompiledFilterList? in
             if let list = lists[key] { touch(key); return list }
             load(key); return nil
         }
+        trim(keeping: Set(keys))
+        return found
     }
 
-    private func touch(_ key: String) {
-        recent.removeAll { $0 == key }; recent.append(key)
-        while recent.count > 8 { lists[recent.removeFirst()] = nil }
+    private func touch(_ key: String) { recent.removeAll { $0 == key }; recent.append(key) }
+
+    private func trim(keeping asked: Set<String>) {
+        guard recent.count > Self.kept else { return }
+        for key in Self.dropped(recent: recent, needed: asked.union(inUse())) { recent.removeAll { $0 == key }; lists[key] = nil }
+    }
+
+    /// The oldest lists past `kept` that no page uses. Dropping one a page uses would reload it, and its arrival
+    /// reapplies that page, which asks for it again: with more lists in use than `kept`, that never ended.
+    static func dropped(recent: [String], needed: Set<String>) -> [String] {
+        var excess = recent.count - kept
+        return recent.filter { key in
+            guard excess > 0, !needed.contains(key) else { return false }
+            excess -= 1
+            return true
+        }
     }
 
     private func load(_ key: String) {
@@ -37,8 +55,8 @@ final class FilterListCache {
             guard let self else { return }
             self.loading.remove(key)
             guard let list else { self.unreadable.insert(key); return }
-            self.lists[key] = list; self.touch(key)
-            self.loaded?()
+            self.lists[key] = list; self.touch(key); self.trim(keeping: [key])
+            self.loaded?(key)
         }
     }
 }

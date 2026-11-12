@@ -28,8 +28,11 @@ public enum ArcSidebar {
             return (id, item)
         }, uniquingKeysWith: { first, _ in first })
 
+        // Each item once: Arc gives an item one parent, and a file that lists a child twice (or under itself) would
+        // otherwise build the subtree again at every level, 2^32 times.
+        var placed: Set<String> = []
         func node(_ id: String, depth: Int) -> ImportNode? {
-            guard depth < 32, let item = items[id], let data = item["data"] as? [String: Any] else { return nil }
+            guard depth < 32, placed.insert(id).inserted, let item = items[id], let data = item["data"] as? [String: Any] else { return nil }
             let custom = (item["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             if let tab = data["tab"] as? [String: Any] {
                 guard let raw = tab["savedURL"] as? String, let url = URL(string: raw), SidebarImport.publicURL(url) else { return nil }
