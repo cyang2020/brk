@@ -5,6 +5,7 @@ import BrkDomain
 import BrkEngine
 import BrkLayout
 import BrkSettings
+import BrkUIKit
 
 /// Executes control ops against the running app, on the main actor, through the same paths a user takes:
 /// `dispatch` and `load` -> `AppStore.dispatch`; `press`/`hold`/`type`/`click`/`hover` -> in-process NSEvents into
@@ -759,6 +760,7 @@ final class ControlExecutor {
         facts.appAppearance = NSApp.appearance.map(Self.scheme)
         facts.effectiveAppearance = Self.scheme(NSApp.effectiveAppearance)
         facts.receivedGetURLs = GetURLHandler.received
+        facts.coveredByPages = PopupLayer.coveredByPages(in: c.root, pages: ViewTree.surfaceViews(in: c.root.content))
         facts.editorText = (responder as? NSTextView)?.string ?? (responder as? NSTextField)?.stringValue
         facts.auxiliaryWindows = store.snapshot.pages.flatMap { engine.facts(for:$0.id)?.auxiliaryWindows ?? [] }
         return facts

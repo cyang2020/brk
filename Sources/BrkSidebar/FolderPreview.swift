@@ -7,7 +7,7 @@ import BrkUIKit
 /// on the folder row, with "Search <folder>…" over the folder's pages, most recently shown first, each with its icon,
 /// title and "44 minutes ago". The first page is highlighted; Return or a click opens the highlighted or clicked page.
 /// The card closes when the pointer leaves both the row and the card. It is the top subview of the window's content
-/// view, so it draws over the page like the other native overlays.
+/// view (`PopupLayer`), so it draws over the page like the other native overlays.
 @MainActor
 final class FolderPreview {
     private let dispatch: Dispatch
@@ -132,7 +132,7 @@ final class FolderPreview {
         let rowRect = root.convert(row.bounds, from: row)
         let midY = root.isFlipped ? rowRect.midY : root.bounds.height - rowRect.midY
         view.frame = CGRect(x: sidebarRect.maxX + PreviewDraw.gap.value, y: midY - size.height / 2, width: size.width, height: size.height)
-        root.addSubview(view)
+        PopupLayer.present(view, over: row)
         self.content = view
     }
 
@@ -207,8 +207,6 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
         wantsLayer = true
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = PreviewDraw.radius.value
-        // P13-a: the card's 0.5 pt edge reads #AEAEAE on its #F9F9FA, as the command bar's does
-        layer?.borderColor = NSColor(white: 0, alpha: 0.3).cgColor
         layer?.borderWidth = Draw.hairline.value / 2
         shadow = {
             let s = NSShadow()
@@ -218,7 +216,6 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
             return s
         }()
         glass.image = symbolImage("magnifyingglass", size: PreviewDraw.glyph.value, weight: .semibold)
-        glass.contentTintColor = NSColor(white: 0, alpha: 0.55)
         search.cell?.usesSingleLineMode = true
         search.lineBreakMode = .byTruncatingTail
         search.isBordered = false
@@ -227,9 +224,7 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
         search.font = .systemFont(ofSize: PreviewDraw.searchFont.value)
         search.delegate = self
         heading.font = .systemFont(ofSize: PreviewDraw.searchFont.value, weight: .semibold)
-        heading.textColor = NSColor(white: 0, alpha: 0.85)
         emptyLabel.font = .systemFont(ofSize: PreviewDraw.titleFont.value)
-        emptyLabel.textColor = NSColor(white: 0, alpha: 0.5)
         // The mail card's signed-out text takes two lines of the one row it has.
         emptyLabel.maximumNumberOfLines = 2
         emptyLabel.lineBreakMode = .byWordWrapping
@@ -238,7 +233,6 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
         emptyLabel.usesSingleLineMode = false
         emptyLabel.preferredMaxLayoutWidth = PreviewDraw.width.value - 2 * (PreviewDraw.iconCentre.value - Metrics.tablist.favicon.value / 2)
         hairline.wantsLayer = true
-        hairline.layer?.backgroundColor = NSColor(white: 0, alpha: 0.08).cgColor
         for view in (searchable ? [glass, search, hairline] : [heading, hairline, emptyLabel]) as [NSView] { addSubview(view) }
         filter("")
     }
@@ -248,8 +242,13 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        layer?.backgroundColor = (dark ? PreviewColors.dark : PreviewColors.light).cgColor
+        let ink = PreviewInk(self)
+        layer?.backgroundColor = ink.card.cgColor
+        layer?.borderColor = ink.edge.cgColor
+        glass.contentTintColor = ink.glyph
+        heading.textColor = ink.title
+        emptyLabel.textColor = ink.caption
+        hairline.layer?.backgroundColor = ink.hairline.cgColor
     }
     override func viewDidMoveToSuperview() {
         super.viewDidMoveToSuperview()
@@ -367,17 +366,18 @@ final class PreviewRowView: HoverView {
     var onHover: (() -> Void)?
     var highlighted = false { didSet { stateChanged() } }
 
+    private let iconContent: IconContent
+
     init(entry: PreviewEntry) {
+        iconContent = entry.icon
         super.init(frame: .zero)
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = PreviewDraw.rowRadius.value
         title.stringValue = entry.title
         title.font = .systemFont(ofSize: PreviewDraw.titleFont.value)
-        title.textColor = NSColor(white: 0, alpha: 0.85)
         title.lineBreakMode = .byTruncatingTail
         time.stringValue = entry.caption ?? ""
         time.font = .systemFont(ofSize: PreviewDraw.timeFont.value)
-        time.textColor = NSColor(white: 0, alpha: 0.5)
         time.isHidden = entry.caption == nil
         join.font = .systemFont(ofSize: PreviewDraw.timeFont.value, weight: .semibold)
         join.textColor = .white
@@ -389,8 +389,21 @@ final class PreviewRowView: HoverView {
         join.isHidden = entry.join == nil
         join.identifier = NSUserInterfaceItemIdentifier("sidebar-hover-card-join")
         join.setAccessibilityIdentifier("sidebar-hover-card-join")
-        icon.render(entry.icon, tint: NSColor(white: 0, alpha: 0.55))   // no palette: a missing favicon is the globe, as in Arc's card
         for view in [icon, title, time, join] as [NSView] { addSubview(view) }
+        viewDidChangeEffectiveAppearance()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        let ink = PreviewInk(self)
+        title.textColor = ink.title
+        time.textColor = ink.caption
+        icon.render(iconContent, tint: ink.glyph)   // no palette: a missing favicon is the globe, as in Arc's card
+        stateChanged()
+    }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        viewDidChangeEffectiveAppearance()
     }
 
     override func layout() {
@@ -421,7 +434,7 @@ final class PreviewRowView: HoverView {
     }
 
     override func stateChanged() {
-        layer?.backgroundColor = highlighted ? NSColor(white: 0, alpha: 0.07).cgColor : nil
+        layer?.backgroundColor = highlighted ? PreviewInk(self).highlight.cgColor : nil
     }
 
     override func mouseDown(with event: NSEvent) { isPressed = true }
@@ -465,4 +478,24 @@ enum PreviewColors {
     static var dark: NSColor { NSColor(srgbRed: 0x21 / 255, green: 0x22 / 255, blue: 0x22 / 255, alpha: 1) }
     /// BrandBlue #3139FB, Arc's primary button face.
     static var join: NSColor { NSColor(srgbRed: 0x31 / 255, green: 0x39 / 255, blue: 0xFB / 255, alpha: 1) }
+}
+
+/// Everything drawn on the card, for the appearance the card is shown in. The card's surface follows the window's
+/// appearance (PreviewBackgroundColor #F9F9FA / #212222), so its text and glyphs must too: with the dark surface and
+/// the light card's black text (user report 2026-11-12, the Gmail Favorite's "Recent Emails" card) the card read as
+/// if the page covered it.
+struct PreviewInk {
+    let dark: Bool
+    @MainActor init(_ view: NSView) { dark = view.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua }
+
+    private var ink: CGFloat { dark ? 1 : 0 }
+    var card: NSColor { dark ? PreviewColors.dark : PreviewColors.light }
+    var title: NSColor { NSColor(white: ink, alpha: 0.85) }
+    var caption: NSColor { NSColor(white: ink, alpha: 0.5) }
+    var glyph: NSColor { NSColor(white: ink, alpha: 0.55) }
+    var hairline: NSColor { NSColor(white: ink, alpha: 0.08) }
+    var highlight: NSColor { NSColor(white: ink, alpha: 0.07) }
+    /// P13-a: the light card's 0.5 pt edge reads #AEAEAE on its #F9F9FA, as the command bar's does; dark: Arc's
+    /// FloatingScrimBorder #FFFFFF @ 0.2.
+    var edge: NSColor { NSColor(white: ink, alpha: dark ? 0.2 : 0.3) }
 }

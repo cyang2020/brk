@@ -3,6 +3,7 @@ import BrkBase
 @testable import BrkContent
 import BrkDomain
 import BrkLayout
+import BrkUIKit
 import XCTest
 
 /// The root view's composition rules that the e2e scenarios found broken (W2's window root with W3's sidebar):
@@ -115,6 +116,34 @@ final class WindowRootViewTests: XCTestCase {
         root.render(closed, frames: WindowLayout.compute(closed, contentSize: Self.size), surface: { _ in nil })
         XCTAssertNil(find(.row(newTab)))
         XCTAssertNotNil(find(.row(tab)))
+    }
+
+    /// The page draws inside the window's view tree, so a popup shows over it only when layered above the content
+    /// cards: `PopupLayer.present` puts it there, and `coveredByPages` (read by the runner on every native read) finds
+    /// one made inside the sidebar, which the card hides where it crosses it.
+    func testPopupLayerFindsAPopupLayeredUnderThePage() throws {
+        let v = snapshot(sidebarVisible: true)
+        let frames = WindowLayout.compute(v, contentSize: Self.size)
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: Self.size), styleMask: [.borderless], backing: .buffered, defer: true)
+        let root = WindowRootView(dispatch: { _ in })
+        window.contentView = root
+        let page = NSView()
+        root.render(v, frames: frames, surface: { _ in page })
+        XCTAssertTrue(page.isDescendant(of: root.content), "the page did not go into its card")
+        XCTAssertEqual(PopupLayer.coveredByPages(in: root, pages: [page]), [], "the window's own backdrops and sidebar count as under the page")
+
+        let card = try XCTUnwrap(frames.cards.first?.rect)
+        let beside = CGRect(x: root.sidebar.frame.maxX + 4, y: card.minY + 40, width: 240, height: 200)
+        let good = NSView(frame: beside)
+        XCTAssertTrue(PopupLayer.present(good, over: root.sidebar))
+        XCTAssertEqual(PopupLayer.coveredByPages(in: root, pages: [page]), [])
+
+        let wrong = NSView(frame: root.sidebar.convert(beside, from: root))
+        wrong.identifier = NSUserInterfaceItemIdentifier("misplaced-card")
+        root.sidebar.addSubview(wrong)
+        let found = PopupLayer.coveredByPages(in: root, pages: [page])
+        XCTAssertEqual(found.count, 1, "\(found)")
+        XCTAssertTrue(found.first?.contains("misplaced-card") == true, "\(found)")
     }
 }
 

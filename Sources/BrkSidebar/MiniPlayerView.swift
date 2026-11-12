@@ -389,7 +389,7 @@ final class ArcTooltip: NSView {
         let size = tip.fittingSizeForText()
         let y = root.isFlipped ? point.y + Draw.tooltipOffsetY.value : point.y - Draw.tooltipOffsetY.value - size.height
         tip.frame = CGRect(x: point.x + Draw.tooltipOffsetX.value, y: y, width: size.width, height: size.height)
-        root.addSubview(tip, positioned: .above, relativeTo: nil)
+        PopupLayer.present(tip, over: root)
         shown = tip
     }
 

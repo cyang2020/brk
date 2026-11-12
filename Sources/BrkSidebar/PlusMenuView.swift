@@ -32,7 +32,7 @@ final class PlusMenu {
         let height = menu.cardHeight + m.arrowHeight.value
         let x = max(m.windowMargin.value, button.maxX - m.width.value)
         menu.frame = CGRect(x: x, y: button.minY - m.arrowGap.value - height, width: m.width.value, height: height)
-        root.addSubview(menu)
+        PopupLayer.present(menu, over: plus)
         view = menu
         anchor = plus
         monitors.append(NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in

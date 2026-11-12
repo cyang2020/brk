@@ -329,6 +329,9 @@ public struct NativeFacts: Codable, Sendable, Equatable {
     /// "light" or "dark".
     public var appAppearance: String? = nil
     public var effectiveAppearance: String? = nil
+    /// Views that show over a content card's page while layered under it (`PopupLayer.coveredByPages`): a popup put
+    /// at the wrong level. The runner fails a scenario that ever sees one.
+    public var coveredByPages: [String]? = nil
     /// Every URL the GetURL Apple Event handler received since launch, as the event carried it (before any test
     /// scheme is mapped), so a scenario can tell a link macOS delivered from one the control socket injected.
     public var receivedGetURLs: [String]? = nil

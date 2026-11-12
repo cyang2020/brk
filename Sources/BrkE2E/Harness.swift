@@ -139,6 +139,8 @@ final class AppUnderTest {
     private(set) var notes: [String] = []
     /// Host windows seen key in any `native()` reply during the scenario.
     private(set) var hostKeyViolations: [String] = []
+    /// `NativeFacts.coveredByPages` seen on any `native()` read: a popup layered under the page it crosses.
+    private(set) var popupLayerViolations: [String] = []
     private var crashBaseline: Set<String> = []
     private var quitOutcome: QuitOutcome?
 
@@ -319,6 +321,7 @@ final class AppUnderTest {
         var problems: [String] = []
         if isRunning, quitOutcome == nil, client.isConnected { _ = try? native() }
         if !hostKeyViolations.isEmpty { problems.append("a CEF host window was key: \(hostKeyViolations.joined(separator: "; "))") }
+        if !popupLayerViolations.isEmpty { problems.append("a view showed under a page it crosses: \(popupLayerViolations.joined(separator: "; "))") }
         if process != nil {
             if let outcome = try? quit() {
                 if !outcome.clean, !exitAlreadyReported { problems.append("exit \(outcome.exit)") }
@@ -389,6 +392,7 @@ final class AppUnderTest {
                 try? ControlWire.encode(facts).write(to: path)
             }
         }
+        for entry in facts.coveredByPages ?? [] where !popupLayerViolations.contains(entry) { popupLayerViolations.append(entry) }
         return facts
     }
 

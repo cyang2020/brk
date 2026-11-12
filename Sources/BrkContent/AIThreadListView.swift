@@ -199,7 +199,7 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
             image.layer?.backgroundColor = style?.color(style?.tokens.tabCurrent ?? RGBA(1, 1, 1)).cgColor
             image.frame = CGRect(origin: .zero, size: view.bounds.size)
             image.identify(.aiControl("thread-drag"))
-            root.addSubview(image, positioned: .above, relativeTo: nil)
+            PopupLayer.present(image, over: root)
             dragImage = image
             fallthrough
         case .moved:

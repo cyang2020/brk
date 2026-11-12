@@ -57,6 +57,13 @@ enum ViewTree {
         return out
     }
 
+    /// Every page surface view under `root`.
+    static func surfaceViews(in root: NSView) -> [NSView] {
+        var out: [NSView] = []
+        walk(root) { view in if view is PageSurfaceView { out.append(view) } }
+        return out
+    }
+
     /// The page whose surface contains `responder`, if it is a view inside one.
     static func page(containing responder: NSResponder?) -> PageID? {
         var view = responder as? NSView
