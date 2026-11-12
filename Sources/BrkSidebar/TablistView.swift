@@ -11,6 +11,11 @@ import BrkUIKit
 /// NSScrollView, placed at `SidebarFrames.rows` and reused by item id. Layout is data (BrkLayout/TablistLayout), so
 /// row geometry, drag hit-testing and pixel tests read one pure function instead of NSOutlineView's internal layout.
 /// Rows sit in two section containers (`section-pinned`, `section-today`) so e2e can scope rows to a section.
+///
+/// Only rows within one viewport above and below the visible part have views, as NSOutlineView keeps only the rows it
+/// shows: a sidebar imported from Arc has hundreds of rows per Space, and every row view costs in each layout, tracking-area
+/// and layer pass of the window, in a Space swipe (both neighbours render) and in a Space switch. Scrolling half a
+/// viewport places the next rows.
 @MainActor
 final class TablistView: NSScrollView {
     /// Every scroll event of the list goes through the window, one at a time. With AppKit's responsive scrolling the
@@ -33,6 +38,12 @@ final class TablistView: NSScrollView {
     private let currentArrow = CurrentRowArrowView()
     private var currentRow: (id: ItemID, title: String)?
     private var rowViews: [ItemID: RowView] = [:]
+    /// The last render's rows, what they draw and what lights them, for placing rows as the list scrolls.
+    private var renderedRows: [ItemID: (row: Row, section: SectionKind)] = [:]
+    private var renderedLit: Set<ItemID> = []
+    /// Where the visible part of the list was when rows were last placed (document coordinates).
+    private var placedAt: CGRect?
+    private var splitJoinLeading: Bool?
     /// A render cache of the domain selection. Pointer gestures dispatch typed selection and bulk commands.
     private var multiselection: [ItemID] = []
     private var last: (space: SpaceSnapshot, renaming: ItemID?, frames: SidebarFrames, palette: Palette)?
@@ -103,6 +114,10 @@ final class TablistView: NSScrollView {
 
     /// The rename field of `item` becomes first responder; false when it is not showing.
     func focusRenameField(_ item: ItemID) -> Bool {
+        if rowViews[item] == nil, let rect = last?.frames.rows.first(where: { $0.kind == .item(item) })?.rect {
+            document.scrollToVisible(rect)
+            placeRows(refresh: false)
+        }
         guard let row = rowViews[item], let window else { return false }
         return row.focusRenameField(in: window)
     }
@@ -167,18 +182,14 @@ final class TablistView: NSScrollView {
 
         multiselection.removeAll { rows[$0] == nil }
         divider.isHidden = !f.rows.contains { $0.kind == .divider }
+        renderedRows = rows
+        renderedLit = lit
+        placeRows(refresh: true)
         var seen: Set<ItemID> = []
         for frame in f.rows {
             switch frame.kind {
-            case .item(let id):
-                guard let (row, section) = rows[id] else { continue }
-                seen.insert(id)
-                let container = section == .pinned ? pinnedSection : todaySection
-                let view = rowViews[id] ?? makeRow(id)
-                if view.superview !== container { container.addSubview(view) }
-                view.frame = frame.rect.offsetBy(dx: -container.frame.minX, dy: -container.frame.minY)
-                view.render(row, section: section, depth: frame.depth, renaming: renaming == id, multiselected: multiselection.contains(id), palette: palette)
-                view.lit = lit.contains(id)
+            case .item:
+                break
             case .divider:
                 divider.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
                 divider.render(canClear: space.today.kind == .today && !space.today.rows.isEmpty, clearAction: space.today.clearAction,
@@ -213,18 +224,49 @@ final class TablistView: NSScrollView {
             default: false
             }
         }
-        for (id, view) in rowViews where !seen.contains(id) {
+        dropLine.ink = palette.focusColor
+        for edge in [topEdge, bottomEdge] { edge.layer?.backgroundColor = palette.color(palette.tokens.itemBackground).cgColor }
+        if let reveal = tools.reveal, tools.revealGeneration != lastReveal, let row = f.rows.first(where: { $0.kind == .item(reveal) }) {
+            document.scrollToVisible(row.rect)
+            lastReveal = tools.revealGeneration
+        }
+        updateEdges()
+    }
+
+    /// Gives a view to each row within one viewport of the visible part of the list (and to the rows that must keep theirs:
+    /// one being renamed, pressed or dragged, a drop or join target) and retires the others. `refresh`: a render, so rows that
+    /// keep their views draw the new snapshot too; a scroll only draws the rows it adds.
+    private func placeRows(refresh: Bool) {
+        guard let last else { return }
+        let f = last.frames
+        let visible = contentView.documentVisibleRect
+        placedAt = visible
+        let reach = max(visible.height, f.tablistViewport.height)
+        let near = CGRect(x: 0, y: visible.minY - reach, width: max(visible.width, f.tablistViewport.width), height: visible.height + 2 * reach)
+        var keep = Set([last.renaming, drag.heldItem, splitJoinTarget, dropFolder].compactMap { $0 })
+        for (id, view) in rowViews where view.isEditingName { keep.insert(id) }
+        var placed: Set<ItemID> = []
+        for frame in f.rows {
+            guard case .item(let id) = frame.kind, let (row, section) = renderedRows[id] else { continue }
+            guard keep.contains(id) || (frame.rect.maxY >= near.minY && frame.rect.minY <= near.maxY) else { continue }
+            placed.insert(id)
+            let container = section == .pinned ? pinnedSection : todaySection
+            let existing = rowViews[id]
+            let view = existing ?? makeRow(id)
+            if view.superview !== container { container.addSubview(view) }
+            view.frame = frame.rect.offsetBy(dx: -container.frame.minX, dy: -container.frame.minY)
+            if refresh || existing == nil {
+                view.render(row, section: section, depth: frame.depth, renaming: last.renaming == id, multiselected: multiselection.contains(id), palette: last.palette)
+                view.lit = renderedLit.contains(id)
+                view.dropInto = dropFolder == id
+                view.joinLeading = splitJoinTarget == id ? splitJoinLeading : nil
+            }
+        }
+        for (id, view) in rowViews where !placed.contains(id) {
             view.retire()
             view.removeFromSuperview()
             rowViews[id] = nil
         }
-        dropLine.ink = palette.focusColor
-        for edge in [topEdge, bottomEdge] { edge.layer?.backgroundColor = palette.color(palette.tokens.itemBackground).cgColor }
-        if let reveal = tools.reveal, tools.revealGeneration != lastReveal, let row = rowViews[reveal] {
-            document.scrollToVisible(document.convert(row.bounds, from: row))
-            lastReveal = tools.revealGeneration
-        }
-        updateEdges()
     }
 
     private func makeRow(_ id: ItemID) -> RowView {
@@ -263,6 +305,11 @@ final class TablistView: NSScrollView {
 
     override func reflectScrolledClipView(_ clipView: NSClipView) {
         super.reflectScrolledClipView(clipView)
+        // Half a viewport moved since rows were placed: the next ones get their views, the far ones go.
+        let visible = contentView.documentVisibleRect
+        if let placedAt, abs(visible.minY - placedAt.minY) > max(visible.height, 1) / 2 || abs(visible.height - placedAt.height) > 1 {
+            placeRows(refresh: false)
+        }
         updateEdges()
     }
 
@@ -359,9 +406,11 @@ final class TablistView: NSScrollView {
     func showSplitJoin(_ join: SplitJoin?, frames f: SidebarFrames) {
         if let old = splitJoinTarget, old != join?.target { rowViews[old]?.joinLeading = nil }
         splitJoinTarget = join?.target
+        splitJoinLeading = nil
         joinBand.isHidden = true
         switch join {
         case .tab(let id, let leading)?:
+            splitJoinLeading = leading
             rowViews[id]?.joinLeading = leading
         case .split(let id, _)?:
             guard let palette = last?.palette, let row = f.rows.first(where: { $0.kind == .item(id) }) else { return }

@@ -112,6 +112,8 @@ final class DragController {
     }
 
     var isActive: Bool { session != nil }
+    /// The item pressed or being dragged: its row keeps its view while the list scrolls (TablistView places only rows near view).
+    var heldItem: ItemID? { session?.press.item.id ?? pressed?.item.id }
 
     /// Mouse down on a row or tile: remember it; it becomes a drag once the pointer travels far enough. Called before
     /// the press opens the item, so `shownBefore` is still the tab it replaces.
