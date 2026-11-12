@@ -93,7 +93,8 @@ public enum Suggest {
             case .instant: intent = .instant(text)
             case .translate: intent = .translate(text)
             case .browse:
-                let parts = text.split(separator: "|", maxSplits: 1).map(String.init)
+                // Empty pieces kept: "|" alone is an empty question (the reducer says one is needed), not no pieces at all.
+                let parts = text.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
                 let sources = parts.count == 2 ? parts[1].split(separator: ",").compactMap { AIValidation.destination(String($0)) } : []
                 intent = .browse(question: parts[0], sources: sources)
             }

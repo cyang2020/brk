@@ -123,6 +123,16 @@ final class FilterListTests: XCTestCase {
         XCTAssertEqual(l.summary.networkFilters, 1)
     }
 
+    /// an option with nothing after its "=" or nothing before it (a typo in a hand-written list) skips that filter:
+    /// reading it trapped and crashed Brk on import and on every download of such a list
+    func testAnOptionWithAnEmptyNameOrValueSkipsTheFilter() throws {
+        let l = try list("||ads.example^$domain=", "||x.example^$third-party,csp=", "||y.example^$=x", "||keep.example^")
+        XCTAssertFalse(blocks(l, "https://ads.example/x"), "not widened to every site")
+        XCTAssertFalse(blocks(l, "https://y.example/x"))
+        XCTAssertTrue(blocks(l, "https://keep.example/x"))
+        XCTAssertEqual(l.summary.skipped, 3)
+    }
+
     func testRejectedInputs() {
         XCTAssertThrowsError(try CompiledFilterList.compile("! only comments\n[Adblock Plus 2.0]\n")) { XCTAssertEqual($0 as? FilterListError, .noRules) }
         XCTAssertThrowsError(try CompiledFilterList.compile(Data([0xFF, 0xFE, 0x00]))) { XCTAssertEqual($0 as? FilterListError, .notText) }

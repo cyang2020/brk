@@ -278,6 +278,9 @@ final class LibraryRowView: NSView {
 
     var showsThumbnail: Bool { icon.showsThumbnail }
 
+    /// A thumbnail made after the row was (Media's are made off the main thread).
+    func show(thumbnail: NSImage) { icon.show(thumbnail: thumbnail, colors: colors) }
+
     /// The context menu under the trailing button with this tooltip (Media's … button).
     func showMenu(under tooltip: String) {
         guard let button = buttons.first(where: { $0.toolTip == tooltip }), let menu = contextMenu() else { return }

@@ -28,6 +28,7 @@ import BrkUIKit
     private var scheme: Scheme?
     private var colors = LibraryColors.of(.light)
     private var rendered: (records: [CaptureRecord], selected: String?, query: String, files: [String: URL])?
+    private let thumbnails = CaptureThumbnails()
     /// The window's clock, for the day headers.
     private var now = Instant(milliseconds: 0)
     /// The introduction card was put away (× or Show Media) in this session.
@@ -139,7 +140,8 @@ import BrkUIKit
         let actions: [(String, CaptureCommand)] = [("Open", .open(id)), ("Export…", .export(id)), ("Remove", .remove(id)), ("Insert in Easel", .insertInEasel(id))]
         weak var shown: LibraryRowView?
         let more = LibraryRowView.Accessory(symbol: "ellipsis.circle", tooltip: LibraryCopy.more) { shown?.showMenu(under: LibraryCopy.more) }
-        let row = LibraryRowView(id: .tabTool("capture-card-" + id), icon: nil, thumbnail: files[id].flatMap { NSImage(contentsOf: $0) },
+        let thumbnail = files[id].flatMap { file in thumbnails.image(for: file) { shown?.show(thumbnail: $0) } }
+        let row = LibraryRowView(id: .tabTool("capture-card-" + id), icon: nil, thumbnail: thumbnail,
                                  title: record.title, detail: "\(record.width) × \(record.height) · \(record.url.host ?? "")", progress: .none,
                                  accessories: [more], menu: actions.map { title, command in (title, { [dispatch] in dispatch(.capture(command)) }) },
                                  selected: id == selected, colors: colors, onClick: { [dispatch] in dispatch(.capture(.preview(id))) })
@@ -187,6 +189,48 @@ import BrkUIKit
     }
 }
 
+/// The Media list's thumbnails, each made once per capture file, off the main thread and at the tile's size: the list
+/// is rebuilt on every search keystroke and every click, and a capture's file is the whole picture (a full page can be
+/// 80 million pixels).
+@MainActor final class CaptureThumbnails {
+    private var images: [URL: NSImage] = [:]
+    private var waiting: [URL: [(NSImage) -> Void]] = [:]
+    private var failed: Set<URL> = []
+
+    /// The thumbnail made earlier, or nil now and `then` once it is made (never, for a file that cannot be read).
+    func image(for file: URL, then: @escaping (NSImage) -> Void) -> NSImage? {
+        if let image = images[file] { return image }
+        guard !failed.contains(file) else { return nil }
+        if waiting[file] != nil {
+            waiting[file]?.append(then)
+            return nil
+        }
+        waiting[file] = [then]
+        // Two pixels a point: the tile on a Retina screen.
+        let side = Int(LibraryDraw.list.iconTile.value * 2)
+        Task {
+            let made = await Task.detached(priority: .userInitiated) { Self.thumbnail(of: file, side: side) }.value
+            let callbacks = waiting.removeValue(forKey: file) ?? []
+            guard let made else { failed.insert(file); return }
+            let image = NSImage(cgImage: made, size: .zero)
+            images[file] = image
+            for callback in callbacks { callback(image) }
+        }
+        return nil
+    }
+
+    /// The picture with its shorter side `side` pixels (the tile crops it to a square), never larger than the file's.
+    nonisolated static func thumbnail(of file: URL, side: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(file as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              min(width, height) > 0 else { return nil }
+        let longest = min(max(width, height), side * max(width, height) / min(width, height))
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: longest,
+                                                              kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary)
+    }
+}
+
 /// A grey card of the media list before anything is shown.
 @MainActor private final class MediaPlaceholderCard: NSView {
     init(colors: LibraryColors) {
@@ -200,13 +244,13 @@ import BrkUIKit
 }
 
 /// The previewed capture over the content card (P34: Brk opens a picked capture where the page is): the image fitted
-/// in the card, its title, size and host under it, and × to put it away (until another capture is picked).
+/// in the card, its title, size and host under it, and × to put it away (`onClose`: the reducer previews nothing).
 @MainActor public final class MediaPreviewView: NSView {
     private let image = NSImageView()
     private let caption = NSTextField(labelWithString: "")
     private let close = NSButton()
     private var shown: (String, URL?)?
-    private var dismissed: String?
+    var onClose: () -> Void = {}
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -238,15 +282,9 @@ import BrkUIKit
     func hide() {
         isHidden = true
         shown = nil
-        dismissed = nil
     }
 
     func show(_ record: CaptureRecord, file: URL?, in rect: CGRect, cornerRadius: Double, scheme: Scheme) {
-        guard dismissed != record.id else {
-            isHidden = true
-            return
-        }
-        dismissed = nil
         frame = rect
         layer?.cornerRadius = cornerRadius
         let colors = LibraryColors.of(scheme)
@@ -263,8 +301,8 @@ import BrkUIKit
     }
 
     @objc private func dismiss() {
-        dismissed = shown?.0
         isHidden = true
+        onClose()
     }
 
     public override func layout() {

@@ -66,6 +66,7 @@ extension Work {
             case .insertInEasel: effects.append(.capture(.insertInEasel(record, window)))
             default: break
             }
+        case .closePreview: state.session.windows[window]?.capturePreview = nil
         }
     }
     mutating func captureEvent(_ event: CaptureEvent) {

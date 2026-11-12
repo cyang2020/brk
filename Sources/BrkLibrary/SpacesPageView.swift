@@ -137,7 +137,9 @@ final class SpacesPageView: NSView {
     func hide() {
         isHidden = true
         snapshot = nil
-        for card in cards.values { card.backdrop.removeFromSuperview(); card.removeFromSuperview() }
+        // Escape mid-drag closes the Library before the button comes up: the drag ends here, moving nothing.
+        dragging = nil
+        for card in cards.values { card.cancelMove(); card.backdrop.removeFromSuperview(); card.removeFromSuperview() }
         cards = [:]
     }
 
@@ -287,6 +289,8 @@ private final class SpaceCardView: NSView {
         }
     }
 
+    func cancelMove() { handle.cancel() }
+
     /// The space's menu at `point` (in this view), as a context menu: it opens below and right of the pointer.
     func showMenu(at point: CGPoint) {
         guard let row else { return }
@@ -402,6 +406,13 @@ private final class SpaceCardView: NSView {
         self.start = nil
         NSCursor.pop()
         onMove(.ended(event.locationInWindow.x - start.x))
+    }
+
+    /// The page went away mid-drag: the cursor pushed at the press comes off, and a late release moves nothing.
+    func cancel() {
+        guard start != nil else { return }
+        start = nil
+        NSCursor.pop()
     }
 }
 

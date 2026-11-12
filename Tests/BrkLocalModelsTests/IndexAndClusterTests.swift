@@ -69,6 +69,21 @@ final class IndexAndClusterTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
     }
 
+    /// an address longer than the file's two-byte key length (a big diagram share link keeps its state in the #fragment)
+    /// is left out and the rest is kept: writing its key trapped, and the pass that crashed Brk ran again at every launch
+    func testAnAddressTooLongForTheFileIsLeftOut() async throws {
+        let file = folder.appendingPathComponent("p.vectors")
+        let index = SemanticIndex(file: file, dimensions: 4)
+        let long = "https://x.example/#" + String(repeating: "a", count: 70_000)
+        let wanted = [IndexEntry(kind: .history, id: long, title: "Diagram", url: long)] + entries([(.history, "Redis")])
+        _ = try await index.reconcile(wanted, embedder: TableEmbedder(table: table, calls: LockedCounter()))
+        let kept = await index.contains("history:0"), dropped = await index.contains("history:" + long)
+        XCTAssertTrue(kept)
+        XCTAssertFalse(dropped)
+        let reopened = await SemanticIndex(file: file, dimensions: 4).vector(for: "history:0")
+        XCTAssertNotNil(reopened, "the file was written")
+    }
+
     func testFileRoundTripsAndRejectsAnotherSize() {
         let data = SemanticIndex.encode(keys: ["tab:1", "history:https://a/"], kinds: [.tab, .history], fingerprints: [7, 9], descriptions: [0, 11],
                                         vectors: [[0.5, -0.25, 1, 0], [0, 0, 0, 1]], dimensions: 4)

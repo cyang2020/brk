@@ -464,8 +464,11 @@ struct FilterParser {
                 var option = raw.trimmingCharacters(in: .whitespaces).lowercased()
                 let negative = option.hasPrefix("~")
                 if negative { option.removeFirst() }
-                let name = option.split(separator: "=", maxSplits: 1).first.map(String.init) ?? option
-                let value = option.contains("=") ? String(option.split(separator: "=", maxSplits: 1)[1]) : nil
+                let parts = option.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                let name = String(parts[0])
+                let value = parts.count == 2 ? String(parts[1]) : nil
+                // "domain=" or "=x", a typo in a hand-written list: the filter is skipped, not read wider than written.
+                if let value, value.isEmpty || name.isEmpty { skip("option:" + name); return }
                 let aliases: [String: FilterResourceType] = [
                     "script": .script, "image": .image, "stylesheet": .stylesheet, "css": .stylesheet, "object": .object, "object-subrequest": .object,
                     "xmlhttprequest": .xmlhttprequest, "xhr": .xmlhttprequest, "subdocument": .subdocument, "frame": .subdocument,

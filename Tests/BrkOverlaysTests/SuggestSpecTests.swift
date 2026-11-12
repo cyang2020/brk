@@ -298,6 +298,19 @@ final class MaxCommandBarSuggestTests: XCTestCase {
         XCTAssertEqual(Suggest.rank(query: "how do browsers render fonts", bar: bar(), appName: "Brk").firstIndex { $0.kind == .ask }, 2)
     }
 
+    /// Browse for Me's bar with nothing before "|": the row asks with an empty question, which the reducer answers with
+    /// its "needs a question" message (reading the missing question trapped and crashed Brk on that keystroke)
+    func testBrowseForMeWithNoQuestionBeforeTheBar() {
+        var browse = bar()
+        browse.aiMode = .browse
+        for text in ["|", "||", " | "] {
+            XCTAssertEqual(Suggest.rank(query: text, bar: browse, appName: "Brk").map(\.command), [.assist(.browse(question: "", sources: []))], text)
+        }
+        let source = URL(string: "https://a.example/")!
+        XCTAssertEqual(Suggest.rank(query: "| https://a.example/", bar: browse, appName: "Brk").map(\.command),
+                       [.assist(.browse(question: "", sources: [source]))], "the address stays a source, not the question")
+    }
+
     func testShiftReturnSearchesOnlyAWebSearch() {
         XCTAssertEqual(Suggest.instantQuery(" wikipedia arc browser ", bar: bar()), "wikipedia arc browser")
         XCTAssertNil(Suggest.instantQuery("wikipedia arc browser", bar: bar(instant: false)))

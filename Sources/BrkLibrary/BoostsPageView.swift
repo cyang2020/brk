@@ -59,6 +59,8 @@ final class BoostsPageView: NSView {
     func hide() {
         isHidden = true
         searchField.stringValue = ""
+        // The rows were filtered by the text just cleared: the next show lists them again.
+        snapshot = nil
     }
 
     private func rebuild(_ value: LibrarySnapshot) {

@@ -42,7 +42,7 @@ final class HistoryPageViewTests: XCTestCase {
         let view = makeView()
         view.render(visits, page: page, in: card, scheme: .light, now: now)
         rows(view)[0].click()
-        XCTAssertEqual(sent, [.commandBar(.submit("http://127.0.0.1:9/page2.html"))])
+        XCTAssertEqual(sent, [.library(.openHistoryVisit(URL(string: "http://127.0.0.1:9/page2.html")!))])
         let menu = rows(view)[3].actions()
         XCTAssertEqual(menu.items.map(\.title), ["More from this site", "Remove from history"])
         let remove = menu.items[1]
@@ -89,6 +89,61 @@ final class HistoryPageViewTests: XCTestCase {
         view.toggle(0)
         view.deleteSelected()
         XCTAssertEqual(sent, [.library(.removeHistoryVisit(HistoryVisitID("v0"))), .library(.removeHistoryVisit(HistoryVisitID("v3")))])
+    }
+
+    /// a check follows its visit: a visit recorded before Delete does not move the check to a neighbour, and a checked
+    /// visit that goes away is no longer checked (checks were list positions, so Delete removed other visits)
+    func testChecksFollowTheirVisitWhenTheListChanges() throws {
+        let view = makeView()
+        let swift = URL(string: "https://swift.org/blog/")!
+        view.render(visits, page: page, in: card, scheme: .light, now: now)
+        view.toggle(2)
+        let newer = [HistoryRow(url: URL(string: "https://new.example/")!, title: "New", visitedAt: now)] + visits
+        view.render(newer, page: page, in: card, scheme: .light, now: now)
+        XCTAssertEqual(rows(view).filter(\.isChecked).map { $0.accessibilityIdentifier() }, ["history-3"])
+        view.deleteSelected()
+        XCTAssertEqual(sent, [.library(.removeHistory(swift))])
+        sent = []
+        view.toggle(3)
+        view.render(newer.filter { $0.url != swift }, page: page, in: card, scheme: .light, now: now)
+        XCTAssertFalse(texts(view).contains("1 selected"))
+        view.deleteSelected()
+        XCTAssertEqual(sent, [])
+    }
+
+    /// a visit opened from the page is a link, not a typed visit: the command bar counts typed visits four times over
+    func testOpeningAVisitIsNotATypedVisit() throws {
+        let size = CGSize(width: 1280, height: 776)
+        let ctx = { Context(now: self.now, newID: { UUID().uuidString }) }
+        var state = StateCodec.restore(nil, seed: RestoreSeed(startURL: URL(string: "http://127.0.0.1:9/a"), contentSize: size), ctx: ctx()).state
+        let window = project(state, ProjectionContext(now: now, calendar: Calendar(identifier: .gregorian))).windows.keys.sorted()[0]
+        let view = HistoryPageView(dispatch: { state = reduce(state, .user(window, $0), ctx()).state })
+        view.render(visits, page: page, in: card, scheme: .light, now: now)
+        rows(view)[0].click()
+        let focused = try XCTUnwrap(state.resolveTab(.focused, in: window))
+        XCTAssertEqual(state.address(of: focused, in: window, for: .visible), URL(string: "http://127.0.0.1:9/page2.html"), "opens in a new focused tab")
+        XCTAssertEqual(state.session.typedPending, [])
+    }
+
+    /// a long history builds its first 150 visits (Chromium's history page asks for 150 at a time) and the next 150 as
+    /// the list scrolls to its end; the search still looks through every visit. Every keystroke, check and new visit
+    /// rebuilt a row for each visit in the profile's history.
+    func testALongHistoryBuildsItsRowsAPageAtATime() throws {
+        let view = makeView()
+        let many = (0..<1000).map {
+            HistoryRow(url: URL(string: "https://site\($0).example/")!, title: "Page \($0)", visitedAt: Instant(milliseconds: now.milliseconds - Int64($0) * minute))
+        }
+        view.render(many, page: page, in: card, scheme: .light, now: now)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(rows(view).count, 150)
+        let scroll = try XCTUnwrap(view.descendants.compactMap { $0 as? NSScrollView }.first)
+        let list = try XCTUnwrap(scroll.documentView)
+        scroll.contentView.scroll(to: CGPoint(x: 0, y: list.frame.height - scroll.contentView.bounds.height))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        XCTAssertEqual(rows(view).count, 300)
+        view.searchField.stringValue = "Page 999"
+        view.searchField.onChange()
+        XCTAssertEqual(rows(view).map { $0.texts[1] }, ["Page 999"])
     }
 
     /// Delete browsing data asks first, then clears this profile's history; Tabs from other devices says Brk has none

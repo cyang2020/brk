@@ -66,6 +66,13 @@ final class QuickAnswersTests: XCTestCase {
         assertAnswer("0 mins to timespan", "0 seconds")
     }
 
+    /// a span too long to count in whole seconds has no answer (converting it trapped and crashed Brk while typing)
+    func testATimespanPastTheCountableRangeHasNoAnswer() {
+        XCTAssertNil(answer("99999999999999 weeks to timespan"))
+        XCTAssertNil(answer("10000000000000000000 s to timespan"))
+        assertAnswer("1000 weeks to timespan", "1000 weeks")
+    }
+
     func testTimeZones() {
         // The system formats these; only the parts are pinned, so a new macOS's punctuation breaks nothing.
         func parts(_ text: String, _ expected: String..., line: UInt = #line) {

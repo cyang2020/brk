@@ -6,6 +6,8 @@ public enum CaptureCommand: Hashable, Sendable, Codable {
     /// A row of the menu card that opens beside a finished selection (P33-c), or the copied toast's Save.
     case act(CaptureAction)
     case open(String), preview(String), export(String), remove(String), insertInEasel(String)
+    /// The Media preview's ×: nothing is previewed, so a click on any capture, the same one too, previews it again.
+    case closePreview
 }
 /// Arc's capture menu: Save to Library, Copy, Save…, Edit, Retake (Send via iMessage and New Easel are not offered).
 public enum CaptureAction: String, Hashable, Sendable, Codable { case library, copy, file, edit, retake }

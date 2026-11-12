@@ -557,6 +557,9 @@ public enum LibraryCommand: Hashable, Sendable, Codable {
     case revealDownload(DownloadID)
     case removeDownload(DownloadID)
     case clearDownloads
+    /// A click on a History page visit: the address in a new focused tab, opened as a link (Chromium's history page
+    /// opens its entries as links), so it is not a typed visit, which the command bar ranks four times higher.
+    case openHistoryVisit(URL)
     case removeHistoryVisit(HistoryVisitID)
     case removeHistory(URL)
     case clearHistory
@@ -772,7 +775,7 @@ extension Command {
     /// threshold picker, and the sidebar's pointer-driven peek and resize).
     var keepsLibrary: Bool {
         switch self {
-        case .capture(.begin), .library(.openHistory): false
+        case .capture(.begin), .library(.openHistory), .library(.openHistoryVisit): false
         case .boost, .capture, .tabTools(.dismissToast), .tabTools(.quoteLinkCopied), .library, .archive, .settings, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .split(.replacePane), .sidebar(.openDialog), .space(.requestDelete), .space(.confirmDelete),
              .space(.move), .space(.exportIntoFolder), .space(.update), .space(.create),
              .easel(.requestDelete), .easel(.confirmDelete), .easel(.rename): true

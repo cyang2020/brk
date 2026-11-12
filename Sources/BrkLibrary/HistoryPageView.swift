@@ -43,9 +43,19 @@ public final class HistoryPageView: NSView {
     private var scheme: Scheme?
     private var now = Instant(milliseconds: 0)
     private var colors = HistoryColors.of(.light)
-    private(set) var selected: Set<Int> = []
+    /// A checked visit by what stays the same while other visits are recorded or removed, not by its place in the list.
+    struct Check: Hashable {
+        let id: HistoryVisitID?, url: URL, visitedAt: Instant
+        init(_ row: HistoryRow) { id = row.id; url = row.url; visitedAt = row.visitedAt }
+    }
+    private(set) var selected: Set<Check> = []
     private(set) var showingOtherDevices = false
     private(set) var confirming = false
+    /// Rows are built for this many visits, and as many more each time the list scrolls near its end (Chromium's history
+    /// page asks for 150 at a time): every keystroke, check and new visit rebuilds them, and a history can hold 20,000.
+    static let batch = 150
+    private var limit = HistoryPageView.batch
+    private var hasMore = false
 
     public init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -61,6 +71,7 @@ public final class HistoryPageView: NSView {
         heading.font = .systemFont(ofSize: LibraryDraw.history.titleFont.value)
         searchField.onChange = { [weak self] in
             guard let self else { return }
+            limit = Self.batch
             rebuild()
             dispatch(.library(.historySearch(query)))
         }
@@ -77,6 +88,8 @@ public final class HistoryPageView: NSView {
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.documentView = list
+        scroll.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
         empty.font = .systemFont(ofSize: LibraryDraw.history.searchFont.value)
         empty.alignment = .center
         selectionBar.wantsLayer = true
@@ -114,6 +127,7 @@ public final class HistoryPageView: NSView {
         if reopened {
             searchField.stringValue = ""
             selected = []
+            limit = Self.batch
             setConfirming(false)
             showingOtherDevices = false
         }
@@ -140,7 +154,7 @@ public final class HistoryPageView: NSView {
             confirmText.textColor = colors.ink
         }
         if changed {
-            selected = selected.filter { rows.indices.contains($0) }
+            selected.formIntersection(rows.map(Check.init))
             rebuild()
         } else {
             needsLayout = true
@@ -172,6 +186,15 @@ public final class HistoryPageView: NSView {
         needsLayout = true
     }
 
+    /// Within a screenful of the last built row: the next batch. Not while the last batch waits for layout (the list's
+    /// height is still the old one, so every scroll event would add another).
+    @objc private func scrolled() {
+        let clip = scroll.contentView
+        guard hasMore, !needsLayout, clip.bounds.maxY >= list.frame.height - clip.bounds.height else { return }
+        limit += Self.batch
+        rebuild()
+    }
+
     @objc private func cancelConfirm() { setConfirming(false) }
 
     @objc private func confirmClearClicked() {
@@ -186,16 +209,19 @@ public final class HistoryPageView: NSView {
 
     @objc func deleteSelected() {
         var commands: [Command] = []
-        for index in selected.sorted() where rows.indices.contains(index) {
-            for command in removals(rows[index]) where !commands.contains(command) { commands.append(command) }
+        for row in rows where selected.contains(Check(row)) {
+            for command in removals(row) where !commands.contains(command) { commands.append(command) }
         }
         commands.forEach(dispatch)
         selected = []
         rebuild()
     }
 
+    /// Checks or unchecks the visit at `index` in the projected list.
     func toggle(_ index: Int) {
-        if selected.contains(index) { selected.remove(index) } else { selected.insert(index) }
+        guard rows.indices.contains(index) else { return }
+        let check = Check(rows[index])
+        if selected.contains(check) { selected.remove(check) } else { selected.insert(check) }
         rebuild()
     }
 
@@ -253,17 +279,25 @@ public final class HistoryPageView: NSView {
         for (index, nav) in navItems.enumerated() {
             nav.render(selected: index == (showingOtherDevices ? 1 : 0), colors: colors)
         }
+        hasMore = false
         if !showingOtherDevices {
             let days = days()
             let found = meaningVisits(excluding: Set(days.flatMap { $0.visits.map(\.element.url) }))
+            let checked = selected.isEmpty ? [] : Set(rows.indices.filter { selected.contains(Check(rows[$0])) })
+            var left = limit
             for day in days + (found.isEmpty ? [] : [(title: LibraryCopy.foundByMeaning, visits: found)]) {
-                list.addSubview(HistoryDayCard(title: day.title, visits: day.visits, selected: selected, colors: colors, calendar: calendar,
+                guard left > 0 else { hasMore = true; break }
+                let visits = Array(day.visits.prefix(left))
+                left -= visits.count
+                hasMore = visits.count < day.visits.count
+                list.addSubview(HistoryDayCard(title: day.title, visits: visits, selected: checked, colors: colors, calendar: calendar,
                                                breaks: day.title != LibraryCopy.foundByMeaning,
-                                               open: { [weak self] url in self?.dispatch(.commandBar(.submit(url.absoluteString))) },
+                                               open: { [weak self] url in self?.dispatch(.library(.openHistoryVisit(url))) },
                                                toggle: { [weak self] index in self?.toggle(index) },
                                                remove: { [weak self] row in self?.removals(row).forEach { self?.dispatch($0) } },
                                                search: { [weak self] host in
                                                    self?.searchField.stringValue = host
+                                                   self?.limit = Self.batch
                                                    self?.rebuild()
                                                }))
             }

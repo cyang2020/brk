@@ -124,11 +124,12 @@ public actor SemanticIndex {
     }
 
     /// Embeds and keeps entries the index does not have yet, in batches, writing after each 16th and the last; drops
-    /// nothing. Returns how many were embedded.
+    /// nothing. Returns how many were embedded. A key longer than the file's two-byte length is left out (a big share
+    /// link keeps its state in the address's #fragment, past 64 KB).
     @discardableResult
     public func add(_ entries: [IndexEntry], embedder: any TextEmbedding, batch: Int = 64) async throws -> Int {
         loadIfNeeded()
-        let missing = entries
+        let missing = entries.filter { $0.key.utf8.count <= Int(UInt16.max) }
         var done = 0
         var start = 0
         while start < missing.count {

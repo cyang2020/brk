@@ -124,13 +124,17 @@ final class LibraryViewTests: XCTestCase {
                        ["Today", "Yesterday", "Monday, October 26", "Thursday, September 25, 2025"])
     }
 
-    private func spacesPage(_ ids: [SpaceID]) -> SpacesPageView {
-        let view = SpacesPageView(dispatch: { [unowned self] in self.sent.append($0) })
+    private func spacesSnapshot(_ ids: [SpaceID]) -> LibrarySnapshot {
         var snapshot = library(.spaces)
         snapshot.spaces = ids.map {
             SpaceManagerRow(id: $0, title: $0.rawValue, icon: .none, profileName: "Default", theme: resolveTheme(.default), tabCount: 0, active: $0 == ids[0])
         }
-        view.show(snapshot, in: CGRect(x: 0, y: 0, width: 900, height: 700), scheme: .light, accent: .white)
+        return snapshot
+    }
+
+    private func spacesPage(_ ids: [SpaceID]) -> SpacesPageView {
+        let view = SpacesPageView(dispatch: { [unowned self] in self.sent.append($0) })
+        view.show(spacesSnapshot(ids), in: CGRect(x: 0, y: 0, width: 900, height: 700), scheme: .light, accent: .white)
         view.layoutSubtreeIfNeeded()
         return view
     }
@@ -195,5 +199,122 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(sent, [.space(.move(a, index: 2))])
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(try card("a").frame.minX, start, "until the order changes the card goes back")
+    }
+
+    /// Escape mid-drag closes the Library: the drag ends there, so a late release moves nothing, the card is back in
+    /// its slot when the page shows again, and the next card's drag starts from its own slot
+    func testClosingTheLibraryMidDragEndsTheDrag() throws {
+        let a = SpaceID("a"), b = SpaceID("b"), c = SpaceID("c")
+        let view = spacesPage([a, b, c])
+        let card = { (id: String) in try XCTUnwrap(try self.control("manager-edit-\(id)", in: view).superview) }
+        let pitch = Metrics.library.spacesCardWidth.value + Metrics.library.spacesCardGap.value
+        let start = try card("a").frame.minX
+        let dragged = try control("manager-move-a", in: view)
+        dragged.mouseDown(with: try mouse(.leftMouseDown, x: 100))
+        dragged.mouseDragged(with: try mouse(.leftMouseDragged, x: 100 + 0.3 * pitch))
+        view.hide()
+        dragged.mouseUp(with: try mouse(.leftMouseUp, x: 100 + 1.7 * pitch))
+        XCTAssertEqual(sent, [])
+        view.show(spacesSnapshot([a, b, c]), in: CGRect(x: 0, y: 0, width: 900, height: 700), scheme: .light, accent: .white)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(try card("a").frame.minX, start)
+        let next = try control("manager-move-b", in: view)
+        next.mouseDown(with: try mouse(.leftMouseDown, x: 100))
+        next.mouseDragged(with: try mouse(.leftMouseDragged, x: 100 + pitch))
+        next.mouseUp(with: try mouse(.leftMouseUp, x: 100 + pitch))
+        XCTAssertEqual(sent, [.space(.move(b, index: 2))])
+    }
+
+    // MARK: Boosts
+
+    /// leaving Boosts with a search typed empties the field, and coming back lists every Boost again, not the ones the
+    /// old text matched
+    func testBoostsComeBackUnfilteredAfterLeavingThePage() {
+        let view = BoostsPageView(dispatch: { [unowned self] in self.sent.append($0) })
+        var snapshot = library(.boosts)
+        snapshot.boosts = [Boost(id: "a", name: "Alpha", scope: .host("alpha.example")), Boost(id: "b", name: "Beta", scope: .host("beta.example"))]
+        let listed = { ["a", "b"].filter { id in view.descendants.contains { $0.accessibilityIdentifier() == ViewID.boostControl("edit-" + id).identifier } } }
+        let rect = CGRect(x: 0, y: 0, width: 400, height: 700)
+        view.show(snapshot, in: rect, scheme: .light)
+        view.searchField.stringValue = "alpha"
+        view.searchField.onChange()
+        XCTAssertEqual(listed(), ["a"])
+        view.hide()
+        view.show(snapshot, in: rect, scheme: .light)
+        XCTAssertEqual(view.searchField.stringValue, "")
+        XCTAssertEqual(listed(), ["a", "b"])
+    }
+
+    // MARK: Media
+
+    private func capture(_ id: String) -> CaptureRecord {
+        let document = DocumentToken(browser: BrowserToken(page: PageID(window: WindowID("w"), item: ItemID("t")), generation: 1), sequence: 1)
+        let request = CaptureRequest(id: id, document: document, context: .profile(.default), mode: .area, title: "Fixture capture",
+                                     url: URL(string: "http://127.0.0.1:9/a")!, createdAt: now)
+        return CaptureRecord(request: request, profile: .default, image: CaptureImage(png: Data(), width: 1200, height: 900, scale: 1))
+    }
+
+    /// The longer side in pixels of the picture a row's tile shows.
+    private func tilePixels(_ row: LibraryRowView) -> Int? {
+        let tile = row.descendants.compactMap { $0 as? LibraryTileView }.first
+        guard let image = tile?.layer?.sublayers?.compactMap({ $0.contents as? NSImage }).first,
+              let picture = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        return max(picture.width, picture.height)
+    }
+
+    /// a capture's tile is a small picture read once, off the main thread: a search keystroke, which rebuilds every row,
+    /// reads no capture file again (each rebuild read every whole picture on the main thread)
+    func testMediaThumbnailsAreSmallAndReadOnce() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("brk-media-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("c1.png")
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1200, pixelsHigh: 900, bitsPerSample: 8, samplesPerPixel: 4,
+                                                    hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: file)
+        let view = MediaPageView(dispatch: { [unowned self] in self.sent.append($0) })
+        var snapshot = library(.media)
+        snapshot.captures = [capture("c1")]
+        snapshot.captureFiles = ["c1": file]
+        view.show(snapshot, in: CGRect(x: 0, y: 0, width: 400, height: 700), scheme: .light, now: now)
+        var waited = 0
+        while view.rows.first?.showsThumbnail != true, waited < 250 {
+            try await Task.sleep(for: .milliseconds(20))
+            waited += 1
+        }
+        let row = try XCTUnwrap(view.rows.first)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(tilePixels(row)), 200, "a tile-sized picture, not the 1200 x 900 capture")
+        try FileManager.default.removeItem(at: file)
+        view.searchField.stringValue = "fixture"
+        view.searchField.onChange()
+        XCTAssertEqual(view.rows.count, 1)
+        XCTAssertEqual(view.rows.first?.showsThumbnail, true, "the search read no file")
+    }
+
+    /// × puts the preview away and a click on the same capture shows it again (the click changed nothing in the state,
+    /// and the view kept the × to itself, so the preview stayed hidden)
+    func testAClosedPreviewOpensAgainOnTheSameCapture() throws {
+        let size = CGSize(width: 1280, height: 776)
+        let ctx = { Context(now: self.now, newID: { UUID().uuidString }) }
+        let projection = ProjectionContext(now: now, calendar: utc)
+        var state = StateCodec.restore(nil, seed: RestoreSeed(startURL: URL(string: "http://127.0.0.1:9/a"), contentSize: size), ctx: ctx()).state
+        let window = project(state, projection).windows.keys.sorted()[0]
+        state = reduce(state, .user(window, .library(.open(.media))), ctx()).state
+        state = reduce(state, .system(.capture(.loaded(.default, [capture("c1")], [:], error: nil))), ctx()).state
+        var view: LibraryView?
+        func render() {
+            let snapshot = project(state, projection).windows[window]!
+            guard case .library(let library)? = snapshot.overlay else { return XCTFail("the Library closed") }
+            view?.render(library, now: now, frames: WindowLayout.compute(snapshot, contentSize: size), palette: Palette(resolveTheme(.default)))
+        }
+        view = LibraryView(dispatch: { state = reduce(state, .user(window, $0), ctx()).state; render() })
+        render()
+        let library = try XCTUnwrap(view)
+        try XCTUnwrap(library.media.rows.first).click()
+        XCTAssertFalse(library.preview.isHidden)
+        try XCTUnwrap(library.preview.descendants.compactMap { $0 as? NSButton }.first).performClick(nil)
+        XCTAssertTrue(library.preview.isHidden)
+        try XCTUnwrap(library.media.rows.first).click()
+        XCTAssertFalse(library.preview.isHidden, "the same capture shows again")
     }
 }

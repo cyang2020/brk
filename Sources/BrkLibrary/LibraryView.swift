@@ -86,6 +86,7 @@ public final class LibraryView: NSView {
         exit.target = self
         exit.action = #selector(exitClicked)
         exit.identify(.libraryClose)
+        preview.onClose = { dispatch(.capture(.closePreview)) }
         for view in [archive, downloads, spaces, boosts, media, easels, conversations, preview] as [NSView] { addSubview(view) }
         isHidden = true
     }

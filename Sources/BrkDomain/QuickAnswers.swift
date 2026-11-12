@@ -150,7 +150,10 @@ public enum QuickAnswers {
         guard !from.isEmpty, !to.isEmpty else { return nil }
         if to == "timespan" {
             guard let unit = QuickUnit.all.first(where: { $0.dimension == .time && $0.names.contains(from) }) else { return nil }
-            return .timespan(seconds: unit.toBase(value))
+            // The span is counted in whole seconds as an Int; past Int.max (292 billion years) there is no answer.
+            let seconds = unit.toBase(value)
+            guard seconds.rounded() < Double(Int.max) else { return nil }
+            return .timespan(seconds: seconds)
         }
         let (fromCode, toCode) = (from.uppercased(), to.uppercased())
         if CurrencyRates.codes.contains(fromCode), CurrencyRates.codes.contains(toCode) { return .currency(value, from: fromCode, to: toCode) }

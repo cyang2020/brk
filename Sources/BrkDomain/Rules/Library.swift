@@ -75,6 +75,10 @@ extension Work {
             // This profile's finished, failed and cancelled entries go; running ones stay (Arc keeps them).
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
             state.doc.downloads.removeAll { $0.profile == profile && $0.state.isActive == false }
+        case .openHistoryVisit(let url):
+            guard isOpenableURL(url), let doc = state.doc.windows[window] else { return }
+            if doc.kind == .standard { openTab(url, inSpace: doc.space, window: window, focus: true) }
+            else { openScratchTab(url, in: window, focus: true) }
         case .removeHistoryVisit(let id):
             guard case .profile(let profile) = state.libraryContext(in: window) else { return }
             state.doc.history.removeAll { $0.profile == profile && $0.id == id }

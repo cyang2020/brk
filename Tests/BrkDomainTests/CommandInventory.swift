@@ -33,7 +33,7 @@ enum CommandInventory {
         .assist(.moveConversation(AIRequestID("ghost"), space)), .assist(.pickAgent(.codex, model: nil)),
         .assist(.togglePanel), .assist(.panelWidth(500)), .assist(.hoverConversation(AIRequestID("ghost"))), .assist(.hoverChip("ghost")),
         .capture(.open("ghost")), .capture(.begin(.area)), .capture(.select(CaptureRegion(x:0,y:0,width:0.5,height:0.5))), .capture(.cancel),
-        .capture(.preview("ghost")), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
+        .capture(.preview("ghost")), .capture(.closePreview), .capture(.export("ghost")), .capture(.remove("ghost")), .capture(.insertInEasel("ghost")),
         .capture(.act(.copy)),
         .page(.pictureInPicture(.document)),
         .commandBar(.queryChangedForSite(SearchEngine.google.id, "x")), .commandBar(.calculate("2+2")),
@@ -78,7 +78,7 @@ enum CommandInventory {
         .settings(.max(.provider(.off))), .settings(.advanced(.soundEffects(false))), .settings(.openPane(.links)), .settings(.closeWindow),
         .settings(.openBrowserPage(.passwords, profile: .default)),
         .library(.open(.archive)), .library(.close), .library(.openHistory), .library(.cancelDownload(download)), .library(.revealDownload(download)),
-        .library(.removeHistoryVisit(HistoryVisitID("ghost"))), .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory), .library(.historySearch("x")),
+        .library(.openHistoryVisit(example)), .library(.removeHistoryVisit(HistoryVisitID("ghost"))), .library(.removeDownload(download)), .library(.clearDownloads), .library(.removeHistory(example)), .library(.clearHistory), .library(.historySearch("x")),
         .library(.conversationQuery(ConversationLibraryQuery(text: "x"))), .library(.selectConversation(AIRequestID("ghost"))), .library(.moveConversation(AIRequestID("ghost"), space)),
         .library(.requestDeleteConversation(AIRequestID("ghost"))), .library(.confirmDeleteConversation(AIRequestID("ghost"), token: "t", confirmed: false)),
         .library(.flyout(.expanded)), .library(.littleDownload(.dismiss(download))),
@@ -290,6 +290,7 @@ enum CommandInventory {
             case .cancel: "cancel"
             case .act: "act"
             case .preview: "preview"
+            case .closePreview: "closePreview"
             case .export: "export"
             case .remove: "remove"
             case .insertInEasel: "insertInEasel"
@@ -489,6 +490,7 @@ enum CommandInventory {
             case .revealDownload: "revealDownload"
             case .removeDownload: "removeDownload"
             case .clearDownloads: "clearDownloads"
+            case .openHistoryVisit: "openHistoryVisit"
             case .removeHistoryVisit: "removeHistoryVisit"
             case .removeHistory: "removeHistory"
             case .clearHistory: "clearHistory"
