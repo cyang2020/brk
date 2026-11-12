@@ -21,6 +21,8 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
     }
     private var ledger = PageLedger()
+    private var saveCounter = 0
+    private var pendingSaves: [PageID: String] = [:]
     var contexts = ContextLifetimes()
     private var wanted: [PageSpec] = []
     private let reconciliation = PageReconciliation()
@@ -403,8 +405,39 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         return true
     }
 
+    // MARK: Save prompts
+
+    /// Chromium's offer to save what a page sent, asked through the app (Arc's card, the same as CEF's path). A newer offer of
+    /// the page replaces an older one; a page that goes withdraws its card.
+    func offerSave(_ page: CorePage, _ offer: any BrkCoreSaveOffer) {
+        guard isLive(page), let delegate else { offer.answer(.notNow); return }
+        saveCounter += 1
+        let id = "core-save-\(saveCounter)"
+        let kind: SavePrompt.Kind = switch offer.kind {
+        case .address: .address
+        case .card: .card
+        default: .password
+        }
+        if let older = pendingSaves[page.id] { delegate.engine(self, dismissSave: older) }
+        pendingSaves[page.id] = id
+        delegate.engine(self, save: SavePrompt(id: id, page: page.id, kind: kind, site: offer.site)) { [weak self] answer in
+            if self?.pendingSaves[page.id] == id { self?.pendingSaves[page.id] = nil }
+            switch answer {
+            case .save: offer.answer(.save)
+            case .never: offer.answer(.never)
+            case .notNow: offer.answer(.notNow)
+            }
+        }
+    }
+
+    private func withdrawSave(_ page: CorePage) {
+        guard let id = pendingSaves.removeValue(forKey: page.id) else { return }
+        delegate?.engine(self, dismissSave: id)
+    }
+
     private func retire(_ page: CorePage) {
         guard ledger.isLive(page.incarnation), ledger.retire(page.id) == page.incarnation else { return }
+        withdrawSave(page)
         resources.unpresent(page.incarnation)
         page.park()
         outputs.sourceGone(page.incarnation)

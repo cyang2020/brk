@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Thu, 12 Nov 2026 15:28:58 +0800
+Subject: [PATCH] brk: embedded, Chrome's download UI does not close a tab that
+ only downloaded; Brk closes it when the download no longer needs it, as on
+ CEF
+
+---
+ chrome/browser/download/download_ui_controller.cc | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/chrome/browser/download/download_ui_controller.cc b/chrome/browser/download/download_ui_controller.cc
+index 03528cc8b0b395d6e56712228a32a4921013d652..f1881d15097ac38b91da9b3c8c98e1b4a2faadd2 100644
+--- a/chrome/browser/download/download_ui_controller.cc
++++ b/chrome/browser/download/download_ui_controller.cc
+@@ -8,6 +8,7 @@
+ #include <utility>
+ 
+ #include "base/functional/callback.h"
++#include "brk/embedding/embedding.h"
+ #include "base/memory/raw_ptr.h"
+ #include "base/metrics/histogram_macros.h"
+ #include "build/build_config.h"
+@@ -269,7 +270,8 @@ void DownloadUIController::OnDownloadUpdated(content::DownloadManager* manager,
+     // it. Avoid calling CloseContents if the tab is not in this browser's tab
+     // strip model; this can happen if the download was initiated by something
+     // internal to Chrome, such as by the app list.
+-    if (browser && web_contents->GetController().IsInitialNavigation() &&
++    // Embedded, Brk closes a tab that only downloaded itself once the download no longer needs it.
++    if (!brkcore::IsEmbedded() && browser && web_contents->GetController().IsInitialNavigation() &&
+         (browser->GetTabStripModel()->count() > 1 ||
+          web_app::AppBrowserController::IsWebApp(browser)) &&
+         browser->GetTabStripModel()->GetIndexOfWebContents(web_contents) !=

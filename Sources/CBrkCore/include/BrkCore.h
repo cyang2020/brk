@@ -151,6 +151,30 @@ NS_SWIFT_UI_ACTOR
 - (void)answer:(BOOL)accepted text:(nullable NSString*)text;
 @end
 
+typedef NS_ENUM(NSInteger, BrkCoreSaveKind) {
+  BrkCoreSaveKindPassword = 0,
+  BrkCoreSaveKindAddress = 1,
+  BrkCoreSaveKindCard = 2,
+};
+
+typedef NS_ENUM(NSInteger, BrkCoreSaveAnswer) {
+  BrkCoreSaveAnswerSave = 0,
+  BrkCoreSaveAnswerNotNow = 1,
+  /// Never for this site (passwords only; the others take it as Not now).
+  BrkCoreSaveAnswerNever = 2,
+};
+
+/// Chromium offers to keep what a page's form just sent: the login (ManagePasswordsUIController), the address or the card
+/// (autofill). Chrome would show its bubble; Brk asks with its own card and answers here.
+NS_SWIFT_UI_ACTOR
+@protocol BrkCoreSaveOffer <NSObject>
+@property(nonatomic, readonly) BrkCoreSaveKind kind;
+/// The page's host; nil when it has none.
+@property(nonatomic, readonly, copy, nullable) NSString* site;
+/// Only the first answer counts; an offer Chromium withdrew (the page navigated) ignores it.
+- (void)answer:(BrkCoreSaveAnswer)answer;
+@end
+
 NS_SWIFT_UI_ACTOR
 @protocol BrkCoreWebContentsDelegate <NSObject>
 /// A main-frame navigation is about to start or redirect. NO cancels it.
@@ -203,6 +227,8 @@ NS_SWIFT_UI_ACTOR
 - (void)webContentsDidChangeSecurity:(id<BrkCoreWebContents>)contents;
 /// The page opened a JavaScript dialog. NO: the shell shows none, and the page sees it dismissed.
 - (BOOL)webContents:(id<BrkCoreWebContents>)contents runDialog:(id<BrkCoreDialog>)dialog;
+/// Chromium offers to save a login, an address or a card from this page (see BrkCoreSaveOffer).
+- (void)webContents:(id<BrkCoreWebContents>)contents offersToSave:(id<BrkCoreSaveOffer>)offer;
 /// The open dialogs of this page are gone (navigation, close); answers to them are ignored.
 - (void)webContentsCancelDialogs:(id<BrkCoreWebContents>)contents;
 /// The page started or stopped making sound (Chromium's audible state, what Chrome's tab speaker shows).

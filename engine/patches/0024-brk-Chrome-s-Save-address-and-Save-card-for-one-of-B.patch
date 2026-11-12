@@ -1,0 +1,244 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Thu, 12 Nov 2026 15:56:11 +0800
+Subject: [PATCH] brk: Chrome's Save address? and Save card? for one of Brk's
+ pages are asked by the shell; the answer runs autofill's callback, Not now if
+ none came
+
+---
+ brk/browser/brk_application.mm                |  2 +
+ brk/browser/brk_save_prompts.h                |  8 ++++
+ brk/browser/brk_save_prompts.mm               | 47 ++++++++++++++++++-
+ brk/embedding/embedding.h                     |  6 +++
+ chrome/browser/ui/autofill/BUILD.gn           |  1 +
+ .../ui/autofill/chrome_autofill_client.cc     | 13 +++++
+ chrome/browser/ui/autofill/payments/BUILD.gn  |  1 +
+ .../chrome_payments_autofill_client.cc        |  9 ++++
+ 8 files changed, 85 insertions(+), 2 deletions(-)
+
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index 1a0fb76c543d324a21a78b157182c46df724fad4..87bae929f5a2fe73fb587f6654989ba5bc9450b9 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -142,6 +142,8 @@ __attribute__((visibility("default"))) void BrkCoreApplicationPrepare(int argc,
+   hooks.javascript_dialog_manager = &brkcore::JavaScriptDialogManagerHook;
+   hooks.show_context_menu = &brkcore::ShowContextMenuHook;
+   hooks.offer_password_save = &brkcore::OfferPasswordSaveHook;
++  hooks.is_brk_page = &brkcore::IsBrkPageHook;
++  hooks.offer_autofill_save = &brkcore::OfferAutofillSaveHook;
+   chrome_browser_application_mac::RegisterBrowserCrApp();
+ }
+ 
+diff --git a/brk/browser/brk_save_prompts.h b/brk/browser/brk_save_prompts.h
+index 90a8b00d68b0babbbf68b3e91a703db6c09cab0d..820e778fccbbe5889b95818dc7c165d8608b5176 100644
+--- a/brk/browser/brk_save_prompts.h
++++ b/brk/browser/brk_save_prompts.h
+@@ -1,6 +1,8 @@
+ #ifndef BRK_BROWSER_BRK_SAVE_PROMPTS_H_
+ #define BRK_BROWSER_BRK_SAVE_PROMPTS_H_
+ 
++#include "base/functional/callback.h"
++
+ namespace content {
+ class WebContents;
+ }  // namespace content
+@@ -11,6 +13,12 @@ namespace brkcore {
+ // not Brk's or its delegate does not ask, and Chrome's own code goes on.
+ bool OfferPasswordSaveHook(content::WebContents* contents);
+ 
++// True for one of Brk's pages whose delegate asks about saving (Hooks::is_brk_page).
++bool IsBrkPageHook(content::WebContents* contents);
++
++// Chrome's "Save address?" (kind 1) or "Save card?" (kind 2) for one of Brk's pages: the shell asks, `answer` gets 0 (save) or 1.
++void OfferAutofillSaveHook(content::WebContents* contents, int kind, base::OnceCallback<void(int)> answer);
++
+ }  // namespace brkcore
+ 
+ #endif  // BRK_BROWSER_BRK_SAVE_PROMPTS_H_
+diff --git a/brk/browser/brk_save_prompts.mm b/brk/browser/brk_save_prompts.mm
+index 764435656086ed8791329e95d3a9bfcf987071ae..a8a1b735d5ba1f9b78cb569e6f98ef43da5efbfa 100644
+--- a/brk/browser/brk_save_prompts.mm
++++ b/brk/browser/brk_save_prompts.mm
+@@ -11,19 +11,39 @@
+ #include "components/password_manager/core/common/password_manager_ui.h"
+ #include "content/public/browser/web_contents.h"
+ 
+-// One offer to save what a page sent. The answer goes to the page's ManagePasswordsUIController as its bubble's buttons would:
+-// Save, Never for this site, or neither (the bubble just closes).
++// One offer to save what a page sent. A login's answer goes to the page's ManagePasswordsUIController as its bubble's buttons would
++// (Save, Never for this site, or neither: the bubble just closes); an address's or a card's runs autofill's callback. An offer
++// that goes unanswered answers Not now, so autofill's callback always runs.
+ @interface BrkSaveOffer : NSObject <BrkCoreSaveOffer>
+ - (instancetype)initWithKind:(BrkCoreSaveKind)kind contents:(content::WebContents*)contents;
++- (instancetype)initWithKind:(BrkCoreSaveKind)kind
++                    contents:(content::WebContents*)contents
++                    callback:(base::OnceCallback<void(int)>)callback;
+ @end
+ 
+ @implementation BrkSaveOffer {
+   BrkCoreSaveKind _kind;
+   NSString* _site;
+   base::WeakPtr<content::WebContents> _contents;
++  base::OnceCallback<void(int)> _callback;
+   BOOL _answered;
+ }
+ 
++- (instancetype)initWithKind:(BrkCoreSaveKind)kind
++                    contents:(content::WebContents*)contents
++                    callback:(base::OnceCallback<void(int)>)callback {
++  if ((self = [self initWithKind:kind contents:contents])) {
++    _callback = std::move(callback);
++  }
++  return self;
++}
++
++- (void)dealloc {
++  if (_callback) {
++    std::move(_callback).Run(1);
++  }
++}
++
+ - (instancetype)initWithKind:(BrkCoreSaveKind)kind contents:(content::WebContents*)contents {
+   if ((self = [super init])) {
+     _kind = kind;
+@@ -43,6 +63,11 @@
+ }
+ 
+ - (void)answer:(BrkCoreSaveAnswer)answer {
++  if (_callback) {
++    _answered = YES;
++    std::move(_callback).Run(answer == BrkCoreSaveAnswerSave ? 0 : (answer == BrkCoreSaveAnswerNever ? 2 : 1));
++    return;
++  }
+   if (_answered || !_contents) {
+     return;
+   }
+@@ -82,4 +107,22 @@ bool OfferPasswordSaveHook(content::WebContents* contents) {
+   return true;
+ }
+ 
++bool IsBrkPageHook(content::WebContents* contents) {
++  BrkWebContents* page = PageForContents(contents);
++  return page && [page.delegate respondsToSelector:@selector(webContents:offersToSave:)];
++}
++
++void OfferAutofillSaveHook(content::WebContents* contents, int kind, base::OnceCallback<void(int)> answer) {
++  BrkWebContents* page = PageForContents(contents);
++  id<BrkCoreWebContentsDelegate> delegate = page.delegate;
++  if (!page || ![delegate respondsToSelector:@selector(webContents:offersToSave:)]) {
++    std::move(answer).Run(1);
++    return;
++  }
++  BrkSaveOffer* offer = [[BrkSaveOffer alloc] initWithKind:kind == 2 ? BrkCoreSaveKindCard : BrkCoreSaveKindAddress
++                                                  contents:contents
++                                                  callback:std::move(answer)];
++  [delegate webContents:page offersToSave:offer];
++}
++
+ }  // namespace brkcore
+diff --git a/brk/embedding/embedding.h b/brk/embedding/embedding.h
+index a347145a69d87440cd2b511e980124dd853028c0..7a0210530660915a0645cbefee12da0ed9b9a239 100644
+--- a/brk/embedding/embedding.h
++++ b/brk/embedding/embedding.h
+@@ -32,6 +32,8 @@ namespace brkcore {
+ 
+ // download::DownloadTargetCallback.
+ using BrkDownloadTargetCallback = base::OnceCallback<void(download::DownloadTargetInfo)>;
++// A save prompt's answer: 0 save, 1 not now, 2 never for this site.
++using BrkSaveAnswerCallback = base::OnceCallback<void(int)>;
+ 
+ struct Hooks {
+   // Makes the window object of a Browser that Brk is creating. Null for every other Browser: DevTools windows and popups a page opens
+@@ -55,6 +57,10 @@ struct Hooks {
+   // True when Brk asks itself whether to save the login this page sent (one of its pages: Chrome's bubble needs Views). Brk answers
+   // through the page's ManagePasswordsUIController.
+   bool (*offer_password_save)(content::WebContents* contents) = nullptr;
++  // True for one of Brk's pages, whose window has no Views for Chrome's bubbles.
++  bool (*is_brk_page)(content::WebContents* contents) = nullptr;
++  // Brk asks itself whether to save the address (kind 1) or the card (kind 2) one of its pages sent, and runs `answer`.
++  void (*offer_autofill_save)(content::WebContents* contents, int kind, BrkSaveAnswerCallback answer) = nullptr;
+ };
+ 
+ // True when BrkCore.framework was started by Brk's shell: the shell owns NSApp's delegate, the menu and the quit.
+diff --git a/chrome/browser/ui/autofill/BUILD.gn b/chrome/browser/ui/autofill/BUILD.gn
+index 9708663b21d2091a5df7dd1852901855e1256822..03f1fa7a31ecddc87650587df3c1606a1285e287 100644
+--- a/chrome/browser/ui/autofill/BUILD.gn
++++ b/chrome/browser/ui/autofill/BUILD.gn
+@@ -188,6 +188,7 @@ source_set("impl") {
+   public_deps = [ "//chrome/browser:browser_public_dependencies" ]
+ 
+   deps = [
++    "//brk:embedding",
+     ":autofill",
+     ":autofill_ai_ui_utils_impl",
+     "//chrome/browser:browser_process",
+diff --git a/chrome/browser/ui/autofill/chrome_autofill_client.cc b/chrome/browser/ui/autofill/chrome_autofill_client.cc
+index 5220b34d64f6d89b611ccd882a24ebd94f808926..bf040eead600eb45441131f7aac3c24b1cfef86b 100644
+--- a/chrome/browser/ui/autofill/chrome_autofill_client.cc
++++ b/chrome/browser/ui/autofill/chrome_autofill_client.cc
+@@ -6,6 +6,7 @@
+ 
+ #include <utility>
+ 
++#include "brk/embedding/embedding.h"
+ #include "base/check.h"
+ #include "base/command_line.h"
+ #include "base/containers/flat_set.h"
+@@ -857,6 +858,18 @@ void ChromeAutofillClient::ConfirmSaveAddressProfile(
+           : SaveUpdateAddressProfilePromptMode::kSaveNewProfile,
+       std::move(callback));
+ #else
++  // Embedded, Brk asks with its own card for one of its pages (Arc's Save Address?), whose window has no Views for the bubble.
++  if (auto& hooks = brkcore::GetHooks(); hooks.is_brk_page && hooks.offer_autofill_save && hooks.is_brk_page(web_contents())) {
++    hooks.offer_autofill_save(web_contents(), 1, base::BindOnce(
++        [](AddressProfileSavePromptCallback callback, AutofillProfile profile, int answer) {
++          if (answer == 0) {
++            std::move(callback).Run(AddressPromptUserDecision::kAccepted, profile);
++          } else {
++            std::move(callback).Run(AddressPromptUserDecision::kDeclined, std::nullopt);
++          }
++        }, std::move(callback), profile));
++    return;
++  }
+   AddressBubblesController::SetUpAndShowSaveOrUpdateAddressBubble(
+       web_contents(), profile, original_profile, save_address_bubble_type,
+       !GetPersonalDataManager().address_data_manager().GetProfiles().empty(),
+diff --git a/chrome/browser/ui/autofill/payments/BUILD.gn b/chrome/browser/ui/autofill/payments/BUILD.gn
+index 2867fb60049fece6ad5663a3c3fdd22fd02718ea..550dee9011bb401a7c2d858ce9317d9eaa11d7de 100644
+--- a/chrome/browser/ui/autofill/payments/BUILD.gn
++++ b/chrome/browser/ui/autofill/payments/BUILD.gn
+@@ -111,6 +111,7 @@ source_set("impl") {
+   public_deps = [ "//chrome/browser:browser_public_dependencies" ]
+ 
+   deps = [
++    "//brk:embedding",
+     ":payments",
+     "//chrome/app:generated_resources",
+     "//chrome/app:generated_resources_grit",
+diff --git a/chrome/browser/ui/autofill/payments/chrome_payments_autofill_client.cc b/chrome/browser/ui/autofill/payments/chrome_payments_autofill_client.cc
+index a084d6b53a781d1688584f817bf36d4e590249c6..b3689e6c17e5cd4b728d3260984f76baf60ff37e 100644
+--- a/chrome/browser/ui/autofill/payments/chrome_payments_autofill_client.cc
++++ b/chrome/browser/ui/autofill/payments/chrome_payments_autofill_client.cc
+@@ -8,6 +8,7 @@
+ #include <optional>
+ #include <vector>
+ 
++#include "brk/embedding/embedding.h"
+ #include "base/check_deref.h"
+ #include "base/containers/span.h"
+ #include "base/functional/callback.h"
+@@ -322,6 +323,14 @@ void ChromePaymentsAutofillClient::ShowSaveCreditCardLocally(
+     bridge->RequestShowContent(ui_info, std::move(save_card_delegate));
+   }
+ #else   // !BUILDFLAG(IS_ANDROID)
++  // Embedded, Brk asks with its own card for one of its pages (Arc's Save this card?), whose window has no Views for the bubble.
++  if (auto& hooks = brkcore::GetHooks(); hooks.is_brk_page && hooks.offer_autofill_save && hooks.is_brk_page(web_contents())) {
++    hooks.offer_autofill_save(web_contents(), 2, base::BindOnce(
++        [](LocalSaveCardPromptCallback callback, int answer) {
++          std::move(callback).Run(answer == 0 ? SaveCardOfferUserDecision::kAccepted : SaveCardOfferUserDecision::kDeclined);
++        }, std::move(callback)));
++    return;
++  }
+   SaveCardBubbleControllerImpl::CreateForWebContents(web_contents());
+   SaveCardBubbleControllerImpl::FromWebContents(web_contents())
+       ->OfferLocalSave(card, options, std::move(callback));

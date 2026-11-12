@@ -89,6 +89,15 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
             self.engine.pageReadyForFocus(self)
         }
         if adopted == nil { contents.load(url) }
+        else {
+            // A page Chromium made (window.open, target=_blank) may have committed and even finished loading before the shell
+            // took it, and those callbacks went to no one: replay them once the engine has the page.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let committed = self.contents.committedURL else { return }
+                self.webContents(self.contents, didStartDocument: committed)
+                if !self.contents.isLoading { self.webContents(self.contents, didFinishDocument: committed) }
+            }
+        }
     }
 
     var facts: PageFacts {
@@ -293,6 +302,12 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
         default: .foregroundTab
         }
         engine.pageDidEmit(self, .openRequested(url, opening, metadata: PageOpenMetadata(userGesture: userGesture)))
+    }
+
+    /// Chromium offers to save the login (or address, card) this page sent: Arc's card asks (SavePrompt), as on CEF.
+    @objc(webContents:offersToSave:)
+    func webContents(_ contents: any BrkCoreWebContents, offersToSave offer: any BrkCoreSaveOffer) {
+        engine.offerSave(self, offer)
     }
 
     @objc(webContents:willDownload:)

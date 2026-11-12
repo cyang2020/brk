@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Thu, 12 Nov 2026 16:03:19 +0800
+Subject: [PATCH] brk: Quit ends the session after five seconds if the run loop
+ has not unwound (macOS's window-button hover menu keeps a nested loop that
+ only a real pointer move ends)
+
+---
+ brk/browser/brk_application.mm | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index 87bae929f5a2fe73fb587f6654989ba5bc9450b9..35b85199571018bfc54269b909842d5028899819 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -22,6 +22,7 @@
+ #include "chrome/browser/chrome_browser_application_mac.h"
+ #include "chrome/browser/devtools/chrome_devtools_manager_delegate.h"
+ #include "chrome/browser/lifetime/application_lifetime.h"
++#include "chrome/browser/lifetime/application_lifetime_desktop.h"
+ #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+ #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
+ #include "chrome/browser/profiles/profile.h"
+@@ -101,6 +102,13 @@ int ChromeMain(int argc, const char** argv);
+   // too, as Chrome does before its DevTools-requested exit (ChromeDevToolsManagerDelegate::CloseBrowserSoon).
+   ChromeDevToolsManagerDelegate::AllowBrowserToClose();
+   chrome::ExitIgnoreUnloadHandlers();
++  // The process ends when Chromium's run loop unwinds after its shutdown. A native tracking loop on the main thread holds that up:
++  // macOS's tile menu on the green window button stays open while the pointer rests there, and only the real pointer leaving ends
++  // it. Tasks still run inside it, so if the process is still here after five seconds, Chromium's end-of-session shutdown writes the
++  // important data and ends the process, as it does at logout.
++  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
++    chrome::SessionEnding();
++  });
+ }
+ 
+ @end

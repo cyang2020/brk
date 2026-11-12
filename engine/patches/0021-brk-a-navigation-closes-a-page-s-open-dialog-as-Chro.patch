@@ -1,0 +1,170 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Thu, 12 Nov 2026 15:38:31 +0800
+Subject: [PATCH] brk: a navigation closes a page's open dialog as Chrome's
+ TabModalDialogManager does; a page Chromium made reaches its real opener's
+ shell once its URL is known and waits two seconds to be adopted
+
+---
+ brk/browser/brk_browser.mm            | 40 ++++++++++++++++++++++-----
+ brk/browser/brk_javascript_dialogs.h  |  4 +++
+ brk/browser/brk_javascript_dialogs.mm | 27 ++++++++++--------
+ brk/browser/brk_web_contents.mm       |  7 +++++
+ 4 files changed, 60 insertions(+), 18 deletions(-)
+
+diff --git a/brk/browser/brk_browser.mm b/brk/browser/brk_browser.mm
+index 926426b1718f608f4faf3dab82d3d99252202816..42085c83baee342d5586040c47777bf6262cbf15 100644
+--- a/brk/browser/brk_browser.mm
++++ b/brk/browser/brk_browser.mm
+@@ -33,6 +33,7 @@
+ #include "net/base/apple/url_conversions.h"
+ #include "ui/base/unowned_user_data/scoped_unowned_user_data.h"
+ #include "url/gurl.h"
++#include "url/url_constants.h"
+ 
+ namespace {
+ 
+@@ -52,6 +53,7 @@ GURL TargetURL(content::WebContents* contents) {
+ 
+ @interface BrkBrowser ()
+ - (void)tabInserted:(content::WebContents*)contents active:(BOOL)active;
++- (void)offerUnadopted:(BrkWebContents*)page opener:(nullable BrkWebContents*)opener active:(BOOL)active attempt:(int)attempt;
+ - (nullable ExtensionActionViewModel*)modelForExtension:(const std::string&)extensionID;
+ @end
+ 
+@@ -249,21 +251,45 @@ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url) {
+   BrkWebContents* page = [[BrkWebContents alloc] initWithContents:contents browser:self];
+   [page tabHelpersReady];
+   [_unadopted addObject:page];
+-  content::WebContents* openerContents = _browser->GetTabStripModel()->GetActiveWebContents();
++  // The page that opened it: its opener (window.open), or the first live page in its original opener chain (noopener and
++  // target=_blank keep that one). The tab strip's active tab is not the shell's current page, so it is only the last resort.
++  content::WebContents* openerContents = contents->GetFirstWebContentsInLiveOriginalOpenerChain();
++  if (!openerContents || !brkcore::PageForContents(openerContents)) {
++    openerContents = _browser->GetTabStripModel()->GetActiveWebContents();
++  }
+   BrkWebContents* opener = openerContents ? brkcore::PageForContents(openerContents) : nil;
+-  const GURL target = TargetURL(contents);
++  [self offerUnadopted:page opener:opener active:active attempt:0];
++}
++
++// Tells the opener's shell about a page Chromium made, on a later task, outside the tab strip's notification. window.open() makes
++// the page before its navigation starts, so its URL may not be known yet: look again every 50 ms, up to half a second, then
++// offer about:blank rather than no URL.
++- (void)offerUnadopted:(BrkWebContents*)page opener:(BrkWebContents*)opener active:(BOOL)active attempt:(int)attempt {
+   __weak BrkBrowser* weakSelf = self;
+-  dispatch_async(dispatch_get_main_queue(), ^{
++  __weak BrkWebContents* weakOpener = opener;
++  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, attempt == 0 ? 0 : 50 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+     BrkBrowser* strongSelf = weakSelf;
+-    if (!strongSelf) {
++    if (!strongSelf || ![strongSelf->_unadopted containsObject:page] || !page.contents) {
+       return;
+     }
+-    id<BrkCoreWebContentsDelegate> delegate = opener.delegate;
+-    [delegate webContents:opener
++    GURL target = TargetURL(page.contents);
++    if (!target.is_valid() && attempt < 10) {
++      [strongSelf offerUnadopted:page opener:weakOpener active:active attempt:attempt + 1];
++      return;
++    }
++    if (!target.is_valid()) {
++      target = GURL(url::kAboutBlankURL);
++    }
++    BrkWebContents* source = weakOpener;
++    id<BrkCoreWebContentsDelegate> delegate = source.delegate;
++    [delegate webContents:source
+           requestsOpening:net::NSURLWithGURL(target)
+               disposition:active ? BrkCoreDispositionForegroundTab : BrkCoreDispositionBackgroundTab
+               userGesture:YES];
+-    [strongSelf dropUnadopted:page];
++    // The shell makes the tab on a later task and adopts this page by its URL then; a page nobody took goes after that.
++    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
++      [weakSelf dropUnadopted:page];
++    });
+   });
+ }
+ 
+diff --git a/brk/browser/brk_javascript_dialogs.h b/brk/browser/brk_javascript_dialogs.h
+index bb3c7973bd510393aca687c05ea40ac050c84d56..0418dbebc19b97ddc3c5b0e9e299ada644223477 100644
+--- a/brk/browser/brk_javascript_dialogs.h
++++ b/brk/browser/brk_javascript_dialogs.h
+@@ -12,6 +12,10 @@ namespace brkcore {
+ // JSDialogHandler does; Chrome's own tab-modal dialogs need a Views host that Brk's window does not have. Null for other pages.
+ content::JavaScriptDialogManager* JavaScriptDialogManagerHook(content::WebContents* source);
+ 
++// Dismisses the page's open dialog, if any, as Chrome's TabModalDialogManager does when a navigation starts: the page sees it
++// dismissed and the shell's sheet goes.
++void CancelPageDialog(content::WebContents* contents);
++
+ }  // namespace brkcore
+ 
+ #endif  // BRK_BROWSER_BRK_JAVASCRIPT_DIALOGS_H_
+diff --git a/brk/browser/brk_javascript_dialogs.mm b/brk/browser/brk_javascript_dialogs.mm
+index fafc3be090046c4c87a9d175e3e9153d3b3acd1b..3194f03918049033ce69340abb8ff9205afa08a5 100644
+--- a/brk/browser/brk_javascript_dialogs.mm
++++ b/brk/browser/brk_javascript_dialogs.mm
+@@ -184,17 +184,7 @@ class BrkJavaScriptDialogManager : public content::JavaScriptDialogManager {
+     return true;
+   }
+ 
+-  void CancelDialogs(content::WebContents* web_contents, bool reset_state) override {
+-    BrkWebContents* page = PageForContents(web_contents);
+-    BrkDialog* dialog = page.openDialog;
+-    if (!dialog) {
+-      return;
+-    }
+-    // As Chrome's TabModalDialogManager: the page sees the dialog dismissed, and the shell's goes.
+-    [dialog answer:NO text:nil];
+-    page.openDialog = nil;
+-    Cancel(page);
+-  }
++  void CancelDialogs(content::WebContents* web_contents, bool reset_state) override { CancelPageDialog(web_contents); }
+ 
+  private:
+   static bool Show(content::WebContents* web_contents, BrkDialog* dialog) {
+@@ -222,6 +212,21 @@ class BrkJavaScriptDialogManager : public content::JavaScriptDialogManager {
+ 
+ }  // namespace
+ 
++void CancelPageDialog(content::WebContents* contents) {
++  BrkWebContents* page = PageForContents(contents);
++  BrkDialog* dialog = page.openDialog;
++  if (!dialog) {
++    return;
++  }
++  // As Chrome's TabModalDialogManager: the page sees the dialog dismissed, and the shell's goes.
++  [dialog answer:NO text:nil];
++  page.openDialog = nil;
++  id<BrkCoreWebContentsDelegate> shell = page.delegate;
++  if ([shell respondsToSelector:@selector(webContentsCancelDialogs:)]) {
++    [shell webContentsCancelDialogs:page];
++  }
++}
++
+ content::JavaScriptDialogManager* JavaScriptDialogManagerHook(content::WebContents* source) {
+   if (!PageForContents(source)) {
+     return nullptr;
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index 0dbddece964eb52fda328f52bd704bbf652fbaf3..dd5402d6adbe0e224db9738da108e1c161c9d948 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -1,4 +1,5 @@
+ #import "brk/browser/brk_web_contents.h"
++#include "brk/browser/brk_javascript_dialogs.h"
+ 
+ #include <memory>
+ #include <optional>
+@@ -84,6 +85,12 @@ class BrkPage : public content::WebContentsObserver,
+   void set_closing_by_shell() { closing_by_shell_ = true; }
+ 
+   // content::WebContentsObserver:
++  void DidStartNavigation(content::NavigationHandle* handle) override {
++    // As Chrome's TabModalDialogManager: a navigation of the main frame (a reload, history) closes the page's dialog, so it can go on.
++    if (handle->IsInPrimaryMainFrame()) {
++      brkcore::CancelPageDialog(&GetWebContents());
++    }
++  }
+   void DidFinishNavigation(content::NavigationHandle* handle) override {
+     if (!handle->IsInPrimaryMainFrame()) {
+       return;

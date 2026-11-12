@@ -276,7 +276,6 @@ opens Chrome's own UI. Nothing in this list was tried and found impossible.
 | Profiles other than Default, profile deletion | W2-2 | named profiles load, but deletion and the directory scheme follow CEF's; to align |
 | Chrome dialogs that need a Views host | none in the sample | JavaScript alerts and other tab-modal dialogs need a `WebContentsModalDialogHost`; Brk's window answers none. Arc replaced 46 such entry points |
 | DevTools, find in page, context menus, fullscreen, print, task manager, tracing | not in the sample | each is a `WebEngine` call with no BrkCore body yet |
-| Quit while macOS's green-button hover menu is open | N3R (smoke) | BrkCore's quit ends when Chromium's run loop unwinds after the terminate reply; the tile menu that macOS shows when the pointer rests on the green button is a remote view whose nested loop lasts until the real pointer leaves, so the quit waits (the test, whose pointer stays, kills it after 12 s; a person's next mouse move lets it finish). Escape and posted events do not close it. CEF's quit exits from inside the loop. Found after the move to 156; the cause is the quit's design, not the version |
 
 Beyond the scenarios:
 - **Release build.** This is a non-official build without LTO or PGO and without symbols for Chromium's code. A shipped engine needs the official

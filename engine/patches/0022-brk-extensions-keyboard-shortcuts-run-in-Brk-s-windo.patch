@@ -1,0 +1,193 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Thu, 12 Nov 2026 15:43:33 +0800
+Subject: [PATCH] brk: extensions' keyboard shortcuts run in Brk's window (an
+ ExtensionKeybindingRegistry without Views); a held key's repeats that the
+ shell leaves to the page do not reach the menu bar
+
+---
+ brk/BUILD.gn                             |  4 +++
+ brk/browser/brk_browser_window.h         |  3 ++
+ brk/browser/brk_browser_window.mm        | 18 ++++++++++-
+ brk/browser/brk_extension_keybindings.h  | 38 +++++++++++++++++++++++
+ brk/browser/brk_extension_keybindings.mm | 39 ++++++++++++++++++++++++
+ 5 files changed, 101 insertions(+), 1 deletion(-)
+ create mode 100644 brk/browser/brk_extension_keybindings.h
+ create mode 100644 brk/browser/brk_extension_keybindings.mm
+
+diff --git a/brk/BUILD.gn b/brk/BUILD.gn
+index ecf02067b1b530f9562abf0de99e7ac76e3c66b4..e373c58d35e0df19b6a785acecdd161a27099aec 100644
+--- a/brk/BUILD.gn
++++ b/brk/BUILD.gn
+@@ -31,6 +31,8 @@ source_set("browser") {
+     "browser/brk_downloads.mm",
+     "browser/brk_extension_action.h",
+     "browser/brk_extension_action.mm",
++    "browser/brk_extension_keybindings.h",
++    "browser/brk_extension_keybindings.mm",
+     "browser/brk_javascript_dialogs.h",
+     "browser/brk_javascript_dialogs.mm",
+     "browser/brk_location_bar.cc",
+@@ -53,6 +55,7 @@ source_set("browser") {
+     "//chrome/browser",
+     "//chrome/browser/extensions",
+     "//chrome/browser/profiles:profile",
++    "//chrome/browser/tab_list",
+     "//chrome/browser/ui",
+     "//components/content_settings/core/browser",
+     "//components/download/public/common:public",
+@@ -60,6 +63,7 @@ source_set("browser") {
+     "//components/keep_alive_registry",
+     "//components/permissions",
+     "//components/renderer_context_menu",
++    "//ui/content_accelerators",
+     "//components/url_formatter",
+     "//components/sessions",
+     "//components/zoom",
+diff --git a/brk/browser/brk_browser_window.h b/brk/browser/brk_browser_window.h
+index e8e38393c7bae45d4bac2e04d76a8764dd4f937c..62acfcc9c94aea031f1dc56181d286b2dc3a60ba 100644
+--- a/brk/browser/brk_browser_window.h
++++ b/brk/browser/brk_browser_window.h
+@@ -3,6 +3,7 @@
+ 
+ #import <AppKit/AppKit.h>
+ 
++#include "brk/browser/brk_extension_keybindings.h"
+ #include <memory>
+ #include <string>
+ #include <vector>
+@@ -159,6 +160,8 @@ class BrkBrowserWindow : public BrowserWindow {
+   __weak NSWindow* window_ = nil;
+   std::unique_ptr<BrkLocationBar> location_bar_;
+   std::unique_ptr<BrkExclusiveAccessContext> exclusive_access_context_;
++  // Made on the first key that reaches it, once the Browser has its tab list.
++  std::unique_ptr<BrkExtensionKeybindings> extension_keybindings_;
+   id key_observer_ = nil;
+   id resign_observer_ = nil;
+   bool closing_ = false;
+diff --git a/brk/browser/brk_browser_window.mm b/brk/browser/brk_browser_window.mm
+index cdd33c7cdc09174a4a6106f6be126db461392aee..4cd3bb7d9ae5fb411c489f01902da511b2e02d8b 100644
+--- a/brk/browser/brk_browser_window.mm
++++ b/brk/browser/brk_browser_window.mm
+@@ -1,5 +1,7 @@
+ #import "brk/browser/brk_browser_window.h"
+ 
++#include "ui/content_accelerators/accelerator_util.h"
++#include "chrome/browser/tab_list/tab_list_interface.h"
+ #include <memory>
+ #include <optional>
+ #include <utility>
+@@ -309,9 +311,23 @@ bool BrkBrowserWindow::HandleKeyboardEvent(const input::NativeWebKeyboardEvent&
+   if (page && [page keyAfterPage:event]) {
+     return true;
+   }
++  // An extension's shortcut (manifest "commands"), as Chrome's focus manager runs it for a key the page left.
++  NSEvent* key = event.os_event.Get();
++  if (event.GetType() == blink::WebInputEvent::Type::kRawKeyDown && !(key && key.ARepeat)) {
++    if (!extension_keybindings_ && browser_->GetProfile()) {
++      if (TabListInterface* tabs = TabListInterface::From(browser_)) {
++        extension_keybindings_ = std::make_unique<BrkExtensionKeybindings>(browser_->GetProfile(), tabs);
++      }
++    }
++    if (extension_keybindings_ && extension_keybindings_->Handle(ui::GetAcceleratorFromNativeWebKeyboardEvent(event))) {
++      return true;
++    }
++  }
+   // The page left it and so did the shell's table. As in Chrome: the menu bar gets it, so Edit > Copy and friends still have their keys.
++  // Not an auto-repeat: the shell's table leaves a held toggle's repeats to the page on purpose (Cmd+S hides the sidebar once), and the
++  // menu item with the same key would toggle again on each one.
+   NSEvent* native = event.os_event.Get();
+-  if (native && event.GetType() != blink::WebInputEvent::Type::kKeyUp &&
++  if (native && event.GetType() != blink::WebInputEvent::Type::kKeyUp && !native.ARepeat &&
+       (native.modifierFlags & NSEventModifierFlagCommand)) {
+     return [NSApp.mainMenu performKeyEquivalent:native];
+   }
+diff --git a/brk/browser/brk_extension_keybindings.h b/brk/browser/brk_extension_keybindings.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..52f256dc8116264e586cbb952b291ab520917181
+--- /dev/null
++++ b/brk/browser/brk_extension_keybindings.h
+@@ -0,0 +1,38 @@
++#ifndef BRK_BROWSER_BRK_EXTENSION_KEYBINDINGS_H_
++#define BRK_BROWSER_BRK_EXTENSION_KEYBINDINGS_H_
++
++#include <set>
++
++#include "chrome/browser/extensions/extension_keybinding_registry.h"
++#include "ui/base/accelerators/accelerator.h"
++
++class Profile;
++class TabListInterface;
++
++namespace brkcore {
++
++// Extensions' keyboard shortcuts (manifest "commands") for Brk's window. Chrome registers them with its Views window's focus
++// manager (ExtensionKeybindingRegistryViews); Brk's window has no Views, so this keeps the accelerators and runs the command
++// when a key the page and the shell both left matches one, as Chrome's focus manager does with an unhandled key.
++class BrkExtensionKeybindings : public extensions::ExtensionKeybindingRegistry {
++ public:
++  BrkExtensionKeybindings(Profile* profile, TabListInterface* tab_list);
++  ~BrkExtensionKeybindings() override;
++
++  // True when an extension's command took the accelerator.
++  bool Handle(const ui::Accelerator& accelerator);
++
++ protected:
++  bool PopulateCommands(const extensions::Extension* extension, ui::CommandMap* commands) override;
++  bool RegisterAccelerator(const ui::Accelerator& accelerator,
++                           const extensions::ExtensionId& extension_id,
++                           const std::string& command_name) override;
++  void UnregisterAccelerator(const ui::Accelerator& accelerator) override;
++
++ private:
++  std::set<ui::Accelerator> accelerators_;
++};
++
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_EXTENSION_KEYBINDINGS_H_
+diff --git a/brk/browser/brk_extension_keybindings.mm b/brk/browser/brk_extension_keybindings.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..c7d36f4492234454252dfdd430ed24121fd3ab54
+--- /dev/null
++++ b/brk/browser/brk_extension_keybindings.mm
+@@ -0,0 +1,39 @@
++#include "brk/browser/brk_extension_keybindings.h"
++
++#include "chrome/browser/extensions/commands/command_service.h"
++#include "chrome/browser/profiles/profile.h"
++
++namespace brkcore {
++
++BrkExtensionKeybindings::BrkExtensionKeybindings(Profile* profile, TabListInterface* tab_list)
++    : ExtensionKeybindingRegistry(profile, tab_list, ALL_EXTENSIONS) {
++  Init();
++}
++
++BrkExtensionKeybindings::~BrkExtensionKeybindings() = default;
++
++bool BrkExtensionKeybindings::Handle(const ui::Accelerator& accelerator) {
++  if (shortcut_handling_suspended() || !accelerators_.count(accelerator)) {
++    return false;
++  }
++  return NotifyEventTargets(accelerator);
++}
++
++bool BrkExtensionKeybindings::PopulateCommands(const extensions::Extension* extension, ui::CommandMap* commands) {
++  extensions::CommandService* service = extensions::CommandService::Get(browser_context());
++  return service->GetNamedCommands(extension->id(), extensions::CommandService::ACTIVE, extensions::CommandService::REGULAR,
++                                   commands);
++}
++
++bool BrkExtensionKeybindings::RegisterAccelerator(const ui::Accelerator& accelerator,
++                                                  const extensions::ExtensionId& extension_id,
++                                                  const std::string& command_name) {
++  accelerators_.insert(accelerator);
++  return true;
++}
++
++void BrkExtensionKeybindings::UnregisterAccelerator(const ui::Accelerator& accelerator) {
++  accelerators_.erase(accelerator);
++}
++
++}  // namespace brkcore
