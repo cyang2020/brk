@@ -229,6 +229,11 @@ Every fix, newest first, with the first build that has it (Brk › About Brk sho
 
 **2026-11-12**
 
+- **In full screen, the top-left corner was off.** With the menu bar shown, the strip under it started a few points in from the screen's edge, the window buttons were grey circles instead of red, yellow and green, and the sidebar button stayed where it leaves room for those buttons. The strip now starts at the edge, the buttons have their colours, and the sidebar button moves to the left as in Arc. Build 32.
+- **Spaces imported from Arc had the wrong colours.** A dark navy Space came out pale grey-lavender: Brk read Arc's colour slider backwards and ignored dark mode. Imported Spaces now keep Arc's colours in light and dark mode, and Spaces imported earlier are corrected the next time Brk opens. Build 32.
+- **Hover cards were hard to read in dark mode.** The Gmail "Recent Emails" card and the other Favorite, Pinned and folder cards turned dark in dark mode but kept black text, so they looked dimmed and stuck under the page. Their text and icons now turn light on the dark card. Build 32.
+- **The Today line did not move while Tidy worked.** Arc turns the line above Today into a moving wave while Tidy Tabs sorts the tabs; Brk's stayed straight. It now waves the way Arc's does, and the broom swings when you press Tidy. Build 32.
+- **Some text in Settings was invisible in dark mode.** The Previews sheet's title and checkbox labels, and the Air Traffic Control sheet's text, were white on a white sheet. They are dark now. Build 32.
 - **Dropping a tab group onto a group inside it deleted its tabs.** With a group inside a folder inside another group, dropping the outer group onto the inner one removed every tab in them without archiving them. Brk now refuses that drop. Build 27.
 - **A site's permission prompt could stay on screen with buttons that did nothing.** After Escape, a click elsewhere, or the page moving on, the prompt was given up but its card stayed. It now closes. Build 27.
 - **Brk kept busy in the background.** With more than eight ad-block lists in use (for example three profiles with three lists each), Brk reloaded them over and over and kept waking hidden tabs, so they never went to sleep. After a failed tab-naming request, it checked again ten times a second for five minutes. Both now wait as they should. Build 27.
