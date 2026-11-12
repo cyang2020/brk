@@ -411,9 +411,17 @@ final class PreviewRowView: HoverView {
         icon.frame.origin.y = (bounds.height - gap - side) / 2
     }
 
+    /// Only the pointer moving onto a row moves the highlight there. A redraw must not ask for it again: setting
+    /// `highlighted` redraws, so that recursed until the stack ran out; and arrow keys must still move the highlight
+    /// off the row the pointer rests on.
+    override func setHovered(_ hovered: Bool) {
+        let entered = hovered && !isHovered
+        super.setHovered(hovered)
+        if entered { onHover?() }
+    }
+
     override func stateChanged() {
         layer?.backgroundColor = highlighted ? NSColor(white: 0, alpha: 0.07).cgColor : nil
-        if isHovered { onHover?() }
     }
 
     override func mouseDown(with event: NSEvent) { isPressed = true }
