@@ -637,10 +637,16 @@ enum AIRealRightPanelScenarios {
             guard let page else { throw Check(description: "no page") }
             if try !app.view().space.today.rows.contains(where: { if case .tab(let t) = $0 { t.url == AIPageTab.url(page) } else { false } }) {
                 let transcript = try T.still(app, .aiControl("transcript"))
-                for _ in 0..<6 where !(try T.shown(app, .aiControl("keep-" + page.rawValue))) {
-                    try PhysicalPointer.scroll(app, lines: -5, at: centre(transcript), window: app.window!)
+                let keep = ViewID.aiControl("keep-" + page.rawValue)
+                // A long answer pushes the page up, out of sight (the transcript also runs under the panel's title row):
+                // scroll toward the button until it sits in the middle of the transcript, so the real click lands on it.
+                let middle = transcript.insetBy(dx: 0, dy: transcript.height * 0.2)
+                for _ in 0..<10 {
+                    let frame = try T.shown(app, keep) ? try T.still(app, keep) : nil
+                    if let frame, middle.contains(CGPoint(x: frame.midX, y: frame.midY)) { break }
+                    try PhysicalPointer.scroll(app, lines: frame.map { $0.midY < middle.minY ? 3 : -3 } ?? -3, at: centre(transcript), window: app.window!)
                 }
-                try T.click(app, .aiControl("keep-" + page.rawValue))
+                try T.click(app, keep)
             }
             try app.waitUntil("the page's row", timeout: 8) { try app.view().space.today.rows.contains { if case .tab(let t) = $0 { t.url == AIPageTab.url(page) } else { false } } }
             T.shot(app, "3-kept")
