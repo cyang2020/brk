@@ -3,6 +3,7 @@ import BrkBase
 @testable import BrkContent
 import BrkDomain
 import BrkLayout
+@testable import BrkSidebar
 import BrkUIKit
 import XCTest
 
@@ -40,6 +41,22 @@ final class WindowRootViewTests: XCTestCase {
     /// The view under a window point (top-left origin, as `WindowFrames` are).
     func hit(_ container: NSView, _ point: CGPoint) -> NSView? {
         container.hitTest(CGPoint(x: point.x, y: container.bounds.height - point.y))
+    }
+
+    /// The user's report (2026-11-12): in full screen the title row has no traffic lights, and Arc starts it with the
+    /// sidebar toggle where the close light would be. Brk kept the toggle at its windowed spot, after room for three
+    /// lights that were not there.
+    func testFullScreenSidebarToggleStartsTheTitleRow() throws {
+        var view = snapshot(sidebarVisible: true)
+        let point = CGPoint(x: Metrics.window.trafficLightLeft.value + Metrics.window.trafficLightSize.value / 2,
+                            y: Metrics.window.trafficLightCenterY.value)
+        let windowed = render(view)
+        XCTAssertNotNil(windowed.frames.sidebar?.trafficLightsOrigin)
+        XCTAssertNotEqual(hit(windowed.container, point)?.toolTip, SidebarCopy.showHideSidebar, "the toggle is over the lights in a window")
+        view.fullScreen = true
+        let full = render(view)
+        XCTAssertNil(full.frames.sidebar?.trafficLightsOrigin)
+        XCTAssertEqual(hit(full.container, point)?.toolTip, SidebarCopy.showHideSidebar, "full screen: the toggle is not where the lights were")
     }
 
     /// e2e 4 and 7: a click on the dock's Library button or a space cell reaches the sidebar, and one on the card

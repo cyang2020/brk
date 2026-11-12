@@ -642,8 +642,10 @@ final class TitleRowView: NSView {
         loading = pill.loading
         let w = Metrics.window, size = Draw.navButton.value, gap = Draw.navGap.value
         let y = (f.titleRow.height - size) / 2
-        let lightsEnd = f.trafficLightsOrigin.x - f.titleRow.minX + 3 * w.trafficLightSize.value + 2 * w.trafficLightSpacing.value
-        toggle.frame = CGRect(x: lightsEnd + Draw.toggleGap.value, y: y, width: size, height: size)
+        // In full screen there are no lights in the row and the toggle starts it (Arc).
+        let lightsEnd = f.trafficLightsOrigin.map { $0.x - f.titleRow.minX + 3 * w.trafficLightSize.value + 2 * w.trafficLightSpacing.value } ?? 0
+        let toggleX = f.trafficLightsOrigin == nil ? Draw.toggleFullScreenLeft.value : lightsEnd + Draw.toggleGap.value
+        toggle.frame = CGRect(x: toggleX, y: y, width: size, height: size)
         var right = f.titleRow.width - Metrics.sidebar.titleRowRightInset.value
         // With the toolbar shown the chat button is the toolbar's; a split's row keeps it at the end.
         let chat = toggleState != nil && !toolbar

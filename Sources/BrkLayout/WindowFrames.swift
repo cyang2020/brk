@@ -98,8 +98,9 @@ public struct SidebarFrames: Sendable, Equatable, Codable {
     public var frame: CGRect
     /// Traffic lights and back/forward/reload (Metrics.sidebar.titleRowHeight).
     public var titleRow: CGRect
-    /// Origin of the close button; the other two follow at size + spacing.
-    public var trafficLightsOrigin: CGPoint
+    /// Origin of the close button; the other two follow at size + spacing. Nil in full screen: the window has no lights
+    /// in the title row then (AppKit shows its own with the menu bar), and the sidebar toggle starts the row.
+    public var trafficLightsOrigin: CGPoint?
     public var urlPill: CGRect
     public var favoritesTray: CGRect
     public var favoriteTiles: [ItemID: CGRect]

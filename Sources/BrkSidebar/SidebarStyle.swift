@@ -140,6 +140,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let navButton = Metric(32.0, .anatomy("cra L1215: Go back, Go forward and Reload are 32 x 32"))
     let navGap = Metric(2.0, .anatomy("cra L1215: the navigation buttons are 2 pt apart"))
     let toggleGap = Metric(4.0, .anatomy("cra L1215: sidebar toggle at x 77 = the third light's end (73) + 4"))
+    let toggleFullScreenLeft = Metric(13.0, .anatomy("~/brk-evidence/fullscreen-titlebar (Arc 1.170 full screen, 2026-11-12): the toggle glyph starts at 20 pt, 7 inside its 32 pt button as in the windowed row (glyph at 84, button at 77); the close light's left inset"))
     let navButtonCompact = Metric(28.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P03-b: at 164 Arc's back, forward and … are centred 28 apart, ending 6 from the edge"))
     let navGlyph = Metric(14.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P01-c: Arc's back arrow is 14.5 pt wide and its reload 15 pt"))
     let navButtonRadius = Metric(9.0, .guess("hover fill of the title-row buttons; reuses the URL pill accessory radius 9"))

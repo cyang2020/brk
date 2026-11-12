@@ -39,7 +39,8 @@ public enum WindowLayout {
             anchoredWidth = snapshot.sidebar.width
             let frame = CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height)
             sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible,
-                                            thisWindow: SidebarLayout.listsOwnTabs(snapshot.kind), toolbarVisible: toolbarVisible, miniPlayers: snapshot.miniPlayers.map(\.tab))
+                                            thisWindow: SidebarLayout.listsOwnTabs(snapshot.kind), toolbarVisible: toolbarVisible, miniPlayers: snapshot.miniPlayers.map(\.tab),
+                                            fullScreen: snapshot.fullScreen)
             handle = CGRect(x: frame.maxX - m.resizeHitWidth.value / 2, y: m.resizeHitTop.value,
                             width: m.resizeHitWidth.value, height: max(0, contentSize.height - m.resizeHitBottomTrim.value))
         } else if snapshot.sidebar.peek {
@@ -47,7 +48,8 @@ public enum WindowLayout {
             let frame = CGRect(x: m.floatingInset.value, y: m.floatingInset.value, width: snapshot.sidebar.width,
                                height: contentSize.height - 2 * m.floatingInset.value)
             sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible,
-                                            thisWindow: SidebarLayout.listsOwnTabs(snapshot.kind), toolbarVisible: toolbarVisible, miniPlayers: snapshot.miniPlayers.map(\.tab))
+                                            thisWindow: SidebarLayout.listsOwnTabs(snapshot.kind), toolbarVisible: toolbarVisible, miniPlayers: snapshot.miniPlayers.map(\.tab),
+                                            fullScreen: snapshot.fullScreen)
         } else {
             reveal = CGRect(x: -m.revealOutsideFactor.value * inset, y: 0,
                             width: (m.revealOutsideFactor.value + m.revealInsideFactor.value) * inset, height: contentSize.height)

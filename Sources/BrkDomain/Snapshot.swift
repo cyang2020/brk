@@ -61,6 +61,9 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var exportOutcome: ExportOutcome? = nil
     public var output: OutputUpdate? = nil
     public var stayOnTop: Bool = false
+    /// The window is in macOS full screen. Set by the window controller from AppKit, never by the reducer: the title
+    /// row has no traffic lights then, so the sidebar toggle takes their place (`SidebarFrames.trafficLightsOrigin`).
+    public var fullScreen: Bool = false
     public var bounds: CGRect?
     /// The current space's theme. A change crossfades (Metrics.motion.themeCrossfade).
     public var theme: ResolvedTheme

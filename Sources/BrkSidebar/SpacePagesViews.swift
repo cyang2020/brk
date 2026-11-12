@@ -44,7 +44,7 @@ final class SpaceSidePageView: NSView {
         let palette = Palette(page.theme)
         let f = SidebarLayout.compute(frame: column, favorites: page.favorites, space: page.space, dock: snapshot.dock,
                                       headerVisible: snapshot.sidebar.spaceHeaderVisible, toolbarVisible: snapshot.sidebar.toolbarVisible,
-                                      miniPlayers: snapshot.miniPlayers.map(\.tab))
+                                      miniPlayers: snapshot.miniPlayers.map(\.tab), fullScreen: snapshot.fullScreen)
         let local = { (r: CGRect) in r.offsetBy(dx: -f.frame.minX, dy: -f.frame.minY) }
         favorites.isHidden = sharesFavorites
         favorites.frame = local(f.favoritesTray)

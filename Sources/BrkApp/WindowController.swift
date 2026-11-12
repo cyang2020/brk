@@ -206,6 +206,8 @@ public class WindowController: NSObject, NSWindowDelegate {
     /// while the sidebar is hidden; Arc shows them on hover); keyboard focus only when `snapshot.focus` differs from the last one.
     /// Render itself never calls `send`; AppKit's resize and move delegate calls do, and the store queues those.
     func render(_ snapshot: WindowSnapshot) {
+        var snapshot = snapshot
+        snapshot.fullScreen = fullScreen
         place(snapshot)
         window.level = window.styleMask.contains(.fullScreen) ? .normal : (snapshot.stayOnTop ? .floating : .normal)
         let frames = WindowLayout.compute(snapshot, contentSize: root.bounds.size)
@@ -286,20 +288,31 @@ public class WindowController: NSObject, NSWindowDelegate {
         if let last = lastSnapshot { applyFocus(last.focus) }
     }
 
+    /// The window is in macOS full screen, or going there: from the start of the move in to the start of the move out.
+    /// The title row follows it (`WindowSnapshot.fullScreen`).
+    private var fullScreen = false {
+        didSet { if fullScreen != oldValue, let last = lastSnapshot { render(last) } }
+    }
+
     public func windowWillEnterFullScreen(_ notification: Notification) {
         tracePageFullscreen("will enter"); pageFullscreen.nativeWillChange(to: true)
+        fullScreen = true
     }
     public func windowWillExitFullScreen(_ notification: Notification) {
         tracePageFullscreen("will exit"); pageFullscreen.nativeWillChange(to: false)
+        fullScreen = false
     }
     public func windowDidEnterFullScreen(_ notification: Notification) {
         tracePageFullscreen("did enter")
+        // The titlebar is in AppKit's full screen window now: its buttons as they are (`showSystemTrafficLights`).
+        if let last = lastSnapshot { render(last) }
         pageFullscreen.nativeDidChange(); window.level = .normal; applyPageFullscreen(); applyQueuedToggles()
     }
     public func windowDidFailToEnterFullScreen(_ window: NSWindow) { fullscreenTransitionFailed() }
     public func windowDidFailToExitFullScreen(_ window: NSWindow) { fullscreenTransitionFailed() }
     private func fullscreenTransitionFailed() {
         tracePageFullscreen("failed")
+        fullScreen = window.styleMask.contains(.fullScreen)
         defer { applyQueuedToggles() }
         if pageFullscreen.nativeFailed(nativeFullscreen: window.styleMask.contains(.fullScreen)) {
             for pane in lastSnapshot?.content.presentedPanes ?? [] {
@@ -309,6 +322,8 @@ public class WindowController: NSObject, NSWindowDelegate {
     }
     public func windowDidExitFullScreen(_ notification: Notification) {
         tracePageFullscreen("did exit")
+        // AppKit has put the titlebar back in the window: the lights go to Arc's spots again.
+        if let last = lastSnapshot { render(last) }
         if pageFullscreen.nativeExited() {
             for pane in lastSnapshot?.content.presentedPanes ?? [] {
                 if case .page(let page) = pane.content { engine.perform(.exitFullscreen, on: page) }
@@ -475,6 +490,12 @@ extension HostWindow {
     /// time the pointer goes onto or off the buttons; `RestingTrafficLights` puts it right in the same display pass.
     func placeArcTrafficLights(origin: CGPoint?) {
         let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { standardWindowButton($0) }
+        if styleMask.contains(.fullScreen) { return showSystemTrafficLights(buttons) }
+        if let resting = RestingTrafficLights.find(in: buttons.first?.superview), resting.fullScreen {
+            // Back from full screen: the buttons go back to their resting look (the pointer is on the page, not on them).
+            resting.fullScreen = false
+            buttons.forEach { $0.alphaValue = RestingTrafficLights.restingAlpha }
+        }
         guard let origin, let titlebar = buttons.first?.superview, let container = titlebar.superview, let frame = container.superview else {
             buttons.forEach { $0.isHidden = true }
             let resting = RestingTrafficLights.find(in: buttons.first?.superview)
@@ -513,6 +534,22 @@ extension HostWindow {
         resting.frame = buttons.map(\.frame).reduce(buttons[0].frame) { $0.union($1) }
         resting.needsDisplay = true
     }
+
+    /// Full screen: AppKit moves the titlebar into its own window that comes down with the menu bar and lays it out
+    /// itself. Arc shows the standard coloured buttons there, not its grey circles (the user's report, 2026-11-12):
+    /// Brk leaves them where AppKit puts them, fully opaque, and stops answering AppKit's moves until the window
+    /// leaves full screen.
+    private func showSystemTrafficLights(_ buttons: [NSButton]) {
+        if let resting = RestingTrafficLights.find(in: buttons.first?.superview) {
+            resting.fullScreen = true
+            resting.origin = nil
+            resting.isHidden = true
+        }
+        for button in buttons {
+            button.isHidden = false
+            button.alphaValue = 1
+        }
+    }
 }
 
 /// Arc's traffic lights at rest (2a96a9d7f0:verify/visual-pairs/run-20261103: every capture with the pointer elsewhere, P01-a in
@@ -528,6 +565,8 @@ final class RestingTrafficLights: NSView {
     var origin: CGPoint?
     /// True while Brk itself moves the titlebar, so its own moves are not taken for AppKit's.
     var placing = false
+    /// The window is in full screen: AppKit's buttons show as they are and this view stays hidden.
+    var fullScreen = false
     /// AppKit put the titlebar back (a window resize, full screen and back): place the lights again.
     var movedByAppKit: (() -> Void)?
     /// How far in from the titlebar's left edge AppKit starts the buttons (9 on macOS 26), read before Brk moved them.
@@ -630,7 +669,10 @@ final class RestingTrafficLights: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) { buttons.forEach { $0.alphaValue = 1 } }
-    override func mouseExited(with event: NSEvent) { buttons.forEach { $0.alphaValue = Self.restingAlpha } }
+    override func mouseExited(with event: NSEvent) {
+        guard !fullScreen else { return }
+        buttons.forEach { $0.alphaValue = Self.restingAlpha }
+    }
 }
 
 /// The browser window. Never lets CEF's host windows take key status from it (they are its child windows).
