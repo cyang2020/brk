@@ -278,10 +278,11 @@ extension Command {
 }
 
 extension AppState {
-    /// The window of any kind the user used last (the one that became key most recently), ties by id: where BrkApp
-    /// sends what no key browser window takes, the menu, Settings and About while one of those is in front.
+    /// The open window of any kind the user used last (the one that became key most recently), ties by id: where BrkApp
+    /// sends what no key browser window takes, the menu, Settings and About while one of those is in front. The closed
+    /// last window (`Session.closedWindow`) is not open; BrkApp falls back to it only when no window is.
     public func lastUsedWindow() -> WindowID? {
-        doc.windows.keys.max { a, b in
+        doc.windows.keys.filter { $0 != session.closedWindow }.max { a, b in
             let (x, y) = (session.windows[a]?.activationOrder ?? 0, session.windows[b]?.activationOrder ?? 0)
             return x != y ? x < y : a > b
         }
