@@ -936,8 +936,12 @@ public final class AppStore {
             } catch { dispatch(.system(.sidebarData(.failed(epoch: nil, "Could not write the local Brk tour.")))) }
         case .exchange(let epoch, let folder, let replica, let revision, let document):
             guard syncTask == nil else { return }
-            // Publishing is permitted only after this exact sidebar edit + replica checkpoint is durable.
-            guard flush() else { dispatch(.system(.sidebarData(.failed(epoch: epoch, "Sync paused because local state could not be saved.")))); return }
+            // Publishing is permitted only after this exact sidebar edit + replica checkpoint is durable. With nothing
+            // pending, the document was made durable before it was last published and this exchange only reads peers, so
+            // the minute's poll does not write the whole state file on the main thread.
+            if state.docNeedsSidebarPublication {
+                guard flush() else { dispatch(.system(.sidebarData(.failed(epoch: epoch, "Sync paused because local state could not be saved.")))); return }
+            }
             let ticket = UUID()
             syncTaskID = ticket
             syncTask = Task { @MainActor [weak self] in

@@ -25,16 +25,29 @@ public final class SuggestionFetcher {
     }
     private var pending: [WindowID: Pending] = [:]
     private var eligible: [WindowID: Eligibility] = [:]
-    private let session: URLSession
+    let session: URLSession
     /// `LaunchOptions.suggestOverride`: the e2e fixture's endpoint instead of the engine's.
     private let override: URL?
     private let log = Logger(subsystem: "brk", category: "suggest")
 
-    public init(send: @escaping @MainActor (Input) -> Void, session: URLSession = .shared, override: URL? = LaunchOptions().suggestOverride) {
+    public init(send: @escaping @MainActor (Input) -> Void, session: URLSession = SuggestionFetcher.privateSession,
+                override: URL? = LaunchOptions().suggestOverride) {
         self.send = send
         self.session = session
         self.override = override
     }
+
+    /// The store's: no cookies, cache or saved credentials, like the other fetchers here. A cookie the engine sets would
+    /// otherwise go back with every profile's typing (pages keep cookies per profile), and typed queries would be cached
+    /// on disk out of reach of clearing browsing data.
+    public static let privateSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
+        configuration.urlCredentialStorage = nil
+        return URLSession(configuration: configuration)
+    }()
 
     public func cancel(_ window: WindowID) { pending.removeValue(forKey: window)?.task.cancel() }
 

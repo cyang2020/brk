@@ -5,12 +5,14 @@ import os
 /// Owner: F2. Deleting a profile's Chromium data. A persistent profile lives in `<rootCachePath>/Profile-<name>`
 /// (CefSwift's layout, `CefProfile.persistent`: the Chrome runtime only loads a profile directly under its root),
 /// and Chromium holds that directory while the runtime runs, so `CEFEngine.disposeContext` marks it after draining: the directory's
-/// name goes into `<data dir>/profiles-to-delete`, one per line. The next launch deletes every marked directory
-/// before CEF starts, then the marker.
+/// name goes into `<data dir>/profiles-to-delete`, one per line. The next launch, before CEF starts, moves every marked
+/// directory out of the root into `<data dir>/profiles-deleting` (a rename, so launch does not wait for a large cache to
+/// be deleted), drops the marker, and deletes that folder on a background thread.
 ///
 /// Every step converges whatever the previous run left: marking a name twice lists it once; the marker is replaced
-/// atomically; a sweep that crashed half way finds the deleted directories gone and deletes the rest; a directory
-/// that could not be deleted stays listed for the next launch.
+/// atomically; a sweep that crashed half way finds the moved directories gone and moves the rest; a background delete
+/// that a quit cut short is started again by the next launch; a directory that could not be moved stays listed for the
+/// next launch.
 struct ProfileDirectories {
     /// CEF's root cache path (`<data dir>/Chromium`, real path).
     let root: URL
@@ -19,6 +21,8 @@ struct ProfileDirectories {
     init(root: URL) { self.root = root }
 
     var marker: URL { root.deletingLastPathComponent().appendingPathComponent("profiles-to-delete") }
+    /// Beside the marker: outside the root, so Chromium never loads what waits here, and on the same volume.
+    var deleting: URL { root.deletingLastPathComponent().appendingPathComponent("profiles-deleting", isDirectory: true) }
 
     /// The directory name CefSwift gives a profile (`CefProfile.cachePath` and `sanitize`, internal to CefKit,
     /// repeated here; W2-2 proves the two agree on disk): "Profile-" and the name with path separators as "_" and
@@ -54,8 +58,10 @@ struct ProfileDirectories {
         log.notice("profile \(id.rawValue, privacy: .public): directory \(name, privacy: .public) marked for deletion at the next launch")
     }
 
-    /// Deletes every marked directory; keeps listed only the ones still on disk. Call before CEF starts.
-    func deleteMarked() {
+    /// Moves every marked directory out of the root and hands them to `sweep`; keeps listed only the ones still in the
+    /// root. Call before CEF starts. What an earlier run's sweep did not finish is swept again.
+    func deleteMarked(sweep: @Sendable (URL) -> Void = ProfileDirectories.sweepInBackground) {
+        defer { if FileManager.default.fileExists(atPath: deleting.path) { sweep(deleting) } }
         guard FileManager.default.fileExists(atPath: marker.path) else { return }
         let names = Self.names(in: readMarker())
         var left: [String] = []
@@ -63,14 +69,20 @@ struct ProfileDirectories {
             let directory = root.appendingPathComponent(name, isDirectory: true)
             guard FileManager.default.fileExists(atPath: directory.path) else { continue }
             do {
-                try FileManager.default.removeItem(at: directory)
-                log.notice("deleted the data of removed profile directory \(name, privacy: .public)")
+                try FileManager.default.createDirectory(at: deleting, withIntermediateDirectories: true)
+                try FileManager.default.moveItem(at: directory, to: deleting.appendingPathComponent("\(name)-\(UUID().uuidString)", isDirectory: true))
+                log.notice("moved the data of removed profile directory \(name, privacy: .public) out for deletion")
             } catch {
-                log.error("could not delete profile directory \(name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                log.error("could not move profile directory \(name, privacy: .public) out: \(error.localizedDescription, privacy: .public)")
                 left.append(name)
             }
         }
         if left.isEmpty { try? FileManager.default.removeItem(at: marker) } else { try? write(left) }
+    }
+
+    /// Deletes `folder` on a background thread while launch goes on; a run that quits first leaves the rest to the next.
+    static func sweepInBackground(_ folder: URL) {
+        DispatchQueue.global(qos: .utility).async { try? FileManager.default.removeItem(at: folder) }
     }
 
     private func readMarker() -> String {

@@ -15,7 +15,8 @@ import Foundation
 ///   engine filled in (`HelpLinks.newIssue`). Nothing is sent; the user reads, edits and submits the form. Brk has no
 ///   team mailbox.
 /// - After a crash, the next launch offers once to report it (`offerCrashReport`), the report's first lines filled in.
-/// - Check for Updates…: Brk has no update feed; an alert names the build and how a newer one is made.
+/// - Check for Updates…: Brk does not update itself; an alert names the build and where the newest one is (the
+///   repository's Latest build release, its DMGs rebuilt after every change), with a button that opens it.
 /// - Restore Data, Record and Cancel Trace, Open Task Manager: their windows and recorder below.
 @MainActor
 final class HelpActions {
@@ -58,9 +59,15 @@ final class HelpActions {
         case .sendFeedback: openIssue(.feedback, in: window)
         case .checkForUpdates:
             let info = BuildInfo.current(engine: engine.engineVersion)
-            let notes: String? = HelpLinks.releaseNotes() == nil ? nil : "Release Notes"
-            alert("\(Product.name) has no update channel", HelpLinks.updateText(info), in: window, second: notes) { [weak self] in
-                self?.run(.releaseNotes, owner: window)
+            if let latest = HelpLinks.latestBuild(info) {
+                alert("\(Product.name) has no update channel", HelpLinks.updateText(info), in: window, second: "Open Latest Build") { [weak self] in
+                    self?.send(window, .app(.help(.open(latest))))
+                }
+            } else {
+                let notes: String? = HelpLinks.releaseNotes() == nil ? nil : "Release Notes"
+                alert("\(Product.name) has no update channel", HelpLinks.updateText(info), in: window, second: notes) { [weak self] in
+                    self?.run(.releaseNotes, owner: window)
+                }
             }
         case .trace:
             trace.toggle { [weak self] message in self?.alert("Trace", message, in: window) }
@@ -164,8 +171,18 @@ enum HelpLinks {
         return url(logs: lines.isEmpty ? nil : lines.joined(separator: "\n"))
     }
 
+    /// The repository's Latest build release (README, docs/release.md): signed DMGs rebuilt from main after every change.
+    /// Nil for a build that names no repository.
+    static func latestBuild(_ info: BuildInfo) -> URL? {
+        info.repository?.appendingPathComponent("releases/tag/latest")
+    }
+
     static func updateText(_ info: BuildInfo) -> String {
-        "This copy is \(info.versionLine)\(info.commit.map { ", commit \($0)" } ?? ""). \(Product.name) is built from its repository and has no update feed, so nothing is downloaded. To get a newer build, pull the repository and run scripts/build.sh."
+        let copy = "This copy is \(info.versionLine)\(info.commit.map { ", commit \($0)" } ?? ""). \(Product.name) does not update itself, so nothing is downloaded."
+        guard latestBuild(info) != nil else {
+            return copy + " This build names no repository; to get a newer one, pull the repository and run scripts/build.sh."
+        }
+        return copy + " The newest build is on the repository's Latest build release, rebuilt after every change: download the DMG for your Mac and replace this copy in Applications."
     }
 }
 

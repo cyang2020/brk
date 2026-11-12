@@ -205,7 +205,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         }
         store.help.restoreConfirmed = { [weak self] backup in
             self?.pendingRestore = backup
-            Quit.request()
+            Quit.request(relaunch: true)
         }
         store.start()
         offerCrashReport(dataDirectory: directory)
@@ -299,20 +299,30 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         sweep?.invalidate()
         control?.stopAccepting()
         let store = store, engine = engine, log = log
+        let restore = pendingRestore, now = clock?.now() ?? Instant(milliseconds: 0)
         Task { @MainActor in
-            switch await Self.orderedQuit(store: store, engine: engine, dataDirectory: Product.dataDirectory(), log: log) {
+            let (outcome, restoreFailure) = await Self.orderedQuit(store: store, engine: engine, dataDirectory: Product.dataDirectory(), log: log,
+                                                                   restore: restore, now: now)
+            if let restoreFailure { Self.tellRestoreFailed(restoreFailure) }
+            if Quit.relaunch { Self.relaunch() }
+            switch outcome {
             case .clean:
-                if let backup = self.pendingRestore {
-                    do {
-                        try StateBackups(directory: Product.dataDirectory()).install(backup, now: self.clock?.now() ?? Instant(milliseconds: 0))
-                        Self.relaunch()
-                    } catch { log.error("restore of \(backup.path, privacy: .public) failed: \(error)") }
-                }
                 NSApp.reply(toApplicationShouldTerminate: true)
             case .timedOut:
                 exit(Self.shutdownTimedOutStatus)
             }
         }
+    }
+
+    /// Restore Data could not put the backup in place. Said before the app starts again with the data it had; the
+    /// engine is down by now, so this is an app-modal alert, not a sheet.
+    private static func tellRestoreFailed(_ reason: String) {
+        let alert = NSAlert()
+        alert.messageText = "\(Product.name) could not restore the backup"
+        alert.informativeText = "\(reason) \(Product.name) starts again with the data it had; the backup is still in Help > Restore Data."
+        alert.addButton(withTitle: "OK")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     /// Arc keeps running with no windows; v1 quits when its only window closes, through the same ordered quit.
@@ -336,7 +346,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     }
 
     /// Starts this executable again once this process has exited, with the same environment (so a test's data
-    /// directory and control socket carry over). Restore Data's last step.
+    /// directory and control socket carry over). The last step of a quit asked for with `Quit.request(relaunch: true)`.
     static func relaunch() {
         guard let executable = Bundle.main.executablePath else { return }
         let process = Process()
@@ -353,7 +363,9 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     /// on disk before anything risky), `await engine.shutdown()`, then the records in the data directory:
     /// `page-log.txt` (every created, closeRequested and closed entry, for the e2e report) and, on a timeout,
     /// `shutdown-incomplete.log` naming each unclosed page. The caller turns the outcome into the exit status.
-    static func orderedQuit(store: AppStore?, engine: any WebEngine, dataDirectory: URL, log: Logger) async -> ShutdownOutcome {
+    /// `restore`: Restore Data's confirmed backup, put in place of state.json last; `restoreFailure` says why it could not be.
+    static func orderedQuit(store: AppStore?, engine: any WebEngine, dataDirectory: URL, log: Logger, restore: URL? = nil,
+                            now: Instant = Instant(milliseconds: 0)) async -> (outcome: ShutdownOutcome, restoreFailure: String?) {
         // AI pages first, while their windows are up: what is being typed in them is saved before the state is written.
         await store?.commitPageEdits()
         await store?.stopAI()
@@ -375,7 +387,15 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             let marker = dataDirectory.appendingPathComponent("shutdown-incomplete.log")
             try? (unclosed.map(\.description).joined(separator: "\n") + "\n").write(to: marker, atomically: true, encoding: .utf8)
         }
-        return outcome
+        // State was flushed before the engine shut down, so a timed-out shutdown leaves nothing to write over the backup.
+        var restoreFailure: String?
+        if let restore {
+            do { try StateBackups(directory: dataDirectory).install(restore, now: now) } catch {
+                log.error("restore of \(restore.path, privacy: .public) failed: \(error)")
+                restoreFailure = error.localizedDescription
+            }
+        }
+        return (outcome, restoreFailure)
     }
 
     /// Exit status of a quit whose browsers did not close in time. Distinct from a crash (signal) and from 0.
@@ -392,8 +412,11 @@ public enum Quit {
     /// The quit under way needs no "Warn before quitting" question: it was answered, or it comes from SIGTERM or the
     /// control socket.
     public static var confirmed = false
+    /// The quit under way ends by starting the app again (Restore Data, the restart that lets imported passwords in).
+    public static var relaunch = false
 
-    public static func request() {
+    public static func request(relaunch: Bool = false) {
+        if relaunch { self.relaunch = true }
         confirmed = true
         perform()
     }

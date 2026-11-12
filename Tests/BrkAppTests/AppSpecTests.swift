@@ -224,7 +224,7 @@ final class LifecycleTests: XCTestCase {
         h.engine.onShutdown = { [stateFile = h.stateFile] in
             if case .data = stateFile.read() { stateWasOnDiskAtShutdown = true }
         }
-        let outcome = await Lifecycle.orderedQuit(store: h.store, engine: h.engine, dataDirectory: h.directory, log: Logger(subsystem: "brk", category: "test"))
+        let (outcome, _) = await Lifecycle.orderedQuit(store: h.store, engine: h.engine, dataDirectory: h.directory, log: Logger(subsystem: "brk", category: "test"))
         XCTAssertEqual(outcome, .clean)
         XCTAssertTrue(stateWasOnDiskAtShutdown)
         XCTAssertEqual(h.engine.shutdowns, 1)
@@ -240,10 +240,28 @@ final class LifecycleTests: XCTestCase {
         defer { h.cleanUp() }
         h.store.start()
         h.engine.shutdownOutcome = .timedOut(unclosed: [h.page])
-        let outcome = await Lifecycle.orderedQuit(store: h.store, engine: h.engine, dataDirectory: h.directory, log: Logger(subsystem: "brk", category: "test"))
+        let (outcome, _) = await Lifecycle.orderedQuit(store: h.store, engine: h.engine, dataDirectory: h.directory, log: Logger(subsystem: "brk", category: "test"))
         XCTAssertEqual(outcome, .timedOut(unclosed: [h.page]))
         let marker = try String(contentsOf: h.directory.appendingPathComponent("shutdown-incomplete.log"), encoding: .utf8)
         XCTAssertEqual(marker, "\(h.page.description)\n")
         XCTAssertEqual(Lifecycle.shutdownTimedOutStatus, 3)
+    }
+
+    /// Restore Data's confirmed backup goes in place even when a page never closed in time: state was flushed before the
+    /// engine shut down, so nothing writes over it, and the state it replaces is kept beside the backups
+    func test_aTimedOutQuitStillPutsTheConfirmedBackupInPlace() async throws {
+        let h = Harness()
+        defer { h.cleanUp() }
+        h.store.start()
+        try FileManager.default.createDirectory(at: h.directory, withIntermediateDirectories: true)
+        let backup = h.directory.appendingPathComponent("chosen-backup.json")
+        try Data("chosen backup".utf8).write(to: backup)
+        h.engine.shutdownOutcome = .timedOut(unclosed: [h.page])
+        let (outcome, failure) = await Lifecycle.orderedQuit(store: h.store, engine: h.engine, dataDirectory: h.directory,
+                                                             log: Logger(subsystem: "brk", category: "test"), restore: backup)
+        XCTAssertEqual(outcome, .timedOut(unclosed: [h.page]))
+        XCTAssertNil(failure)
+        XCTAssertEqual(try Data(contentsOf: h.stateFile.url), Data("chosen backup".utf8))
+        XCTAssertTrue(StateBackups(directory: h.directory).list().contains { $0.url.lastPathComponent.hasPrefix("state-before-restore") })
     }
 }

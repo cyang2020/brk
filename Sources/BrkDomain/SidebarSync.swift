@@ -178,8 +178,9 @@ public enum SidebarPanel: Hashable, Sendable { case welcome, importFile, importB
 public enum SidebarDataEvent: Sendable, Equatable {
     case syncPoll
     case imported(WindowID, target: SidebarImportTarget, SidebarImportPreview, favorites: Bool)
-    /// A browser import read and its passwords and cookies written; the rest lands here.
-    case browserImported(WindowID, BrowserImportResult)
+    /// A browser import read and its passwords and cookies written; the rest lands here, in `target`: the Space and profile
+    /// the import started from, where the passwords and cookies went.
+    case browserImported(WindowID, target: SidebarImportTarget, BrowserImportResult)
     case connected(WindowID, folder: String)
     case syncRead(epoch: String, SidebarSyncDocument)
     case syncWritten(epoch: String, revision: UInt64, published: SidebarSyncDocument)

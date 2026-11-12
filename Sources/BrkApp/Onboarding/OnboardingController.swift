@@ -23,18 +23,23 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         var engine: any WebEngine
         var now: @MainActor () -> Instant
         var showBrowserWindow: @MainActor (WindowID) -> Void
+        /// Reads what the user picked, off the main thread (tests answer without files or the keychain).
+        var read: @Sendable (ImportChoice, @escaping @Sendable (String?) -> Void) -> ImportRead = BrowserImportRun.read
     }
 
     private let host: Host
     private(set) var window: NSWindow?
     private var surface: (any OnboardingSurface)?
     private var owner = WindowID("")
-    private var state = OnboardingSnapshot()
+    private(set) var state = OnboardingSnapshot()
     private var history: [OnboardingStep] = []
     private var discovered: [DiscoveredBrowser] = []
     private var selectedProfiles: Set<String> = []
     private var safariFile: URL?
     private var read: ImportRead?
+    /// The Space and profile the import started from: the passwords, the cookies and then the rest land there, even if
+    /// the browser window shows another Space by the time Import is clicked.
+    private var importTarget: SidebarImportTarget?
     private var applied = false
     private var importTask: Task<Void, Never>?
     private var passwordsWritten = 0, passwordsStaged = 0, cookiesSet = 0
@@ -61,7 +66,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         state.step = mode == .firstRun ? .welcome : .pickBrowser
         state.isDefaultBrowser = DefaultBrowser.isDefault()
         state.blockAds = host.snapshot().settings.general.blockAds != false
-        history = []; read = nil; applied = false; safariFile = nil
+        history = []; read = nil; importTarget = nil; applied = false; safariFile = nil
         passwordsWritten = 0; passwordsStaged = 0; cookiesSet = 0
         discover()
         let size = OnboardingLayoutSize.fitted
@@ -105,7 +110,8 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         switch action {
         case .next: next()
         case .back:
-            guard let previous = history.popLast() else { return }
+            // While macOS asks for the password the read is under way; its answer would take over whatever screen is up.
+            guard !state.waitingForPassword, let previous = history.popLast() else { return }
             state.step = previous
             state.mustQuit = nil
         case .skip: skip()
@@ -204,7 +210,10 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         case .bookmarks: selection = []; applyImport(); afterImport()
         case .favorites: pickedSites = []; go(.theme)
         case .theme: go(.adBlocker)
-        case .max: state.maxOn = false; go(state.isDefaultBrowser ? .finish : .defaultBrowser)
+        case .max:
+            // After Enable Max and Back, "Not now" is the answer that counts.
+            if state.maxOn { host.dispatch(.user(owner, .settings(.max(.enable(false))))) }
+            state.maxOn = false; go(state.isDefaultBrowser ? .finish : .defaultBrowser)
         default: next()
         }
     }
@@ -276,6 +285,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     }
 
     private func start(_ source: ImportChoice.Source) {
+        importTarget = host.target(owner)
         let choice = ImportChoice(source: source, secrets: state.importSecrets, now: host.now(), applicationSupport: applicationSupport,
                                   library: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library", isDirectory: true))
         let secretsWanted: Bool
@@ -286,8 +296,9 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         let report: @Sendable (String?) -> Void = { [weak self] profile in
             Task { @MainActor in self?.waiting(profile) }
         }
+        let read = host.read
         importTask = Task { @MainActor [weak self] in
-            let result = await Task.detached(priority: .userInitiated) { BrowserImportRun.read(choice, waiting: report) }.value
+            let result = await Task.detached(priority: .userInitiated) { read(choice, report) }.value
             guard let self, !Task.isCancelled else { return }
             if self.state.step != .progress { self.beginProgress() }
             self.state.waitingForPassword = false
@@ -312,10 +323,12 @@ final class OnboardingController: NSObject, NSWindowDelegate {
 
     private func finishRead(_ result: ImportRead) async {
         read = result
+        // The Favorites step offers this read's sites; a skip before the import filled the built-in list.
+        sites = []; pickedSites = []
         var failures = result.failures
         state.summary = readSummary(result)
         render()
-        guard let target = host.target(owner) else { state.failures = failures + ["The browser window closed"]; state.progressDone = true; render(); return }
+        guard host.target(owner) != nil, let target = importTarget else { state.failures = failures + ["The browser window closed"]; state.progressDone = true; render(); return }
         // Brk profiles an Arc import names must exist before their passwords and cookies can be written.
         let names = Set(result.profiles.compactMap(\.brkProfile))
         for name in names where !host.snapshot().settings.profiles.contains(where: { $0.profile.name.caseInsensitiveCompare(name) == .orderedSame }) {
@@ -385,7 +398,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     }
 
     private func applyImport() {
-        guard let read, !applied else { return }
+        guard let read, !applied, let target = importTarget else { return }
         applied = true
         let bookmarks = filtered(nodes, prefix: "")
         let result = BrowserImportResult(
@@ -394,7 +407,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
             bookmarks: bookmarks, spaces: read.spaces,
             profiles: read.profiles.map { ImportedProfileData(profileName: $0.brkProfile, favorites: $0.read.favorites, visits: $0.read.visits) },
             passwords: passwordsWritten + passwordsStaged, cookies: cookiesSet, failures: state.failures)
-        host.dispatch(.system(.sidebarData(.browserImported(owner, result))))
+        host.dispatch(.system(.sidebarData(.browserImported(owner, target: target, result))))
         if let theme = read.spaces.first?.theme { state.theme = theme }
     }
 
@@ -416,16 +429,11 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Restart to let staged passwords in: a shell waits for this process to end, then starts the same executable with
-    /// the same environment; Brk's ordered quit runs first.
+    /// Restart to let staged passwords in: a confirmed quit (the button was the answer, so "Warn before quitting" does not
+    /// ask again), and the app starts again only once the ordered quit has run, as Restore Data does.
     private func restart() {
-        let shell = Process()
-        shell.executableURL = URL(fileURLWithPath: "/bin/sh")
-        shell.arguments = ["-c", "while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done; exec \"$0\"",
-                           Bundle.main.executablePath ?? CommandLine.arguments[0]]
-        do { try shell.run() } catch { return }
         finish()
-        NSApp.terminate(nil)
+        Quit.request(relaunch: true)
     }
 
     // MARK: Bookmarks step
@@ -554,7 +562,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
 
     private func render() {
         guard let surface else { return }
-        state.canGoBack = !history.isEmpty && state.step != .progress
+        state.canGoBack = !history.isEmpty && state.step != .progress && !state.waitingForPassword
         state.profiles = (discovered.first { $0.kind.rawValue == state.selectedBrowser }?.profiles ?? []).map {
             OnboardingProfileRow(id: $0.id, name: $0.name, selected: selectedProfiles.contains($0.id))
         }

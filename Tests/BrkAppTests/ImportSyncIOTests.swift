@@ -93,6 +93,24 @@ final class ImportSyncIOTests: XCTestCase {
         XCTAssertTrue(h.store.snapshot.sidebarData.status.contains("Imported 1 bookmarks"))
         XCTAssertTrue(h.store.flush())
     }
+    /// A sync poll with nothing new to publish (the minute's clock tick) only reads the folder: it does not encode and
+    /// fsync the whole state file on the main thread first.
+    func testAPollWithNothingToPublishWritesNoStateFile() async throws {
+        let h = Harness(); defer { h.cleanUp() }
+        let shared = h.directory.appendingPathComponent("shared", isDirectory: true)
+        try FileManager.default.createDirectory(at: shared, withIntermediateDirectories: true)
+        h.store.dispatch(.system(.sidebarData(.connected(h.window, folder: shared.path))))
+        let deadline = Date().addingTimeInterval(5)
+        while h.store.state.docNeedsSidebarPublication, Date() < deadline { try await Task.sleep(for: .milliseconds(25)) }
+        XCTAssertFalse(h.store.state.docNeedsSidebarPublication, "the first exchange did not publish")
+        // The debounced save that followed it lands first; then any write is the poll's own.
+        try await Task.sleep(for: .seconds(Metrics.persistence.saveDebounce.value * 3))
+        try? FileManager.default.removeItem(at: h.stateFile.url)
+        h.store.dispatch(.system(.sidebarData(.syncPoll)))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: h.stateFile.url.path), "an idle poll wrote state.json")
+        await h.store.stopSidebarData()
+    }
+
     func testInvalidPeerDoesNotOverwriteLastReplicaAndTemporaryFilesAreIgnored() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("brk-sync-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

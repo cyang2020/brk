@@ -58,6 +58,16 @@ final class SuggestionFetcherTests: XCTestCase {
                                      EngineSuggestion("https://github.com/", kind: .navigation, relevance: 1249, title: "GitHub page")])
         XCTAssertEqual(SuggestionFetcher.parse(try JSONSerialization.data(withJSONObject: ["q", ["q-a"]])).rows, ["q-a"])
     }
+
+    /// the store's fetcher (no session given) keeps no cookies, cache or credentials: an engine cookie cannot link the
+    /// suggestion requests of two profiles, and typed queries are not stored on disk
+    func test_theStoresFetcherKeepsNoCookiesOrCache() {
+        let configuration = SuggestionFetcher(send: { _ in }, override: nil).session.configuration
+        XCTAssertNil(configuration.httpCookieStorage)
+        XCTAssertFalse(configuration.httpShouldSetCookies)
+        XCTAssertNil(configuration.urlCache)
+        XCTAssertNil(configuration.urlCredentialStorage)
+    }
 }
 
 /// Answers `["q", ["q-a", "q-b"]]` for any URL with a `q` (or `query`) item; "fail" is a network error.

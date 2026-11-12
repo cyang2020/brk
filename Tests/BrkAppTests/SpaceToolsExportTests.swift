@@ -1,3 +1,5 @@
+import AppKit
+import BrkBase
 import BrkDomain
 import Foundation
 import XCTest
@@ -17,5 +19,38 @@ final class SpaceToolsExportTests: XCTestCase {
         XCTAssertTrue(try String(contentsOf: first.appendingPathComponent("bookmarks.html"), encoding: .utf8).contains("Fixture &amp; one"))
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path).count, 2)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: first.path).sorted(), ["bookmarks.html", "bookmarks.json"])
+    }
+
+    /// Export Here writes the folder off the main thread (a slow network share must not stop the window) and reports
+    /// through the same completion
+    @MainActor
+    func testExportHereWritesOffTheMainThread() async throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("brk-space-export-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let window = NSWindow(contentRect: CGRect(x: 200, y: 200, width: 700, height: 500), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        final class Seen: @unchecked Sendable { var onMain: Bool?; var outcome: SpaceExportOutcome? }
+        let seen = Seen()
+        let panels = SpaceToolsPanels()
+        panels.write = { document, folder in
+            seen.onMain = Thread.isMainThread
+            return try SpaceFolderWriter.write(document, into: folder)
+        }
+        let document = ExportDocument(title: "Work", entries: [.link(title: "One", url: URL(string: "https://example.org/one")!)])
+        panels.export(document, owner: WindowID("owner"), token: "t", window: window) { seen.outcome = $0 }
+        let sheet = try XCTUnwrap(window.attachedSheet)
+        let path = try XCTUnwrap(ViewTree.find("space-tools-folder-export-path", in: sheet) as? NSTextField)
+        path.stringValue = directory.path
+        let confirm = try XCTUnwrap(ViewTree.find("space-tools-folder-export-confirm", in: sheet) as? NSButton)
+        confirm.performClick(nil)
+        let deadline = Date().addingTimeInterval(5)
+        while seen.outcome == nil, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(seen.outcome, .saved)
+        XCTAssertEqual(seen.onMain, false)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), ["Work"])
     }
 }

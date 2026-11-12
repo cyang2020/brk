@@ -62,8 +62,8 @@ extension Work {
             let addedHistory = Set(state.doc.history.filter { $0.profile == space.profile }.map(\.url)).subtracting(previousHistory).count
             state.session.sidebarDataStatus = "Imported \(imported) bookmarks, \(addedHistory) new history URLs, \(preview.passwords) passwords. Skipped \(preview.rejected) invalid entries and \(preview.bookmarkCount - imported) duplicate or unplaced bookmarks."
             toast(preview.rejected == 0 ? ToastCopy.importSucceeded : ToastCopy.importPartly, in: window)
-        case .browserImported(let window, let result):
-            applyBrowserImport(result, in: window)
+        case .browserImported(let window, let target, let result):
+            applyBrowserImport(result, into: target, in: window)
         case .connected(let window, let folder):
             guard let w = state.doc.windows[window], w.kind == .standard, let profile = state.doc.spaces[w.space]?.profile,
                   URL(fileURLWithPath: folder).isFileURL, folder.hasPrefix("/") else { return }

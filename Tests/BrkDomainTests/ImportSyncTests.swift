@@ -187,7 +187,8 @@ final class ImportSyncTests: XCTestCase {
             ImportedSpace(key: "arc:B", title: "Work", profileName: "Work", pinned: [.tab(title: "Tracker", url: url("https://tracker.example.test/"))]),
         ], profiles: [ImportedProfileData(favorites: [.tab(title: "Mail", url: url("https://mail.example.test/"))], visits: [visit]),
                       ImportedProfileData(profileName: "Work", favorites: [.tab(title: "Chat", url: url("https://chat.example.test/"))])])
-        d.system(.sidebarData(.browserImported(d.window, result)))
+        let target = try XCTUnwrap(d.state.sidebarImportTarget(in: d.window))
+        d.system(.sidebarData(.browserImported(d.window, target: target, result)))
         XCTAssertEqual(d.state.doc.spaceOrder.count, 2)
         XCTAssertEqual(d.state.doc.spaces[home]?.title, "Personal", "the empty starting Space took Arc's first Space")
         let work = try XCTUnwrap(d.state.doc.profiles.values.first { $0.name == "Work" })
@@ -199,7 +200,7 @@ final class ImportSyncTests: XCTestCase {
         XCTAssertEqual(d.state.doc.history.count, 1)
         XCTAssertEqual(d.snapshot.sidebarData.lastImport?.tabs, 5)
         let items = d.state.doc.tree.items.count
-        d.system(.sidebarData(.browserImported(d.window, result)))
+        d.system(.sidebarData(.browserImported(d.window, target: target, result)))
         XCTAssertEqual(d.state.doc.tree.items.count, items, "re-import created rows")
         XCTAssertEqual(d.state.doc.spaceOrder.count, 2)
         XCTAssertEqual(d.state.doc.history.count, 1)

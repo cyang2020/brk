@@ -116,8 +116,9 @@ extension Doc {
 }
 
 extension Work {
-    mutating func applyBrowserImport(_ result: BrowserImportResult, in window: WindowID) {
-        guard let target = state.sidebarImportTarget(in: window), let home = state.doc.spaces[target.space] else { return }
+    /// Lands in `target`, the Space and profile the import started from, whichever Space the window shows now.
+    mutating func applyBrowserImport(_ result: BrowserImportResult, into target: SidebarImportTarget, in window: WindowID) {
+        guard state.sidebarImportTarget(in: window) != nil, let home = state.doc.spaces[target.space], home.profile == target.profile else { return }
         var summary = BrowserImportSummary(source: result.source)
         summary.passwords = result.passwords; summary.cookies = result.cookies; summary.failures = result.failures
 

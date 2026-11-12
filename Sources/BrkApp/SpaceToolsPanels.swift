@@ -14,6 +14,8 @@ final class SpaceToolsPanels {
     }
     private var exports: [WindowID: Export] = [:]
     private var nextFixtureDirectories: [WindowID: URL] = [:]
+    /// Writes the folder (tests watch where it runs).
+    var write: @Sendable (ExportDocument, URL) throws -> URL = SpaceFolderWriter.write
 
     func export(_ document: ExportDocument, owner: WindowID, token: String, window: NSWindow,
                 complete: @escaping @MainActor (SpaceExportOutcome) -> Void) {
@@ -27,10 +29,13 @@ final class SpaceToolsPanels {
                directory.resolvingSymlinksInPath().standardizedFileURL.path != expected.path {
                 complete(.failed("The export form selected a different fixture directory")); return
             }
-            do {
-                _ = try SpaceFolderWriter.write(document, into: directory)
-                complete(.saved)
-            } catch { complete(.failed(error.localizedDescription)) }
+            // Off the main thread: the folder may be on a slow share. A late answer is fenced by its token in the domain.
+            let write = self.write
+            Task.detached(priority: .userInitiated) {
+                let outcome: SpaceExportOutcome
+                do { _ = try write(document, directory); outcome = .saved } catch { outcome = .failed(error.localizedDescription) }
+                await MainActor.run { complete(outcome) }
+            }
         }
         exports[owner] = Export(token: token, panel: panel, window: window, fixtureDirectory: fixture)
         panel.begin(in: window)

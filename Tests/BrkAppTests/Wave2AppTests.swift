@@ -24,6 +24,23 @@ final class Wave2AppTests: XCTestCase {
         XCTAssertNil(AIProviderSeam.provider(for: .auto, detected: []))
     }
 
+    /// a link from another app opens, and a normal launch keeps no list of the links it was sent (only a control-socket
+    /// launch records them for its facts)
+    func test_aNormalLaunchKeepsNoListOfLinksFromOtherApps() {
+        @MainActor final class Sent { var inputs: [Input] = [] }
+        let sent = Sent()
+        let handler = GetURLHandler(testScheme: nil) { sent.inputs.append($0) }
+        let before = GetURLHandler.received.count
+        for index in 0..<3 {
+            let event = NSAppleEventDescriptor(eventClass: AEEventClass(kInternetEventClass), eventID: AEEventID(kAEGetURL), targetDescriptor: nil,
+                                               returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID))
+            event.setParam(NSAppleEventDescriptor(string: "https://example.test/from-mail-\(index)"), forKeyword: AEKeyword(keyDirectObject))
+            _ = handler.perform(NSSelectorFromString("handle:reply:"), with: event, with: NSAppleEventDescriptor.null())
+        }
+        XCTAssertEqual(sent.inputs.count, 3, "the links still open")
+        XCTAssertEqual(GetURLHandler.received.count, before)
+    }
+
     /// a key equivalent the window's views do not take is routed through the table before AppKit's menu, so Arc's
     /// hidden rows (Ctrl+Tab) and remapped chords work with a native view focused
     func test_windowRoutesUnhandledKeyEquivalentsThroughTheTable() {

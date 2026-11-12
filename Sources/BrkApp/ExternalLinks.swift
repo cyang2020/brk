@@ -19,14 +19,18 @@ public final class GetURLHandler: NSObject {
     private let testScheme: String?
     private let log = Logger(subsystem: "brk", category: "links")
     /// Every URL string a GetURL event carried since launch, for the control socket (`NativeFacts.receivedGetURLs`).
+    /// Kept only in a control-socket launch: a normal session holds no list of every link it was sent.
     public private(set) static var received: [String] = []
+    private let records: Bool
 
     /// `testScheme` (`BRK_TEST_URL_SCHEME`, set only for a test copy of the bundle that declares that scheme): a
     /// Brk-only scheme Launch Services can route to this app without it becoming the http handler. Such a link is
     /// the http address after the scheme (`brk-test://127.0.0.1:8764/a.html` opens `http://127.0.0.1:8764/a.html`).
-    public init(testScheme: String? = ProcessInfo.processInfo.environment["BRK_TEST_URL_SCHEME"], send: @escaping @MainActor (Input) -> Void) {
+    public init(testScheme: String? = ProcessInfo.processInfo.environment["BRK_TEST_URL_SCHEME"], records: Bool = LaunchOptions().controlSocket != nil,
+                send: @escaping @MainActor (Input) -> Void) {
         self.send = send
         self.testScheme = testScheme.flatMap { $0.isEmpty ? nil : $0.lowercased() }
+        self.records = records
         super.init()
     }
 
@@ -48,7 +52,7 @@ public final class GetURLHandler: NSObject {
             log.notice("GetURL without a usable URL")
             return
         }
-        Self.received.append(text)
+        if records { Self.received.append(text) }
         log.notice("GetURL \(text, privacy: .public)")
         send(.system(.externalURL(url)))
     }
