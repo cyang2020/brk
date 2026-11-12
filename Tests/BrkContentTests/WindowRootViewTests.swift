@@ -131,6 +131,10 @@ final class WindowRootViewTests: XCTestCase {
         root.render(v, frames: frames, surface: { _ in page })
         XCTAssertTrue(page.isDescendant(of: root.content), "the page did not go into its card")
         XCTAssertEqual(PopupLayer.coveredByPages(in: root, pages: [page]), [], "the window's own backdrops and sidebar count as under the page")
+        // The Library's slide moves the card past the window's right edge; the background still spans what shows of it.
+        page.frame.size.width += 600
+        XCTAssertEqual(PopupLayer.coveredByPages(in: root, pages: [page]), [], "a page running past the window's edge")
+        page.frame.size.width -= 600
 
         let card = try XCTUnwrap(frames.cards.first?.rect)
         let beside = CGRect(x: root.sidebar.frame.maxX + 4, y: card.minY + 40, width: 240, height: 200)

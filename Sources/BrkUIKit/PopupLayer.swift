@@ -53,10 +53,11 @@ public enum PopupLayer {
         return found
     }
 
-    /// `view`'s frame in `root`, cut to the ancestors that clip it (a scroll view's clip, a layer that masks). Not
-    /// `visibleRect`: AppKit answers an empty rectangle for a window that is not on screen.
+    /// `view`'s frame in `root`, cut to the ancestors that clip it (a scroll view's clip, a layer that masks) and to
+    /// the window (a card that slides past the window's edge, as when the Library opens). Not `visibleRect`: AppKit
+    /// answers an empty rectangle for a window that is not on screen.
     private static func shown(_ view: NSView, in root: NSView) -> CGRect {
-        var rect = view.convert(view.bounds, to: root)
+        var rect = view.convert(view.bounds, to: root).intersection(root.bounds)
         var ancestor = view.superview
         while let a = ancestor, a !== root {
             if a.clipsToBounds || a.layer?.masksToBounds == true || a is NSClipView { rect = rect.intersection(a.convert(a.bounds, to: root)) }
