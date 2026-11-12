@@ -1,5 +1,4 @@
 import AppKit
-import QuartzCore
 
 /// When the Today divider's wave starts, grows, fades and stops: Arc's `SquiggleViewModel` (isLoading, allowAnimation,
 /// startTime). `setLoading(true)` starts the clock and lets it animate; the amplitude rises from 0 to full over
