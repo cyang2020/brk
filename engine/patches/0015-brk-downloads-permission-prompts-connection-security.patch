@@ -1,0 +1,1210 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Sun, 8 Nov 2026 17:53:38 +0800
+Subject: [PATCH] brk: downloads, permission prompts, connection security,
+ dialogs, Shift-click and sound reach the shell as CEF delivers them; the
+ DevTools session keeps state it set
+
+---
+ brk/BUILD.gn                          |  11 ++
+ brk/browser/brk_application.mm        |   5 +
+ brk/browser/brk_browser.h             |   2 +
+ brk/browser/brk_browser.mm            |  27 +++
+ brk/browser/brk_devtools_session.cc   |  16 +-
+ brk/browser/brk_devtools_session.h    |   5 +-
+ brk/browser/brk_downloads.h           |  14 ++
+ brk/browser/brk_downloads.mm          | 230 +++++++++++++++++++++++++
+ brk/browser/brk_javascript_dialogs.h  |  17 ++
+ brk/browser/brk_javascript_dialogs.mm | 233 ++++++++++++++++++++++++++
+ brk/browser/brk_permission_prompt.h   |  16 ++
+ brk/browser/brk_permission_prompt.mm  | 231 +++++++++++++++++++++++++
+ brk/browser/brk_profile.mm            |  26 +++
+ brk/browser/brk_web_contents.h        |   4 +
+ brk/browser/brk_web_contents.mm       |  82 +++++++++
+ 15 files changed, 915 insertions(+), 4 deletions(-)
+ create mode 100644 brk/browser/brk_downloads.h
+ create mode 100644 brk/browser/brk_downloads.mm
+ create mode 100644 brk/browser/brk_javascript_dialogs.h
+ create mode 100644 brk/browser/brk_javascript_dialogs.mm
+ create mode 100644 brk/browser/brk_permission_prompt.h
+ create mode 100644 brk/browser/brk_permission_prompt.mm
+
+diff --git a/brk/BUILD.gn b/brk/BUILD.gn
+index 30447ded9920c0156fcd98ad6b45c03a45f7ff66..bd40741223689b4872a9d2b8611c2af7a8e7be0d 100644
+--- a/brk/BUILD.gn
++++ b/brk/BUILD.gn
+@@ -19,12 +19,18 @@ source_set("browser") {
+     "browser/brk_browser_window.mm",
+     "browser/brk_devtools_session.cc",
+     "browser/brk_devtools_session.h",
++    "browser/brk_downloads.h",
++    "browser/brk_downloads.mm",
+     "browser/brk_extension_action.h",
+     "browser/brk_extension_action.mm",
++    "browser/brk_javascript_dialogs.h",
++    "browser/brk_javascript_dialogs.mm",
+     "browser/brk_location_bar.cc",
+     "browser/brk_location_bar.h",
+     "browser/brk_navigation_throttle.h",
+     "browser/brk_navigation_throttle.mm",
++    "browser/brk_permission_prompt.h",
++    "browser/brk_permission_prompt.mm",
+     "browser/brk_profile.h",
+     "browser/brk_profile.mm",
+     "browser/brk_web_contents.h",
+@@ -38,7 +44,12 @@ source_set("browser") {
+     "//chrome/browser/extensions",
+     "//chrome/browser/profiles:profile",
+     "//chrome/browser/ui",
++    "//components/content_settings/core/browser",
++    "//components/download/public/common:public",
++    "//components/javascript_dialogs",
+     "//components/keep_alive_registry",
++    "//components/permissions",
++    "//components/url_formatter",
+     "//components/sessions",
+     "//components/zoom",
+     "//content/public/browser",
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index ee2e197014649ae4f8d9510e9bdd77eedcd06eac..988ea01567e076e8a84bea70b708938c93e5243a 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -12,6 +12,8 @@
+ #include "base/strings/sys_string_conversions.h"
+ #include "brk/browser/brk_navigation_throttle.h"
+ #import "brk/browser/brk_browser.h"
++#include "brk/browser/brk_downloads.h"
++#include "brk/browser/brk_javascript_dialogs.h"
+ #import "brk/browser/brk_profile.h"
+ #include "brk/embedding/embedding.h"
+ #include "chrome/browser/browser_process.h"
+@@ -133,6 +135,9 @@ __attribute__((visibility("default"))) void BrkCoreApplicationPrepare(int argc,
+   hooks.add_navigation_throttles = &brkcore::AddNavigationThrottles;
+   hooks.quit_chromium = &brkcore::QuitChromium;
+   hooks.browser_process_starting = &brkcore::BrowserProcessStarting;
++  hooks.determine_download_target = &brkcore::DetermineDownloadTargetHook;
++  hooks.open_url_from_tab = &brkcore::OpenURLFromTabHook;
++  hooks.javascript_dialog_manager = &brkcore::JavaScriptDialogManagerHook;
+   chrome_browser_application_mac::RegisterBrowserCrApp();
+ }
+ 
+diff --git a/brk/browser/brk_browser.h b/brk/browser/brk_browser.h
+index 75898a8861c6926060e2de4687e104960ed1b051..c9f40244aa69f665dfea334ec8354d518a630c39 100644
+--- a/brk/browser/brk_browser.h
++++ b/brk/browser/brk_browser.h
+@@ -12,6 +12,7 @@ class Profile;
+ 
+ namespace content {
+ class WebContents;
++struct OpenURLParams;
+ }
+ 
+ @class BrkWebContents;
+@@ -33,6 +34,7 @@ namespace brkcore {
+ // Installed in brkcore::Hooks. The window of the BrkBrowser being created; null for every other Browser.
+ BrowserWindow* _Nullable CreateBrowserWindowHook(BrowserWindowInterface* browser);
+ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url);
++bool OpenURLFromTabHook(content::WebContents* source, const content::OpenURLParams& params);
+ }  // namespace brkcore
+ 
+ NS_ASSUME_NONNULL_END
+diff --git a/brk/browser/brk_browser.mm b/brk/browser/brk_browser.mm
+index 4124edbbf14c9ec87ce6805491de83374870f845..926426b1718f608f4faf3dab82d3d99252202816 100644
+--- a/brk/browser/brk_browser.mm
++++ b/brk/browser/brk_browser.mm
+@@ -23,6 +23,8 @@
+ #include "chrome/browser/ui/toolbar/toolbar_action_view_model.h"
+ #include "content/public/browser/navigation_controller.h"
+ #include "content/public/browser/navigation_entry.h"
++#include "content/public/browser/page_navigator.h"
++#include "ui/base/window_open_disposition.h"
+ #include "content/public/browser/render_widget_host_view.h"
+ #include "content/public/browser/web_contents.h"
+ #include "extensions/browser/extension_action_manager.h"
+@@ -108,6 +110,29 @@ BrowserWindow* CreateBrowserWindowHook(BrowserWindowInterface* browser) {
+   return g_created_window;
+ }
+ 
++bool OpenURLFromTabHook(content::WebContents* source, const content::OpenURLParams& params) {
++  BrkWebContents* page = source ? PageForContents(source) : nil;
++  // A link that asks for a new window (Shift+click) goes to the shell, as CEF's OnOpenURLFromTab; Chrome would open its own window.
++  // Modified clicks that ask for a tab stay Chrome's: it adds the tab to this Browser and the shell adopts it (-tabInserted:active:).
++  if (!page || params.disposition != WindowOpenDisposition::NEW_WINDOW || !params.url.is_valid()) {
++    return false;
++  }
++  NSURL* url = net::NSURLWithGURL(params.url);
++  const BOOL gesture = params.user_gesture;
++  __weak BrkWebContents* weakPage = page;
++  // Outside Chromium's OpenURL, as the tab path does.
++  dispatch_async(dispatch_get_main_queue(), ^{
++    BrkWebContents* opener = weakPage;
++    if (opener.contents) {
++      [opener.delegate webContents:opener
++                   requestsOpening:url
++                       disposition:BrkCoreDispositionNewWindow
++                       userGesture:gesture];
++    }
++  });
++  return true;
++}
++
+ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url) {
+   BrkWebContents* page = PageForContents(source);
+   if (!page) {
+@@ -199,6 +224,7 @@ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url) {
+   _creatingPage = YES;
+   _browser->GetTabStripModel()->AppendWebContents(std::move(owned), /*foreground=*/false);
+   _creatingPage = NO;
++  [page tabHelpersReady];
+   return page;
+ }
+ 
+@@ -221,6 +247,7 @@ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url) {
+   }
+   // Chromium made this tab itself. The shell decides where it goes, on the next task, outside the tab strip's notification.
+   BrkWebContents* page = [[BrkWebContents alloc] initWithContents:contents browser:self];
++  [page tabHelpersReady];
+   [_unadopted addObject:page];
+   content::WebContents* openerContents = _browser->GetTabStripModel()->GetActiveWebContents();
+   BrkWebContents* opener = openerContents ? brkcore::PageForContents(openerContents) : nil;
+diff --git a/brk/browser/brk_devtools_session.cc b/brk/browser/brk_devtools_session.cc
+index f9893c1a5854565cfec569c9c794239fb01edd5e..8c79ee96d4facba8f199541c1d95882a9974cd32 100644
+--- a/brk/browser/brk_devtools_session.cc
++++ b/brk/browser/brk_devtools_session.cc
+@@ -36,6 +36,12 @@ void BrkDevToolsSession::Send(const std::string& method,
+       return;
+     }
+   }
++  // A command that leaves state in the page (an emulated media feature, a frozen lifecycle, an isolated world, blocked addresses) lasts only
++  // while its session is attached: from then on the session stays, as CEF's does.
++  if (method.starts_with("Emulation.") || method == "Page.setWebLifecycleState" || method == "Page.createIsolatedWorld" ||
++      method == "Network.enable" || method.starts_with("Network.set") || method.starts_with("Fetch.")) {
++    keep_attached_ = true;
++  }
+   const int id = next_id_++;
+   waiting_[id] = std::move(reply);
+   base::DictValue command;
+@@ -49,8 +55,13 @@ void BrkDevToolsSession::Send(const std::string& method,
+ 
+ void BrkDevToolsSession::DispatchProtocolMessage(content::DevToolsAgentHost* agent_host,
+                                                  base::span<const uint8_t> message) {
++  // Events (a page with its network domain on sends several per request) are not asked for; only answers start with their id.
++  const std::string_view json(reinterpret_cast<const char*>(message.data()), message.size());
++  if (!json.starts_with("{\"id\":")) {
++    return;
++  }
+   std::optional<base::Value> parsed = base::JSONReader::Read(
+-      std::string_view(reinterpret_cast<const char*>(message.data()), message.size()),
++      json,
+       base::JSON_PARSE_RFC);
+   if (!parsed || !parsed->is_dict()) {
+     return;
+@@ -76,7 +87,7 @@ void BrkDevToolsSession::DispatchProtocolMessage(content::DevToolsAgentHost* age
+     }
+     std::move(reply).Run(result, std::string());
+   }
+-  if (waiting_.empty() && host_) {
++  if (waiting_.empty() && host_ && !keep_attached_) {
+     host_->DetachClient(this);
+     host_ = nullptr;
+   }
+@@ -84,6 +95,7 @@ void BrkDevToolsSession::DispatchProtocolMessage(content::DevToolsAgentHost* age
+ 
+ void BrkDevToolsSession::AgentHostClosed(content::DevToolsAgentHost* agent_host) {
+   host_ = nullptr;
++  keep_attached_ = false;
+   FailAll("DevTools closed");
+ }
+ 
+diff --git a/brk/browser/brk_devtools_session.h b/brk/browser/brk_devtools_session.h
+index f2507655c43ead6e119583ba343beaca69a30d79..8d1d5b4d5fb2ace075c94e9c0c12f5de466e48f3 100644
+--- a/brk/browser/brk_devtools_session.h
++++ b/brk/browser/brk_devtools_session.h
+@@ -16,8 +16,8 @@ class WebContents;
+ 
+ namespace brkcore {
+ 
+-// One page's DevTools protocol commands, for what the shell asks (page text, PDF, MHTML). Attaches for a command and detaches when
+-// none is waiting, so a page has no DevTools session attached while idle.
++// One page's DevTools protocol commands, for what the shell asks (page text, PDF, MHTML, site policy). Attaches for a command and detaches
++// when none is waiting, so a page has no DevTools session attached while idle, unless a command left state that needs the session.
+ class BrkDevToolsSession : public content::DevToolsAgentHostClient {
+  public:
+   // (result JSON, error). Exactly one is non-empty.
+@@ -41,6 +41,7 @@ class BrkDevToolsSession : public content::DevToolsAgentHostClient {
+   scoped_refptr<content::DevToolsAgentHost> host_;
+   std::map<int, Reply> waiting_;
+   int next_id_ = 1;
++  bool keep_attached_ = false;
+ };
+ 
+ }  // namespace brkcore
+diff --git a/brk/browser/brk_downloads.h b/brk/browser/brk_downloads.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..08733a081c051600f3c68065fedd1fdd4c4786e6
+--- /dev/null
++++ b/brk/browser/brk_downloads.h
+@@ -0,0 +1,14 @@
++#ifndef BRK_BROWSER_BRK_DOWNLOADS_H_
++#define BRK_BROWSER_BRK_DOWNLOADS_H_
++
++#include "brk/embedding/embedding.h"
++
++namespace brkcore {
++
++// Installed in brkcore::Hooks: a download one of Brk's pages started gets its destination from the shell, as CEF's OnBeforeDownload
++// gives it, instead of from Chrome's download prefs and file chooser. Every other download stays Chrome's.
++bool DetermineDownloadTargetHook(download::DownloadItem* item, BrkDownloadTargetCallback* callback);
++
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_DOWNLOADS_H_
+diff --git a/brk/browser/brk_downloads.mm b/brk/browser/brk_downloads.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..6fb2f22a1410be0d284d191cc364e2b5b86c2fdd
+--- /dev/null
++++ b/brk/browser/brk_downloads.mm
+@@ -0,0 +1,230 @@
++#import "brk/browser/brk_downloads.h"
++
++#import <Foundation/Foundation.h>
++
++#include <algorithm>
++#include <memory>
++#include <string>
++#include <utility>
++
++#include "base/files/file_path.h"
++#include "base/functional/callback.h"
++#include "base/memory/raw_ptr.h"
++#include "base/strings/sys_string_conversions.h"
++#import "brk/browser/brk_web_contents.h"
++#include "brk/public/BrkCore.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/common/pref_names.h"
++#include "components/download/public/common/download_item.h"
++#include "components/download/public/common/download_target_info.h"
++#include "components/prefs/pref_service.h"
++#include "content/public/browser/browser_context.h"
++#include "content/public/browser/download_item_utils.h"
++#include "content/public/browser/web_contents.h"
++#include "net/base/apple/url_conversions.h"
++#include "net/base/filename_util.h"
++
++@class BrkDownload;
++
++namespace {
++
++// Every download the shell was told about, until Chromium drops its item. The shell holds them only while it cares.
++NSMutableSet<BrkDownload*>* LiveDownloads() {
++  static NSMutableSet<BrkDownload*>* set = [NSMutableSet set];
++  return set;
++}
++
++}  // namespace
++
++@interface BrkDownload : NSObject <BrkCoreDownload>
++- (instancetype)initWithItem:(download::DownloadItem*)item
++                        page:(BrkWebContents*)page
++               suggestedName:(NSString*)suggestedName
++                    callback:(brkcore::BrkDownloadTargetCallback)callback;
++- (void)itemUpdated;
++- (void)itemDestroyed;
++@end
++
++namespace brkcore {
++namespace {
++
++class BrkDownloadObserver : public download::DownloadItem::Observer {
++ public:
++  BrkDownloadObserver(download::DownloadItem* item, BrkDownload* owner) : item_(item), owner_(owner) {
++    item_->AddObserver(this);
++  }
++  ~BrkDownloadObserver() override {
++    if (item_) {
++      item_->RemoveObserver(this);
++    }
++  }
++
++  void OnDownloadUpdated(download::DownloadItem* item) override { [owner_ itemUpdated]; }
++  void OnDownloadDestroyed(download::DownloadItem* item) override {
++    item_->RemoveObserver(this);
++    item_ = nullptr;
++    [owner_ itemDestroyed];
++  }
++
++ private:
++  raw_ptr<download::DownloadItem> item_;
++  __weak BrkDownload* const owner_;
++};
++
++}  // namespace
++}  // namespace brkcore
++
++@implementation BrkDownload {
++  raw_ptr<download::DownloadItem> _item;
++  __weak BrkWebContents* _page;
++  NSString* _suggestedName;
++  uint32_t _downloadID;
++  brkcore::BrkDownloadTargetCallback _callback;
++  std::unique_ptr<brkcore::BrkDownloadObserver> _observer;
++  BOOL _reportedTerminal;
++}
++
++- (instancetype)initWithItem:(download::DownloadItem*)item
++                        page:(BrkWebContents*)page
++               suggestedName:(NSString*)suggestedName
++                    callback:(brkcore::BrkDownloadTargetCallback)callback {
++  if ((self = [super init])) {
++    _item = item;
++    _page = page;
++    _suggestedName = [suggestedName copy];
++    _downloadID = item->GetId();
++    _callback = std::move(callback);
++    _observer = std::make_unique<brkcore::BrkDownloadObserver>(item, self);
++  }
++  return self;
++}
++
++- (uint32_t)downloadID {
++  return _downloadID;
++}
++
++- (NSURL*)url {
++  return _item && _item->GetURL().is_valid() ? net::NSURLWithGURL(_item->GetURL()) : nil;
++}
++
++- (NSString*)suggestedName {
++  return _suggestedName;
++}
++
++- (int64_t)receivedBytes {
++  return _item ? _item->GetReceivedBytes() : 0;
++}
++
++- (int64_t)totalBytes {
++  return _item ? std::max<int64_t>(0, _item->GetTotalBytes()) : 0;
++}
++
++- (BOOL)isComplete {
++  return _item && _item->GetState() == download::DownloadItem::COMPLETE;
++}
++
++- (BOOL)isCanceled {
++  return !_item || _item->GetState() == download::DownloadItem::CANCELLED;
++}
++
++- (BOOL)isInterrupted {
++  return _item && _item->GetState() == download::DownloadItem::INTERRUPTED;
++}
++
++- (NSInteger)interruptionReason {
++  return _item ? static_cast<NSInteger>(_item->GetLastReason()) : 0;
++}
++
++- (NSString*)fullPath {
++  return _item && !_item->GetFullPath().empty() ? base::SysUTF8ToNSString(_item->GetFullPath().value()) : nil;
++}
++
++- (void)continueToPath:(NSString*)path {
++  if (_callback.is_null()) {
++    return;
++  }
++  download::DownloadTargetInfo target;
++  if (path.length) {
++    // As CEF: the file is written where the shell said, under that name from the first byte, with no renaming and nothing judged
++    // dangerous. The shell's own staging folder is what keeps a partial file apart.
++    target.target_path = base::FilePath(base::SysNSStringToUTF8(path));
++    target.intermediate_path = target.target_path;
++    target.display_name = target.target_path.BaseName();
++    target.target_disposition = download::DownloadItem::TARGET_DISPOSITION_OVERWRITE;
++    target.danger_type = download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS;
++    target.insecure_download_status = download::DownloadItem::InsecureDownloadStatus::SAFE;
++    if (_item) {
++      target.mime_type = _item->GetMimeType();
++    }
++  } else {
++    target.interrupt_reason = download::DOWNLOAD_INTERRUPT_REASON_USER_CANCELED;
++  }
++  std::move(_callback).Run(std::move(target));
++}
++
++- (void)cancel {
++  if (!_callback.is_null()) {
++    [self continueToPath:nil];
++    return;
++  }
++  if (_item && !_item->IsDone()) {
++    _item->Cancel(/*user_cancel=*/true);
++  }
++}
++
++- (void)itemUpdated {
++  if (_reportedTerminal) {
++    return;
++  }
++  BrkWebContents* page = _page;
++  id<BrkCoreWebContentsDelegate> delegate = page.delegate;
++  const bool done = !_item || _item->IsDone() || _item->GetState() == download::DownloadItem::INTERRUPTED;
++  if (done) {
++    _reportedTerminal = YES;
++  }
++  if (page && [delegate respondsToSelector:@selector(webContents:downloadDidUpdate:)]) {
++    [delegate webContents:page downloadDidUpdate:self];
++  }
++}
++
++- (void)itemDestroyed {
++  _item = nullptr;
++  _observer.reset();
++  _callback.Reset();
++  [self itemUpdated];
++  [LiveDownloads() removeObject:self];
++}
++
++@end
++
++namespace brkcore {
++
++bool DetermineDownloadTargetHook(download::DownloadItem* item, BrkDownloadTargetCallback* callback) {
++  content::WebContents* contents = content::DownloadItemUtils::GetWebContents(item);
++  BrkWebContents* page = contents ? PageForContents(contents) : nil;
++  id<BrkCoreWebContentsDelegate> delegate = page.delegate;
++  if (!page || ![delegate respondsToSelector:@selector(webContents:willDownload:)]) {
++    return false;
++  }
++  // A path forced by the caller (Save Page As, an extension's download with a file name) is kept, as CEF keeps it.
++  if (!item->GetForcedFilePath().empty()) {
++    download::DownloadTargetInfo target;
++    target.target_path = item->GetForcedFilePath();
++    target.intermediate_path = target.target_path;
++    std::move(*callback).Run(std::move(target));
++    return true;
++  }
++  Profile* profile = Profile::FromBrowserContext(contents->GetBrowserContext());
++  const base::FilePath name = net::GenerateFileName(item->GetURL(), item->GetContentDisposition(),
++                                                    profile->GetPrefs()->GetString(prefs::kDefaultCharset),
++                                                    item->GetSuggestedFilename(), item->GetMimeType(), "download");
++  BrkDownload* download = [[BrkDownload alloc] initWithItem:item
++                                                       page:page
++                                              suggestedName:base::SysUTF8ToNSString(name.value())
++                                                   callback:std::move(*callback)];
++  [LiveDownloads() addObject:download];
++  [delegate webContents:page willDownload:download];
++  return true;
++}
++
++}  // namespace brkcore
+diff --git a/brk/browser/brk_javascript_dialogs.h b/brk/browser/brk_javascript_dialogs.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..bb3c7973bd510393aca687c05ea40ac050c84d56
+--- /dev/null
++++ b/brk/browser/brk_javascript_dialogs.h
+@@ -0,0 +1,17 @@
++#ifndef BRK_BROWSER_BRK_JAVASCRIPT_DIALOGS_H_
++#define BRK_BROWSER_BRK_JAVASCRIPT_DIALOGS_H_
++
++namespace content {
++class JavaScriptDialogManager;
++class WebContents;
++}  // namespace content
++
++namespace brkcore {
++
++// Installed in brkcore::Hooks. A page of Brk's shows alert, confirm, prompt and the leave-page question through the shell, as CEF's
++// JSDialogHandler does; Chrome's own tab-modal dialogs need a Views host that Brk's window does not have. Null for other pages.
++content::JavaScriptDialogManager* JavaScriptDialogManagerHook(content::WebContents* source);
++
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_JAVASCRIPT_DIALOGS_H_
+diff --git a/brk/browser/brk_javascript_dialogs.mm b/brk/browser/brk_javascript_dialogs.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..fafc3be090046c4c87a9d175e3e9153d3b3acd1b
+--- /dev/null
++++ b/brk/browser/brk_javascript_dialogs.mm
+@@ -0,0 +1,233 @@
++#include "brk/browser/brk_javascript_dialogs.h"
++
++#import <Foundation/Foundation.h>
++
++#include <string>
++#include <utility>
++
++#include "base/functional/callback.h"
++#include "base/no_destructor.h"
++#include "base/strings/sys_string_conversions.h"
++#include "base/strings/utf_string_conversions.h"
++#import "brk/browser/brk_web_contents.h"
++#include "brk/public/BrkCore.h"
++#include "components/url_formatter/elide_url.h"
++#include "content/public/browser/javascript_dialog_manager.h"
++#include "content/public/browser/render_frame_host.h"
++#include "content/public/browser/web_contents.h"
++#include "content/public/common/javascript_dialog_type.h"
++#include "url/origin.h"
++
++using DialogClosedCallback = content::JavaScriptDialogManager::DialogClosedCallback;
++
++@interface BrkDialog : NSObject <BrkCoreDialog>
++- (instancetype)initWithKind:(BrkCoreDialogKind)kind
++                     message:(NSString*)message
++           defaultPromptText:(NSString*)defaultPromptText
++                 originTitle:(NSString*)originTitle
++                    isReload:(BOOL)isReload
++                    callback:(DialogClosedCallback)callback;
++@property(nonatomic, readonly) BOOL answered;
++// The page it is open on, which forgets it once it is answered.
++@property(nonatomic, weak) BrkWebContents* owner;
++- (void)drop;
++@end
++
++@implementation BrkDialog {
++  __weak BrkWebContents* _owner;
++  BrkCoreDialogKind _kind;
++  NSString* _message;
++  NSString* _defaultPromptText;
++  NSString* _originTitle;
++  BOOL _isReload;
++  DialogClosedCallback _callback;
++}
++
++- (instancetype)initWithKind:(BrkCoreDialogKind)kind
++                     message:(NSString*)message
++           defaultPromptText:(NSString*)defaultPromptText
++                 originTitle:(NSString*)originTitle
++                    isReload:(BOOL)isReload
++                    callback:(DialogClosedCallback)callback {
++  if ((self = [super init])) {
++    _kind = kind;
++    _message = [message copy];
++    _defaultPromptText = [defaultPromptText copy];
++    _originTitle = [originTitle copy];
++    _isReload = isReload;
++    _callback = std::move(callback);
++  }
++  return self;
++}
++
++@synthesize owner = _owner;
++
++- (BrkCoreDialogKind)kind {
++  return _kind;
++}
++
++- (NSString*)message {
++  return _message;
++}
++
++- (NSString*)defaultPromptText {
++  return _defaultPromptText;
++}
++
++- (NSString*)originTitle {
++  return _originTitle;
++}
++
++- (BOOL)isReload {
++  return _isReload;
++}
++
++- (BOOL)answered {
++  return _callback.is_null();
++}
++
++- (void)answer:(BOOL)accepted text:(NSString*)text {
++  if (_callback.is_null()) {
++    return;
++  }
++  BrkWebContents* owner = _owner;
++  if (owner.openDialog == self) {
++    owner.openDialog = nil;
++  }
++  std::move(_callback).Run(accepted, accepted && text ? base::SysNSStringToUTF16(text) : std::u16string());
++}
++
++- (void)drop {
++  _callback.Reset();
++}
++
++@end
++
++namespace brkcore {
++
++namespace {
++
++BrkCoreDialogKind KindOf(content::JavaScriptDialogType type) {
++  switch (type) {
++    case content::JAVASCRIPT_DIALOG_TYPE_ALERT:
++      return BrkCoreDialogKindAlert;
++    case content::JAVASCRIPT_DIALOG_TYPE_CONFIRM:
++      return BrkCoreDialogKindConfirm;
++    case content::JAVASCRIPT_DIALOG_TYPE_PROMPT:
++      return BrkCoreDialogKindPrompt;
++  }
++  return BrkCoreDialogKindAlert;
++}
++
++// What Chrome titles the dialog with: the frame's origin, "site.test says".
++NSString* OriginTitle(content::RenderFrameHost* frame) {
++  const url::Origin origin = frame ? frame->GetLastCommittedOrigin() : url::Origin();
++  if (origin.opaque()) {
++    return @"This page says";
++  }
++  const std::u16string host =
++      url_formatter::FormatOriginForSecurityDisplay(origin, url_formatter::SchemeDisplay::OMIT_HTTP_AND_HTTPS);
++  return [base::SysUTF16ToNSString(host) stringByAppendingString:@" says"];
++}
++
++// One per process: the dialogs belong to the BrkWebContents they were asked on, which the shell answers.
++class BrkJavaScriptDialogManager : public content::JavaScriptDialogManager {
++ public:
++  void RunJavaScriptDialog(content::WebContents* web_contents,
++                           content::RenderFrameHost* render_frame_host,
++                           content::JavaScriptDialogType dialog_type,
++                           const std::u16string& message_text,
++                           const std::u16string& default_prompt_text,
++                           DialogClosedCallback callback,
++                           bool* did_suppress_message) override {
++    BrkDialog* dialog = [[BrkDialog alloc] initWithKind:KindOf(dialog_type)
++                                                message:base::SysUTF16ToNSString(message_text)
++                                      defaultPromptText:base::SysUTF16ToNSString(default_prompt_text)
++                                            originTitle:OriginTitle(render_frame_host)
++                                               isReload:NO
++                                               callback:std::move(callback)];
++    if (!Show(web_contents, dialog)) {
++      // As Chrome does for a page that may not show one: the page goes on as if it was dismissed.
++      [dialog drop];
++      *did_suppress_message = true;
++    }
++  }
++
++  void RunBeforeUnloadDialog(content::WebContents* web_contents,
++                             content::RenderFrameHost* render_frame_host,
++                             bool is_reload,
++                             DialogClosedCallback callback) override {
++    BrkDialog* dialog = [[BrkDialog alloc] initWithKind:BrkCoreDialogKindBeforeUnload
++                                                message:@""
++                                      defaultPromptText:@""
++                                            originTitle:OriginTitle(render_frame_host)
++                                               isReload:is_reload
++                                               callback:std::move(callback)];
++    if (!Show(web_contents, dialog)) {
++      // Nobody to ask: the page is left, as Chrome leaves it when it cannot show the question.
++      [dialog answer:YES text:nil];
++    }
++  }
++
++  bool HandleJavaScriptDialog(content::WebContents* web_contents,
++                              bool accept,
++                              const std::u16string* prompt_override) override {
++    // DevTools' Page.handleJavaScriptDialog: answers the page's open dialog as the shell would.
++    BrkWebContents* page = PageForContents(web_contents);
++    BrkDialog* dialog = page ? page.openDialog : nil;
++    if (!dialog || dialog.answered) {
++      return false;
++    }
++    NSString* text = prompt_override ? base::SysUTF16ToNSString(*prompt_override) : dialog.defaultPromptText;
++    [dialog answer:accept text:text];
++    Cancel(page);
++    return true;
++  }
++
++  void CancelDialogs(content::WebContents* web_contents, bool reset_state) override {
++    BrkWebContents* page = PageForContents(web_contents);
++    BrkDialog* dialog = page.openDialog;
++    if (!dialog) {
++      return;
++    }
++    // As Chrome's TabModalDialogManager: the page sees the dialog dismissed, and the shell's goes.
++    [dialog answer:NO text:nil];
++    page.openDialog = nil;
++    Cancel(page);
++  }
++
++ private:
++  static bool Show(content::WebContents* web_contents, BrkDialog* dialog) {
++    BrkWebContents* page = PageForContents(web_contents);
++    id<BrkCoreWebContentsDelegate> shell = page.delegate;
++    if (!page || page.openDialog || ![shell respondsToSelector:@selector(webContents:runDialog:)]) {
++      return false;
++    }
++    page.openDialog = dialog;
++    dialog.owner = page;
++    if (![shell webContents:page runDialog:dialog]) {
++      page.openDialog = nil;
++      return false;
++    }
++    return true;
++  }
++
++  static void Cancel(BrkWebContents* page) {
++    id<BrkCoreWebContentsDelegate> shell = page.delegate;
++    if ([shell respondsToSelector:@selector(webContentsCancelDialogs:)]) {
++      [shell webContentsCancelDialogs:page];
++    }
++  }
++};
++
++}  // namespace
++
++content::JavaScriptDialogManager* JavaScriptDialogManagerHook(content::WebContents* source) {
++  if (!PageForContents(source)) {
++    return nullptr;
++  }
++  static base::NoDestructor<BrkJavaScriptDialogManager> manager;
++  return manager.get();
++}
++
++}  // namespace brkcore
+diff --git a/brk/browser/brk_permission_prompt.h b/brk/browser/brk_permission_prompt.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..03350f21d55f21f9882e8b71decbe430f4ad57a8
+--- /dev/null
++++ b/brk/browser/brk_permission_prompt.h
+@@ -0,0 +1,16 @@
++#ifndef BRK_BROWSER_BRK_PERMISSION_PROMPT_H_
++#define BRK_BROWSER_BRK_PERMISSION_PROMPT_H_
++
++namespace content {
++class WebContents;
++}
++
++namespace brkcore {
++
++// Chromium's PermissionRequestManager for one of Brk's pages shows its prompts through the shell, which Chrome does with its Views bubble and
++// Arc with its own prompt (arc/browser/ui/permission_prompt_impl.cc). Call once the page's tab helpers exist.
++void UseShellPermissionPrompts(content::WebContents* contents);
++
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_PERMISSION_PROMPT_H_
+diff --git a/brk/browser/brk_permission_prompt.mm b/brk/browser/brk_permission_prompt.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..370e48ecefc2ed80e56b609e5d55338d17b1eeda
+--- /dev/null
++++ b/brk/browser/brk_permission_prompt.mm
+@@ -0,0 +1,231 @@
++#include "brk/browser/brk_permission_prompt.h"
++
++#import <Foundation/Foundation.h>
++
++#include <memory>
++#include <optional>
++#include <variant>
++#include <vector>
++
++#include "base/functional/bind.h"
++#include "base/memory/raw_ptr.h"
++#include "base/memory/weak_ptr.h"
++#include "base/strings/sys_string_conversions.h"
++#include "base/task/single_thread_task_runner.h"
++#import "brk/browser/brk_web_contents.h"
++#include "brk/public/BrkCore.h"
++#include "components/permissions/permission_prompt.h"
++#include "components/permissions/permission_request.h"
++#include "components/permissions/permission_request_manager.h"
++#include "components/permissions/permission_uma_constants.h"
++#include "components/permissions/request_type.h"
++#include "content/public/browser/web_contents.h"
++#include "url/gurl.h"
++
++namespace brkcore {
++class BrkPermissionPrompt;
++}
++
++@interface BrkPermissionRequest : NSObject <BrkCorePermissionRequest>
++- (instancetype)initWithPrompt:(brkcore::BrkPermissionPrompt*)prompt
++                      promptID:(uint64_t)promptID
++                         kinds:(BrkCorePermissionKind)kinds
++                    requesting:(NSString*)requesting
++                     embedding:(NSString*)embedding;
++- (void)promptGone;
++@end
++
++namespace brkcore {
++
++namespace {
++
++uint64_t g_next_prompt_id = 1;
++
++BrkCorePermissionKind KindOf(permissions::RequestType type) {
++  using permissions::RequestType;
++  switch (type) {
++    case RequestType::kCameraStream:
++    case RequestType::kCameraPanTiltZoom:
++      return BrkCorePermissionKindCamera;
++    case RequestType::kMicStream:
++      return BrkCorePermissionKindMicrophone;
++    case RequestType::kGeolocation:
++      return BrkCorePermissionKindGeolocation;
++    case RequestType::kNotifications:
++      return BrkCorePermissionKindNotifications;
++    case RequestType::kClipboard:
++      return BrkCorePermissionKindClipboard;
++    case RequestType::kMidiSysex:
++      return BrkCorePermissionKindMidi;
++    case RequestType::kWindowManagement:
++      return BrkCorePermissionKindWindowManagement;
++    case RequestType::kStorageAccess:
++    case RequestType::kTopLevelStorageAccess:
++      return BrkCorePermissionKindStorageAccess;
++    case RequestType::kSensors:
++      return BrkCorePermissionKindSensors;
++    case RequestType::kMultipleDownloads:
++      return BrkCorePermissionKindMultipleDownloads;
++    case RequestType::kPointerLock:
++      return BrkCorePermissionKindPointerLock;
++    default:
++      return BrkCorePermissionKindOther;
++  }
++}
++
++NSString* OriginText(const GURL& url) {
++  return base::SysUTF8ToNSString(url.DeprecatedGetOriginAsURL().spec());
++}
++
++}  // namespace
++
++// One prompt Chromium wants shown. Chromium owns it and deletes it when the requests are settled or taken back (navigation, the page
++// closing); an answer from the shell after that is ignored.
++class BrkPermissionPrompt : public permissions::PermissionPrompt {
++ public:
++  BrkPermissionPrompt(content::WebContents* contents, Delegate* delegate) : delegate_(delegate->GetWeakPtr()) {
++    BrkCorePermissionKind kinds = 0;
++    for (const auto& request : delegate->Requests()) {
++      kinds |= KindOf(request->request_type());
++    }
++    page_ = PageForContents(contents);
++    request_ = [[BrkPermissionRequest alloc] initWithPrompt:this
++                                                   promptID:g_next_prompt_id++
++                                                      kinds:kinds
++                                                 requesting:OriginText(delegate->GetRequestingOrigin())
++                                                  embedding:OriginText(delegate->GetEmbeddingOrigin())];
++    // Chromium is inside ShowPrompt; the shell may answer at once, which would settle the requests from in there.
++    BrkPermissionRequest* request = request_;
++    __weak BrkWebContents* page = page_;
++    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE, base::BindOnce(^{
++      BrkWebContents* owner = page;
++      id<BrkCoreWebContentsDelegate> shell = owner.delegate;
++      if (!owner.contents || ![shell respondsToSelector:@selector(webContents:requestsPermission:)]) {
++        [request answer:BrkCorePermissionAnswerDismiss];
++        return;
++      }
++      [shell webContents:owner requestsPermission:request];
++    }));
++  }
++
++  ~BrkPermissionPrompt() override {
++    const bool was_answered = answered_;
++    [request_ promptGone];
++    if (was_answered) {
++      return;
++    }
++    BrkWebContents* owner = page_;
++    id<BrkCoreWebContentsDelegate> shell = owner.delegate;
++    if ([shell respondsToSelector:@selector(webContents:didDismissPermission:)]) {
++      [shell webContents:owner didDismissPermission:request_.promptID];
++    }
++  }
++
++  void Answer(BrkCorePermissionAnswer answer) {
++    if (answered_ || !delegate_) {
++      return;
++    }
++    answered_ = true;
++    // Settling the requests deletes this prompt.
++    base::WeakPtr<Delegate> delegate = delegate_;
++    switch (answer) {
++      case BrkCorePermissionAnswerAllow:
++        delegate->Accept(std::monostate());
++        break;
++      case BrkCorePermissionAnswerDeny:
++        delegate->Deny(std::monostate());
++        break;
++      case BrkCorePermissionAnswerDismiss:
++        delegate->Dismiss(std::monostate());
++        break;
++    }
++  }
++
++  // permissions::PermissionPrompt:
++  bool UpdateAnchor() override { return true; }
++  TabSwitchingBehavior GetTabSwitchingBehavior() override { return kKeepPromptAlive; }
++  permissions::PermissionPromptDisposition GetPromptDisposition() const override {
++    return permissions::PermissionPromptDisposition::ANCHORED_BUBBLE;
++  }
++  bool IsAskPrompt() const override { return true; }
++  std::optional<gfx::Rect> GetViewBoundsInScreen() const override { return std::nullopt; }
++  std::vector<permissions::ElementAnchoredBubbleVariant> GetPromptVariants() const override { return {}; }
++  std::optional<permissions::feature_params::PermissionElementPromptPosition> GetPromptPosition() const override {
++    return std::nullopt;
++  }
++
++ private:
++  base::WeakPtr<Delegate> delegate_;
++  __weak BrkWebContents* page_;
++  BrkPermissionRequest* request_;
++  bool answered_ = false;
++};
++
++namespace {
++
++std::unique_ptr<permissions::PermissionPrompt> CreatePrompt(content::WebContents* contents,
++                                                            permissions::PermissionPrompt::Delegate* delegate) {
++  return std::make_unique<BrkPermissionPrompt>(contents, delegate);
++}
++
++}  // namespace
++
++void UseShellPermissionPrompts(content::WebContents* contents) {
++  // The manager's own seam for the view it shows. Chrome's tests use it; for Brk's pages it is where Arc puts its prompt.
++  if (auto* manager = permissions::PermissionRequestManager::FromWebContents(contents)) {
++    manager->set_view_factory_for_testing(base::BindRepeating(&CreatePrompt));
++  }
++}
++
++}  // namespace brkcore
++
++@implementation BrkPermissionRequest {
++  raw_ptr<brkcore::BrkPermissionPrompt> _prompt;
++  uint64_t _promptID;
++  BrkCorePermissionKind _kinds;
++  NSString* _requesting;
++  NSString* _embedding;
++}
++
++- (instancetype)initWithPrompt:(brkcore::BrkPermissionPrompt*)prompt
++                      promptID:(uint64_t)promptID
++                         kinds:(BrkCorePermissionKind)kinds
++                    requesting:(NSString*)requesting
++                     embedding:(NSString*)embedding {
++  if ((self = [super init])) {
++    _prompt = prompt;
++    _promptID = promptID;
++    _kinds = kinds;
++    _requesting = [requesting copy];
++    _embedding = [embedding copy];
++  }
++  return self;
++}
++
++- (uint64_t)promptID {
++  return _promptID;
++}
++
++- (BrkCorePermissionKind)kinds {
++  return _kinds;
++}
++
++- (NSString*)requestingOrigin {
++  return _requesting;
++}
++
++- (NSString*)embeddingOrigin {
++  return _embedding;
++}
++
++- (void)answer:(BrkCorePermissionAnswer)answer {
++  if (brkcore::BrkPermissionPrompt* prompt = _prompt) {
++    prompt->Answer(answer);
++  }
++}
++
++- (void)promptGone {
++  _prompt = nullptr;
++}
++
++@end
+diff --git a/brk/browser/brk_profile.mm b/brk/browser/brk_profile.mm
+index c737d45dfa2100a13d99cbc9509711d219fa093b..343e3437b92db4ac0d2d1664504efee42d700322 100644
+--- a/brk/browser/brk_profile.mm
++++ b/brk/browser/brk_profile.mm
+@@ -13,6 +13,10 @@
+ #import "brk/browser/brk_extension_action.h"
+ #include "chrome/browser/extensions/extension_util.h"
+ #include "chrome/browser/profiles/profile.h"
++#include "content/public/browser/storage_partition.h"
++#include "services/network/public/mojom/clear_data_filter.mojom.h"
++#include "services/network/public/mojom/cookie_manager.mojom.h"
++#include "services/network/public/mojom/network_context.mojom.h"
+ #include "extensions/browser/extension_action_manager.h"
+ #include "extensions/browser/extension_registry.h"
+ #include "extensions/browser/extension_system.h"
+@@ -103,4 +107,26 @@
+   installer->Load(base::FilePath(base::SysNSStringToUTF8(path)));
+ }
+ 
++- (void)clearCookiesWithCompletion:(void (^)(NSUInteger))completion {
++  if (!_profile) {
++    completion(0);
++    return;
++  }
++  _profile->GetDefaultStoragePartition()->GetCookieManagerForBrowserProcess()->DeleteCookies(
++      network::mojom::CookieDeletionFilter::New(), base::BindOnce(^(uint32_t deleted) {
++        completion(deleted);
++      }));
++}
++
++- (void)clearCacheWithCompletion:(void (^)(void))completion {
++  if (!_profile) {
++    completion();
++    return;
++  }
++  _profile->GetDefaultStoragePartition()->GetNetworkContext()->ClearHttpCache(base::Time(), base::Time(), nullptr,
++                                                                               base::BindOnce(^{
++                                                                                 completion();
++                                                                               }));
++}
++
+ @end
+diff --git a/brk/browser/brk_web_contents.h b/brk/browser/brk_web_contents.h
+index 884efa98cdf0ed7f6caa05b56ee3ec66bea4973f..9a6172df912e65fbf4a73f526e6ba34385e9b37a 100644
+--- a/brk/browser/brk_web_contents.h
++++ b/brk/browser/brk_web_contents.h
+@@ -23,6 +23,10 @@ struct NativeWebKeyboardEvent;
+ @property(nonatomic, readonly, weak) BrkBrowser* browser;
+ // The shell has taken this page. A page Chromium made itself (target=_blank) waits unadopted until then.
+ @property(nonatomic) BOOL adopted;
++// The JavaScript dialog the shell shows for this page, until it is answered or cancelled (brk_javascript_dialogs.mm).
++@property(nonatomic, strong) id openDialog;
++// The page is a tab now, with Chrome's tab helpers: what Brk replaces in them is replaced here.
++- (void)tabHelpersReady;
+ - (BOOL)decideNavigationTo:(const GURL&)url isRedirect:(BOOL)isRedirect userGesture:(BOOL)userGesture;
+ - (BrkCoreKeyAnswer)keyBeforePage:(const input::NativeWebKeyboardEvent&)event;
+ - (BOOL)keyAfterPage:(const input::NativeWebKeyboardEvent&)event;
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index 9e477898cb4edfe6f283f4c46a3a1459f558a6be..8d73cccd8db8aaaba0b313b1c1dab361bf480522 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -4,6 +4,7 @@
+ #include <optional>
+ #include <string>
+ #include <utility>
++#include <vector>
+ 
+ #include "base/functional/bind.h"
+ #include "base/json/json_writer.h"
+@@ -14,6 +15,14 @@
+ #include "base/values.h"
+ #import "brk/browser/brk_browser.h"
+ #include "brk/browser/brk_devtools_session.h"
++#include "brk/browser/brk_permission_prompt.h"
++#include "chrome/browser/content_settings/host_content_settings_map_factory.h"
++#include "chrome/browser/profiles/profile.h"
++#include "components/content_settings/core/browser/host_content_settings_map.h"
++#include "components/content_settings/core/common/content_settings.h"
++#include "components/content_settings/core/common/content_settings_types.h"
++#include "content/public/browser/ssl_status.h"
++#include "net/cert/cert_status_flags.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
+ #include "components/input/native_web_keyboard_event.h"
+@@ -145,6 +154,18 @@ class BrkPage : public content::WebContentsObserver,
+   void OnWebContentsFocused(content::RenderWidgetHost* host) override {
+     [owner_.delegate webContentsDidGainFocus:owner_];
+   }
++  void OnAudioStateChanged(bool audible) override {
++    id<BrkCoreWebContentsDelegate> delegate = owner_.delegate;
++    if ([delegate respondsToSelector:@selector(webContents:didChangeAudible:)]) {
++      [delegate webContents:owner_ didChangeAudible:audible];
++    }
++  }
++  void DidChangeVisibleSecurityState() override {
++    id<BrkCoreWebContentsDelegate> delegate = owner_.delegate;
++    if ([delegate respondsToSelector:@selector(webContentsDidChangeSecurity:)]) {
++      [delegate webContentsDidChangeSecurity:owner_];
++    }
++  }
+   void WebContentsDestroyed() override;
+ 
+  private:
+@@ -193,6 +214,7 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+ 
+ @synthesize delegate = _delegate;
+ @synthesize adopted = _adopted;
++@synthesize openDialog = _openDialog;
+ 
+ - (instancetype)initWithContents:(content::WebContents*)contents browser:(BrkBrowser*)browser {
+   if ((self = [super init])) {
+@@ -237,6 +259,10 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   return _contents ? NSURLFromGURL(_contents->GetVisibleURL()) : nil;
+ }
+ 
++- (NSURL*)committedURL {
++  return _contents ? NSURLFromGURL(_contents->GetLastCommittedURL()) : nil;
++}
++
+ - (BOOL)isLoading {
+   return _contents && _contents->IsLoading();
+ }
+@@ -270,6 +296,10 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   }
+ }
+ 
++- (BOOL)isAudible {
++  return _contents && _contents->IsCurrentlyAudible();
++}
++
+ - (int)tabID {
+   return _contents ? sessions::SessionTabHelper::IdForTab(_contents).id() : -1;
+ }
+@@ -418,6 +448,58 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   }
+ }
+ 
++- (void)tabHelpersReady {
++  if (_contents) {
++    brkcore::UseShellPermissionPrompts(_contents);
++  }
++}
++
++- (BrkCoreSecurity)security {
++  BrkCoreSecurity security{};
++  content::NavigationEntry* entry = _contents ? _contents->GetController().GetVisibleEntry() : nullptr;
++  if (!entry || !entry->GetURL().is_valid()) {
++    return security;
++  }
++  const content::SSLStatus& ssl = entry->GetSSL();
++  security.known = true;
++  security.secureConnection = ssl.certificate != nullptr;
++  security.certificateError = net::IsCertStatusError(ssl.cert_status);
++  security.insecureContent =
++      ssl.content_status & (content::SSLStatus::DISPLAYED_INSECURE_CONTENT | content::SSLStatus::RAN_INSECURE_CONTENT |
++                            content::SSLStatus::DISPLAYED_CONTENT_WITH_CERT_ERRORS | content::SSLStatus::RAN_CONTENT_WITH_CERT_ERRORS);
++  security.insecureForm = ssl.content_status & content::SSLStatus::DISPLAYED_FORM_WITH_INSECURE_ACTION;
++  security.certStatus = ssl.cert_status;
++  security.contentStatus = ssl.content_status;
++  return security;
++}
++
++- (void)setPermission:(BrkCorePermissionKind)kinds
++     requestingOrigin:(NSURL*)requesting
++       topLevelOrigin:(NSURL*)topLevel
++              allowed:(NSNumber*)allowed {
++  if (!_contents) {
++    return;
++  }
++  std::vector<ContentSettingsType> types;
++  if (kinds & BrkCorePermissionKindCamera) types.push_back(ContentSettingsType::MEDIASTREAM_CAMERA);
++  if (kinds & BrkCorePermissionKindMicrophone) types.push_back(ContentSettingsType::MEDIASTREAM_MIC);
++  if (kinds & BrkCorePermissionKindGeolocation) types.push_back(ContentSettingsType::GEOLOCATION);
++  if (kinds & BrkCorePermissionKindNotifications) types.push_back(ContentSettingsType::NOTIFICATIONS);
++  if (kinds & BrkCorePermissionKindClipboard) types.push_back(ContentSettingsType::CLIPBOARD_READ_WRITE);
++  if (kinds & BrkCorePermissionKindPointerLock) types.push_back(ContentSettingsType::POINTER_LOCK);
++  if (kinds & BrkCorePermissionKindStorageAccess) types.push_back(ContentSettingsType::STORAGE_ACCESS);
++  if (kinds & BrkCorePermissionKindSensors) types.push_back(ContentSettingsType::SENSORS);
++  if (kinds & BrkCorePermissionKindWindowManagement) types.push_back(ContentSettingsType::WINDOW_MANAGEMENT);
++  if (kinds & BrkCorePermissionKindMultipleDownloads) types.push_back(ContentSettingsType::AUTOMATIC_DOWNLOADS);
++  const ContentSetting setting =
++      !allowed ? CONTENT_SETTING_DEFAULT : (allowed.boolValue ? CONTENT_SETTING_ALLOW : CONTENT_SETTING_BLOCK);
++  HostContentSettingsMap* map =
++      HostContentSettingsMapFactory::GetForProfile(Profile::FromBrowserContext(_contents->GetBrowserContext()));
++  for (ContentSettingsType type : types) {
++    map->SetContentSettingDefaultScope(net::GURLWithNSURL(requesting), net::GURLWithNSURL(topLevel), type, setting);
++  }
++}
++
+ - (void)close {
+   if (!_contents) {
+     return;

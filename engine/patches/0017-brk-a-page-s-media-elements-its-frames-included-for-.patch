@@ -1,0 +1,345 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Sun, 8 Nov 2026 18:18:10 +0800
+Subject: [PATCH] brk: a page's media elements, its frames' included, for the
+ shell's media controls
+
+---
+ brk/BUILD.gn                     |   2 +
+ brk/browser/brk_media_players.h  |  28 ++++
+ brk/browser/brk_media_players.mm | 242 +++++++++++++++++++++++++++++++
+ brk/browser/brk_web_contents.mm  |  10 ++
+ 4 files changed, 282 insertions(+)
+ create mode 100644 brk/browser/brk_media_players.h
+ create mode 100644 brk/browser/brk_media_players.mm
+
+diff --git a/brk/BUILD.gn b/brk/BUILD.gn
+index a002f5462af9e23bfaa717c74b55a9e90b4d8382..9f61463aed7feb0261d1d6f876536686c466e2db 100644
+--- a/brk/BUILD.gn
++++ b/brk/BUILD.gn
+@@ -33,6 +33,8 @@ source_set("browser") {
+     "browser/brk_javascript_dialogs.mm",
+     "browser/brk_location_bar.cc",
+     "browser/brk_location_bar.h",
++    "browser/brk_media_players.h",
++    "browser/brk_media_players.mm",
+     "browser/brk_navigation_throttle.h",
+     "browser/brk_navigation_throttle.mm",
+     "browser/brk_permission_prompt.h",
+diff --git a/brk/browser/brk_media_players.h b/brk/browser/brk_media_players.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..16071ebd623deb94b616f7522d00c570a0f80623
+--- /dev/null
++++ b/brk/browser/brk_media_players.h
+@@ -0,0 +1,28 @@
++#ifndef BRK_BROWSER_BRK_MEDIA_PLAYERS_H_
++#define BRK_BROWSER_BRK_MEDIA_PLAYERS_H_
++
++#include <string>
++
++@class BrkWebContents;
++
++namespace content {
++class WebContents;
++}
++
++namespace brkcore {
++
++// The audio and video elements of a page and all its frames, cross-origin ones included, for the shell's media controls (CEF's Brk reads
++// them with a bundled extension's content script). Read in an isolated world of each frame whenever Chromium says a player started,
++// stopped, changed or went, and sent to the shell as JSON.
++void WatchMediaPlayers(content::WebContents* contents, BrkWebContents* owner);
++
++// Plays, pauses, sets the volume of, or moves into or out of picture in picture one element of one frame. False when there is no such frame.
++bool ControlMediaPlayer(content::WebContents* contents,
++                        int frame,
++                        const std::string& element,
++                        const std::string& operation,
++                        double volume);
++
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_MEDIA_PLAYERS_H_
+diff --git a/brk/browser/brk_media_players.mm b/brk/browser/brk_media_players.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..1856355f051c2d25d94fdaa2f2d4e4de3215fc65
+--- /dev/null
++++ b/brk/browser/brk_media_players.mm
+@@ -0,0 +1,242 @@
++#include "brk/browser/brk_media_players.h"
++
++#import <Foundation/Foundation.h>
++
++#include <string>
++#include <utility>
++#include <vector>
++
++#include "base/barrier_callback.h"
++#include "base/functional/bind.h"
++#include "base/json/json_writer.h"
++#include "base/memory/weak_ptr.h"
++#include "base/strings/sys_string_conversions.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/task/single_thread_task_runner.h"
++#include "base/time/time.h"
++#include "base/values.h"
++#import "brk/browser/brk_web_contents.h"
++#include "brk/public/BrkCore.h"
++#include "chrome/common/chrome_isolated_world_ids.h"
++#include "content/public/browser/navigation_handle.h"
++#include "content/public/browser/render_frame_host.h"
++#include "content/public/browser/web_contents.h"
++#include "content/public/browser/web_contents_observer.h"
++#include "content/public/browser/web_contents_user_data.h"
++
++namespace brkcore {
++
++namespace {
++
++// Chrome's world for its own features in a page; the registry's one global is namespaced.
++constexpr int32_t kWorld = ISOLATED_WORLD_ID_CHROME_INTERNAL;
++
++// The same registry CEF's Brk keeps in its extension's world (BrkCEF/AudibilityExtension/media.js): ids per element, nothing in the DOM.
++constexpr char16_t kRegistry[] = uR"((() => {
++  if (!globalThis.__brkCoreMedia) {
++    const ids = new WeakMap(), players = new Map();
++    const elements = root => {
++      const result = [...root.querySelectorAll('audio,video')];
++      for (const node of root.querySelectorAll('*')) if (node.shadowRoot) result.push(...elements(node.shadowRoot));
++      return result;
++    };
++    globalThis.__brkCoreMedia = {
++      snapshot() {
++        const current = new Set();
++        const result = elements(document).filter(e => e.readyState > 0).slice(0, 64).map(e => {
++          let id = ids.get(e);
++          if (!id) { id = crypto.randomUUID(); ids.set(e, id); }
++          players.set(id, new WeakRef(e)); current.add(id);
++          return {element:id, kind:e.localName, paused:e.paused, ended:e.ended, silent:e.muted, pictureInPicture:document.pictureInPictureElement === e};
++        });
++        for (const id of players.keys()) if (!current.has(id)) players.delete(id);
++        return result;
++      },
++      control(id, operation, volume) {
++        const player = players.get(id)?.deref();
++        if (!player?.isConnected) return 'Player is no longer in this document';
++        switch (operation) {
++          case 'play': HTMLMediaElement.prototype.play.call(player).catch(() => {}); break;
++          case 'pause': HTMLMediaElement.prototype.pause.call(player); break;
++          case 'enterPictureInPicture': if (player instanceof HTMLVideoElement) HTMLVideoElement.prototype.requestPictureInPicture.call(player).catch(() => {}); break;
++          case 'exitPictureInPicture': if (document.pictureInPictureElement === player) document.exitPictureInPicture().catch(() => {}); break;
++          case 'setVolume': player.volume = Math.min(1, Math.max(0, volume)); break;
++          default: return 'Unknown media operation';
++        }
++        return 'ok';
++      },
++    };
++  }
++  return globalThis.__brkCoreMedia;
++})())";
++
++// The frame id Brk's MediaPlayerID carries: 0 for the main frame, Chromium's frame tree node id for the others.
++int FrameID(content::RenderFrameHost* frame) {
++  return frame->IsInPrimaryMainFrame() ? 0 : frame->GetFrameTreeNodeId().value();
++}
++
++bool Readable(content::RenderFrameHost* frame) {
++  return frame->IsRenderFrameLive() && frame->IsActive() && frame->GetLastCommittedURL().is_valid() &&
++         !frame->GetLastCommittedURL().IsAboutBlank();
++}
++
++struct FrameMedia {
++  int frame = 0;
++  std::string document;
++  base::Value players;
++};
++
++class BrkMediaPlayers : public content::WebContentsObserver, public content::WebContentsUserData<BrkMediaPlayers> {
++ public:
++  ~BrkMediaPlayers() override = default;
++
++  void Read() {
++    if (read_pending_) {
++      return;
++    }
++    read_pending_ = true;
++    // Several of Chromium's media notifications come together; one read answers them.
++    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
++        FROM_HERE, base::BindOnce(&BrkMediaPlayers::ReadNow, weak_factory_.GetWeakPtr()), base::Milliseconds(60));
++  }
++
++  // content::WebContentsObserver:
++  void MediaStartedPlaying(const MediaPlayerInfo& info, const content::MediaPlayerId& id) override { Read(); }
++  void MediaStoppedPlaying(const MediaPlayerInfo& info, const content::MediaPlayerId& id, MediaStoppedReason reason) override {
++    Read();
++  }
++  void MediaPictureInPictureChanged(bool active) override { Read(); }
++  void MediaMutedStatusChanged(const content::MediaPlayerId& id, bool muted) override { Read(); }
++  void MediaDestroyed(const content::MediaPlayerId& id) override { Read(); }
++  void MediaMetadataChanged(const MediaPlayerInfo& info, const content::MediaPlayerId& id) override { Read(); }
++  void DidFinishLoad(content::RenderFrameHost* frame, const GURL& url) override { Read(); }
++  void FrameDeleted(content::FrameTreeNodeId id) override { Read(); }
++  void DidFinishNavigation(content::NavigationHandle* handle) override {
++    if (handle->IsInPrimaryMainFrame() && handle->HasCommitted() && !handle->IsSameDocument()) {
++      // The old document's players are gone with it, before anything of the new one is read.
++      generation_++;
++      Report("[]");
++    }
++    Read();
++  }
++
++ private:
++  friend class content::WebContentsUserData<BrkMediaPlayers>;
++  BrkMediaPlayers(content::WebContents* contents, BrkWebContents* owner)
++      : content::WebContentsObserver(contents), content::WebContentsUserData<BrkMediaPlayers>(*contents), owner_(owner) {}
++
++  void ReadNow() {
++    read_pending_ = false;
++    std::vector<content::RenderFrameHost*> frames;
++    GetWebContents().GetPrimaryMainFrame()->ForEachRenderFrameHost([&frames](content::RenderFrameHost* frame) {
++      if (Readable(frame)) {
++        frames.push_back(frame);
++      }
++    });
++    const uint64_t generation = ++generation_;
++    if (frames.empty()) {
++      Report("[]");
++      return;
++    }
++    auto barrier = base::BarrierCallback<FrameMedia>(
++        frames.size(), base::BindOnce(&BrkMediaPlayers::Combine, weak_factory_.GetWeakPtr(), generation));
++    const std::u16string script = std::u16string(kRegistry) + u".snapshot()";
++    for (content::RenderFrameHost* frame : frames) {
++      frame->ExecuteJavaScriptInIsolatedWorld(
++          script,
++          base::BindOnce(
++              [](base::RepeatingCallback<void(FrameMedia)> done, int id, std::string document, base::Value value) {
++                done.Run(FrameMedia{id, std::move(document), std::move(value)});
++              },
++              barrier, FrameID(frame), frame->GetFrameToken().ToString()),
++          kWorld);
++    }
++  }
++
++  // A frame that goes away while it is read never answers; its read is then superseded by the one its removal starts.
++  void Combine(uint64_t generation, std::vector<FrameMedia> frames) {
++    if (generation != generation_) {
++      return;
++    }
++    base::ListValue players;
++    for (FrameMedia& frame : frames) {
++      if (!frame.players.is_list()) {
++        continue;
++      }
++      for (base::Value& player : frame.players.GetList()) {
++        if (!player.is_dict()) {
++          continue;
++        }
++        player.GetDict().Set("frame", frame.frame);
++        player.GetDict().Set("document", frame.document);
++        players.Append(std::move(player));
++      }
++    }
++    std::string json;
++    base::JSONWriter::Write(players, &json);
++    Report(json);
++  }
++
++  void Report(const std::string& json) {
++    if (json == reported_) {
++      return;
++    }
++    reported_ = json;
++    BrkWebContents* owner = owner_;
++    id<BrkCoreWebContentsDelegate> delegate = owner.delegate;
++    if ([delegate respondsToSelector:@selector(webContents:didChangeMediaPlayers:)]) {
++      [delegate webContents:owner didChangeMediaPlayers:base::SysUTF8ToNSString(json)];
++    }
++  }
++
++  __weak BrkWebContents* owner_;
++  bool read_pending_ = false;
++  uint64_t generation_ = 0;
++  std::string reported_ = "[]";
++  base::WeakPtrFactory<BrkMediaPlayers> weak_factory_{this};
++
++  WEB_CONTENTS_USER_DATA_KEY_DECL();
++};
++
++WEB_CONTENTS_USER_DATA_KEY_IMPL(BrkMediaPlayers);
++
++}  // namespace
++
++void WatchMediaPlayers(content::WebContents* contents, BrkWebContents* owner) {
++  BrkMediaPlayers::CreateForWebContents(contents, owner);
++}
++
++bool ControlMediaPlayer(content::WebContents* contents,
++                        int frame,
++                        const std::string& element,
++                        const std::string& operation,
++                        double volume) {
++  content::RenderFrameHost* target = nullptr;
++  contents->GetPrimaryMainFrame()->ForEachRenderFrameHost([&](content::RenderFrameHost* candidate) {
++    if (!target && Readable(candidate) && FrameID(candidate) == frame) {
++      target = candidate;
++    }
++  });
++  if (!target) {
++    return false;
++  }
++  base::ListValue arguments;
++  arguments.Append(element);
++  arguments.Append(operation);
++  arguments.Append(volume);
++  std::string json;
++  base::JSONWriter::Write(arguments, &json);
++  const std::u16string script = std::u16string(kRegistry) + u".control(..." + base::UTF8ToUTF16(json) + u")";
++  // As a click on the page's own control: picture in picture needs the user's activation.
++  if (operation == "enterPictureInPicture") {
++    target->ExecuteJavaScriptWithUserGestureForTests(script, base::NullCallback(), kWorld);
++  } else {
++    target->ExecuteJavaScriptInIsolatedWorld(script, base::NullCallback(), kWorld);
++  }
++  if (auto* players = BrkMediaPlayers::FromWebContents(contents)) {
++    players->Read();
++  }
++  return true;
++}
++
++}  // namespace brkcore
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index 8d73cccd8db8aaaba0b313b1c1dab361bf480522..0dbddece964eb52fda328f52bd704bbf652fbaf3 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -15,6 +15,7 @@
+ #include "base/values.h"
+ #import "brk/browser/brk_browser.h"
+ #include "brk/browser/brk_devtools_session.h"
++#include "brk/browser/brk_media_players.h"
+ #include "brk/browser/brk_permission_prompt.h"
+ #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
+ #include "chrome/browser/profiles/profile.h"
+@@ -221,6 +222,7 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+     _contents = contents;
+     _browser = browser;
+     BrkPage::CreateForWebContents(contents, self);
++    brkcore::WatchMediaPlayers(contents, self);
+     _nativeView = contents->GetNativeView().GetNativeNSView();
+   }
+   return self;
+@@ -473,6 +475,14 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   return security;
+ }
+ 
++- (BOOL)controlMediaPlayerInFrame:(int)frame
++                          element:(NSString*)element
++                        operation:(NSString*)operation
++                           volume:(double)volume {
++  return _contents && brkcore::ControlMediaPlayer(_contents, frame, base::SysNSStringToUTF8(element),
++                                                  base::SysNSStringToUTF8(operation), volume);
++}
++
+ - (void)setPermission:(BrkCorePermissionKind)kinds
+      requestingOrigin:(NSURL*)requesting
+        topLevelOrigin:(NSURL*)topLevel

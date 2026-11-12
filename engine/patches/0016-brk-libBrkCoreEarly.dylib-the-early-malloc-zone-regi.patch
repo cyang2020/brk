@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Sun, 8 Nov 2026 18:03:18 +0800
+Subject: [PATCH] brk: libBrkCoreEarly.dylib, the early malloc zone
+ registration Brk's main calls before loading the framework
+
+---
+ brk/BUILD.gn                | 7 +++++++
+ brk/early/brk_early_zone.cc | 9 +++++++++
+ 2 files changed, 16 insertions(+)
+ create mode 100644 brk/early/brk_early_zone.cc
+
+diff --git a/brk/BUILD.gn b/brk/BUILD.gn
+index bd40741223689b4872a9d2b8611c2af7a8e7be0d..a002f5462af9e23bfaa717c74b55a9e90b4d8382 100644
+--- a/brk/BUILD.gn
++++ b/brk/BUILD.gn
+@@ -9,6 +9,12 @@ source_set("embedding") {
+   ]
+ }
+ 
++# Loaded by Brk's executable before the framework (brk/early/brk_early_zone.cc). engine/assemble-app.sh puts it next to the framework.
++shared_library("BrkCoreEarly") {
++  sources = [ "early/brk_early_zone.cc" ]
++  deps = [ "//base/allocator:early_zone_registration_apple" ]
++}
++
+ source_set("browser") {
+   sources = [
+     "browser/brk_application.h",
+@@ -57,6 +63,7 @@ source_set("browser") {
+     "//extensions/common",
+   ]
+   frameworks = [ "AppKit.framework" ]
++  data_deps = [ ":BrkCoreEarly" ]
+ 
+   # Chromium's own code has no debug info (engine/args/brk.gn). Brk's has enough for a backtrace.
+   configs -= [ "//build/config/compiler:default_symbols" ]
+diff --git a/brk/early/brk_early_zone.cc b/brk/early/brk_early_zone.cc
+new file mode 100644
+index 0000000000000000000000000000000000000000..d04326ec1ddc0457337a569da484bdc207b04460
+--- /dev/null
++++ b/brk/early/brk_early_zone.cc
+@@ -0,0 +1,9 @@
++// The first thing Brk's own executable calls when it runs on BrkCore, as Chrome's main does (chrome/app/chrome_exe_main_mac.cc): a stand-in
++// default malloc zone registered while the process has one thread, which Chromium's allocator replaces when BrkCore.framework loads. Without
++// it the replacement swaps zones while other threads may allocate. A library of its own, so it can be loaded before the framework is.
++
++#include "base/allocator/early_zone_registration_apple.h"
++
++extern "C" __attribute__((visibility("default"))) void BrkCoreEarlyMallocZoneRegistration() {
++  partition_alloc::EarlyMallocZoneRegistration();
++}

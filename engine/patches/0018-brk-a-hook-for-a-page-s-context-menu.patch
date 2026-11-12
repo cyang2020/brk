@@ -1,0 +1,67 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Sun, 8 Nov 2026 18:32:52 +0800
+Subject: [PATCH] brk: a hook for a page's context menu
+
+---
+ brk/embedding/embedding.h                                    | 3 +++
+ chrome/browser/ui/cocoa/BUILD.gn                             | 1 +
+ .../render_view_context_menu_mac_cocoa.mm                    | 5 +++++
+ 3 files changed, 9 insertions(+)
+
+diff --git a/brk/embedding/embedding.h b/brk/embedding/embedding.h
+index 13a9bb894a5df98a0c84033e117a4ce43ec1dd07..b7e51fd87ad07aa53090a87a2a6f25a87c8e6d71 100644
+--- a/brk/embedding/embedding.h
++++ b/brk/embedding/embedding.h
+@@ -8,6 +8,7 @@
+ class BrowserWindow;
+ class BrowserWindowInterface;
+ class GURL;
++class RenderViewContextMenuBase;
+ 
+ namespace base {
+ // As base/functional/callback_forward.h declares it.
+@@ -49,6 +50,8 @@ struct Hooks {
+   bool (*open_url_from_tab)(content::WebContents* source, const content::OpenURLParams& params) = nullptr;
+   // Brk's JavaScript dialogs for one of its pages; null for every other page, which keeps Chrome's.
+   content::JavaScriptDialogManager* (*javascript_dialog_manager)(content::WebContents* source) = nullptr;
++  // True when Brk showed the page's context menu itself (one of its pages, which has no Views widget for Chrome's menu).
++  bool (*show_context_menu)(RenderViewContextMenuBase* menu) = nullptr;
+ };
+ 
+ // True when BrkCore.framework was started by Brk's shell: the shell owns NSApp's delegate, the menu and the quit.
+diff --git a/chrome/browser/ui/cocoa/BUILD.gn b/chrome/browser/ui/cocoa/BUILD.gn
+index e1f0771d90bf33139fa5aeb2c1a784edd4f51341..262a18a12b972880909db7953e0f13919e6047f6 100644
+--- a/chrome/browser/ui/cocoa/BUILD.gn
++++ b/chrome/browser/ui/cocoa/BUILD.gn
+@@ -123,6 +123,7 @@ source_set("cocoa") {
+   ]
+ 
+   deps = [
++    "//brk:embedding",
+     "//chrome/app:command_ids",
+     "//chrome/app/theme:chrome_unscaled_resources_grit",
+     "//chrome/browser:app_controller_mac",
+diff --git a/chrome/browser/ui/cocoa/renderer_context_menu/render_view_context_menu_mac_cocoa.mm b/chrome/browser/ui/cocoa/renderer_context_menu/render_view_context_menu_mac_cocoa.mm
+index 10829d1e5930ce9f1b9deb4027b9ba7361ecb358..e1ea17982f71e9069164a93dc5c1503e0941d0b3 100644
+--- a/chrome/browser/ui/cocoa/renderer_context_menu/render_view_context_menu_mac_cocoa.mm
++++ b/chrome/browser/ui/cocoa/renderer_context_menu/render_view_context_menu_mac_cocoa.mm
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/cocoa/renderer_context_menu/render_view_context_menu_mac_cocoa.h"
+ 
++#include "brk/embedding/embedding.h"
++
+ #include <utility>
+ 
+ #include "base/compiler_specific.h"
+@@ -75,6 +77,9 @@ RenderViewContextMenuMacCocoa::~RenderViewContextMenuMacCocoa() {
+ }
+ 
+ void RenderViewContextMenuMacCocoa::Show() {
++  if (auto* show = brkcore::GetHooks().show_context_menu; show && show(this)) {
++    return;
++  }
+   views::Widget* widget = views::Widget::GetTopLevelWidgetForNativeView(
+       source_web_contents_->GetNativeView());
+ 

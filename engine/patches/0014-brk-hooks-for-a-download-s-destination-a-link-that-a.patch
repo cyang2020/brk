@@ -1,0 +1,123 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Sun, 8 Nov 2026 17:53:35 +0800
+Subject: [PATCH] brk: hooks for a download's destination, a link that asks for
+ a new window, and a page's JavaScript dialogs
+
+---
+ brk/embedding/embedding.h                     | 22 +++++++++++++++++++
+ chrome/browser/download/BUILD.gn              |  1 +
+ .../chrome_download_manager_delegate.cc       |  6 +++++
+ .../browser_web_contents_delegate.cc          |  9 ++++++++
+ 4 files changed, 38 insertions(+)
+
+diff --git a/brk/embedding/embedding.h b/brk/embedding/embedding.h
+index 16559896f0612b33e070cf3d7f77d17fcddef290..13a9bb894a5df98a0c84033e117a4ce43ec1dd07 100644
+--- a/brk/embedding/embedding.h
++++ b/brk/embedding/embedding.h
+@@ -9,13 +9,29 @@ class BrowserWindow;
+ class BrowserWindowInterface;
+ class GURL;
+ 
++namespace base {
++// As base/functional/callback_forward.h declares it.
++template <typename Signature>
++class OnceCallback;
++}  // namespace base
++
+ namespace content {
++class JavaScriptDialogManager;
+ class NavigationThrottleRegistry;
+ class WebContents;
++struct OpenURLParams;
+ }  // namespace content
+ 
++namespace download {
++class DownloadItem;
++struct DownloadTargetInfo;
++}  // namespace download
++
+ namespace brkcore {
+ 
++// download::DownloadTargetCallback.
++using BrkDownloadTargetCallback = base::OnceCallback<void(download::DownloadTargetInfo)>;
++
+ struct Hooks {
+   // Makes the window object of a Browser that Brk is creating. Null for every other Browser: DevTools windows and popups a page opens
+   // stay Chrome's own.
+@@ -27,6 +43,12 @@ struct Hooks {
+   void (*browser_process_starting)() = nullptr;
+   // The shell agreed to quit. Runs Chromium's own shutdown; the run loop stops when that is done.
+   void (*quit_chromium)() = nullptr;
++  // True when Brk gives this download its destination (a download of one of Brk's pages); `callback` was then moved from.
++  bool (*determine_download_target)(download::DownloadItem* item, BrkDownloadTargetCallback* callback) = nullptr;
++  // True when Brk took a link that asks for a new window (Shift+click) from one of its pages; Chrome then opens nothing.
++  bool (*open_url_from_tab)(content::WebContents* source, const content::OpenURLParams& params) = nullptr;
++  // Brk's JavaScript dialogs for one of its pages; null for every other page, which keeps Chrome's.
++  content::JavaScriptDialogManager* (*javascript_dialog_manager)(content::WebContents* source) = nullptr;
+ };
+ 
+ // True when BrkCore.framework was started by Brk's shell: the shell owns NSApp's delegate, the menu and the quit.
+diff --git a/chrome/browser/download/BUILD.gn b/chrome/browser/download/BUILD.gn
+index fb1b41b07ca5296f6e62bf69dda53b5431947c0e..46683057ba9117e65ac43d1f022e9f5d1395fcd1 100644
+--- a/chrome/browser/download/BUILD.gn
++++ b/chrome/browser/download/BUILD.gn
+@@ -187,6 +187,7 @@ source_set("impl") {
+ 
+   deps = [
+     ":status_text_builder_utils",
++    "//brk:embedding",
+     "//chrome/browser:browser_process",
+     "//chrome/browser:primitives",
+     "//chrome/browser/actor",
+diff --git a/chrome/browser/download/chrome_download_manager_delegate.cc b/chrome/browser/download/chrome_download_manager_delegate.cc
+index 0cfc34d1e08df4ff399991e85fb87d0e9725a164..42bd824777a9e5f4ec46f82b96571c24074f29a9 100644
+--- a/chrome/browser/download/chrome_download_manager_delegate.cc
++++ b/chrome/browser/download/chrome_download_manager_delegate.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/download/chrome_download_manager_delegate.h"
+ 
++#include "brk/embedding/embedding.h"
++
+ #include <algorithm>
+ #include <memory>
+ #include <optional>
+@@ -852,6 +854,10 @@ void ChromeDownloadManagerDelegate::ReturnNextId(
+ bool ChromeDownloadManagerDelegate::DetermineDownloadTarget(
+     DownloadItem* download,
+     download::DownloadTargetCallback* callback) {
++  if (auto* determine = brkcore::GetHooks().determine_download_target;
++      determine && determine(download, callback)) {
++    return true;
++  }
+   if (download->GetTargetFilePath().empty() &&
+       download->GetMimeType() == pdf::kPDFMimeType &&
+       !download->HasUserGesture()) {
+diff --git a/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc b/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
+index 34e263f6f127c1ad9946a25fd2a648c4ca8b6a1f..4de8f49d9fe7b9f718450f09244ffbea8bd682b0 100644
+--- a/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
++++ b/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
+@@ -541,6 +541,10 @@ content::WebContents* BrowserWebContentsDelegate::OpenURLFromTab(
+ #if DCHECK_IS_ON()
+   DCHECK(params.Valid());
+ #endif
++  if (auto* open = brkcore::GetHooks().open_url_from_tab;
++      open && open(source, params)) {
++    return nullptr;
++  }
+ 
+   if ((browser_->GetType() == BrowserWindowInterface::Type::TYPE_DEVTOOLS)) {
+     DevToolsWindow* window = DevToolsWindow::AsDevToolsWindow(source);
+@@ -1117,6 +1121,11 @@ void BrowserWebContentsDelegate::RendererResponsive(
+ content::JavaScriptDialogManager*
+ BrowserWebContentsDelegate::GetJavaScriptDialogManager(
+     content::WebContents* source) {
++  if (auto* brk = brkcore::GetHooks().javascript_dialog_manager) {
++    if (content::JavaScriptDialogManager* manager = brk(source)) {
++      return manager;
++    }
++  }
+   return javascript_dialogs::TabModalDialogManager::FromWebContents(source);
+ }
+ 

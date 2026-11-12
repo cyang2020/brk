@@ -1,0 +1,177 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Sun, 8 Nov 2026 18:32:56 +0800
+Subject: [PATCH] brk: Chrome's context menu of a page goes to the shell, which
+ shows it and answers the command
+
+---
+ brk/BUILD.gn                    |  3 ++
+ brk/browser/brk_application.mm  |  2 +
+ brk/browser/brk_context_menu.h  | 15 ++++++
+ brk/browser/brk_context_menu.mm | 94 +++++++++++++++++++++++++++++++++
+ 4 files changed, 114 insertions(+)
+ create mode 100644 brk/browser/brk_context_menu.h
+ create mode 100644 brk/browser/brk_context_menu.mm
+
+diff --git a/brk/BUILD.gn b/brk/BUILD.gn
+index 9f61463aed7feb0261d1d6f876536686c466e2db..ecf02067b1b530f9562abf0de99e7ac76e3c66b4 100644
+--- a/brk/BUILD.gn
++++ b/brk/BUILD.gn
+@@ -23,6 +23,8 @@ source_set("browser") {
+     "browser/brk_browser.mm",
+     "browser/brk_browser_window.h",
+     "browser/brk_browser_window.mm",
++    "browser/brk_context_menu.h",
++    "browser/brk_context_menu.mm",
+     "browser/brk_devtools_session.cc",
+     "browser/brk_devtools_session.h",
+     "browser/brk_downloads.h",
+@@ -57,6 +59,7 @@ source_set("browser") {
+     "//components/javascript_dialogs",
+     "//components/keep_alive_registry",
+     "//components/permissions",
++    "//components/renderer_context_menu",
+     "//components/url_formatter",
+     "//components/sessions",
+     "//components/zoom",
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index 988ea01567e076e8a84bea70b708938c93e5243a..d4309407aa37435e28fe666ae814310d7d2786ae 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -12,6 +12,7 @@
+ #include "base/strings/sys_string_conversions.h"
+ #include "brk/browser/brk_navigation_throttle.h"
+ #import "brk/browser/brk_browser.h"
++#include "brk/browser/brk_context_menu.h"
+ #include "brk/browser/brk_downloads.h"
+ #include "brk/browser/brk_javascript_dialogs.h"
+ #import "brk/browser/brk_profile.h"
+@@ -138,6 +139,7 @@ __attribute__((visibility("default"))) void BrkCoreApplicationPrepare(int argc,
+   hooks.determine_download_target = &brkcore::DetermineDownloadTargetHook;
+   hooks.open_url_from_tab = &brkcore::OpenURLFromTabHook;
+   hooks.javascript_dialog_manager = &brkcore::JavaScriptDialogManagerHook;
++  hooks.show_context_menu = &brkcore::ShowContextMenuHook;
+   chrome_browser_application_mac::RegisterBrowserCrApp();
+ }
+ 
+diff --git a/brk/browser/brk_context_menu.h b/brk/browser/brk_context_menu.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..0b8dbbbe4e7bd021902e0aeeeae06398db01c840
+--- /dev/null
++++ b/brk/browser/brk_context_menu.h
+@@ -0,0 +1,15 @@
++#ifndef BRK_BROWSER_BRK_CONTEXT_MENU_H_
++#define BRK_BROWSER_BRK_CONTEXT_MENU_H_
++
++class RenderViewContextMenuBase;
++
++namespace brkcore {
++
++// Installed in brkcore::Hooks. Chrome's own context menu of one of Brk's pages (its rows, their state, their commands) goes to the shell,
++// which shows it in its own NSMenu as CEF's Brk does, with its own rows added; the chosen command runs in Chrome's menu. Chrome's Mac menu
++// needs a Views widget the page does not have. False for other pages.
++bool ShowContextMenuHook(RenderViewContextMenuBase* menu);
++
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_CONTEXT_MENU_H_
+diff --git a/brk/browser/brk_context_menu.mm b/brk/browser/brk_context_menu.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..847c0e5233d9359fe5386fe50a02e5c1cbe7789c
+--- /dev/null
++++ b/brk/browser/brk_context_menu.mm
+@@ -0,0 +1,94 @@
++#include "brk/browser/brk_context_menu.h"
++
++#import <Foundation/Foundation.h>
++
++#include "base/strings/sys_string_conversions.h"
++#include "base/task/current_thread.h"
++#import "brk/browser/brk_web_contents.h"
++#include "brk/public/BrkCore.h"
++#include "components/renderer_context_menu/render_view_context_menu_base.h"
++#include "content/public/browser/context_menu_params.h"
++#include "content/public/browser/web_contents.h"
++#include "net/base/apple/url_conversions.h"
++#include "third_party/blink/public/mojom/context_menu/context_menu.mojom.h"
++#include "ui/menus/simple_menu_model.h"
++
++namespace brkcore {
++
++namespace {
++
++NSArray<NSDictionary<NSString*, id>*>* Items(ui::MenuModel* model) {
++  NSMutableArray<NSDictionary<NSString*, id>*>* items = [NSMutableArray array];
++  for (size_t index = 0; index < model->GetItemCount(); ++index) {
++    if (!model->IsVisibleAt(index)) {
++      continue;
++    }
++    if (model->GetTypeAt(index) == ui::MenuModel::TYPE_SEPARATOR) {
++      [items addObject:@{@"separator" : @YES}];
++      continue;
++    }
++    NSMutableDictionary<NSString*, id>* item = [NSMutableDictionary dictionary];
++    item[@"title"] = base::SysUTF16ToNSString(model->GetLabelAt(index));
++    item[@"command"] = @(model->GetCommandIdAt(index));
++    item[@"enabled"] = @(model->IsEnabledAt(index));
++    item[@"checked"] = @(model->IsItemCheckedAt(index));
++    if (model->GetTypeAt(index) == ui::MenuModel::TYPE_SUBMENU && model->GetSubmenuModelAt(index)) {
++      item[@"children"] = Items(model->GetSubmenuModelAt(index));
++    }
++    [items addObject:item];
++  }
++  return items;
++}
++
++NSString* MediaType(blink::mojom::ContextMenuDataMediaType type) {
++  switch (type) {
++    case blink::mojom::ContextMenuDataMediaType::kNone:
++      return @"none";
++    case blink::mojom::ContextMenuDataMediaType::kImage:
++      return @"image";
++    case blink::mojom::ContextMenuDataMediaType::kVideo:
++      return @"video";
++    case blink::mojom::ContextMenuDataMediaType::kAudio:
++      return @"audio";
++    default:
++      return @"other";
++  }
++}
++
++}  // namespace
++
++bool ShowContextMenuHook(RenderViewContextMenuBase* menu) {
++  content::WebContents* contents = menu->GetWebContents();
++  BrkWebContents* page = contents ? PageForContents(contents) : nil;
++  id<BrkCoreWebContentsDelegate> shell = page.delegate;
++  if (!page || ![shell respondsToSelector:@selector(webContents:runContextMenu:info:)]) {
++    return false;
++  }
++  const content::ContextMenuParams& params = menu->params();
++  NSMutableDictionary<NSString*, id>* info = [NSMutableDictionary dictionary];
++  info[@"x"] = @(params.x);
++  info[@"y"] = @(params.y);
++  info[@"editable"] = @(params.is_editable);
++  info[@"mediaType"] = MediaType(params.media_type);
++  if (params.link_url.is_valid()) {
++    info[@"linkURL"] = net::NSURLWithGURL(params.link_url);
++  }
++  info[@"selection"] = base::SysUTF16ToNSString(params.selection_text);
++  // The menu model is the menu's own; the menu lives until Chrome makes the next one, longer than this call.
++  ui::SimpleMenuModel* model = const_cast<ui::SimpleMenuModel*>(&menu->menu_model());
++  NSArray<NSDictionary<NSString*, id>*>* items = Items(model);
++  menu->OnMenuWillShow(model);
++  NSInteger chosen;
++  {
++    // As Chrome's own menu: tasks run while the menu tracks the mouse.
++    base::CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
++    chosen = [shell webContents:page runContextMenu:items info:info];
++  }
++  if (chosen >= 0 && menu->IsCommandIdEnabled(static_cast<int>(chosen))) {
++    menu->ExecuteCommand(static_cast<int>(chosen), 0);
++  }
++  menu->MenuClosed(model);
++  return true;
++}
++
++}  // namespace brkcore
