@@ -14,7 +14,7 @@ import os
 /// One dispatch, in order:
 /// 1. `reduce(state, input, ctx)` with `ctx.now = clock.now()`.
 /// 2. If `changed`: `state = t.state`; `snapshot = project(state, ...)`; if `docChanged`,
-///    `stateFile.schedule(StateCodec.encode(state))` (debounced, off the main thread); `engine.reconcile(snapshot.pages)`
+///    `stateFile.schedule { StateCodec.encode(state) }` (debounced, encoded and written off the main thread); `engine.reconcile(snapshot.pages)`
 ///    so pages exist before anything is shown or navigated; windows: create/close `WindowController`s to match
 ///    `snapshot.windows`; each renders its `WindowSnapshot` (frames -> views -> page surfaces into cards -> keyboard
 ///    focus when `focus` changed).
@@ -470,7 +470,7 @@ public final class AppStore {
         localSearch.reconcile(snapshot)
         meaningSearch.reconcile(snapshot)
         reconcileCaptureSheets()
-        if docChanged { stateFile.schedule(StateCodec.encode(state)) }
+        if docChanged { stateFile.schedule { [state] in StateCodec.encode(state) } }
         saveConversations()
         engine.reconcile(snapshot.pages)
         for id in windows.keys where snapshot.windows[id] == nil {

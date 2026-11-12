@@ -216,6 +216,9 @@ struct Work {
         case .spaceExportFinished(let window, let token, let outcome): spaceExportFinished(window, token: token, outcome: outcome)
         case .clockTick:
             sweepAutoArchive()
+            // Visits older than Metrics.persistence.historyDays go, so the saved file does not grow without end.
+            let oldest = ctx.now.advanced(by: .seconds(-Int64(Metrics.persistence.historyDays.value) * 86_400))
+            if state.doc.history.contains(where: { $0.visitedAt < oldest }) { state.doc.history.removeAll { $0.visitedAt < oldest } }
             for window in state.session.windows.keys where state.session.windows[window]?.barClock != nil { state.session.windows[window]?.barClock = ctx.now }
             for window in state.session.windows.keys {
                 if let toast = state.session.windows[window]?.toast, toast.expiresAt <= ctx.now {
@@ -298,15 +301,16 @@ struct Work {
         stamp(state.onScreenTabs().symmetricDifference(cycle.baseline))
     }
 
-    /// An open command bar closes unless the command keeps it; an open Library page or Peek closes unless the
-    /// command keeps it or is a command bar command (`.commandBar(.open)` then replaces it, `.dismiss` closes it).
-    /// A Peek that closes drops its scratch tab too.
+    /// An open command bar closes unless the command keeps it; an open Library page closes unless the command keeps
+    /// it or is a command bar command (`.commandBar(.open)` then replaces it, `.dismiss` closes it). An open Peek
+    /// closes unless the command keeps it, and drops its scratch tab: a command bar command closes it too (the bar
+    /// takes its place), since a page left behind it would stay loaded with no row to close it.
     mutating func applyOverlayRule(for command: Command, in window: WindowID) {
         guard let overlay = state.session.windows[window]?.overlay else { return }
         let keeps = switch overlay {
         case .commandBar: command.keepsCommandBar
         case .library: command.keepsLibrary || command.keepsCommandBar
-        case .peek: command.keepsPeek || command.keepsCommandBar
+        case .peek: command.keepsPeek
         }
         if !keeps {
             if case .peek = overlay { closePeek(in: window) } else { state.session.windows[window]!.overlay = nil }

@@ -667,6 +667,7 @@ public struct PersistenceMetrics: MetricGroup {
     public let sweepInterval = Metric(60.0, .guess("real-time interval of the auto-archive sweep; Arc's comes from settings at run time"))
     public let shutdownTimeout = Metric(5.0, .guess("longest wait for OnBeforeClose of every browser at quit before the controlled failure"))
     public let historyCap = Metric(500, .guess("history entries kept"))
+    public let historyDays = Metric(90, .guess("days a visit is kept: Chromium's history expiry, which Arc's history inherits; an import brings the same 90 days"))
     public let archiveCap = Metric(2000, .guess("archive entries kept"))
 }
 

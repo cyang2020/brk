@@ -97,6 +97,30 @@ final class SidebarReviewEvidenceTests: XCTestCase {
         XCTAssertEqual(shown(d), hidden, "an open folder's tab is a stop")
     }
 
+    // A016: Opt+Cmd+Down/Up from a tab whose folder was collapsed under it steps to the stops beside the folder, not to
+    // the first or last stop of the space.
+    func testStepFromATabInACollapsedFolderMovesToTheStopsBesideTheFolder() throws {
+        let d = Driver()
+        let before = d.open("https://example.com/before")
+        let after = d.open("https://example.com/after")
+        let hidden = d.open("https://example.com/hidden")
+        d.user(.item(.newFolder))
+        let box = d.pinnedIDs[0]
+        d.user(.item(.move(hidden, to: .into(parent: box, index: 0))))
+        d.user(.item(.move(before, to: .into(parent: d.view.space.pinned.root, index: 0))))
+        d.user(.item(.move(after, to: .into(parent: d.view.space.pinned.root, index: Int.max))))
+        XCTAssertEqual(d.pinnedIDs, [before, box, after])
+        d.user(.tab(.focus(hidden)))
+        d.user(.item(.toggleFolder(box)))
+        XCTAssertEqual(folder(box, in: d.view.space.pinned.rows)?.collapsed, true)
+        XCTAssertEqual(shown(d), hidden)
+        d.user(.tab(.step(.next)))
+        XCTAssertEqual(shown(d), after)
+        d.user(.tab(.focus(hidden)))
+        d.user(.tab(.step(.previous)))
+        XCTAssertEqual(shown(d), before)
+    }
+
     // A025: Ctrl+Space reveals the shown item (ancestors open) and focuses the sidebar; arrows move and stop at ends.
     func testRevealOpensAncestorsFocusesTheSidebarAndArrowsMoveWithinRows() throws {
         let d = Driver()

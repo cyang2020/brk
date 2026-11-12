@@ -11,16 +11,24 @@ extension Work {
             focus(item, in: window)
         case .step(let step):
             // Next or previous stop in the space's sidebar order, no wrap; a split is one stop. Nothing shown: Down
-            // goes to the first stop, Up to the last.
+            // goes to the first stop, Up to the last. A shown item that is no stop (in a collapsed folder, or the
+            // peeked row of collapsed Pinned) steps to the nearest stop after or before the place it sits.
             let stops = state.units(in: window, skipCollapsed: true)
             guard !stops.isEmpty else { return }
-            let at = state.shownItem(in: window).flatMap { stops.firstIndex(of: $0) }
+            let shown = state.shownItem(in: window)
+            let at = shown.flatMap { stops.firstIndex(of: $0) }
             let index: Int
-            switch (at, step) {
-            case (nil, .next): index = 0
-            case (nil, .previous): index = stops.count - 1
-            case (let i?, .next): index = min(i + 1, stops.count - 1)
-            case (let i?, .previous): index = max(i - 1, 0)
+            if at == nil, let shown, let position = state.units(in: window).firstIndex(of: shown) {
+                let before = Set(state.units(in: window).prefix(position))
+                guard let i = step == .next ? stops.firstIndex(where: { !before.contains($0) }) : stops.lastIndex(where: before.contains) else { return }
+                index = i
+            } else {
+                switch (at, step) {
+                case (nil, .next): index = 0
+                case (nil, .previous): index = stops.count - 1
+                case (let i?, .next): index = min(i + 1, stops.count - 1)
+                case (let i?, .previous): index = max(i - 1, 0)
+                }
             }
             focus(stops[index], in: window)
         case .cycleRecent(let step):
@@ -204,7 +212,10 @@ extension Work {
             state.session.live[page] = live
             switch target {
             case .littleWindow:
-                run(.window(.newLittle(url)), in: window)
+                // A Little window browses in the space's persistent profile, so from a private window the link opens
+                // as a private tab there instead, as an Opt+Cmd+click does (Rules/Peek.swift `specialOpen`).
+                if state.doc.windows[window]?.kind == .incognito { openScratchTab(url, in: window, focus: true) }
+                else { run(.window(.newLittle(url)), in: window) }
             case .splitView:
                 // A new pane, filled with the link through the command bar that adding a pane opens. A window that
                 // cannot add one (a Little window, a Favorite shown) opens no bar and nothing happens.
@@ -363,7 +374,7 @@ extension Work {
         }
         if disposition == .newWindow {
             let kind: WindowKind = state.doc.windows[window]?.kind == .incognito ? .incognito : .standard
-            let owner = newWindow(kind: kind, space: target, sidebar: (true, state.doc.windows[window]!.sidebarWidth), cascadingFrom: state.doc.windows[window]?.bounds)
+            let owner = newWindow(kind: kind, space: target, sidebar: (true, state.doc.windows[window]!.sidebarWidth), cascadingFrom: state.doc.windows[window].flatMap { cascadeOrigin($0) })
             if kind == .incognito { openScratchTab(url, in: owner, focus: true) }
             else { openTab(url, inSpace: target, window: owner, focus: true) }
             return

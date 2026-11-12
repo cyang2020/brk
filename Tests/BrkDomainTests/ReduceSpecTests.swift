@@ -528,6 +528,19 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(row.title, "Reading")
     }
 
+    /// Committing the rename field unchanged (it starts with the row's title, as after a double-click and a click away)
+    /// names nothing: the row keeps following its page's title
+    func test_itemRenameCommittedUnchangedKeepsThePageTitle() throws {
+        let d = Driver()
+        let a = d.todayIDs[0]
+        d.page(a, .titleChanged("First Page"))
+        d.user(.item(.beginRename(.focused)))
+        d.user(.item(.rename(a, title: try XCTUnwrap(d.row(a)?.title))))
+        d.page(a, .committed(url("http://127.0.0.1:9/b")))
+        d.page(a, .titleChanged("Second Page"))
+        XCTAssertEqual(d.row(a)?.title, "Second Page")
+    }
+
     /// Rename Current Item on a tab inside a collapsed folder of a collapsed Pinned section expands both, so the
     /// field can show (electron-wave1-review.md finding 3, wrong in the Electron version).
     func testBeginRenameExpandsCollapsedAncestors() throws {
@@ -876,11 +889,55 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertFalse(d.loadedIDs.contains(idle))
     }
 
+    /// .clockTick archives an idle Today split holding the History tab (its brk:// address failed the archive's check, so
+    /// the sweep skipped it for good), and "Auto archived" counts only what went: a split the archive cannot hold (an
+    /// extension page in it) stays, unannounced, instead of a toast every other tick
+    func test_clocktickArchivesASplitWithTheHistoryTabAndAnnouncesOnlyWhatItArchived() throws {
+        let d = Driver()
+        let home = d.todayIDs[0]
+        d.user(.library(.openHistory))
+        d.user(.split(.addPane)); d.user(.commandBar(.submit("https://example.com/right")))
+        XCTAssertNotNil(d.view.content.split)
+        d.user(.tab(.focus(home)))
+        d.advance(.seconds(13 * 3_600))
+        d.system(.clockTick)
+        XCTAssertEqual(d.todayIDs, [home])
+        XCTAssertFalse(d.archive().isEmpty)
+
+        let e = Driver()
+        let first = e.todayIDs[0]
+        e.open("https://example.com/left")
+        e.user(.split(.addPane)); e.user(.commandBar(.submit("https://example.com/right")))
+        let split = try XCTUnwrap(e.view.content.split)
+        let pane = try XCTUnwrap(e.view.content.panes.first { $0.focused }?.tab)
+        e.page(pane, .committed(url("chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html")))
+        e.user(.tab(.focus(first)))
+        e.user(.tabTools(.dismissToast))
+        e.advance(.seconds(13 * 3_600))
+        e.system(.clockTick)
+        XCTAssertTrue(e.todayIDs.contains(split))
+        XCTAssertNil(e.view.tabTools.toast, "nothing was archived, so nothing is announced")
+    }
+
+    /// .clockTick never archives a background Today tab while it plays: archiving unloads it and stops the sound
+    func test_clocktickKeepsABackgroundTabThatIsPlaying() throws {
+        let d = Driver()
+        let home = d.todayIDs[0]
+        let playing = d.open("https://example.com/podcast")
+        d.page(playing, .audioChanged(true))
+        d.user(.tab(.focus(home)))
+        d.advance(.seconds(13 * 3_600))
+        d.system(.clockTick)
+        XCTAssertTrue(d.todayIDs.contains(playing))
+        XCTAssertTrue(d.loadedIDs.contains(playing))
+    }
+
     /// .clockTick with autoArchiveAfter never archives nothing
     func test_clocktickWithAutoArchiveAfterNeverArchivesNothing() throws {
         let d = Driver()
         d.open("example.com")
         d.user(.settings(.autoArchive(.never)))
+        d.user(.library(.clearHistory))   // visits this old would expire at the tick
         d.advance(.seconds(400 * 86_400))
         assertUnchanged(d.state, d.system(.clockTick))
         XCTAssertEqual(d.todayIDs.count, 2)

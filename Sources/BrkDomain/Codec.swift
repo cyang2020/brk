@@ -115,7 +115,18 @@ public enum StateCodec {
         }
         if doc.repairArcImportedThemes() { repairs.append("turned around the slider and appearance of themes imported from Arc") }
         if !doc.settings.advanced.restoreWindowsOnLaunch {
-            // Keep saved public sidebar documents, but start one fresh window with no loaded selection.
+            // Keep saved public sidebar documents, but start one fresh window with no loaded selection. A tab's latest
+            // address and title live in its window's slot, so they move into the tab first, as unloading a page does.
+            var folded: Set<ItemID> = []
+            for window in doc.windows.keys.sorted() {
+                for (item, slot) in doc.windows[window]!.slots where folded.insert(item).inserted {
+                    doc.tree.updateTab(item) { tab in
+                        tab.url = slot.committedURL
+                        if let title = slot.observedTitle { tab.title = title }
+                        if let favicon = slot.favicon { tab.favicon = favicon }
+                    }
+                }
+            }
             let id = WindowID(ctx.newID())
             doc.windows = [id: WindowDoc(id: id, kind: .standard, bounds: nil, space: doc.spaceOrder[0], activeBySpace: [:],
                                         emptySelections: Set(doc.spaceOrder), sidebarVisible: true, sidebarWidth: Metrics.sidebar.defaultWidth.value)]

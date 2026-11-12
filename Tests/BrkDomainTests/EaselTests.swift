@@ -43,6 +43,20 @@ final class EaselTests: XCTestCase {
         XCTAssertFalse(d.view.enabledActions.contains(.reloadPage))
     }
 
+    /// An Easel's row duplicates and archives like any tab (its brk:// address used to fail the archive's URL check:
+    /// the × showed "exceeds the saved archive limits" and Duplicate did nothing).
+    func test_anEaselRowDuplicatesAndArchivesLikeAnyTab() throws {
+        let d = Driver()
+        let home = d.todayIDs[0]
+        let (id, row) = create(d)
+        d.user(.tabTools(.bulk(.items([row]), .duplicate(nil))))
+        XCTAssertEqual(d.pinnedIDs.filter { d.row($0)?.url == EaselPage.url(id) }.count, 2)
+        d.user(.tab(.focus(home)))
+        d.user(.tabTools(.bulk(.items([row]), .archive)))
+        XCTAssertFalse(d.pinnedIDs.contains(row))
+        XCTAssertEqual(d.archive().first?.url, EaselPage.url(id))
+    }
+
     func test_shapesArrowsInkTextAndPicturesAreAddedMovedAndRemoved() throws {
         let d = Driver()
         let (id, _) = create(d)

@@ -69,6 +69,20 @@ final class PrivateNavigationTests: XCTestCase {
         }
     }
 
+    /// The page menu's "Open Link in Little Brk" in a private window keeps the link private, as Opt+Cmd+click does: a
+    /// Little window would browse it in the space's persistent profile (cookies, history, archive).
+    func testLittleWindowLinkMenuInAPrivateWindowStaysPrivate() throws {
+        let d = Driver()
+        let (window, opener) = try makePrivateOpener(d)
+        let destination = url("https://example.com/private-little-menu")
+        d.page(opener, .linkMenuRequested(destination, .littleWindow), in: window)
+        XCTAssertFalse(d.snapshot.windows.values.contains { $0.kind == .little })
+        let page = try XCTUnwrap(d.snapshot.pages.first { $0.initialURL == destination })
+        XCTAssertEqual(page.context, .incognito(d.state.session.privateSession!))
+        d.page(page.id.item, .committed(destination), in: window)
+        XCTAssertFalse(String(decoding: d.savedFile, as: UTF8.self).contains("private-little-menu"))
+    }
+
     private func makePrivateOpener(_ d: Driver) throws -> (WindowID, ItemID) {
         d.user(.window(.newIncognito))
         let window = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)

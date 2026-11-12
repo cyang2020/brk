@@ -105,6 +105,65 @@ final class WindowsSpecTests: XCTestCase {
         XCTAssertEqual(d.current?.section, .today)
     }
 
+    /// "Open in" from a Little Arc holding a second tab (a link it opened in the background) archives that tab, as
+    /// closing the Little Arc does, instead of dropping it with no trace
+    func test_openInArchivesTheLittleArcsOtherTabs() throws {
+        let d = Driver()
+        d.user(.window(.newLittle(url("https://example.com/little"))))
+        let little = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .little }?.id)
+        d.commitRequested(in: little)
+        let shown = try XCTUnwrap(d.view(of: little).content.panes.first?.tab)
+        d.page(shown, .openRequested(url("https://example.com/second"), .backgroundTab), in: little)
+        d.commitRequested(in: little)
+        d.user(.window(.openIn(.current)), in: little)
+        XCTAssertNil(d.snapshot.windows[little])
+        XCTAssertEqual(d.current?.url, url("https://example.com/little"))
+        XCTAssertEqual(d.archive().map(\.url), [url("https://example.com/second")])
+    }
+
+    /// Cmd+N from a Little Arc opens a normal standard window: the sidebar shown and a standard window's default size,
+    /// not the Little Arc's hidden sidebar and small frame
+    func test_newWindowFromALittleArcIsANormalWindow() throws {
+        let d = Driver()
+        d.user(.window(.newLittle(url("https://example.com/little"))))
+        let little = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .little }?.id)
+        let panel = CGRect(x: 400, y: 400, width: 490, height: 329)
+        d.system(.window(little, .geometry(bounds: panel, contentSize: panel.size)))
+        let before = Set(d.snapshot.windows.keys)
+        d.user(.window(.new), in: little)
+        let added = try XCTUnwrap(Set(d.snapshot.windows.keys).subtracting(before).first)
+        XCTAssertEqual(d.view(of: added).kind, .standard)
+        XCTAssertTrue(d.view(of: added).sidebar.visible)
+        XCTAssertNil(d.view(of: added).bounds, "no frame to cascade from: the host opens it at the standard default size")
+    }
+
+    /// Closing the last standard window while an incognito window stays open (AppKit does not quit then) closes it
+    /// like any other window: its pages unload, so nothing it played keeps playing out of sight
+    func test_closingTheLastStandardWindowWithAPrivateWindowOpenUnloadsIt() throws {
+        let d = Driver()
+        d.user(.window(.newIncognito))
+        XCTAssertTrue(d.snapshot.pages.contains { $0.id.window == d.window })
+        d.system(.window(d.window, .closed))
+        XCTAssertFalse(d.snapshot.windows.keys.contains(d.window))
+        XCTAssertFalse(d.snapshot.pages.contains { $0.id.window == d.window })
+    }
+
+    /// With the last standard window closed and an incognito window still open, a link from another app opens in a new
+    /// standard window, not in the closed one nobody can see
+    func test_aLinkAfterTheLastStandardWindowClosedOpensInANewWindow() throws {
+        let d = Driver()
+        d.user(.settings(.links(.externalLinksInLittleArc(false))))
+        d.user(.window(.newIncognito))
+        d.system(.window(d.window, .closed))
+        let link = url("https://example.com/from-another-app")
+        d.system(.externalURL(link))
+        let opened = d.snapshot.windows.values.filter { $0.kind == .standard && $0.id != d.window }
+        XCTAssertEqual(opened.count, 1)
+        let window = try XCTUnwrap(opened.first?.id)
+        let pane = try XCTUnwrap(d.view(of: window).content.panes.first?.tab)
+        XCTAssertEqual(d.state.address(of: pane, in: window, for: .visible), link)
+    }
+
     /// .peek(.open) shows a scratch tab's page over the content; Esc closes it and drops the tab; a sidebar focus closes it too
     func test_peekOpensOverTheContentAndClosesOnExit() throws {
         let d = Driver()
@@ -127,6 +186,19 @@ final class WindowsSpecTests: XCTestCase {
         d.user(.peek(.open(url("https://example.com/third"))))
         d.user(.peek(.close))
         XCTAssertNil(d.view.overlay)
+    }
+
+    /// Cmd+T over a Peek replaces the card and drops the peeked tab and its page, as Esc does; they used to stay loaded
+    /// and hidden, with no row to close them
+    func test_commandBarOverAPeekDropsThePeekedTab() throws {
+        let d = Driver()
+        d.user(.peek(.open(url("https://example.com/peeked"))))
+        guard case .peek(let peek)? = d.view.overlay else { return XCTFail("\(String(describing: d.view.overlay))") }
+        d.user(.commandBar(.open(.newTab)))
+        XCTAssertNotNil(d.bar)
+        d.user(.commandBar(.dismiss))
+        XCTAssertFalse(d.loadedIDs.contains(peek.tab.id))
+        XCTAssertEqual(d.state.session.scratch[d.window]?.allTabs(), [])
     }
 
     /// The Peek's ⤢ button (Arc 1.170, the 2026-11-03 capture P22c): the peeked tab moves to the end of Today with its

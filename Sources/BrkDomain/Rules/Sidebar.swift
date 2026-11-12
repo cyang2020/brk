@@ -43,12 +43,15 @@ extension Work {
             guard let title, let scope = state.locate(id) else { return }
             state.session.windows[window]?.renameHint = nil
             let trimmed = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
+            // The field starts with the row's title (the page's, shortened, or the AI's name).
+            let shown = state.displayedTab(id, in: window)?.displayTitle
             state.withTree(scope) { tree in
                 tree.updateTab(id) { tab in
                     let custom = trimmed.isEmpty ? nil : trimmed
-                    // Return on the AI's name unchanged keeps it the AI's; any other commit makes the title the user's
-                    // for good, so Name Tabs never touches it again.
-                    if tab.customTitle == nil, let name = tab.aiName, custom == name.title { return }
+                    // Return or a click away on the title unchanged names nothing, so the row keeps following the page
+                    // (or stays the AI's); any other commit makes the title the user's for good, so Name Tabs never
+                    // touches it again.
+                    if tab.customTitle == nil, custom == shown { return }
                     if tab.customTitle != custom {
                         tab.customTitle = custom
                         tab.userNamed = true
@@ -619,10 +622,13 @@ extension Work {
             // A standard window keeps its WindowDoc when it is the last one (the next launch restores it; quitting
             // after the last window closes is AppKit's applicationShouldTerminateAfterLastWindowClosed) and is
             // removed otherwise; an ephemeral window goes with its tree (`WindowCommand.close` does the archiving).
+            // An open incognito or blank window keeps Brk running, so the closed window goes too: kept, it would
+            // play its pages out of sight and take the next link. A Little Arc is left out: it is a panel, and AppKit
+            // may quit with only panels open.
             guard let doc = state.doc.windows[window] else { return }
             switch doc.kind {
             case .standard:
-                if state.doc.windows.values.contains(where: { $0.kind == .standard && $0.id != window }) { removeWindow(window) }
+                if state.doc.windows.values.contains(where: { $0.id != window && $0.kind != .little }) { removeWindow(window) }
             case .little, .incognito, .blank:
                 windows(.close, in: window)
             }

@@ -25,13 +25,13 @@ extension Work {
             state.doc.windows[window]?.stayOnTop.toggle()
         case .newBlank:
             guard let doc = state.doc.windows[window] else { return }
-            let id = newWindow(kind: .blank, space: doc.space, sidebar: (true, doc.sidebarWidth), cascadingFrom: doc.bounds)
+            let id = newWindow(kind: .blank, space: doc.space, sidebar: (true, doc.sidebarWidth), cascadingFrom: cascadeOrigin(doc))
             openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)
         case .new:
             // Cmd+N: a standard window on the dispatching window's space, sharing the global sidebar. It opens with
             // the command bar and an empty card, like Arc's new window (normalize fills nothing; `focus` would).
             guard let doc = state.doc.windows[window] else { return }
-            let id = newWindow(kind: .standard, space: doc.space, sidebar: (doc.sidebarVisible, doc.sidebarWidth), cascadingFrom: doc.bounds)
+            let id = newWindow(kind: .standard, space: doc.space, sidebar: (doc.sidebarVisible || doc.kind == .little, doc.sidebarWidth), cascadingFrom: cascadeOrigin(doc))
             state.doc.windows[id]?.aiPanelWidth = doc.aiPanelWidth
             openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)
         case .newIncognito:
@@ -39,7 +39,7 @@ extension Work {
             // `BrowsingContext.incognito` (F2 owns the context and badge; the projection gives it dark chrome).
             guard let doc = state.doc.windows[window] else { return }
             if state.session.privateSession == nil { state.session.privateSession = PrivateSessionID(ctx.newID()) }
-            let id = newWindow(kind: .incognito, space: doc.space, sidebar: (true, doc.sidebarWidth), cascadingFrom: doc.bounds)
+            let id = newWindow(kind: .incognito, space: doc.space, sidebar: (true, doc.sidebarWidth), cascadingFrom: cascadeOrigin(doc))
             openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: id)
         case .newLittle(let url):
             // Opt+Cmd+N, an external link or an Opt+Cmd+click: one tab in the window's own container, no sidebar.
@@ -100,7 +100,13 @@ extension Work {
         _ = removeItem(held)
         let standard = mostRecentStandardWindow() ?? newWindow(kind: .standard, space: targetSpace, sidebar: (true, doc.sidebarWidth))
         if case .peek? = state.session.windows[window]?.overlay { state.session.windows[window]?.overlay = nil }
-        if doc.kind == .little { removeWindow(window) }
+        if doc.kind == .little {
+            // Links it opened are tabs of its own: archived as closing it does, not dropped with the window.
+            if let tree = state.session.scratch[window], let root = tree.root(for: .scratch(window)) {
+                archiveTabs(tree[root]?.children ?? [], reason: .manual, in: window)
+            }
+            removeWindow(window)
+        }
         focus(id, in: standard)
         if let address, address != tab.url { request(address, for: PageID(window: standard, item: id)) }
     }
@@ -125,7 +131,9 @@ extension Work {
             let window = recent ?? newWindow(kind: .standard, space: space, sidebar: (true, Metrics.sidebar.defaultWidth.value))
             openTab(url, inSpace: space, window: window, focus: true)
         case .space, .mostRecentSpace:
-            guard let window = recent, let space = state.doc.windows[window]?.space else { return }
+            // No standard window is left when the last one closed while an incognito window stays: a new one opens.
+            guard let window = recent ?? state.doc.spaceOrder.first.map({ newWindow(kind: .standard, space: $0, sidebar: (true, Metrics.sidebar.defaultWidth.value)) }),
+                  let space = state.doc.windows[window]?.space else { return }
             openTab(url, inSpace: space, window: window, focus: true)
         }
     }
@@ -151,6 +159,10 @@ extension Work {
         ensureSession(id)
         return id
     }
+
+    /// The frame a new window cascades from. A Little Arc's small panel (its sidebar always hidden) is no model for a
+    /// full window: one asked from it opens at its kind's default size.
+    func cascadeOrigin(_ doc: WindowDoc) -> CGRect? { doc.kind == .little ? nil : doc.bounds }
 
     /// Drops a window and everything only it held (session, scratch tree, loaded pages of its scratch tabs).
     mutating func removeWindow(_ id: WindowID) {

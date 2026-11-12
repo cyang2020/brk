@@ -139,6 +139,19 @@ final class LibrarySpecTests: XCTestCase {
         XCTAssertNil(d.view.history)
     }
 
+    /// Cmd+L then Return on the History tab keeps the History page: a brk:// address opens as itself and is never sent
+    /// to the search engine
+    func test_returnOnTheHistoryTabsOwnAddressKeepsTheHistoryPage() throws {
+        let d = Driver()
+        d.user(.library(.openHistory))
+        let tab = try XCTUnwrap(d.todayIDs.first)
+        d.user(.commandBar(.open(.editCurrent)))
+        d.user(.commandBar(.submit(HistoryPage.url.absoluteString)))
+        XCTAssertNil(d.bar)
+        XCTAssertEqual(d.row(tab)?.url, HistoryPage.url)
+        XCTAssertEqual(d.view.content.panes.map(\.content), [.history(PageID(window: d.window, item: tab))])
+    }
+
     /// The History tab comes back after a relaunch like any other tab (Arc restores arc://history), in its place and
     /// still drawn natively; restore used to drop it with the other brk:// addresses (R4-7, A050).
     func test_theHistoryTabIsRestoredAfterARelaunch() throws {

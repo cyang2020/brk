@@ -33,14 +33,14 @@ extension Work {
     }
 
     /// `SystemEvent.clockTick`. Archives (reason .auto) every Today item, including a group as one unit, that has no
-    /// descendant on screen in any window and whose most recent descendant activity is at least the threshold
-    /// old. Never Pinned or Favorites. Empty panes inside a swept split are removed without an archive entry
+    /// descendant on screen in any window or playing, and whose most recent descendant activity is at least the
+    /// threshold old. Never Pinned or Favorites. Empty panes inside a swept split are removed without an archive entry
     /// (`archiveTabs`). Pending Ctrl+Tab cycles were committed first by `observe`, so a tab just left is stamped
     /// (regression finding 5). Idempotent: a second tick at the same `now` is a no-op.
     mutating func sweepAutoArchive() {
         let onScreen = state.onScreenTabs()
         var victims: [ItemID] = []
-        var swept: [SpaceID: Int] = [:]
+        var spaces: [ItemID: SpaceID] = [:]
         for space in state.doc.spaceOrder.compactMap({ state.doc.spaces[$0] }) {
             // The threshold is the space's profile's ("Archive tabs after", per profile: anatomy-m 4.3).
             guard let threshold = state.profileSettings(space.profile).autoArchive.interval else { continue }
@@ -52,13 +52,20 @@ extension Work {
                     guard let live = AIPageTab.id(of: state.tab(tab)?.url).flatMap({ state.doc.aiPages[$0]?.live }) else { return false }
                     return live.schedule != nil || live.weekdays != nil
                 }) { continue }
+                // A tab playing out of sight (sound, a running video, picture in picture) is in use: archiving it
+                // would unload it and stop what plays, as the Little Arc rule below already says.
+                if state.doc.tree.tabs(under: unit).contains(where: { state.tabIsPlaying($0) }) { continue }
                 if ctx.now.since(state.lastActiveOf(unit)) >= threshold {
                     victims.append(unit)
-                    swept[space.id, default: 0] += state.doc.tree.tabs(under: unit).count
+                    spaces[unit] = space.id
                 }
             }
         }
+        let tabCounts = Dictionary(uniqueKeysWithValues: victims.map { ($0, state.doc.tree.tabs(under: $0).count) })
         archiveTabs(victims, reason: .auto)
+        // Only what really went counts: a unit the archive cannot hold stays, and announcing it would repeat every tick.
+        var swept: [SpaceID: Int] = [:]
+        for unit in victims where state.locate(unit) == nil { swept[spaces[unit]!, default: 0] += tabCounts[unit]! }
         if !swept.isEmpty { state.doc.tabPreferences.archiveEducationEarned = true }
         // Arc's "Auto archived %d tabs", in the windows showing a space that lost tabs, over no other toast.
         for id in state.doc.windows.keys.sorted() {
@@ -202,10 +209,15 @@ extension AppState {
     /// video or picture in picture.
     func littleArcIsBusy(_ window: WindowID, tabs: [ItemID]) -> Bool {
         if session.activeDownloadOwners.values.contains(where: { $0.window == window }) { return true }
-        return tabs.contains { tab in
-            guard let live = session.live[PageID(window: window, item: tab)] else { return false }
-            return live.audible || live.documentPictureInPicture
-                || live.mediaPlayers.contains { $0.pictureInPicture || (!$0.paused && !$0.ended) }
-        }
+        return tabs.contains { isPlaying(PageID(window: window, item: $0)) }
+    }
+
+    /// A page of this tab, in any window, playing sound, a running video or picture in picture.
+    func tabIsPlaying(_ tab: ItemID) -> Bool { session.loaded.contains { $0.item == tab && isPlaying($0) } }
+
+    func isPlaying(_ page: PageID) -> Bool {
+        guard let live = session.live[page] else { return false }
+        return live.audible || live.documentPictureInPicture
+            || live.mediaPlayers.contains { $0.pictureInPicture || (!$0.paused && !$0.ended) }
     }
 }

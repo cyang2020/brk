@@ -35,7 +35,9 @@ indirect enum ArchivedNode: Equatable, Sendable, Codable {
         if depth == 0 { let ids = allIDs; guard ids.count <= 5_000, Set(ids).count == ids.count else { return false } }
         switch self {
         case .tab(_, let tab):
-            return (tab.url.map(isOpenableURL) ?? true) && (tab.pinnedURL.map(isOpenableURL) ?? true)
+            // Brk's own pages (History, Easels, kept AI pages) keep their brk:// address, as a saved tab may (StateCodec).
+            func opens(_ url: URL) -> Bool { isOpenableURL(url) || NativePages.shows(url) }
+            return (tab.url.map(opens) ?? true) && (tab.pinnedURL.map(opens) ?? true)
         case .folder(_, _, _, _, _, let children):
             return children.count <= 1_000 && children.allSatisfy { $0.isValid(depth: depth + 1) }
         case .split(_, _, _, _, let fractions, let children):

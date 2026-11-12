@@ -49,6 +49,12 @@ extension Work {
                 showConversationInPanel(conversation, in: window)
                 return
             }
+            // Brk's own pages (History, an Easel, a kept AI page) open as themselves: Cmd+L then Return on one must not
+            // send its brk:// address to the search engine.
+            if let native = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)), NativePages.shows(native) {
+                apply(native, in: window)
+                return
+            }
             let engine = state.searchEngine(in: window)
             guard let url = resolveTypedInput(text, engine: engine) else { return }
             // An address typed or chosen here is a typed visit (Chromium's TYPED); a search is not.

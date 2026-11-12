@@ -67,6 +67,33 @@ final class BrowserBasicTests: XCTestCase {
         XCTAssertNotNil(r.bar)
     }
 
+    /// With Restore Windows on Launch off, a tab comes back on the page it was on at quit (its window's latest address
+    /// and title), not the address it first opened on.
+    func testRestoreOffKeepsEachTabsLatestPage() {
+        let d = Driver()
+        let tab = d.todayIDs[0]
+        d.page(tab, .committed(url("http://127.0.0.1:9/clicked")))
+        d.page(tab, .titleChanged("Clicked"))
+        d.user(.settings(.advanced(.restoreWindowsOnLaunch(false))))
+        let r = Driver(file: d.savedFile)
+        XCTAssertEqual(r.row(tab)?.url, url("http://127.0.0.1:9/clicked"))
+        XCTAssertEqual(r.row(tab)?.title, "Clicked")
+    }
+
+    /// Visits older than 90 days go at the next clock tick (Chromium's history expiry, which Arc's history has too), so
+    /// the saved file does not grow with every page ever opened; newer visits stay.
+    func testVisitsOlderThanNinetyDaysExpire() {
+        let d = Driver()
+        d.user(.library(.clearHistory))
+        let tab = d.todayIDs[0]
+        d.page(tab, .committed(url("http://127.0.0.1:9/old")))
+        d.advance(.seconds(80 * 86_400))
+        d.page(tab, .committed(url("http://127.0.0.1:9/recent")))
+        d.advance(.seconds(11 * 86_400))
+        d.system(.clockTick)
+        XCTAssertEqual(d.state.doc.history.map(\.url), [url("http://127.0.0.1:9/recent")])
+    }
+
     func testEveryVisitSurvivesWhileLegacySuggestionIndexRemainsBounded() throws {
         let d = Driver()
         let tab = d.todayIDs[0]

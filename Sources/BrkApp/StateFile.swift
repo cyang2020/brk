@@ -8,8 +8,8 @@ import os
 ///   different results: only the second is quarantined.
 /// - Writes are atomic: a temporary file in the same directory, `F_FULLFSYNC`, rename over state.json. A crash at any
 ///   point leaves either the old or the new file, never a torn one.
-/// - `schedule` debounces by Metrics.persistence.saveDebounce and writes off the main thread; `writeNow` is
-///   synchronous (quit, control `flush`). Drain rule: every `schedule` and `writeNow` bumps `generation` under the
+/// - `schedule` debounces by Metrics.persistence.saveDebounce and encodes and writes off the main thread; `writeNow`
+///   is synchronous (quit, control `flush`). Drain rule: every `schedule` and `writeNow` bumps `generation` under the
 ///   lock; a debounced write runs only if its generation is still current, and the lock serializes the writes
 ///   themselves. So a write scheduled before a `writeNow` can never land after it, and the latest bytes always win.
 public final class StateFile: @unchecked Sendable {
@@ -23,7 +23,7 @@ public final class StateFile: @unchecked Sendable {
 
     public let url: URL
     private let lock = NSLock()
-    private var pending: Data?
+    private var pending: (@Sendable () -> Data)?
     private var generation = 0
     private let log = Logger(subsystem: "brk", category: "state-file")
 
@@ -47,9 +47,14 @@ public final class StateFile: @unchecked Sendable {
     }
 
     /// Debounced write of the latest bytes. Writing identical bytes twice is harmless.
-    public func schedule(_ data: Data) {
+    public func schedule(_ data: Data) { schedule { data } }
+
+    /// Debounced write of the latest state, encoded by `encode` on the writing thread and only for the write that
+    /// happens. Encoding the whole state, every history visit included, on the main thread for each change made Brk
+    /// slower the longer it was used.
+    public func schedule(_ encode: @escaping @Sendable () -> Data) {
         let mine: Int = lock.withLock {
-            pending = data
+            pending = encode
             generation += 1
             return generation
         }
@@ -70,8 +75,11 @@ public final class StateFile: @unchecked Sendable {
     }
 
     private func flushIfCurrent(_ mine: Int) {
+        // Encoded outside the lock, so a `writeNow` meanwhile does not wait for it; it then wins by its generation.
+        guard let encode = lock.withLock({ generation == mine ? pending : nil }) else { return }
+        let data = encode()
         lock.withLock {
-            guard generation == mine, let data = pending else { return }
+            guard generation == mine else { return }
             pending = nil
             do { try writeAtomically(data) } catch { log.error("debounced write failed: \(error)") }
         }
