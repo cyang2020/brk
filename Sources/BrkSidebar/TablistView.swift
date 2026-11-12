@@ -1420,11 +1420,65 @@ final class TidyButton: HoverView {
         (superview as? HoverView)?.stateChanged()
     }
 
-    override func mouseDown(with event: NSEvent) { isPressed = true }
+    override func mouseDown(with event: NSEvent) {
+        isPressed = true
+        if !busy { swingBroom() }
+    }
 
     override func mouseUp(with event: NSEvent) {
         isPressed = false
         if !busy, bounds.contains(local(event)) { action() }
+    }
+
+    private var swingEnd: DispatchWorkItem?
+
+    /// Arc's press: the broom hangs from its top edge and springs 25° clockwise, then back 0.4 s later. Its bristles swing
+    /// past the button's left edge, so the button stops clipping until the swing has settled.
+    private func swingBroom() {
+        guard let layer = glyph.layer, let superlayer = layer.superlayer else { return }
+        // In a flipped parent the layer's top edge is y 0 and a clockwise turn is a positive angle.
+        let flipped = superlayer.contentsAreFlipped()
+        let anchor = CGPoint(x: Draw.tidyBroomPivot.value, y: flipped ? 0 : 1), old = layer.anchorPoint, size = layer.bounds.size
+        if anchor != old {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.anchorPoint = anchor
+            layer.position = CGPoint(x: layer.position.x + (anchor.x - old.x) * size.width, y: layer.position.y + (anchor.y - old.y) * size.height)
+            CATransaction.commit()
+        }
+        layer.add(Self.swing(to: Draw.tidyBroomSwing.value * (flipped ? 1 : -1)), forKey: "rotationAnimation")
+        clipsToBounds = false
+        swingEnd?.cancel()
+        let end = DispatchWorkItem { [weak self] in
+            guard let self, let layer = self.glyph.layer else { return }
+            let back = Self.swing(to: 0)
+            layer.add(back, forKey: "rotationAnimationBack")
+            let settle = DispatchWorkItem { [weak self] in self?.endSwing() }
+            self.swingEnd = settle
+            DispatchQueue.main.asyncAfter(deadline: .now() + back.duration, execute: settle)
+        }
+        swingEnd = end
+        DispatchQueue.main.asyncAfter(deadline: .now() + Draw.tidyBroomHold.value, execute: end)
+    }
+
+    /// Clipping back on; the pointer may have left while the button reached past its edge.
+    private func endSwing() {
+        clipsToBounds = true
+        guard let window else { return }
+        setHovered(bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)))
+    }
+
+    private static func swing(to angle: CGFloat) -> CASpringAnimation {
+        let spring = CASpringAnimation(keyPath: "transform.rotation.z")
+        spring.toValue = angle
+        let p = Draw.tidyBroomSpring.value
+        spring.mass = p[0]
+        spring.stiffness = p[1]
+        spring.damping = p[2]
+        spring.initialVelocity = p[3]
+        spring.duration = spring.settlingDuration
+        spring.fillMode = .forwards
+        return spring
     }
 }
 

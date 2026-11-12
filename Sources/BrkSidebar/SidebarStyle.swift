@@ -112,6 +112,12 @@ struct SidebarDrawMetrics: MetricGroup {
     let tidyWaveControl = Metric(0.3, .anatomy("bin:0x1002b1ffc, bin:0x1002b22e4: each half wave is a cubic with its control points 0.3 and 0.7 of the way along, at the amplitude"))
     let tidyWaveLineWidth = Metric(2.0, .anatomy("bin:0x1002b1f90: StrokeStyle lineWidth 2 while animating, 0.5 at rest (Brk keeps its own resting hairline)"))
     let tidyWaveWidthDuration = Metric(0.2, .anatomy("bin:0x1002b1c14: the line width eases with timingCurve(0.25, 0.1, 0.25, 1, duration: 0.2)"))
+    /// The broom swings when Tidy is pressed (Arc's SidebarTidyButton mouseDown, bin:0x100311530 to bin:0x100310908): it
+    /// hangs from a point 0.6 across its top edge (bin:0x100310f74), springs 25° clockwise, and 0.4 s later springs back.
+    let tidyBroomSwing = Metric(0.436332, .anatomy("bin:0x1003109f8: transform.rotation.z to -0.436332 rad (25° clockwise in Arc's unflipped layer)"))
+    let tidyBroomPivot = Metric(0.6, .anatomy("bin:0x100310f74: anchorPoint (0.6, 1), the top edge"))
+    let tidyBroomSpring = Metric([1.5, 150.0, 15.0, 8.0], .anatomy("bin:0x1003114b8 to bin:0x1003114e4: CASpringAnimation mass, stiffness, damping, initial velocity; duration its settlingDuration"))
+    let tidyBroomHold = Metric(0.4, .anatomy("bin:0x100310aa0: the swing back is dispatched 0.4 s after the press"))
     let titleTrailing = Metric(8.0, .guess("title end padding inside the selection, mirrors the 8 pt selection inset"))
     let closeTrailing = Metric(7.0, .anatomy("~/brk-arc-reference/Q13/Q13-press-row-arc.png: the × centres 19 from the row's right end"))
     let emptyFavicon = Metric(14.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's empty favicon is a 14 pt square centred 26 from the sidebar edge"))
