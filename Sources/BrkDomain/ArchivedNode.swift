@@ -29,20 +29,21 @@ indirect enum ArchivedNode: Equatable, Sendable, Codable {
         case .split(_, let title, _, _, _, let children): title ?? children.map(\.title).joined(separator: " / ")
         }
     }
-    /// Restored files are external input. Reject excessive depth, duplicate IDs and unsafe URLs as a unit.
-    func isValid(depth: Int = 0) -> Bool {
+    /// Restored files are external input. Reject excessive depth, duplicate IDs and unsafe URLs as a unit. A node taken
+    /// from this session's own tree (an undo) skips the address check: its rows may show Brk's own pages.
+    func isValid(depth: Int = 0, checkingAddresses: Bool = true) -> Bool {
         guard depth < 32 else { return false }
         if depth == 0 { let ids = allIDs; guard ids.count <= 5_000, Set(ids).count == ids.count else { return false } }
         switch self {
         case .tab(_, let tab):
             // Brk's own pages (History, Easels, kept AI pages) keep their brk:// address, as a saved tab may (StateCodec).
             func opens(_ url: URL) -> Bool { isOpenableURL(url) || NativePages.shows(url) }
-            return (tab.url.map(opens) ?? true) && (tab.pinnedURL.map(opens) ?? true)
+            return !checkingAddresses || ((tab.url.map(opens) ?? true) && (tab.pinnedURL.map(opens) ?? true))
         case .folder(_, _, _, _, _, let children):
-            return children.count <= 1_000 && children.allSatisfy { $0.isValid(depth: depth + 1) }
+            return children.count <= 1_000 && children.allSatisfy { $0.isValid(depth: depth + 1, checkingAddresses: checkingAddresses) }
         case .split(_, _, _, _, let fractions, let children):
             return (2...Metrics.content.maxPanes.value).contains(children.count)
-                && children.allSatisfy { if case .tab = $0 { return $0.isValid(depth: depth + 1) }; return false }
+                && children.allSatisfy { if case .tab = $0 { return $0.isValid(depth: depth + 1, checkingAddresses: checkingAddresses) }; return false }
                 && fractions.count == children.count && fractions.allSatisfy { $0.isFinite && $0 > 0 }
         }
     }

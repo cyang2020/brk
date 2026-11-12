@@ -64,8 +64,12 @@ extension Work {
             if state.doc.history.contains(where: { $0.profile == id }) { state.doc.history.removeAll { $0.profile == id } }
             if state.doc.downloads.contains(where: { $0.profile == id }) { state.doc.downloads.removeAll { $0.profile == id } }
             // Its Easels (with their pictures), AI conversations and AI pages go too: left behind, an Easel would show in the
-            // Default profile's Library after a relaunch, and the conversations' files would never be deleted.
-            for easel in state.doc.easels.values.filter({ $0.profile == id }).map(\.id).sorted() { deleteEasel(easel) }
+            // Default profile's Library after a relaunch, and the conversations' files would never be deleted. An Easel a
+            // row still shows in another profile's Space (that Space changed profile after it was made) is kept and becomes
+            // that profile's.
+            for easel in state.doc.easels.values.filter({ $0.profile == id }).map(\.id).sorted() {
+                if let home = state.easelHome(easel, besides: id) { state.doc.easels[easel]?.profile = home } else { deleteEasel(easel) }
+            }
             for conversation in state.doc.conversations.values.filter({ $0.profile == id }).map(\.id).sorted() { removeConversation(conversation) }
             for page in state.doc.aiPages.values where page.profile == id { state.doc.aiPages[page.id] = nil }
             let disposal = DisposalID(ctx.newID())

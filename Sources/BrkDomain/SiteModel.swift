@@ -51,6 +51,9 @@ public struct SiteControlSnapshot: Sendable, Equatable, Codable {
     public let appearance: WebsiteAppearance
     public let clearing: Bool
     public let result: ClearSiteDataResult?
+    /// The target's document has finished loading. Until then the switches already work (`target`), but clearing website
+    /// data does not (`.site(.clear)` acts on a loaded page only), so the popover turns its Clear buttons off.
+    public var ready: Bool = false
     /// The security row's Secure (else the red Insecure): an https page whose certificate and content Chromium found
     /// clean. An https page the engine has not reported on yet (still loading) counts as secure; http never does.
     public var secure: Bool = false

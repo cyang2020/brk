@@ -218,8 +218,13 @@ extension Work {
             } catch { return refuse("The plan could not be applied. No tabs were moved.") }
             let moved = all.map { state.doc.tree.splitContaining($0) ?? $0 }
             let wasPinned = state.pinnedTabs(under: moved)
+            let before = Set(moved).flatMap { state.doc.tree.tabs(under: $0) }.map { (tab: $0, section: state.role(of: $0)) }
             state.doc.tree = tree
             pinAddresses(moved, wasPinned: wasPinned, in: window)
+            // A tab brought in from another section or Space counts as used now, as a move does, so the sweep does not archive
+            // its new group at once (a folder is as old as its newest tab). A tab regrouped within the section keeps its age,
+            // as Tidy leaves it.
+            stamp(Set(before.filter { state.role(of: $0.tab) != $0.section }.map(\.tab)))
             // Grouping the shown Space's Today is Tidy's result: the same undo, the same toast.
             if section == .today, state.doc.windows[window]?.space == spaceID, made.count == groups.count {
                 state.session.ai.undo[window] = AIOrganizeUndo(space: spaceID, original: original, folders: folders)

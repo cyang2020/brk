@@ -72,6 +72,47 @@ final class DomainToolsAuditTests: XCTestCase {
         XCTAssertEqual(d.todayIDs, before)
     }
 
+    /// A tab that never showed a page leaves no archive entry; ⌘Z still puts the cleared tab back above the one that
+    /// stayed, where it was, not one place lower.
+    func testUndoClearTodayDoesNotCountATabThatNeverShowedAPage() throws {
+        let d = Driver()
+        let start = d.todayIDs
+        let kept = d.open("https://clear.example/kept")
+        let cleared = d.open("https://clear.example/cleared")
+        d.user(.commandBar(.open(.newTab)))
+        d.user(.commandBar(.submit("https://clear.example/never-committed")))
+        let blank = try XCTUnwrap(d.todayIDs.first)
+        XCTAssertEqual(d.todayIDs, [blank, cleared, kept] + start, "setup")
+        d.user(.tab(.focus(kept)))
+        d.user(.tab(.clearToday))
+        XCTAssertEqual(d.todayIDs, [kept])
+        d.user(.tabTools(.undoToast))
+        XCTAssertEqual(d.todayIDs, [cleared, kept] + start)
+    }
+
+    /// A pinned folder holding an Easel comes back from ⌘Z on "Space deleted!" as the folder, not as loose tabs.
+    func testUndoDeleteSpaceKeepsAFolderHoldingAnEasel() throws {
+        let d = Driver()
+        let space = d.newSpace("Gone")
+        let w1 = d.open("https://gone.example/w1"), w2 = d.open("https://gone.example/w2")
+        d.user(.tabTools(.bulk(.items([w1, w2]), .newFolder(group: false))))
+        let folder = try XCTUnwrap(d.view.space.pinned.rows.first?.id)
+        d.user(.item(.rename(folder, title: "Work")))
+        d.user(.easel(.create))
+        guard case .tab(let board)? = d.view.space.pinned.rows.last, EaselPage.id(of: board.url) != nil else { return XCTFail("setup: no Easel row") }
+        d.user(.item(.move(board.id, to: .into(parent: folder, index: Int.max))))
+        d.commitRequested()
+        let children = try XCTUnwrap(d.state.doc.tree[folder]?.children)
+        XCTAssertTrue(children.contains(board.id), "setup")
+
+        d.user(.space(.delete(space)))
+        d.user(.tabTools(.undoToast))
+        XCTAssertEqual(d.view.space.id, space)
+        guard case .folder(let back)? = d.view.space.pinned.rows.first else { return XCTFail("the folder is gone: \(d.view.space.pinned.rows)") }
+        XCTAssertEqual(back.title, "Work")
+        XCTAssertEqual(back.children.map(\.id), children)
+    }
+
     // MARK: Live Folders (bugs 19, 46)
 
     /// A refresh takes away only the pull request rows a refresh put there; a tab or folder the user added stays, after
@@ -112,12 +153,12 @@ final class DomainToolsAuditTests: XCTestCase {
 
     // MARK: Profiles (bug 26)
 
-    /// Deleting a profile deletes its Easels (and their pictures), AI conversations and AI pages.
+    /// Deleting a profile deletes its Easels (and their pictures), AI conversations and AI pages, once their Space is gone.
     func testDeletingAProfileDeletesItsEaselsAndConversations() throws {
         let d = Driver()
         d.user(.profile(.create(name: "Work", icon: nil)))
         let work = try XCTUnwrap(d.state.doc.profiles.keys.first { $0 != .default })
-        _ = d.newSpace("Work")
+        let space = d.newSpace("Work")
         d.user(.profile(.assign(.current, to: work)))
         d.user(.easel(.create))
         let easel = try XCTUnwrap(d.state.doc.easels.values.first { $0.profile == work }?.id)
@@ -126,13 +167,33 @@ final class DomainToolsAuditTests: XCTestCase {
                                       [AIPageRecord(id: page, title: "Work page", html: URL(fileURLWithPath: "/tmp/brk-test-pages/work.html"), height: 200, data: nil,
                                                     conversation: conversation, profile: work, createdAt: T0, readPages: false)]))
         XCTAssertNotNil(d.state.doc.conversations[conversation])
-        d.user(.profile(.assign(.current, to: .default)))
+        d.user(.space(.delete(space)))
         let t = d.user(.profile(.delete(work)))
         XCTAssertNil(d.state.doc.profiles[work], "setup: the profile was not deleted")
         XCTAssertNil(d.state.doc.easels[easel], "the Easel would show in the Default profile's Library after a relaunch")
         XCTAssertTrue(t.effects.contains(.easel(.deleteFiles(easel))), "its pictures stay on disk")
         XCTAssertNil(d.state.doc.conversations[conversation], "the conversation's file would stay on disk")
         XCTAssertNil(d.state.doc.aiPages[page])
+    }
+
+    /// An Easel whose Space changed to another profile is still in use: deleting its old profile keeps the board, its row
+    /// and its pictures, and the Space's profile lists it.
+    func testDeletingAProfileKeepsAnEaselASpaceStillShows() throws {
+        let d = Driver()
+        d.user(.profile(.create(name: "Work", icon: nil)))
+        let work = try XCTUnwrap(d.state.doc.profiles.keys.first { $0 != .default })
+        let space = d.newSpace("Work")
+        d.user(.profile(.assign(.current, to: work)))
+        d.user(.easel(.create))
+        guard case .tab(let board)? = d.view.space.pinned.rows.last, let easel = EaselPage.id(of: board.url) else { return XCTFail("setup: no Easel row") }
+        d.user(.profile(.assign(.current, to: .default)))
+        let t = d.user(.profile(.delete(work)))
+        XCTAssertNil(d.state.doc.profiles[work], "setup: the profile was not deleted")
+        XCTAssertEqual(d.state.doc.easels[easel]?.profile, .default, "the board was deleted from a Space the user still uses")
+        XCTAssertFalse(t.effects.contains(.easel(.deleteFiles(easel))), "its pictures were deleted")
+        XCTAssertEqual(d.view.space.id, space)
+        XCTAssertTrue(d.view.space.pinned.rows.contains { $0.id == board.id }, "its row was removed")
+        XCTAssertTrue(d.state.easelCards(in: d.window).contains { $0.id == easel }, "the Default profile's Library does not list it")
     }
 
     // MARK: Splits (bugs 44, 68)
@@ -216,6 +277,17 @@ final class DomainToolsAuditTests: XCTestCase {
         guard case .done? = act(d, .move([old], to: AgentDestination(space: space, section: .today))) else { return XCTFail("move to Today") }
         d.system(.clockTick)
         XCTAssertTrue(d.todayIDs.contains(old), "the sweep archived a tab the agent had just moved")
+
+        // A group the agent makes in Today out of a Pinned tab nobody opened for hours is new there too.
+        let older = d.open("https://agent-group.example/")
+        d.user(.tab(.togglePin(.item(older))))
+        d.user(.tab(.focus(tab)))
+        d.advance(.seconds(7_200))
+        guard case .done? = act(d, .group(space: space, section: .today, [AgentGroup(name: "Reading", tabs: [older])])) else { return XCTFail("group") }
+        let today = try XCTUnwrap(d.state.doc.spaces[space]?.todayRoot)
+        XCTAssertTrue(d.state.doc.tree.tabs(under: today).contains(older), "setup: not grouped into Today")
+        d.system(.clockTick)
+        XCTAssertTrue(d.state.doc.tree.tabs(under: today).contains(older), "the sweep archived the group the agent had just made")
     }
 
     // MARK: Site controls (bug 66)
@@ -231,6 +303,19 @@ final class DomainToolsAuditTests: XCTestCase {
         XCTAssertTrue(d.state.sitePreferences(target.context).rule(for: target.origin).keepAlive, "the switch snapped back")
         d.user(.boost(.editCurrent))
         XCTAssertEqual(d.state.session.windows[d.window]?.boostEditor?.draft.scope, .origin(target.origin), "a Boost for every site")
+        XCTAssertTrue(d.view.enabledActions.contains(.toggleDeveloperMode), "the menu's Developer Mode is off while the reducer takes it")
+    }
+
+    /// Clearing website data still needs a loaded page, so the popover says so and keeps its Clear buttons off until then.
+    func testSiteControlsClearWaitsForThePageToLoad() throws {
+        let d = Driver()
+        let target = try loadingTarget(d)
+        d.user(.site(.controls))
+        let loading = try XCTUnwrap(d.snapshot.sites[d.window])
+        XCTAssertNotNil(loading.target, "setup: the controls show the loading page")
+        XCTAssertFalse(loading.ready, "the Clear buttons look usable while a click does nothing")
+        d.page(target.page.item, .documentChanged(.ready(target.document)))
+        XCTAssertEqual(d.snapshot.sites[d.window]?.ready, true)
     }
 
     /// A remembered permission does not freeze the app-wide ad blocker and cookie-banner choices for its site; a choice

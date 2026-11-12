@@ -101,7 +101,8 @@ extension AppState {
                 rule: target.map { preferences.rule(for: $0.origin) } ?? SiteRule(),
                 appearance: preferences.appearance ?? WebsiteAppearance(rawValue: doc.settings.general.webAppearance.rawValue) ?? .automatic,
                 clearing: session.sites.running.values.contains { $0.target.page.window == window },
-                result: session.sites.results[window], secure: target.map(secure) ?? false, security: target.flatMap(security),
+                result: session.sites.results[window], ready: siteTarget(in: window) != nil,
+                secure: target.map(secure) ?? false, security: target.flatMap(security),
                 filterLists: preferences.effectiveFilterLists, filterUpdates: preferences.filterUpdates ?? true))
         })
     }

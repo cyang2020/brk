@@ -74,15 +74,19 @@ extension Work {
     }
 
     /// The archive entries `body` adds, oldest sidebar position first, and where each archived row sat: its parent and its
-    /// index there. Restoring them in this order at those places rebuilds the list around the rows that stayed.
+    /// index there, counting only the rows that stayed or have an entry. Restoring them in this order at those places
+    /// rebuilds the list around the rows that stayed; a row removed with no entry (a tab that never showed a page) is not
+    /// counted, so it does not push later rows down.
     mutating func archiving(_ body: (inout Work) -> Void) -> (entries: [ArchiveID], from: [ArchiveID: TreePosition]) {
         let before = Set(state.doc.archive.map(\.id))
         let tree = state.doc.tree
         body(&self)
         let added = state.doc.archive.filter { !before.contains($0.id) }
+        let archived = Set(added.map(\.tabID))
         var from: [ArchiveID: TreePosition] = [:]
         for entry in added {
-            guard let parent = tree[entry.tabID]?.parent, let index = tree[parent]?.children.firstIndex(of: entry.tabID) else { continue }
+            guard let parent = tree[entry.tabID]?.parent,
+                  let index = tree[parent]?.children.filter({ archived.contains($0) || state.doc.tree[$0] != nil }).firstIndex(of: entry.tabID) else { continue }
             from[entry.id] = .into(parent: parent, index: index)
         }
         func index(_ id: ArchiveID) -> Int { if case .into(_, let index)? = from[id] { index } else { 0 } }
@@ -108,12 +112,14 @@ extension Work {
             state.doc.spaceOrder.insert(space.id, at: min(index, state.doc.spaceOrder.count))
             showSpace(space.id, in: window)
             // The rows come back as they were and their archive entries go. A row one of whose tabs is back already (restored
-            // from the archive meanwhile) is left out; its other entries restore one by one below.
+            // from the archive meanwhile) is left out; its other entries restore one by one below. The rows were taken from
+            // this session's tree, so Brk's own pages in them (an Easel, a conversation, an AI page) need no address check.
             var back: Set<ItemID> = []
             for (root, rows) in [(space.pinnedRoot, pinned), (space.todayRoot, today)] {
                 for row in rows where !row.allIDs.contains(where: { state.doc.tree[$0] != nil }) {
                     guard let result = try? state.doc.tree.insertArchived(row, at: .into(parent: root, index: Int.max), now: ctx.now, freshIDs: false,
-                                                                         reservedIDs: Set(state.session.scratch.values.flatMap { $0.items.keys }), newID: ctx.newID) else { continue }
+                                                                         reservedIDs: Set(state.session.scratch.values.flatMap { $0.items.keys }),
+                                                                         checkingAddresses: false, newID: ctx.newID) else { continue }
                     for (tab, value) in result.tabs { state.doc.windows[window]?.slots[tab] = SavedSlot(committedURL: value.url, observedTitle: value.title, favicon: value.favicon) }
                     back.formUnion(row.allIDs)
                 }

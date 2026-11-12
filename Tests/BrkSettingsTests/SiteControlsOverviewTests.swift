@@ -37,6 +37,15 @@ final class SiteControlsOverviewTests: XCTestCase {
                                    rule: SiteRule(), appearance: .automatic, clearing: false, result: nil, secure: secure)
     }
 
+    /// While the page still loads the Clear buttons are off, and a line above them says why.
+    func testClearNoteShowsOnlyWhileThePageLoads() {
+        var value = snapshot("https://example.com/")
+        XCTAssertEqual(SiteControlsHost.clearNote(value), "Clearing works once the page has finished loading.")
+        value.ready = true
+        XCTAssertNil(SiteControlsHost.clearNote(value))
+        XCTAssertNil(SiteControlsHost.clearNote(snapshot(nil)), "no web page, no note")
+    }
+
     private func chip(in view: NSView) -> SecurityChip? {
         for child in view.subviews {
             if let chip = child as? SecurityChip { return chip }

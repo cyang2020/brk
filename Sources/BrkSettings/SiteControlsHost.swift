@@ -77,6 +77,12 @@ extension SiteControlsHost {
         return "Connection is not secure: this page loaded content over plain HTTP."
     }
 
+    /// The line above the Clear buttons while they are off because the page is still loading (they act on a loaded page
+    /// only); nil once it has loaded, and without a web page.
+    static func clearNote(_ value: SiteControlSnapshot) -> String? {
+        value.target != nil && !value.ready ? "Clearing works once the page has finished loading." : nil
+    }
+
     /// A filter list's line under its checkbox: how many rules it gave, how many it skipped, and the download state.
     /// No network is reported as a fact, not an error.
     static func filterListStatus(_ list: FilterListRecord) -> String {
@@ -207,8 +213,11 @@ private struct SiteControlsView: View {
                     Toggle("Suspend this site while its tab is hidden", isOn: Binding(get: { value.rule.suspendWhenHidden }, set: { on in change { $0.suspendWhenHidden = on } }))
                     Text("Playing audio/video, audible WebAudio, picture in picture and active operations keep pages active. Automatic picture in picture is not available yet.").font(.caption).foregroundStyle(.secondary)
                     Divider()
+                    if let note = SiteControlsHost.clearNote(value) { Text(note).font(.caption).foregroundStyle(.secondary) }
                     Button("Clear cookies and refresh…") { dispatch(.site(.clear(kinds: [.cookies], scope: .site, reload: true))) }
+                        .disabled(!value.ready || value.clearing)
                     Button("Clear profile HTTP cache and refresh…") { dispatch(.site(.clear(kinds: [.cache], scope: .profile, reload: true))) }
+                        .disabled(!value.ready || value.clearing)
                     Picker("Clear browsing data for", selection: $dataScope) {
                         Text("This website").tag(SiteDataScope.site)
                         Text(privateSession ? "This private session" : "This profile").tag(SiteDataScope.profile)
@@ -221,7 +230,7 @@ private struct SiteControlsView: View {
                     Toggle("Refresh the same document after completion", isOn: $refreshAfterClear)
                     Text("Profile-wide localStorage, IndexedDB, Cache Storage and service-worker removal is unavailable. Choose This website for site storage. The HTTP cache covers the entire originating profile or private session.").font(.caption).foregroundStyle(.secondary)
                     Button("Clear selected data…") { dispatch(.site(.clear(kinds: selectedData, scope: dataScope, reload: refreshAfterClear))) }
-                        .disabled(selectedData.isEmpty || value.clearing)
+                        .disabled(selectedData.isEmpty || !value.ready || value.clearing)
                     if value.clearing {
                         ProgressView("Clearing website data…")
                         Button("Stop remaining steps") { dispatch(.site(.cancelClearing)) }

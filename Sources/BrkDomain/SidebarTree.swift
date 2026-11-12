@@ -820,9 +820,9 @@ struct SidebarTree: Sendable, Equatable {
 
 extension SidebarTree {
     /// Build on a copy. Any invalid descendant leaves the original tree untouched.
-    mutating func insertArchived(_ node: ArchivedNode, at position: TreePosition, now: Instant,
-                                 freshIDs: Bool, reservedIDs: Set<ItemID> = [], newID: () -> String) throws -> (root: ItemID, tabs: [(ItemID, Tab)]) {
-        guard node.isValid() else { throw TreeError.invalidHierarchy }
+    mutating func insertArchived(_ node: ArchivedNode, at position: TreePosition, now: Instant, freshIDs: Bool, reservedIDs: Set<ItemID> = [],
+                                 checkingAddresses: Bool = true, newID: () -> String) throws -> (root: ItemID, tabs: [(ItemID, Tab)]) {
+        guard node.isValid(checkingAddresses: checkingAddresses) else { throw TreeError.invalidHierarchy }
         var draft = self
         var inserted: [(ItemID, Tab)] = []
         var used: Set<ItemID> = []

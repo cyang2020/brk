@@ -627,7 +627,9 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
                           .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection, .collapseAllFolders, .expandAllFolders, .resetSpace, .joinLiveMeeting])
         enabled.subtract(ActionID.allCases.filter { if case .tabTools(.jumpSpace) = $0.spec.command { true } else { false } })
     }
-    if state.siteTarget(in: window) == nil { enabled.subtract([.clearCookies, .clearCache, .toggleDeveloperMode]) }
+    if state.siteTarget(in: window) == nil { enabled.subtract([.clearCookies, .clearCache]) }
+    // Developer Mode is a per-site switch like the site controls' rows: it works on a page that is still loading.
+    if state.siteTarget(in: window, allowLoading: true) == nil { enabled.remove(.toggleDeveloperMode) }
     if state.boostProfile(in: window) == nil { enabled.subtract([.newBoost, .editBoost, .newLegacyBoost, .boostGallery]) }
     let pageActions: [ActionID] = [.capturePage, .captureFullPage, .capturePrettyScreenshot, .videoPictureInPicture, .documentPictureInPicture, .closePictureInPicture, .stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .zoomOutAlternate, .developerTools, .developerToolsAlternate, .cast, .savePageAs, .savePageAsPDF, .printPage, .viewSource, .inspectElements, .javaScriptConsole, .networkInspector, .goBack, .goBackAlternate, .goForward, .goForwardAlternate]
     if let (id, tab) = focused {

@@ -146,11 +146,7 @@ extension Work {
     /// Deletes the board, its pictures, every row that shows it and archive entries that would bring a row back.
     mutating func deleteEasel(_ id: EaselID) {
         guard state.doc.easels.removeValue(forKey: id) != nil else { return }
-        let rows = state.doc.tree.allTabs().filter { tab in
-            EaselPage.id(of: state.tab(tab)?.url) == id
-                || state.doc.windows.keys.contains { EaselPage.id(of: state.doc.windows[$0]?.slots[tab]?.committedURL) == id }
-        }
-        for row in rows {
+        for row in state.easelRows(id) {
             _ = removeItem(row)
             unload(row)
             replaceShown(row)
@@ -194,6 +190,30 @@ enum EaselDefaults {
 }
 
 extension AppState {
+    /// The sidebar rows that show Easel `id`: tabs at its address, or whose page in some window committed it.
+    func easelRows(_ id: EaselID) -> [ItemID] {
+        doc.tree.allTabs().filter { tab in
+            EaselPage.id(of: self.tab(tab)?.url) == id
+                || doc.windows.keys.contains { EaselPage.id(of: doc.windows[$0]?.slots[tab]?.committedURL) == id }
+        }
+    }
+
+    /// Where an Easel of the profile `gone` (being deleted) is still in use: the profile of the first Space, in dock order,
+    /// with a row showing it, else of the Favorites holding one, else of a remaining Space it was archived from. An Easel's
+    /// profile is set when it is made and does not follow its Space's Change Profile, so such a row sits in another profile's
+    /// Space. Nil when nothing outside `gone` shows it (its Space was deleted): the Easel goes with the profile.
+    func easelHome(_ id: EaselID, besides gone: ProfileID) -> ProfileID? {
+        let roles = easelRows(id).compactMap { role(of: $0) }
+        for space in doc.spaceOrder where roles.contains(.pinned(space)) || roles.contains(.today(space)) {
+            if let profile = doc.spaces[space]?.profile, profile != gone { return profile }
+        }
+        for case .favorites(let profile) in roles where profile != gone && doc.profiles[profile] != nil { return profile }
+        for entry in doc.archive where EaselPage.id(of: entry.tab.url) == id {
+            if let profile = entry.fromSpace.flatMap({ doc.spaces[$0]?.profile }), profile != gone { return profile }
+        }
+        return nil
+    }
+
     /// The cards of `window` that show an Easel, with the Easel each shows.
     func shownEaselPages(in window: WindowID) -> [(PageID, EaselID)] {
         guard let shown = shownItem(in: window) else { return [] }
