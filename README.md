@@ -229,6 +229,7 @@ Every fix, newest first, with the first build that has it (Brk › About Brk sho
 
 **2026-11-12**
 
+- **The sidebar lagged when scrolling, worse with many tabs, folders and Spaces.** Every scroll step, key press and click made Brk recompute the whole window and redraw it, dozens of times a second, and an imported Arc sidebar made each pass slower. Brk now skips that when nothing changed: with 60 tabs, Brk's main thread is busy about half as much while scrolling the sidebar. Build 32.
 - **In full screen, the top-left corner was off.** With the menu bar shown, the strip under it started a few points in from the screen's edge, the window buttons were grey circles instead of red, yellow and green, and the sidebar button stayed where it leaves room for those buttons. The strip now starts at the edge, the buttons have their colours, and the sidebar button moves to the left as in Arc. Build 32.
 - **Spaces imported from Arc had the wrong colours.** A dark navy Space came out pale grey-lavender: Brk read Arc's colour slider backwards and ignored dark mode. Imported Spaces now keep Arc's colours in light and dark mode, and Spaces imported earlier are corrected the next time Brk opens. Build 32.
 - **Hover cards were hard to read in dark mode.** The Gmail "Recent Emails" card and the other Favorite, Pinned and folder cards turned dark in dark mode but kept black text, so they looked dimmed and stuck under the page. Their text and icons now turn light on the dark card. Build 32.
