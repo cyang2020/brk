@@ -154,8 +154,9 @@ extension Work {
     /// Puts an archived tab back: its space's section when that space still exists (end of Pinned, top of Today),
     /// the end of Favorites for a Favorites tab, else the top of Today of the dispatching window's current space.
     /// Reuses the tab id unless it is taken. `lastActiveAt = now`, so a restored tab is not swept again at once.
-    /// Removes the entry. Nil (nothing changes) for an unknown entry or when the tree refuses the insert.
-    mutating func restoreEntry(_ id: ArchiveID, in window: WindowID) -> ItemID? {
+    /// Removes the entry. Nil (nothing changes) for an unknown entry or when the tree refuses the insert. ⌘Z on an undo toast
+    /// passes `original`, where the row sat before it was archived, so a Today tab goes back there and not to the top.
+    mutating func restoreEntry(_ id: ArchiveID, in window: WindowID, at original: TreePosition? = nil) -> ItemID? {
         guard let index = state.doc.archive.firstIndex(where: { $0.id == id }) else { return nil }
         let entry = state.doc.archive[index]
         let windowSpace = state.doc.windows[window].flatMap { state.doc.spaces[$0.space] }
@@ -176,7 +177,9 @@ extension Work {
             guard let space = current else { return nil }
             position = .into(parent: space.todayRoot, index: 0)
         }
-        if let parent = entry.fromParent, let index = entry.fromIndex, let node = state.doc.tree[parent],
+        var place = entry.fromParent.flatMap { parent in entry.fromIndex.map { (parent, $0) } }
+        if case .into(let parent, let index)? = original { place = (parent, index) }
+        if case let (parent, index)? = place, let node = state.doc.tree[parent],
            node.kind == .folder || node.kind == .section, state.doc.tree.role(of: parent)?.space == source?.id, source != nil {
             position = .into(parent: parent, index: index)
         }

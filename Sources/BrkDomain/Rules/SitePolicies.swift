@@ -122,12 +122,18 @@ extension Work {
         switch command {
         case .controls: state.session.sites.controls.insert(window)
         case .closeControls: state.session.sites.controls.remove(window)
-        case .rule(let target, let rule):
-            guard target.page.window == window, state.validSiteTarget(target) else { return }
+        case .rule(let target, var rule):
+            // The controls show a committed document that is still loading (`siteSnapshots`), so they change its site too.
+            guard target.page.window == window, state.validSiteTarget(target, allowLoading: true) else { return }
+            // A switch flipped here becomes the site's own; ad blocking and cookie banners left alone keep following the
+            // app-wide choices.
+            let current = state.sitePreferences(target.context).rule(for: target.origin)
+            if rule.blocking != current.blocking { rule.inheritsBlocking = nil }
+            if rule.hideCookieBanners != current.hideCookieBanners { rule.inheritsCookieBanners = nil }
             updateSitePreferences(target.context) { $0.rules[target.origin.value] = rule }
         case .toggleDeveloperMode:
-            // The page the window shows (its committed document); a page without an http(s) site has no switch.
-            guard let target = state.siteTarget(in: window) else { return }
+            // The page the window shows (its committed document, loaded or not); a page without an http(s) site has no switch.
+            guard let target = state.siteTarget(in: window, allowLoading: true) else { return }
             updateSitePreferences(target.context) { preferences in
                 var rule = preferences.rule(for: target.origin)
                 rule.developerMode = rule.developerMode == true ? false : true
@@ -212,7 +218,7 @@ extension Work {
                     let url = (live?.requestContext == context ? live?.requestedURL : nil) ?? state.address(of: page.item, in: page.window, for: .savedDocument)
                     return url?.scheme == "chrome" && url?.host == "extensions"
                 }
-                if !present { _ = openTab(URL(string: "chrome://extensions/")!, inSpace: state.doc.windows[window]!.space, window: window, focus: false) }
+                if !present { _ = openExtensionsPage(URL(string: "chrome://extensions/")!, in: window, focus: false) }
             }
             effects.append(.queryExtensions(context))
         case .extensionIncognito(let id, let allowed):
@@ -248,12 +254,12 @@ extension Work {
         case .removeExtension(let id):
             let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
             guard case .profile = context, state.session.sites.catalogs[context]?.extensions.contains(where: { $0.id == id }) == true else { return }
-            guard let manager = openTab(URL(string: "chrome://extensions/")!, inSpace: state.doc.windows[window]!.space, window: window, focus: true) else { return }
+            guard let manager = openExtensionsPage(URL(string: "chrome://extensions/")!, in: window, focus: true) else { return }
             effects.append(.removeExtension(id, context, PageID(window: window, item: manager)))
         case .extensions, .extensionShortcuts:
             let url = URL(string: command == .extensions ? "chrome://extensions/" : "chrome://extensions/shortcuts")!
             if state.doc.windows[window]?.kind == .incognito { effects.append(.app(.beep)); return }
-            _ = openTab(url, inSpace: state.doc.windows[window]!.space, window: window, focus: true)
+            _ = openExtensionsPage(url, in: window, focus: true)
         case .installSelectedExtension(let directory):
             let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
             guard case .profile = context, directory.isFileURL, directory.path.hasPrefix("/") else { return }
@@ -262,13 +268,21 @@ extension Work {
         case .executeExtensionInstall(let directory, let context):
             guard case .profile = context, directory.isFileURL,
                   context == (state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)) else { return }
-            guard let item = openTab(URL(string: "chrome://extensions/")!, inSpace: state.doc.windows[window]!.space, window: window, focus: true) else { return }
+            guard let item = openExtensionsPage(URL(string: "chrome://extensions/")!, in: window, focus: true) else { return }
             effects.append(.installLocalExtension(PageID(window: window, item: item), context, directory))
         case .addExtension:
             let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
             guard case .profile = context else { effects.append(.app(.beep)); return }
             effects.append(.addLocalExtension(window, context))
         }
+    }
+
+    /// The extensions page in a new tab: in the window's Space, or in a Little Arc's own tabs (it shows no Space's sidebar,
+    /// so a tab put there would be a blank row in another window and open nowhere).
+    private mutating func openExtensionsPage(_ url: URL, in window: WindowID, focus: Bool) -> ItemID? {
+        guard let shown = state.doc.windows[window] else { return nil }
+        if shown.kind == .standard { return openTab(url, inSpace: shown.space, window: window, focus: focus) }
+        return openScratchTab(url, in: window, focus: focus)
     }
 
     mutating func websiteRulesLoaded(_ context: BrowsingContext, _ update: WebsiteRulesUpdate) {

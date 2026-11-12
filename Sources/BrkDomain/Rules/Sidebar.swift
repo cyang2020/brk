@@ -155,7 +155,10 @@ extension Work {
             let neighbour = index + 1 < order.count ? order[index + 1] : order[index - 1]
             for (wid, w) in state.doc.windows where w.space == id { showSpace(neighbour, in: wid) }
             let contents = [space.pinnedRoot, space.todayRoot].flatMap { state.doc.tree[$0]?.children ?? [] }
-            let entries = archiving { $0.archiveTabs(contents, reason: .containerDeleted, in: window, preservingStructure: false) }
+            // ⌘Z puts the rows back as they are now: the archive keeps only their tabs, not folders, splits or order.
+            let pinned = (state.doc.tree[space.pinnedRoot]?.children ?? []).compactMap { state.detached($0, in: window) }
+            let today = (state.doc.tree[space.todayRoot]?.children ?? []).compactMap { state.detached($0, in: window) }
+            let entries = archiving { $0.archiveTabs(contents, reason: .containerDeleted, in: window, preservingStructure: false) }.entries
             for root in [space.pinnedRoot, space.todayRoot] {
                 for (tab, _) in state.doc.tree.removeRoot(root) ?? [] { unload(tab) }
             }
@@ -168,7 +171,7 @@ extension Work {
             }
             for (wid, w) in state.doc.windows where w.activeBySpace[id] != nil { state.doc.windows[wid]!.activeBySpace[id] = nil }
             if state.doc.windows[window]?.kind == .standard {
-                undoToast("Space deleted! Use", undo: .space(space, index: index, entries: entries, conversations: moved), in: window)
+                undoToast("Space deleted! Use", undo: .space(space, index: index, entries: entries, conversations: moved, pinned: pinned, today: today), in: window)
             }
         case .move(let id, let index):
             // `index` counts the dock after the space is taken out, clamped.

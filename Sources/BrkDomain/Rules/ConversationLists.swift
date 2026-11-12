@@ -494,6 +494,13 @@ extension Work {
         guard let profile = state.agentProfile(in: window), let stored = state.doc.conversations[id], stored.profile == profile else { return }
         let language = AILanguage.of(stored.items, system: ctx.systemLanguage)
         let title = state.conversationName(id) ?? stored.title
+        if state.session.ai.librarySelection[window] == id { state.session.ai.librarySelection[window] = nil }
+        removeConversation(id)
+        toast(AIThreadWords.deleted(title, language), in: window)
+    }
+
+    /// The transcript, every page it made with their rows wherever they are (open or archived), and its live state.
+    mutating func removeConversation(_ id: AIRequestID) {
         let pages = state.doc.aiPages.values.filter { $0.conversation == id }.map(\.id)
         let urls = Set([ConversationPage.url(id)] + pages.map(AIPageTab.url))
         state.doc.conversations[id] = nil
@@ -506,7 +513,6 @@ extension Work {
         if let request = state.session.ai.awayAnswers[id]?.request { cancelAI(request) }
         state.session.ai.awayAnswers[id] = nil
         state.session.ai.awayWindows[id] = nil
-        if state.session.ai.librarySelection[window] == id { state.session.ai.librarySelection[window] = nil }
         state.doc.archive.removeAll { record in
             guard let url = record.tab.url, urls.contains(url) else { return false }
             if case .folder? = record.structure { return false }
@@ -518,7 +524,6 @@ extension Work {
             unload(row)
             replaceShown(row)
         }
-        toast(AIThreadWords.deleted(title, language), in: window)
     }
 
     /// A request ended by Brk: its process told to stop, its turn ended in the transcript.

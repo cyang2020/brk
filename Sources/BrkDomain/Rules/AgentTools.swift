@@ -181,7 +181,12 @@ extension Work {
                 }
                 for id in ids.reversed() { _ = try tree.move(tree.splitContaining(id) ?? id, to: .into(parent: parent, index: 0)) }
             } catch { return refuse("Those tabs cannot go there.") }
+            let moved = ids.map { state.doc.tree.splitContaining($0) ?? $0 }
+            let wasPinned = state.pinnedTabs(under: moved)
             state.doc.tree = tree
+            pinAddresses(moved, wasPinned: wasPinned, in: window)
+            // As a drop on another Space does: the moved tabs count as used now, so the sweep does not archive them at once.
+            stamp(Set(moved.flatMap { state.doc.tree.tabs(under: $0) }))
             done("Moved \(ids.count) \(ids.count == 1 ? "tab" : "tabs").", made)
         case .group(let spaceID, let section, let groups):
             guard !groups.isEmpty, groups.count <= 12, ownSpace(spaceID), let space = state.doc.spaces[spaceID] else { return refuse("A plan has 1 to 12 groups in a Space of this profile.") }
@@ -211,7 +216,10 @@ extension Work {
                     folders[folder] = group.tabs
                 }
             } catch { return refuse("The plan could not be applied. No tabs were moved.") }
+            let moved = all.map { state.doc.tree.splitContaining($0) ?? $0 }
+            let wasPinned = state.pinnedTabs(under: moved)
             state.doc.tree = tree
+            pinAddresses(moved, wasPinned: wasPinned, in: window)
             // Grouping the shown Space's Today is Tidy's result: the same undo, the same toast.
             if section == .today, state.doc.windows[window]?.space == spaceID, made.count == groups.count {
                 state.session.ai.undo[window] = AIOrganizeUndo(space: spaceID, original: original, folders: folders)
@@ -237,5 +245,17 @@ extension Work {
             let days = state.doc.aiPages[page]?.live?.weekdays.map { " It shows in Today on " + AIPageWeekdays.title($0) + " only." } ?? ""
             done("Kept as a tab at the top of Today." + schedule + days, [row.rawValue])
         }
+    }
+
+    /// As a drag into Pinned does: a tab that entered Pinned is pinned to the address it shows, not the one it first opened.
+    private mutating func pinAddresses(_ units: [ItemID], wasPinned: Set<ItemID>, in window: WindowID) {
+        for unit in units where state.role(of: unit)?.kind == .pinned { setPinnedAddresses(under: unit, in: window, excluding: wasPinned) }
+    }
+}
+
+private extension AppState {
+    /// The tabs under `units` that are in Pinned or Favorites now: a move keeps their pinned address.
+    func pinnedTabs(under units: [ItemID]) -> Set<ItemID> {
+        Set(units.flatMap { doc.tree.tabs(under: $0) }.filter { role(of: $0)?.kind == .pinned || role(of: $0)?.kind == .favorites })
     }
 }

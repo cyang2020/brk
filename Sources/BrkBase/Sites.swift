@@ -49,6 +49,11 @@ public struct SiteRule: Hashable, Sendable, Codable {
     public var permissions: [SiteCapability: SitePermission] = [:]
     /// Arc's per-site Developer Mode row in the site controls popover. Nil (older profiles) reads as off.
     public var developerMode: Bool? = nil
+    /// True while the site's ad blocking (`blocking`) or cookie banners (`hideCookieBanners`) were never set for this site:
+    /// the rule was made for another switch (a remembered permission, Developer Mode, Keep alive), and `rule(for:)` reads
+    /// the app-wide choice instead of the value copied when it was made. Nil (older profiles, or set for the site) keeps it.
+    public var inheritsBlocking: Bool? = nil
+    public var inheritsCookieBanners: Bool? = nil
     public init() {}
 }
 
@@ -72,7 +77,20 @@ public struct SitePreferences: Hashable, Sendable, Codable {
         origin == top ? rule(for: origin).permissions : embeddedPermissions?[top.value + "\n" + origin.value] ?? [:]
     }
     public init() {}
-    public func rule(for origin: SiteOrigin) -> SiteRule { rules[origin.value] ?? defaultRule ?? SiteRule() }
+    /// The site's own rule, else the default. Ad blocking and cookie banners the site has not set follow the default, so a
+    /// later change of the app-wide switches reaches it; a rule made from this one carries that on.
+    public func rule(for origin: SiteOrigin) -> SiteRule {
+        let fallback = defaultRule ?? SiteRule()
+        guard var rule = rules[origin.value] else {
+            var inherited = fallback
+            inherited.inheritsBlocking = true
+            inherited.inheritsCookieBanners = true
+            return inherited
+        }
+        if rule.inheritsBlocking == true { rule.blocking = fallback.blocking }
+        if rule.inheritsCookieBanners == true { rule.hideCookieBanners = fallback.hideCookieBanners }
+        return rule
+    }
 }
 
 /// Immutable input to one browser. The engine receives no global application store or saved tree.

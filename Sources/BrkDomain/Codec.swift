@@ -315,6 +315,7 @@ struct StoredDocV3: Codable {
         var muted: Bool?
         var aiName: AITabName?
         var userNamed: Bool?
+        var liveFolderRow: Bool?
     }
     struct StoredFolder: Codable { var title: String, collapsed: Bool, icon: CustomIcon?; var group: Bool?; var liveRepository: String? }
     struct StoredSplit: Codable {
@@ -637,7 +638,8 @@ struct StoredDocV3: Codable {
 extension StoredDocV3.StoredTab {
     init(_ tab: Tab) {
         self.init(url: tab.url, title: tab.title, customTitle: tab.customTitle, favicon: tab.favicon, pinnedURL: tab.pinnedURL,
-                  lastActiveAt: tab.lastActiveAt, icon: tab.icon, muted: tab.muted, aiName: tab.aiName, userNamed: tab.userNamed ? true : nil)
+                  lastActiveAt: tab.lastActiveAt, icon: tab.icon, muted: tab.muted, aiName: tab.aiName, userNamed: tab.userNamed ? true : nil,
+                  liveFolderRow: tab.liveFolderRow)
     }
 }
 
@@ -648,6 +650,7 @@ extension Tab {
         muted = stored.muted ?? false
         aiName = stored.aiName
         userNamed = stored.userNamed ?? false
+        liveFolderRow = stored.liveFolderRow
     }
 }
 

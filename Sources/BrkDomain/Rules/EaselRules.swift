@@ -144,7 +144,7 @@ extension Work {
     }
 
     /// Deletes the board, its pictures, every row that shows it and archive entries that would bring a row back.
-    private mutating func deleteEasel(_ id: EaselID) {
+    mutating func deleteEasel(_ id: EaselID) {
         guard state.doc.easels.removeValue(forKey: id) != nil else { return }
         let rows = state.doc.tree.allTabs().filter { tab in
             EaselPage.id(of: state.tab(tab)?.url) == id

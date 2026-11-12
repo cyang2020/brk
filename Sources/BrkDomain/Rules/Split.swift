@@ -45,9 +45,12 @@ extension Work {
             focus(pane, in: window)
             openOverlay({ .commandBar(openID: $0, target: .fillPane(tab: pane)) }, in: window)
         case .addPaneAt(let edge):
-            // Arc's Add Left/Top Split puts the empty pane before the focused one (`addPaneBefore`), Right/Bottom after.
+            // Arc's Add Left/Top Split puts the empty pane before the focused one (`addPaneBefore`), Right/Bottom after. A
+            // refused pane (a full split) leaves the layout as it was.
+            let panes = state.shownItem(in: window).map { state.panes(of: $0).count } ?? 0
             splits(edge == .left || edge == .top ? .addPaneBefore : .addPane, in: window)
-            guard let shown = state.shownItem(in: window), let scope = state.locate(shown), case .split? = state.tree(scope)?[shown]?.body else { return }
+            guard let shown = state.shownItem(in: window), state.panes(of: shown).count > panes, let scope = state.locate(shown),
+                  case .split? = state.tree(scope)?[shown]?.body else { return }
             state.withTree(scope) { tree in tree.updateSplit(shown) { if $0.orientation != edge.orientation { $0.orientation = edge.orientation } } }
         case .movePane(let step):
             guard let split = state.shownItem(in: window), state.canUseSplit(split, in: window),

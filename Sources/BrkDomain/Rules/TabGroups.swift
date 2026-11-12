@@ -13,8 +13,8 @@ extension Work {
     /// goes with them. Brk files it under "Closed manually"; Arc's own reason is `clearTabGroup`.
     mutating func closeGroup(_ id: ItemID, in window: WindowID) {
         guard isGroup(id) else { return }
-        let entries = archiving { $0.archiveTabs([id], reason: .manual, in: window) }
-        if !entries.isEmpty { undoToast("Closed Tab Group! Use", undo: .restore(entries), in: window) }
+        let (entries, from) = archiving { $0.archiveTabs([id], reason: .manual, in: window) }
+        if !entries.isEmpty { undoToast("Closed Tab Group! Use", undo: .restore(entries, from: from), in: window) }
     }
 
     /// "Remove Group Header": the tabs stay where they are, the header goes. ⌘Z while the toast shows puts it back.

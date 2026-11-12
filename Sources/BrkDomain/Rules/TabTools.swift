@@ -73,11 +73,20 @@ extension Work {
         state.session.windows[window]?.toastUndo = undo
     }
 
-    /// The archive entries `body` adds, oldest sidebar position first.
-    mutating func archiving(_ body: (inout Work) -> Void) -> [ArchiveID] {
+    /// The archive entries `body` adds, oldest sidebar position first, and where each archived row sat: its parent and its
+    /// index there. Restoring them in this order at those places rebuilds the list around the rows that stayed.
+    mutating func archiving(_ body: (inout Work) -> Void) -> (entries: [ArchiveID], from: [ArchiveID: TreePosition]) {
         let before = Set(state.doc.archive.map(\.id))
+        let tree = state.doc.tree
         body(&self)
-        return state.doc.archive.filter { !before.contains($0.id) }.sorted { ($0.fromIndex ?? 0) < ($1.fromIndex ?? 0) }.map(\.id)
+        let added = state.doc.archive.filter { !before.contains($0.id) }
+        var from: [ArchiveID: TreePosition] = [:]
+        for entry in added {
+            guard let parent = tree[entry.tabID]?.parent, let index = tree[parent]?.children.firstIndex(of: entry.tabID) else { continue }
+            from[entry.id] = .into(parent: parent, index: index)
+        }
+        func index(_ id: ArchiveID) -> Int { if case .into(_, let index)? = from[id] { index } else { 0 } }
+        return (added.enumerated().sorted { (index($0.element.id), $0.offset) < (index($1.element.id), $1.offset) }.map(\.element.id), from)
     }
 
     /// ⌘Z on an undo toast. Cleared tabs go back where they were; a deleted space comes back at its dock position
@@ -89,16 +98,30 @@ extension Work {
         switch undo {
         case .translation(let page): showTranslation(page, true)
         case .tidy: undoAIOrganize(in: window)
-        case .restore(let entries):
-            for id in entries { _ = restoreEntry(id, in: window) }
-        case .space(let space, let index, let entries, let conversations):
+        case .restore(let entries, let from):
+            for id in entries { _ = restoreEntry(id, in: window, at: from[id]) }
+        case .space(let space, let index, let entries, let conversations, let pinned, let today):
             guard state.doc.spaces[space.id] == nil,
                   state.doc.tree.makeRoot(space.pinnedRoot, .pinned(space.id), createdAt: ctx.now),
                   state.doc.tree.makeRoot(space.todayRoot, .today(space.id), createdAt: ctx.now) else { return }
             state.doc.spaces[space.id] = space
             state.doc.spaceOrder.insert(space.id, at: min(index, state.doc.spaceOrder.count))
             showSpace(space.id, in: window)
-            for id in entries { _ = restoreEntry(id, in: window) }
+            // The rows come back as they were and their archive entries go. A row one of whose tabs is back already (restored
+            // from the archive meanwhile) is left out; its other entries restore one by one below.
+            var back: Set<ItemID> = []
+            for (root, rows) in [(space.pinnedRoot, pinned), (space.todayRoot, today)] {
+                for row in rows where !row.allIDs.contains(where: { state.doc.tree[$0] != nil }) {
+                    guard let result = try? state.doc.tree.insertArchived(row, at: .into(parent: root, index: Int.max), now: ctx.now, freshIDs: false,
+                                                                         reservedIDs: Set(state.session.scratch.values.flatMap { $0.items.keys }), newID: ctx.newID) else { continue }
+                    for (tab, value) in result.tabs { state.doc.windows[window]?.slots[tab] = SavedSlot(committedURL: value.url, observedTitle: value.title, favicon: value.favicon) }
+                    back.formUnion(row.allIDs)
+                }
+            }
+            for id in entries {
+                if let entry = state.doc.archive.first(where: { $0.id == id }), back.contains(entry.tabID) { state.doc.archive.removeAll { $0.id == id } }
+                else { _ = restoreEntry(id, in: window) }
+            }
             for id in conversations where state.doc.conversations[id]?.profile == space.profile { state.doc.conversations[id]?.space = space.id }
             showSpace(space.id, in: window)
         case .regroup(let id, let folder, let parent, let children):
@@ -175,8 +198,9 @@ extension Work {
         case .sidebarStep(let step):
             let rows = state.visibleRows(in: window)
             guard !rows.isEmpty else { return }
-            let at = state.session.windows[window]?.revealItem.flatMap { rows.firstIndex(of: $0) } ?? 0
-            let next = rows[min(max(at + (step == .next ? 1 : -1), 0), rows.count - 1)]
+            // From an item outside the list (a Favorite, or nothing revealed yet) either arrow goes to the first row.
+            let at = state.session.windows[window]?.revealItem.flatMap { rows.firstIndex(of: $0) }
+            let next = at.map { rows[min(max($0 + (step == .next ? 1 : -1), 0), rows.count - 1)] } ?? rows[0]
             state.session.windows[window]?.revealItem = next
             state.session.windows[window]?.revealGeneration &+= 1
             if tree[next]?.kind != .folder { focus(next, in: window) }
@@ -240,15 +264,16 @@ extension Work {
         case .openInSplit(let targets):
             let ids = state.requestedItems(targets, in: window).filter { tree[$0]?.kind == .tab }
             guard let first = ids.first, w.kind != .little else { return }
-            // A Favorite opens beside itself through a new pane. `.dropTab` keeps a pinned tab pinned, as a drag does (Q17).
-            if state.role(of: first)?.kind != .favorites, let offer = state.splitDrop(in: window)?.offers[first] {
+            // `.dropTab` keeps a Favorite or a pinned tab where it is and a new Today tab at its address joins the split, as a
+            // drag does (Q13-e, Q17).
+            if let offer = state.splitDrop(in: window)?.offers[first] {
                 splits(.dropTab(offer, edge: .right), in: window)
             } else {
                 focus(first, in: window)
                 guard state.shownItem(in: window) == (tree.splitContaining(first) ?? first) else { return }
                 if ids.count == 1 { splits(.addPane, in: window); return }
             }
-            for id in ids.dropFirst() where state.role(of: id)?.kind != .favorites {
+            for id in ids.dropFirst() {
                 guard let offer = state.splitDrop(in: window)?.offers[id] else { continue }
                 splits(.dropTab(offer, edge: .right), in: window)
             }
@@ -332,7 +357,7 @@ extension Work {
         let descendants = Set(ids.flatMap { tree.tabs(under: $0) })
         let alreadyPinned = Set(descendants.filter { state.role(of: $0)?.kind == .pinned || state.role(of: $0)?.kind == .favorites })
         var draft = self
-        var archivedEntries: [ArchiveID]?
+        var archivedEntries: (entries: [ArchiveID], from: [ArchiveID: TreePosition])?
         switch action {
         case .archive:
             guard ids.allSatisfy({ state.detached($0, in: window)?.isValid() == true }) else {
@@ -399,7 +424,7 @@ extension Work {
         switch action {
         case .archive:
             // Arc's WindowsCloseContentAction: closing several rows is the same undoable "Cleared Tabs!" as Clear.
-            if let archived = archivedEntries, !archived.isEmpty { draft.undoToast("Cleared Tabs! Use", undo: .restore(archived), in: window) }
+            if let archived = archivedEntries, !archived.entries.isEmpty { draft.undoToast("Cleared Tabs! Use", undo: .restore(archived.entries, from: archived.from), in: window) }
         case .move(.space(let space)):
             if let first = ids.first { draft.movedToast(first, to: space, in: window) }
         default: break

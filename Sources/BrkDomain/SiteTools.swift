@@ -157,20 +157,23 @@ extension Work {
                 do { try state.doc.tree.insert(folder, .folder(payload), at: .into(parent: space.pinnedRoot, index: 0), createdAt: ctx.now) } catch { return }
             }
             guard case .folder(let f)? = state.doc.tree[folder]?.body, f.liveRepository == repository else { return }
-            // Keep IDs for unchanged URLs. New items remain lazy until explicitly selected.
+            // Keep IDs for unchanged URLs. New items remain lazy until explicitly selected. Only the rows a refresh put here go:
+            // a tab or folder the user added stays.
             let wanted = Set(links.map(\.url))
-            for child in state.doc.tree[folder]?.children ?? [] where state.tab(child)?.url.map({ !wanted.contains($0) }) ?? true {
+            for child in state.doc.tree[folder]?.children ?? [] where state.tab(child).map({ $0.liveFolderRow == true && $0.url.map { !wanted.contains($0) } ?? true }) ?? false {
                 _ = removeItem(child)
                 unload(child)
             }
             for (index, link) in links.enumerated() {
                 let existing = (state.doc.tree[folder]?.children ?? []).first { state.tab($0)?.url == link.url }
                 if let existing {
-                    state.doc.tree.updateTab(existing) { $0.title = link.title }
+                    state.doc.tree.updateTab(existing) { $0.title = link.title; $0.liveFolderRow = true }
                     _ = moveItem(existing, to: .into(parent: folder, index: index))
                 } else {
                     let id = ItemID(ctx.newID())
-                    try? state.doc.tree.insert(id, .tab(Tab(url: link.url, title: link.title, lastActiveAt: ctx.now)), at: .into(parent: folder, index: index), createdAt: ctx.now)
+                    var row = Tab(url: link.url, title: link.title, lastActiveAt: ctx.now)
+                    row.liveFolderRow = true
+                    try? state.doc.tree.insert(id, .tab(row), at: .into(parent: folder, index: index), createdAt: ctx.now)
                 }
             }
             state.session.liveFolders[folder] = LiveFolderSession(phase: .idle, updatedAt: ctx.now)

@@ -199,11 +199,13 @@ public struct ToastLink: Equatable, Sendable, Codable {
 
 /// What ⌘Z undoes while an undo toast shows (session only).
 enum ToastUndo: Sendable, Equatable {
-    /// Clear Today: the archive entries it made, in sidebar order.
-    case restore([ArchiveID])
+    /// Clear Today: the archive entries it made, in sidebar order, and where each archived row sat (its parent and its
+    /// index there), so the rows go back in place.
+    case restore([ArchiveID], from: [ArchiveID: TreePosition] = [:])
     /// Delete Space: the space, its dock position and the archive entries of its tabs.
-    /// A deleted Space: its archived tabs come back, and the conversations that moved out of it go back to it.
-    case space(Space, index: Int, entries: [ArchiveID], conversations: [AIRequestID] = [])
+    /// A deleted Space: its rows come back as they were (folders, splits and order: `pinned` and `today`, taken before the
+    /// archive split them into tabs), and the conversations that moved out of it go back to it.
+    case space(Space, index: Int, entries: [ArchiveID], conversations: [AIRequestID] = [], pinned: [ArchivedNode] = [], today: [ArchivedNode] = [])
     /// Remove Group Header: the header and the tabs it held.
     case regroup(id: ItemID, folder: Folder, parent: ItemID, children: [ItemID])
     /// Use Original on a translated page (P50-e "Translated back to French! Use ⌘Z to undo."): the translation again.

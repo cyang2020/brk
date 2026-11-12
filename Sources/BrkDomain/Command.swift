@@ -767,6 +767,7 @@ extension Command {
     var keepsCommandBar: Bool {
         switch self {
         case .page(.media), .tabTools(.dismissToast), .tabTools(.quoteLinkCopied), .commandBar, .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .split(.dropTab), .split(.replacePane): true
+        case _ where isPointerHover: true
         default: false
         }
     }
@@ -793,6 +794,16 @@ extension Command {
     var keepsPeek: Bool {
         switch self {
         case .capture, .tabTools(.dismissToast), .tabTools(.quoteLinkCopied), .find, .site, .peek, .page, .settings, .app(.export), .window(.openIn), .window(.openInFolder), .window(.toggleStayOnTop), .sidebar(.peek), .sidebar(.resize), .tab(.close(.focused)), .split(.dropTab), .split(.replacePane): true
+        case _ where isPointerHover: true
+        default: false
+        }
+    }
+
+    /// Sent by the pointer passing over something (an AI panel row or chip, the link preview card, the Library button and
+    /// the flyout its rest opens), with no click: like the sidebar's peek, it closes no command bar or Peek.
+    private var isPointerHover: Bool {
+        switch self {
+        case .assist(.hoverConversation), .assist(.hoverChip), .assist(.previewHover), .library(.flyout(.hovered)), .library(.flyout(.expanded)): true
         default: false
         }
     }

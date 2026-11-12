@@ -63,6 +63,11 @@ extension Work {
             state.doc.profiles[id] = nil
             if state.doc.history.contains(where: { $0.profile == id }) { state.doc.history.removeAll { $0.profile == id } }
             if state.doc.downloads.contains(where: { $0.profile == id }) { state.doc.downloads.removeAll { $0.profile == id } }
+            // Its Easels (with their pictures), AI conversations and AI pages go too: left behind, an Easel would show in the
+            // Default profile's Library after a relaunch, and the conversations' files would never be deleted.
+            for easel in state.doc.easels.values.filter({ $0.profile == id }).map(\.id).sorted() { deleteEasel(easel) }
+            for conversation in state.doc.conversations.values.filter({ $0.profile == id }).map(\.id).sorted() { removeConversation(conversation) }
+            for page in state.doc.aiPages.values where page.profile == id { state.doc.aiPages[page.id] = nil }
             let disposal = DisposalID(ctx.newID())
             state.doc.deletingProfiles[id] = ProfileDeletion(id: disposal, name: profile.name)
             effects.append(.disposeContext(ContextDisposal(id: disposal, context: .profile(id))))

@@ -262,6 +262,12 @@ private func repairTabTools(_ state: inout AppState) {
     state.session.calendars = state.session.calendars.filter { state.doc.profiles[$0.key] != nil }
     state.session.favoriteFeeds = state.session.favoriteFeeds.filter { state.role(of: $0.key) == .favorites($0.value.profile) }
     state.session.liveFolders = state.session.liveFolders.filter { state.doc.tree[$0.key] != nil }
+    // A Live Folder whose refresh request went (its window started another site request, or is gone) stops loading, so
+    // opening it refreshes it again; no answer will come for it.
+    let refreshing = Set(state.session.siteRequests.values.compactMap(\.folder))
+    for (id, folder) in state.session.liveFolders where folder.phase == .loading && !refreshing.contains(id) {
+        state.session.liveFolders[id]?.phase = .idle
+    }
 }
 
 /// Arc has no empty tab group: a group whose last tab was closed, archived or moved out goes.

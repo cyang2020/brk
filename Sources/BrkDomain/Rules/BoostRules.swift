@@ -55,7 +55,8 @@ extension Work {
         switch command {
         case .create, .legacy, .preset:
             library(.close, in: window)
-            let target = state.siteTarget(in: window)
+            // A page still loading has its site already: its Boost is for that site, not for every site.
+            let target = state.siteTarget(in: window, allowLoading: true)
             let scope = target.map { BoostScope.origin($0.origin) } ?? .allSites
             var draft = Boost(id: ctx.newID(), name: "My Boost", scope: scope)
             if case .preset(let id) = command, let preset = BoostPresets.all.first(where: { $0.id == id }) {
@@ -67,14 +68,14 @@ extension Work {
         case .editCurrent:
             // Most specific scope first: an origin Boost beats a host Boost beats an all-sites Boost (review F6).
             func rank(_ scope: BoostScope) -> Int { switch scope { case .origin: 0; case .host: 1; case .allSites: 2 } }
-            if let target = state.siteTarget(in: window),
+            if let target = state.siteTarget(in: window, allowLoading: true),
                let boost = catalog.boosts.filter({ $0.scope.matches(target.origin.url) }).min(by: { rank($0.scope) < rank($1.scope) }) {
                 boosts(.edit(boost.id), in: window)
             } else { boosts(.create, in: window) }
         case .edit(let id):
             guard let boost = find(id) else { return }
             library(.close, in: window)
-            let target = state.siteTarget(in: window)
+            let target = state.siteTarget(in: window, allowLoading: true)
             state.session.windows[window]?.boostEditor = BoostEditor(id: ctx.newID(), profile: profile, target: target, draft: boost)
         case .gallery:
             library(.open(.boosts), in: window)

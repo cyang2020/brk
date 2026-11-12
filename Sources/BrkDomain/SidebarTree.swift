@@ -92,6 +92,9 @@ struct Tab: Sendable, Equatable, Codable {
     var aiName: AITabName? = nil
     /// The user renamed this tab by hand at some point: Name Tabs leaves it alone for good.
     var userNamed: Bool = false
+    /// A pull request row a Live Folder's refresh put there. A later refresh takes away only these rows, so a tab or folder
+    /// the user added to the folder stays.
+    var liveFolderRow: Bool? = nil
 
     init(url: URL?, title: String, customTitle: String? = nil, favicon: URL? = nil, pinnedURL: URL? = nil,
          lastActiveAt: Instant, icon: CustomIcon? = nil) {
