@@ -12,10 +12,10 @@ Subject: [PATCH] brk: the framework is BrkCore.framework, with Brk's code and
  4 files changed, 9 insertions(+), 7 deletions(-)
 
 diff --git a/chrome/BUILD.gn b/chrome/BUILD.gn
-index ce7ebbe4f6b680db1aa0d3afdd49cfe2fdbed550..7a4b07c5fd69e1e39eaf1b07e2c63913d9349c46 100644
+index d98c86e5dace91937c62c5428084686c666ab0d4..aae8684679fe1d2d39989e84f511ef79235ee0f0 100644
 --- a/chrome/BUILD.gn
 +++ b/chrome/BUILD.gn
-@@ -481,7 +481,7 @@ if (is_win) {
+@@ -486,7 +486,7 @@ if (is_win) {
    }
  } else if (is_mac) {
    chrome_helper_name = chrome_product_full_name + " Helper"
@@ -24,7 +24,7 @@ index ce7ebbe4f6b680db1aa0d3afdd49cfe2fdbed550..7a4b07c5fd69e1e39eaf1b07e2c63913
    chrome_framework_version = chrome_version_full
  
    verify_dynamic_libraries = !is_component_build && !is_asan && !is_ubsan_any
-@@ -1624,6 +1624,7 @@ if (is_win) {
+@@ -1636,6 +1636,7 @@ if (is_win) {
  
  group("dependencies") {
    public_deps = [

@@ -4,14 +4,14 @@
 set -euo pipefail
 
 export BRK_CHROMIUM_ROOT="${BRK_CHROMIUM_ROOT:-$HOME/brk-chromium}"
-export BRK_CHROMIUM_TAG="154.0.8037.98"
-# The commit refs/tags/154.0.8037.98 pointed at when this was pinned; fetch.sh refuses a tag that moved.
-export BRK_CHROMIUM_COMMIT="b859317bf11f6be47f9b7799ec690a0a42a1fb33"
+export BRK_CHROMIUM_TAG="156.0.8078.88"
+# The commit refs/tags/156.0.8078.88 pointed at when this was pinned; fetch.sh refuses a tag that moved.
+export BRK_CHROMIUM_COMMIT="8954d18543712dc11b97c3aca0a6e714aa2d7dcd"
 export BRK_GCLIENT_DIR="$BRK_CHROMIUM_ROOT/chromium"
 export BRK_SRC="$BRK_GCLIENT_DIR/src"
 export BRK_DEPOT_TOOLS="$BRK_CHROMIUM_ROOT/depot_tools"
 export BRK_LOGS="$BRK_CHROMIUM_ROOT/logs"
-export BRK_BRANCH="brk/154.0.8037.98"
+export BRK_BRANCH="brk/156.0.8078.88"
 # Outputs: Vanilla proves the toolchain on unmodified source; Brk is the branch with the patch series applied.
 export BRK_OUT_VANILLA="out/Vanilla"
 export BRK_OUT_BRK="out/Brk"

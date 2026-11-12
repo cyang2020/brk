@@ -13,7 +13,7 @@ git checkout -B "$BRK_BRANCH" "$BRK_CHROMIUM_COMMIT"
 shopt -s nullglob
 patches=("$ENGINE_DIR"/patches/*.patch)
 if [ "${#patches[@]}" -gt 0 ]; then
-  git -c user.name="Brk Engine" -c user.email="brk-engine@localhost" am --keep-cr --committer-date-is-author-date "${patches[@]}"
+  git -c user.name="Brk Engine" -c user.email="brk-engine@localhost" am -3 --keep-cr --committer-date-is-author-date "${patches[@]}"
 fi
 "$ENGINE_DIR/sync-header.sh"
 gclient runhooks --force >/dev/null 2>&1 || true

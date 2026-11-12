@@ -12,7 +12,8 @@ in `engine/tools/arc-inspect.sh`; its output lands in `~/brk-chromium/arc-notes/
 
 - [seen] `Resources/Info.plist`: `CFBundleShortVersionString` 156.0.8078.48, `SCMRevision`
   `2882d35e33aa53b680cc76da4dab51fd88b5af9a-refs/branch-heads/8078@{#1314}`, `DTSDKName` macosx26.5, `DTXcode` 2650. So
-  Arc 1.170 is on Chromium 156. Brk's CEF is 154.0.8037.98, two milestones behind, and this work stays on 154 as asked.
+  Arc 1.170 is on Chromium 156. Brk's CEF was 154.0.8037.98, two milestones behind, and this work started on 154 as asked; on
+  2026-11-12 both moved to 156 (CEF 156.0.28 = Chromium 156.0.8078.88, and this tree to the same tag), the user's decision.
 - [seen] `Versions/A/ArcCore` is a universal dylib of 501,736,400 bytes (about 250 MB per architecture). Install name
   `@executable_path/../Frameworks/ArcCore.framework/Versions/A/ArcCore`, minimum macOS 13.0. Version folder `A`, not the
   Chromium version as in Chrome's own bundle.
@@ -256,6 +257,7 @@ opens Chrome's own UI. Nothing in this list was tried and found impossible.
 | Profiles other than Default, profile deletion | W2-2 | named profiles load, but deletion and the directory scheme follow CEF's; to align |
 | Chrome dialogs that need a Views host | none in the sample | JavaScript alerts and other tab-modal dialogs need a `WebContentsModalDialogHost`; Brk's window answers none. Arc replaced 46 such entry points |
 | DevTools, find in page, context menus, fullscreen, print, task manager, tracing | not in the sample | each is a `WebEngine` call with no BrkCore body yet |
+| Quit while macOS's green-button hover menu is open | N3R (smoke) | BrkCore's quit ends when Chromium's run loop unwinds after the terminate reply; the tile menu that macOS shows when the pointer rests on the green button is a remote view whose nested loop lasts until the real pointer leaves, so the quit waits (the test, whose pointer stays, kills it after 12 s; a person's next mouse move lets it finish). Escape and posted events do not close it. CEF's quit exits from inside the loop. Found after the move to 156; the cause is the quit's design, not the version |
 
 Beyond the scenarios:
 - **Release build.** This is a non-official build without LTO or PGO and without symbols for Chromium's code. A shipped engine needs the official

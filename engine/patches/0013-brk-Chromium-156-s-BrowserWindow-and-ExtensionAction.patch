@@ -1,0 +1,71 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Thu, 12 Nov 2026 08:48:35 +0800
+Subject: [PATCH] brk: Chromium 156's BrowserWindow and
+ ExtensionActionDelegate: DownloadCloseType, no accelerator provider or pinned
+ toolbar actions, GetPopupNativeView
+
+---
+ brk/browser/brk_browser_window.h    | 5 ++++-
+ brk/browser/brk_browser_window.mm   | 4 +++-
+ brk/browser/brk_extension_action.mm | 2 +-
+ 3 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/brk/browser/brk_browser_window.h b/brk/browser/brk_browser_window.h
+index 770c38bdc22a0d173188bbb9fb25c726ede5bf31..e8e38393c7bae45d4bac2e04d76a8764dd4f937c 100644
+--- a/brk/browser/brk_browser_window.h
++++ b/brk/browser/brk_browser_window.h
+@@ -73,6 +73,9 @@ class BrkBrowserWindow : public BrowserWindow {
+   void SetContentsSize(const gfx::Size& size) override;
+   autofill::AutofillBubbleHandler* GetAutofillBubbleHandler() override;
+   LocationBar* GetLocationBar() const override;
++  // Chromium 156: Brk's window has no Chrome accelerators of its own and no toolbar to pin actions to.
++  ui::AcceleratorProvider* GetAcceleratorProvider() override;
++  PinnedToolbarActions* GetPinnedToolbarActions() override;
+   void SetFocusToLocationBar(bool is_user_initiated) override;
+   void UpdateReloadStopState(bool is_loading, bool force) override;
+   void UpdateToolbar(content::WebContents* contents) override;
+@@ -105,7 +108,7 @@ class BrkBrowserWindow : public BrowserWindow {
+                                                 bool is_user_gesture) override;
+   DownloadBubbleUIController* GetDownloadBubbleUIController() override;
+   void ConfirmBrowserCloseWithPendingDownloads(int download_count,
+-                                               UnloadController::DownloadCloseType dialog_type,
++                                               DownloadCloseType dialog_type,
+                                                base::OnceCallback<void(bool)> callback) override;
+   void ShowAppMenu() override;
+   void PreHandleDragUpdate(const content::DropData& drop_data, const gfx::PointF& point) override;
+diff --git a/brk/browser/brk_browser_window.mm b/brk/browser/brk_browser_window.mm
+index 1a658b762cedd21fecbf470f5c5ccf7b50c42bad..cdd33c7cdc09174a4a6106f6be126db461392aee 100644
+--- a/brk/browser/brk_browser_window.mm
++++ b/brk/browser/brk_browser_window.mm
+@@ -231,6 +231,8 @@ autofill::AutofillBubbleHandler* BrkBrowserWindow::GetAutofillBubbleHandler() {
+ LocationBar* BrkBrowserWindow::GetLocationBar() const {
+   return location_bar_.get();
+ }
++ui::AcceleratorProvider* BrkBrowserWindow::GetAcceleratorProvider() { return nullptr; }
++PinnedToolbarActions* BrkBrowserWindow::GetPinnedToolbarActions() { return nullptr; }
+ void BrkBrowserWindow::SetFocusToLocationBar(bool) {}
+ void BrkBrowserWindow::UpdateReloadStopState(bool, bool) {}
+ void BrkBrowserWindow::UpdateToolbar(content::WebContents*) {}
+@@ -277,7 +279,7 @@ DownloadBubbleUIController* BrkBrowserWindow::GetDownloadBubbleUIController() {
+   return nullptr;
+ }
+ void BrkBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(int,
+-                                                               UnloadController::DownloadCloseType,
++                                                               DownloadCloseType,
+                                                                base::OnceCallback<void(bool)> callback) {
+   std::move(callback).Run(true);
+ }
+diff --git a/brk/browser/brk_extension_action.mm b/brk/browser/brk_extension_action.mm
+index 852d3ead7596f6f1ef2f4d4ba34d9a49ee1f4cfb..0b5b87fd2c2dbbda4478f5638d99db53203a4a6e 100644
+--- a/brk/browser/brk_extension_action.mm
++++ b/brk/browser/brk_extension_action.mm
+@@ -100,7 +100,7 @@ class BrkExtensionActionDelegate : public ExtensionActionDelegate {
+   void UnregisterCommand() override {}
+   bool IsShowingPopup() const override { return !!popup_; }
+   void HidePopup() override { popup_.reset(); }
+-  gfx::NativeView GetPopupNativeViewForTesting() override {
++  gfx::NativeView GetPopupNativeView() override {
+     return popup_ ? popup_->NativeView() : gfx::NativeView();
+   }
+   void TriggerPopup(std::unique_ptr<extensions::ExtensionViewHost> host,

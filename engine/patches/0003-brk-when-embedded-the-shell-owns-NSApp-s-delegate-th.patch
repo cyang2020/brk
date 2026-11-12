@@ -11,7 +11,7 @@ Subject: [PATCH] brk: when embedded, the shell owns NSApp's delegate, the menu
  3 files changed, 35 insertions(+), 3 deletions(-)
 
 diff --git a/chrome/browser/app_controller_mac.mm b/chrome/browser/app_controller_mac.mm
-index 608f3503bb68c6039b5e18d2d6214ff8a852d49e..201e3d1ba25278048484c185aec8cd1d21bcf548 100644
+index ead883ef957da19dd88cfb75e85be72a5c31918c..be26d6f3330296c6082bf515a51fc31cad50aa3b 100644
 --- a/chrome/browser/app_controller_mac.mm
 +++ b/chrome/browser/app_controller_mac.mm
 @@ -43,6 +43,7 @@
@@ -22,7 +22,7 @@ index 608f3503bb68c6039b5e18d2d6214ff8a852d49e..201e3d1ba25278048484c185aec8cd1d
  #include "chrome/browser/browser_process.h"
  #include "chrome/browser/browser_process_platform_part.h"
  #include "chrome/browser/command_updater_impl.h"
-@@ -792,12 +793,14 @@ class AppControllerProfileObserver : public ProfileAttributesStorage::Observer,
+@@ -795,12 +796,14 @@ class AppControllerProfileObserver : public ProfileAttributesStorage::Observer,
  + (AppController*)sharedController {
    static AppController* sharedController = [] {
      AppController* sharedController = [[AppController alloc] init];

@@ -38,10 +38,10 @@ index 16a0aeeaa62275fb9bfc4ef8bf929afff6e0ce48..bdaee1489378e5bcbd3108b6d749d66b
  
      if (is_asan || is_ubsan_any) {
 diff --git a/content/public/app/BUILD.gn b/content/public/app/BUILD.gn
-index 0a7825672de1604b2e50e8f8d6967e40358b561d..1a71ff82fe2b06fd3815f6e8c17074958c65ad34 100644
+index 02d8aacfe00ba9a2e725d43e8b862b83f5b74b7f..ca1e43645923c175c920eea37f75c82501e4c5b8 100644
 --- a/content/public/app/BUILD.gn
 +++ b/content/public/app/BUILD.gn
-@@ -122,7 +122,7 @@ if (is_mac) {
+@@ -123,7 +123,7 @@ if (is_mac) {
          "-Wl,-rpath,@loader_path/../../../../../../..",
        ]
      } else {

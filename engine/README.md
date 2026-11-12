@@ -8,15 +8,15 @@ in `scripts/build.sh` or `swift test`, so `main` builds and passes with no Chrom
 
 | Where | What |
 | --- | --- |
-| `~/brk-chromium/` (not in the repo) | `depot_tools`, `chromium/src` at tag 154.0.8037.98, `logs/`, `STATE.md` |
+| `~/brk-chromium/` (not in the repo) | `depot_tools`, `chromium/src` at tag 156.0.8078.88 (154.0.8037.98 until 2026-11-12, kept on branch `brk/154.0.8037.98`), `logs/`, `STATE.md` |
 | `engine/config.sh` | the pinned tag and commit, the paths |
 | `engine/fetch.sh` | depot_tools and the source. 18 minutes, 30 GB on this machine and connection. Safe to rerun |
-| `engine/patches/` (11 files) | `0001` brk/ itself, `0002` hooks, `0003` the shell owns NSApp, `0004`-`0005` the framework's name and exports, `0006`-`0011` fixes the runs found |
+| `engine/patches/` (13 files) | `0001` brk/ itself, `0002` hooks, `0003` the shell owns NSApp, `0004`-`0005` the framework's name and exports, `0006`-`0012` fixes the runs found, `0013` Chromium 156's interface changes in brk/ |
 | `engine/args/brk.gn` | pinned build arguments |
 | `engine/configure.sh` | writes `out/Brk/args.gn`, runs `gn gen` |
 | `engine/build.sh <target>` | compiles at low priority, pausing itself (below). `chrome` builds everything |
 | `engine/patches/` | the patch series: Brk's commits over the tag, numbered |
-| `engine/apply-patches.sh` | makes branch `brk/154.0.8037.98` in the tree from the tag and the series |
+| `engine/apply-patches.sh` | makes branch `brk/156.0.8078.88` in the tree from the tag and the series (three-way, so a patch whose context moved in a new Chromium still applies) |
 | `engine/export-patches.sh` | writes the branch back to `engine/patches/` |
 | `engine/sync-header.sh` | copies the one interface header `Sources/CBrkCore/include/BrkCore.h` into the tree |
 | `engine/build-demo.sh` | the smallest program on the framework, `engine/demo/main.swift` |
