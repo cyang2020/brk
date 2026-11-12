@@ -147,7 +147,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             if action == .exit, TabIconPicker.isOpen { TabIconPicker.close(); return }
             // Exit (Esc) answers No on a save-password card over the key window.
             if action == .exit, self?.store?.savePromptCards.cancelKeyWindowCard() == true { return }
-            guard let self, let window = self.store?.windowController(nil)?.id else { return }
+            guard let self, let window = self.store?.commandWindow else { return }
             self.router?.menuAction(action, in: window, event: event)
         }
         menuTarget.isEnabled = { [weak self] action in
@@ -168,7 +168,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             }
         }
         menuTarget.focusSpace = { [weak self] space in
-            guard let self, let window = self.store?.windowController(nil)?.id else { return }
+            guard let self, let window = self.store?.commandWindow else { return }
             self.store?.dispatch(.user(window, .space(.focus(space))))
         }
         menuTarget.windowList = { [weak self] in

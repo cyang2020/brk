@@ -110,6 +110,7 @@ struct Work {
     /// without rules does not compile.
     mutating func run(_ command: Command, in window: WindowID) {
         guard state.doc.windows[window] != nil else { return }
+        if window == state.session.closedWindow, command.reopensClosedWindow { _ = reopenClosedWindow() }
         if command == .app(.exit), state.session.windows[window]?.recentCycle != nil {
             begin(window: window)
             tabTools(.cancelRecent, in: window)

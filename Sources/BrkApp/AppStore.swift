@@ -46,7 +46,7 @@ public final class AppStore {
     private var askingQuit = false
     static let dockIconSide: CGFloat = 512
     private lazy var aboutWindow = AboutWindow(engineVersion: engine.engineVersion) { [weak self] command in
-        guard let self, let window = self.windowController(nil)?.id else { return }
+        guard let self, let window = self.commandWindow else { return }
         self.dispatch(.user(window, command))
     }
     /// Fallback for in-process input while the display is locked or the app has no key window.
@@ -85,7 +85,11 @@ public final class AppStore {
         notices.onOpen = { [weak self] id in
             guard let self else { return }
             let standard = { (c: WindowController) in self.snapshot.windows[c.id]?.kind == .standard }
-            guard let controller = self.windowController(nil).flatMap({ standard($0) ? $0 : nil }) ?? self.windows.values.first(where: standard) else { return }
+            guard let controller = self.windowController(nil).flatMap({ standard($0) ? $0 : nil }) ?? self.windows.values.first(where: standard) else {
+                // The last standard window is closed: the conversation brings it back.
+                if let closed = self.snapshot.closedWindow { self.dispatch(.user(closed, .assist(.showConversation(id)))) }
+                return
+            }
             controller.window.makeKeyAndOrderFront(nil)
             self.dispatch(.user(controller.id, .assist(.showConversation(id))))
         }
@@ -336,6 +340,12 @@ public final class AppStore {
             ?? windows.values.first { $0.window === inputWindow } ?? windows.values.first
     }
 
+    /// The window a command from the menus, the Dock, the Settings or About window is sent to: the browser window
+    /// `windowController(nil)` picks, else, while no browser window is open, the closed last standard window
+    /// (`AppSnapshot.closedWindow`). The reducer brings that one back when the command shows something (Cmd+N, a new
+    /// tab) and leaves it closed for the Settings window's own commands, so no command is dropped for want of a window.
+    public var commandWindow: WindowID? { windowController(nil)?.id ?? snapshot.closedWindow }
+
     func prepareForTermination() {
         guard !isTerminating else { return }
         isTerminating = true
@@ -366,7 +376,7 @@ public final class AppStore {
     /// before the ordered quit flushes.
     func confirmQuit(on window: NSWindow?, answer: @escaping @MainActor (Bool) -> Void) {
         QuitWarning.confirm(snapshot.settings.general, on: window, dispatch: { [weak self] command in
-            guard let self, let window = self.windowController(nil)?.id else { return }
+            guard let self, let window = self.commandWindow else { return }
             self.dispatch(.user(window, command))
         }, ask: Self.askQuit, answer: answer)
     }
@@ -527,7 +537,7 @@ public final class AppStore {
         if settingsWindow == nil, snapshot.settings.pane == nil { return }
         if settingsWindow == nil {
             settingsWindow = SettingsWindowController(send: { [weak self] command in
-                guard let self, let window = self.windowController(nil)?.id else { return }
+                guard let self, let window = self.commandWindow else { return }
                 self.dispatch(.user(window, command))
             })
         }

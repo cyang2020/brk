@@ -74,7 +74,7 @@ extension AppState {
     /// and leaving or entering this set is what stamps `lastActiveAt`.
     func onScreenTabs() -> Set<ItemID> {
         var out: Set<ItemID> = []
-        for window in doc.windows.keys {
+        for window in doc.windows.keys where window != session.closedWindow {
             if let shown = shownItem(in: window) { out.formUnion(panes(of: shown)) }
         }
         return out

@@ -212,12 +212,14 @@ extension AppState {
         return tabs.contains { isPlaying(PageID(window: window, item: $0)) }
     }
 
-    /// A page of this tab, in any window, playing sound, a running video or picture in picture.
-    func tabIsPlaying(_ tab: ItemID) -> Bool { session.loaded.contains { $0.item == tab && isPlaying($0) } }
+    /// A page of this tab, in any window, playing sound, a running video or picture in picture (the Today sweep). A clip
+    /// the page itself keeps muted (a news site's autoplay loop) does not count, as it gets no mini player either: a
+    /// background tab running one would otherwise never be archived.
+    func tabIsPlaying(_ tab: ItemID) -> Bool { session.loaded.contains { $0.item == tab && isPlaying($0, countingSilent: false) } }
 
-    func isPlaying(_ page: PageID) -> Bool {
+    func isPlaying(_ page: PageID, countingSilent: Bool = true) -> Bool {
         guard let live = session.live[page] else { return false }
         return live.audible || live.documentPictureInPicture
-            || live.mediaPlayers.contains { $0.pictureInPicture || (!$0.paused && !$0.ended) }
+            || live.mediaPlayers.contains { $0.pictureInPicture || (!$0.paused && !$0.ended && (countingSilent || !$0.silent)) }
     }
 }

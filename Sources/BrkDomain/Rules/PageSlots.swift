@@ -58,14 +58,15 @@ extension AppState {
     }
 
     func onScreenPages() -> Set<PageID> {
-        Set(doc.windows.keys.flatMap { window in
+        Set(doc.windows.keys.filter { $0 != session.closedWindow }.flatMap { window in
             let panes = shownItem(in: window).map { self.panes(of: $0) } ?? []
             return (panes + (peekedTab(in: window).map { [$0] } ?? [])).map { PageID(window: window, item: $0) }
         })
     }
 
     mutating func demand(_ page: PageID) {
-        guard owns(page) else { return }
+        // The closed window has no host to show a page in (`Session.closedWindow`).
+        guard owns(page), page.window != session.closedWindow else { return }
         if doc.windows[page.window]!.slots[page.item] == nil {
             doc.windows[page.window]!.slots[page.item] = SavedSlot(committedURL: tab(page.item)?.url, observedTitle: nil, favicon: tab(page.item)?.favicon)
         }

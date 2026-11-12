@@ -33,7 +33,7 @@ public struct ProjectionContext: Sendable {
 /// - archive groups by bucket (`archiveBucket`), newest first in each; a deleted source space has no title.
 public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot {
     var windows: [WindowID: WindowSnapshot] = [:]
-    for id in state.doc.windows.keys {
+    for id in state.doc.windows.keys where id != state.session.closedWindow {
         if var window = projectWindow(id, state, ctx) { window.linkStatus = state.session.windows[id]?.linkStatus; window.ai = state.session.ai.answers[id].map(state.withPages); window.aiPanel = state.panelSnapshot(in: id, now: ctx.now, calendar: ctx.calendar, system: ctx.systemLanguage); window.pendingConversationDeletion = state.session.ai.pendingConversationDeletion[id]; window.aiAgents = state.agentMenu; window.aiPages = state.aiPageCards(in: id, system: ctx.systemLanguage); state.projectPanelEntries(into: &window, id, system: ctx.systemLanguage); window.pageLinkPrompt = state.session.ai.linkPrompts[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; windows[id] = window }
     }
     return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state, systemScheme: ctx.systemScheme) + state.session.ai.requests.values.flatMap(\.hidden), settings: projectSettings(state),
@@ -46,7 +46,7 @@ public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot 
                                                   browser: live?.browser, document: live?.document ?? .unavailable,
                                                   requestedURL: live?.requestedURL ?? loadingURL, committedURL: committed,
                                                   websitePolicyStatus: live?.websitePolicyStatus))
-                       }), dockTile: dockTile(state))
+                       }), dockTile: dockTile(state), closedWindow: state.session.closedWindow)
 }
 
 /// The Dock tile: downloads in progress (choosing a destination does not count; cancelling still does), their

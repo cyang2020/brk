@@ -22,6 +22,10 @@ public struct AppSnapshot: Sendable, Equatable, Codable {
     public var observations: [PageID: PageObservation] = [:]
     /// What the Dock icon shows: the downloads under way, app-wide.
     public var dockTile = DockTileSnapshot()
+    /// The last standard window after it was closed while Brk keeps running: not in `windows` (no host window), but
+    /// still the window the menus, the Dock and the Settings window send their commands to when no browser window is
+    /// open. Cmd+N brings it back.
+    public var closedWindow: WindowID? = nil
 }
 
 /// The Dock icon's badge and progress bar (Chrome's and Arc's Dock tile): `active` downloads in progress, and the

@@ -137,31 +137,89 @@ final class WindowsSpecTests: XCTestCase {
         XCTAssertNil(d.view(of: added).bounds, "no frame to cascade from: the host opens it at the standard default size")
     }
 
-    /// Closing the last standard window while an incognito window stays open (AppKit does not quit then) closes it
-    /// like any other window: its pages unload, so nothing it played keeps playing out of sight
+    /// Closing the last standard window while an incognito window stays open (AppKit does not quit then) takes it off
+    /// screen: its pages unload, so nothing it played keeps playing out of sight, and it is not in the snapshot (no host
+    /// window, not in the Window menu). Its WindowDoc stays for the next launch, and Cmd+N from the incognito window
+    /// brings it back instead of adding a second standard window that the next launch would also restore
     func test_closingTheLastStandardWindowWithAPrivateWindowOpenUnloadsIt() throws {
         let d = Driver()
         d.user(.window(.newIncognito))
+        let incognito = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
         XCTAssertTrue(d.snapshot.pages.contains { $0.id.window == d.window })
         d.system(.window(d.window, .closed))
         XCTAssertFalse(d.snapshot.windows.keys.contains(d.window))
         XCTAssertFalse(d.snapshot.pages.contains { $0.id.window == d.window })
+        XCTAssertEqual(d.snapshot.closedWindow, d.window)
+        XCTAssertEqual(Driver(file: d.savedFile).snapshot.windows.count, 1, "kept for the next launch")
+        d.user(.window(.new), in: incognito)
+        XCTAssertEqual(d.snapshot.windows.values.filter { $0.kind == .standard }.map(\.id), [d.window])
+        XCTAssertEqual(Driver(file: d.savedFile).snapshot.windows.count, 1)
     }
 
-    /// With the last standard window closed and an incognito window still open, a link from another app opens in a new
-    /// standard window, not in the closed one nobody can see
-    func test_aLinkAfterTheLastStandardWindowClosedOpensInANewWindow() throws {
+    /// Settings open, an incognito window open, the main window closed, then the incognito window closed: Brk keeps
+    /// running with no browser window on screen, but the closed window is still there for the menus, the Dock and the
+    /// Settings window to send to. A Settings change runs without bringing it back; Cmd+N (or the Dock's New Window)
+    /// brings it back with the command bar
+    func test_commandsStillHaveAWindowAfterTheIncognitoWindowClosesToo() throws {
+        let d = Driver()
+        d.user(.settings(.openPane(.general)))
+        d.user(.window(.newIncognito))
+        let incognito = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito }?.id)
+        d.system(.window(d.window, .closed))
+        d.system(.window(incognito, .closed))
+        XCTAssertTrue(d.snapshot.windows.isEmpty, "no browser window on screen")
+        let target = try XCTUnwrap(d.snapshot.closedWindow, "a window for the commands")
+        XCTAssertEqual(target, d.window)
+        d.user(.settings(.links(.externalLinksInLittleArc(false))), in: target)
+        XCTAssertFalse(d.snapshot.settings.links.externalLinksInLittleArc)
+        XCTAssertTrue(d.snapshot.windows.isEmpty, "a Settings change does not bring the window back")
+        d.user(.window(.new), in: target)
+        XCTAssertEqual(Array(d.snapshot.windows.keys), [d.window])
+        XCTAssertNil(d.snapshot.closedWindow)
+        guard case .commandBar? = d.view.overlay else { return XCTFail("\(String(describing: d.view.overlay))") }
+        XCTAssertTrue(d.snapshot.pages.contains { $0.id.window == d.window }, "it shows its tab again")
+    }
+
+    /// The last standard window closed with only a Little Arc open: it goes off screen like any closed window (pages
+    /// unloaded) whether or not AppKit quits with only a panel left, and the Little Arc's Open In brings it back with the
+    /// tab instead of moving the tab into a window nobody can see
+    func test_closingTheLastStandardWindowWithALittleArcOpenAndOpenInBringsItBack() throws {
+        let d = Driver()
+        let link = url("https://example.com/little")
+        d.user(.window(.newLittle(link)))
+        let little = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .little }?.id)
+        d.system(.window(d.window, .closed))
+        XCTAssertNil(d.snapshot.windows[d.window])
+        XCTAssertFalse(d.snapshot.pages.contains { $0.id.window == d.window })
+        d.user(.window(.openIn(.current)), in: little)
+        XCTAssertEqual(Array(d.snapshot.windows.keys), [d.window])
+        let pane = try XCTUnwrap(d.view.content.panes.first?.tab)
+        XCTAssertEqual(d.state.address(of: pane, in: d.window, for: .visible), link)
+    }
+
+    /// With the last standard window closed and an incognito window still open, a link from another app brings the
+    /// closed window back with the link, instead of opening it in a window nobody can see
+    func test_aLinkAfterTheLastStandardWindowClosedBringsItBack() throws {
         let d = Driver()
         d.user(.settings(.links(.externalLinksInLittleArc(false))))
         d.user(.window(.newIncognito))
         d.system(.window(d.window, .closed))
+        XCTAssertNil(d.snapshot.windows[d.window])
         let link = url("https://example.com/from-another-app")
         d.system(.externalURL(link))
-        let opened = d.snapshot.windows.values.filter { $0.kind == .standard && $0.id != d.window }
-        XCTAssertEqual(opened.count, 1)
-        let window = try XCTUnwrap(opened.first?.id)
-        let pane = try XCTUnwrap(d.view(of: window).content.panes.first?.tab)
-        XCTAssertEqual(d.state.address(of: pane, in: window, for: .visible), link)
+        XCTAssertEqual(d.snapshot.windows.values.filter { $0.kind == .standard }.map(\.id), [d.window])
+        let pane = try XCTUnwrap(d.view.content.panes.first?.tab)
+        XCTAssertEqual(d.state.address(of: pane, in: d.window, for: .visible), link)
+    }
+
+    /// Cmd+T from the menu while no browser window is open goes to the closed window and brings it back with the bar
+    func test_aMenuCommandToTheClosedWindowBringsItBack() throws {
+        let d = Driver()
+        d.system(.window(d.window, .closed))
+        XCTAssertTrue(d.snapshot.windows.isEmpty)
+        d.user(.commandBar(.open(.newTab)), in: try XCTUnwrap(d.snapshot.closedWindow))
+        XCTAssertEqual(Array(d.snapshot.windows.keys), [d.window])
+        guard case .commandBar? = d.view.overlay else { return XCTFail("\(String(describing: d.view.overlay))") }
     }
 
     /// .peek(.open) shows a scratch tab's page over the content; Esc closes it and drops the tab; a sidebar focus closes it too

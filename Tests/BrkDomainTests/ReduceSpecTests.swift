@@ -420,11 +420,19 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.current?.id, first)
     }
 
-    /// Closing the window with its close button keeps it in the file for the next launch (v1 has one window).
+    /// Closing the last window with its close button keeps it in the file for the next launch, at its frame. When Brk
+    /// keeps running (here the Settings window is open) it is off screen: no host window, no loaded page
     func testWindowCloseKeepsTheWindowForTheNextLaunch() throws {
         let d = Driver()
-        assertUnchanged(d.state, d.system(.window(d.window, .closed)))
-        XCTAssertEqual(Driver(file: d.savedFile).snapshot.windows.count, 1)
+        d.user(.settings(.openPane(.general)))
+        let frame = CGRect(x: 120, y: 80, width: 1100, height: 760)
+        d.system(.window(d.window, .geometry(bounds: frame, contentSize: CGSize(width: 1100, height: 732))))
+        d.system(.window(d.window, .closed))
+        XCTAssertNil(d.snapshot.windows[d.window])
+        XCTAssertTrue(d.snapshot.pages.isEmpty, "its page does not stay loaded out of sight")
+        let next = Driver(file: d.savedFile)
+        XCTAssertEqual(next.snapshot.windows.count, 1)
+        XCTAssertEqual(next.view.bounds, frame)
     }
 
     // MARK: reduce: tree
@@ -930,6 +938,25 @@ final class ReduceSpecTests: XCTestCase {
         d.system(.clockTick)
         XCTAssertTrue(d.todayIDs.contains(playing))
         XCTAssertTrue(d.loadedIDs.contains(playing))
+    }
+
+    /// .clockTick still archives a background tab whose page only keeps a muted clip running (a news site's autoplay
+    /// loop): it plays nothing anyone hears, and gets no mini player either
+    func test_clocktickArchivesABackgroundTabWhosePageKeepsAMutedClipRunning() throws {
+        let d = Driver()
+        let home = d.todayIDs[0]
+        let news = d.open("https://example.com/news")
+        let browser = try XCTUnwrap(d.state.session.live[PageID(window: d.window, item: news)]?.browser)
+        let document = DocumentToken(browser: browser, sequence: 1)
+        d.page(news, .documentChanged(.loading(document)))
+        d.page(news, .documentChanged(.ready(document)))
+        let clip = MediaPlayer(id: MediaPlayerID(document: "doc", frame: 0, element: "clip"), kind: .video, paused: false, ended: false, silent: true)
+        d.page(news, .mediaChanged(document, [clip], error: nil))
+        XCTAssertEqual(d.state.session.live[PageID(window: d.window, item: news)]?.mediaPlayers, [clip])
+        d.user(.tab(.focus(home)))
+        d.advance(.seconds(13 * 3_600))
+        d.system(.clockTick)
+        XCTAssertFalse(d.todayIDs.contains(news))
     }
 
     /// .clockTick with autoArchiveAfter never archives nothing

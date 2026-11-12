@@ -41,7 +41,7 @@ final class SpaceToolsTests: XCTestCase {
         }
         d.system(.window(d.window, .closed))
         XCTAssertNotNil(d.state.doc.windows[d.window], "last standard window remains saved")
-        XCTAssertNil(d.view.pendingSpaceDeletion)
+        XCTAssertNil(d.state.session.windows[d.window]?.pendingSpaceDeletion)
         XCTAssertNil(d.state.session.windows[d.window]?.spaceExport)
         d.user(.space(.confirmDelete(second, token: request.token, confirmed: true)))
         XCTAssertNotNil(d.state.doc.spaces[second])

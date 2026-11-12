@@ -46,4 +46,24 @@ final class F3WindowRegressionTests: XCTestCase {
             XCTAssertEqual(shown(), c, "the next walk starts from A; intermediate B was only selected, never shown")
         }
     }
+
+    /// The last standard window closed while an incognito window stays open, then the incognito window closed (an open
+    /// Settings window keeps Brk running then): no browser window is left on screen, but the menus, the Dock and the
+    /// Settings window still have a window to send to, and New Window brings the closed one back with a host window
+    func testAMenuCommandAfterEveryBrowserWindowClosedBringsTheClosedWindowBack() throws {
+        let h = Harness()
+        defer { h.cleanUp() }
+        h.store.start()
+        h.store.dispatch(.user(h.window, .window(.newIncognito)))
+        let incognito = try XCTUnwrap(h.store.snapshot.windows.values.first { $0.kind == .incognito }?.id)
+        h.store.dispatch(.system(.window(h.window, .closed)))
+        XCTAssertNil(h.store.windowController(h.window), "its host window is torn down")
+        h.store.dispatch(.system(.window(incognito, .closed)))
+        XCTAssertNil(h.store.windowController(nil))
+        let target = try XCTUnwrap(h.store.commandWindow, "a window for the commands")
+        XCTAssertEqual(target, h.window)
+        h.router.menuAction(.newWindow, in: target, event: nil)
+        XCTAssertNotNil(h.store.windowController(h.window), "New Window brings the closed window back on screen")
+        XCTAssertEqual(Array(h.store.snapshot.windows.keys), [h.window])
+    }
 }

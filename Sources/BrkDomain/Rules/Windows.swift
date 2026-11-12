@@ -30,6 +30,12 @@ extension Work {
         case .new:
             // Cmd+N: a standard window on the dispatching window's space, sharing the global sidebar. It opens with
             // the command bar and an empty card, like Arc's new window (normalize fills nothing; `focus` would).
+            // While the last standard window is closed (Brk kept running), Cmd+N brings that one back with the bar
+            // instead, so the next launch does not restore a second window the user never asked to keep.
+            if let closed = reopenClosedWindow() {
+                openOverlay({ .commandBar(openID: $0, target: .newTab) }, in: closed)
+                return
+            }
             guard let doc = state.doc.windows[window] else { return }
             let id = newWindow(kind: .standard, space: doc.space, sidebar: (doc.sidebarVisible || doc.kind == .little, doc.sidebarWidth), cascadingFrom: cascadeOrigin(doc))
             state.doc.windows[id]?.aiPanelWidth = doc.aiPanelWidth
@@ -56,7 +62,7 @@ extension Work {
             // Shift+Cmd+W. An ephemeral window goes with its tree (a Little Arc's tab is archived with reason manual
             // so Restore Last Closed Tab brings it back; incognito tabs leave no trace). A standard window is removed
             // unless it is the last one (then AppKit's close-and-quit path takes over through `WindowEffect.close`).
-            guard let doc = state.doc.windows[window] else { return }
+            guard let doc = state.doc.windows[window], window != state.session.closedWindow else { return }
             switch doc.kind {
             case .little, .blank:
                 if let tree = state.session.scratch[window], let root = tree.root(for: .scratch(window)) {
@@ -71,7 +77,7 @@ extension Work {
                     effects.append(.disposeContext(ContextDisposal(id: DisposalID(ctx.newID()), context: .incognito(epoch))))
                 }
             case .standard:
-                let others = state.doc.windows.values.filter { $0.kind == .standard && $0.id != window }
+                let others = state.doc.windows.values.filter { $0.kind == .standard && $0.id != window && $0.id != state.session.closedWindow }
                 if others.isEmpty { effects.append(.window(window, .close)) } else { removeWindow(window) }
             }
         case .openIn(let ref):
@@ -98,7 +104,7 @@ extension Work {
         let id = ItemID(ctx.newID())
         do { try state.doc.tree.insert(id, .tab(tab), at: position, createdAt: ctx.now) } catch { return }
         _ = removeItem(held)
-        let standard = mostRecentStandardWindow() ?? newWindow(kind: .standard, space: targetSpace, sidebar: (true, doc.sidebarWidth))
+        let standard = mostRecentStandardWindow() ?? reopenClosedWindow() ?? newWindow(kind: .standard, space: targetSpace, sidebar: (true, doc.sidebarWidth))
         if case .peek? = state.session.windows[window]?.overlay { state.session.windows[window]?.overlay = nil }
         if doc.kind == .little {
             // Links it opened are tabs of its own: archived as closing it does, not dropped with the window.
@@ -125,14 +131,16 @@ extension Work {
         let recent = mostRecentStandardWindow()
         switch destination {
         case .littleArc:
+            // The window it is asked from only lends its space and sidebar width: the closed window will do.
             guard let from = recent ?? state.doc.windows.keys.sorted().first else { return }
             windows(.newLittle(url), in: from)
         case .space(let space) where state.doc.spaces[space] != nil:
-            let window = recent ?? newWindow(kind: .standard, space: space, sidebar: (true, Metrics.sidebar.defaultWidth.value))
+            let window = recent ?? reopenClosedWindow() ?? newWindow(kind: .standard, space: space, sidebar: (true, Metrics.sidebar.defaultWidth.value))
             openTab(url, inSpace: space, window: window, focus: true)
         case .space, .mostRecentSpace:
-            // No standard window is left when the last one closed while an incognito window stays: a new one opens.
-            guard let window = recent ?? state.doc.spaceOrder.first.map({ newWindow(kind: .standard, space: $0, sidebar: (true, Metrics.sidebar.defaultWidth.value)) }),
+            // With the last standard window closed while Brk keeps running, the link brings it back.
+            guard let window = recent ?? reopenClosedWindow()
+                    ?? state.doc.spaceOrder.first.map({ newWindow(kind: .standard, space: $0, sidebar: (true, Metrics.sidebar.defaultWidth.value)) }),
                   let space = state.doc.windows[window]?.space else { return }
             openTab(url, inSpace: space, window: window, focus: true)
         }
@@ -148,6 +156,8 @@ extension Work {
     /// kind's default size. Returns its id.
     @discardableResult
     mutating func newWindow(kind: WindowKind, space: SpaceID, sidebar: (visible: Bool, width: Double), cascadingFrom origin: CGRect? = nil) -> WindowID {
+        // A new standard window (a Little Arc page's window.open) takes the closed one's place for the next launch.
+        if kind == .standard, let closed = state.session.closedWindow { removeWindow(closed) }
         let id = WindowID(ctx.newID())
         let step = Metrics.littleArc.cascade.value
         var bounds = origin.map { $0.offsetBy(dx: step, dy: -step) }
@@ -164,12 +174,33 @@ extension Work {
     /// full window: one asked from it opens at its kind's default size.
     func cascadeOrigin(_ doc: WindowDoc) -> CGRect? { doc.kind == .little ? nil : doc.bounds }
 
+    /// The last standard window's close button or Shift+Cmd+W (`Session.closedWindow`): its pages unload (their
+    /// addresses stay in its slots and move into the tabs) and its session starts over, so nothing it showed plays or
+    /// waits out of sight; its `WindowDoc` stays for the next launch and for the commands that still need a window.
+    mutating func closeKeepingForNextLaunch(_ id: WindowID) {
+        for page in state.session.loaded.filter({ $0.window == id }).sorted() { unload(page) }
+        let size = state.session.windows[id]?.contentSize ?? Metrics.window.defaultSize.value
+        state.session.windows[id] = .fresh(contentSize: size)
+        state.session.closedWindow = id
+    }
+
+    /// Brings the closed standard window back (its host opens again, at its saved frame, showing what it showed; normalize
+    /// loads its page). Nil when no window is closed.
+    mutating func reopenClosedWindow() -> WindowID? {
+        guard let id = state.session.closedWindow else { return nil }
+        state.session.closedWindow = nil
+        guard state.doc.windows[id] != nil else { return nil }
+        ensureSession(id)
+        return id
+    }
+
     /// Drops a window and everything only it held (session, scratch tree, loaded pages of its scratch tabs).
     mutating func removeWindow(_ id: WindowID) {
         for page in state.session.loaded.filter({ $0.window == id }).sorted() { unload(page) }
         state.doc.windows[id] = nil
         state.session.windows[id] = nil
         state.session.scratch[id] = nil
+        if state.session.closedWindow == id { state.session.closedWindow = nil }
     }
 
     /// The session and scratch tree a window needs before the rules can use it (normalize repairs the same). The
@@ -212,7 +243,7 @@ extension Work {
     /// no key-window event (`WindowEvent` is geometry, modifiers, closed), so recency of what each window shows is
     /// the signal; a window the user only looked at without choosing a tab does not count.
     func mostRecentStandardWindow() -> WindowID? {
-        state.doc.windows.values.filter { $0.kind == .standard }
+        state.doc.windows.values.filter { $0.kind == .standard && $0.id != state.session.closedWindow }
             .sorted { a, b in
                 let (x, y) = (state.session.windows[a.id]?.activationOrder ?? 0,
                               state.session.windows[b.id]?.activationOrder ?? 0)
@@ -222,6 +253,24 @@ extension Work {
                 return ta != tb ? ta > tb : a.id < b.id
             }
             .first?.id
+    }
+}
+
+extension Command {
+    /// Whether this command, sent to the closed window (`Session.closedWindow`: the menus, the Dock and the Settings
+    /// window send there while no browser window is open), brings that window back first. The Settings window's own
+    /// commands and the app-wide ones run without it; the window-making ones decide for themselves (Cmd+N brings it
+    /// back, a new incognito, blank or Little window only takes its space); everything else shows something in it.
+    var reopensClosedWindow: Bool {
+        switch self {
+        case .settings, .profile, .sidebarData, .site: false
+        case .tabTools(.preferences), .page(.copyURL): false
+        case .later(.aiCommandBar), .app(.help(.open)): true
+        case .later, .app: false
+        case .window(.place), .window(.toggleStayOnTop), .window(.openIn), .window(.openInFolder): true
+        case .window(.new), .window(.newIncognito), .window(.newBlank), .window(.newLittle), .window(.close): false
+        default: true
+        }
     }
 }
 

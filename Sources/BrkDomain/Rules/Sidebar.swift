@@ -619,16 +619,17 @@ extension Work {
         case .closed:
             state.session.windows[window]?.pendingSpaceDeletion = nil
             state.session.windows[window]?.spaceExport = nil
-            // A standard window keeps its WindowDoc when it is the last one (the next launch restores it; quitting
-            // after the last window closes is AppKit's applicationShouldTerminateAfterLastWindowClosed) and is
-            // removed otherwise; an ephemeral window goes with its tree (`WindowCommand.close` does the archiving).
-            // An open incognito or blank window keeps Brk running, so the closed window goes too: kept, it would
-            // play its pages out of sight and take the next link. A Little Arc is left out: it is a panel, and AppKit
-            // may quit with only panels open.
+            // A standard window is removed while another standard window stays open. The last one keeps its
+            // WindowDoc, closed (`closeKeepingForNextLaunch`): the next launch restores it, and when Brk keeps running
+            // (an incognito, blank or Little window, or Settings, is still open; otherwise AppKit's
+            // applicationShouldTerminateAfterLastWindowClosed quits) its pages are unloaded, it is off the Window menu
+            // and out of the links' way, and the menus still have a window to send to. An ephemeral window goes with
+            // its tree (`WindowCommand.close` does the archiving).
             guard let doc = state.doc.windows[window] else { return }
             switch doc.kind {
             case .standard:
-                if state.doc.windows.values.contains(where: { $0.id != window && $0.kind != .little }) { removeWindow(window) }
+                let othersOpen = state.doc.windows.values.contains { $0.kind == .standard && $0.id != window && $0.id != state.session.closedWindow }
+                if othersOpen { removeWindow(window) } else { closeKeepingForNextLaunch(window) }
             case .little, .incognito, .blank:
                 windows(.close, in: window)
             }

@@ -81,6 +81,7 @@ private func repairSpaces(_ state: inout AppState, _ repairs: inout [String]) {
     for id in state.session.scratch.keys where state.doc.windows[id] == nil {
         state.session.scratch[id] = nil
     }
+    if let closed = state.session.closedWindow, state.doc.windows[closed]?.kind != .standard { state.session.closedWindow = nil }
 }
 
 /// The default profile always exists; every profile a space names exists; every profile has a settings record and

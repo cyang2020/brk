@@ -130,7 +130,7 @@ final class ScriptWindow: NSObject {
 
     /// `make new window`: a standard or incognito window, as File > New Window and New Incognito Window.
     func create() {
-        guard windowID == nil, let store, let from = store.windowController(nil)?.id else { return }
+        guard windowID == nil, let store, let from = store.commandWindow else { return }
         let before = Set(store.snapshot.windows.keys)
         store.dispatch(.user(from, .window(pendingIncognito ? .newIncognito : .new)))
         windowID = store.snapshot.windows.keys.first { !before.contains($0) }
@@ -202,7 +202,7 @@ final class ScriptTab: NSObject {
 
     /// The application's write-only `tabs`: `make new tab with properties {URL: …}` opens a Little window.
     func openLittle() {
-        guard itemID == nil, let store, let text = pendingURL, let url = Scripting.url(text), let from = store.windowController(nil)?.id else { return }
+        guard itemID == nil, let store, let text = pendingURL, let url = Scripting.url(text), let from = store.commandWindow else { return }
         let before = Set(store.snapshot.windows.keys)
         store.dispatch(.user(from, .window(.newLittle(url))))
         guard let little = store.snapshot.windows.keys.first(where: { !before.contains($0) }) else { return }

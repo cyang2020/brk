@@ -280,6 +280,13 @@ struct Session: Sendable, Equatable {
     /// Incremented by every reduce that changes state; becomes the snapshot's `rev`.
     var rev: Int
     var windows: [WindowID: WindowSession]
+    /// The last standard window after its close button or Shift+Cmd+W. With nothing else open AppKit then quits; while
+    /// Brk keeps running (an incognito, blank or Little window, or the Settings window, is still open) it stays like
+    /// this. Its `WindowDoc` stays, so it is saved for the next launch and the menus, the Dock and the Settings window
+    /// still have a window to send their commands to; it is left out of the snapshot (no host window, not in the Window
+    /// menu), loads no page and takes no link. Cmd+N, a link, Open In or a command that shows something brings it back
+    /// (`reopenClosedWindow`). Not saved.
+    var closedWindow: WindowID? = nil
     /// Window/tab slots that demand a page. Every visible slot is loaded. A tab leaves the set
     /// when archived, removed, or closed-and-kept (Cmd+W on Pinned or Favorites); only focusing it puts it back.
     var loaded: Set<PageID>
