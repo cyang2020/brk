@@ -93,12 +93,35 @@ public struct BrowserImportSummary: Hashable, Sendable, Codable {
     public init(source: String) { self.source = source }
 }
 
+extension Doc {
+    /// Builds up to 27 imported an Arc Space's theme with Arc's slider read the wrong way round (Arc's slider shows more
+    /// color to the right, Brk's intensity is the white over it) and with Arc's saved "light", which Arc writes for its
+    /// automatic button too, as Brk's sun button, so a navy Space came out pale lavender and never followed dark mode.
+    /// Turns both around once for the Spaces an import made and marks the file; a file without imported Spaces is left
+    /// as it is (an import marks it). Returns whether a theme changed.
+    @discardableResult
+    mutating func repairArcImportedThemes() -> Bool {
+        guard sidebarData.importedThemes == nil, let ledger = sidebarData.importedSpaces, !ledger.isEmpty else { return false }
+        sidebarData.importedThemes = 1
+        var changed = false
+        for id in Set(ledger.values) {
+            guard var theme = spaces[id]?.theme, theme.variants == nil else { continue }
+            theme.intensity = 1 - theme.intensity
+            if theme.appearance == .light { theme.appearance = .auto }
+            spaces[id]?.theme = theme
+            changed = true
+        }
+        return changed
+    }
+}
+
 extension Work {
     mutating func applyBrowserImport(_ result: BrowserImportResult, in window: WindowID) {
         guard let target = state.sidebarImportTarget(in: window), let home = state.doc.spaces[target.space] else { return }
         var summary = BrowserImportSummary(source: result.source)
         summary.passwords = result.passwords; summary.cookies = result.cookies; summary.failures = result.failures
 
+        state.doc.repairArcImportedThemes()
         // Arc Spaces. A Space imported before is filled again (rows dedupe by address); the empty Space a fresh
         // install starts with takes the first imported Space, so onboarding does not leave a blank Space behind.
         var ledger = state.doc.sidebarData.importedSpaces ?? [:]
@@ -133,7 +156,10 @@ extension Work {
             summary.tabs += insertImportNodes(space.pinned, root: model.pinnedRoot)
             summary.tabs += insertImportNodes(space.today, root: model.todayRoot)
         }
-        if !result.spaces.isEmpty { state.doc.sidebarData.importedSpaces = ledger }
+        if !result.spaces.isEmpty {
+            state.doc.sidebarData.importedSpaces = ledger
+            state.doc.sidebarData.importedThemes = 1
+        }
 
         // Bookmarks: one folder in the current Space's Pinned, its own folders kept below it.
         if !result.bookmarks.isEmpty, let current = state.doc.spaces[target.space] {

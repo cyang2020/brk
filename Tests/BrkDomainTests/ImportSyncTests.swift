@@ -208,6 +208,28 @@ final class ImportSyncTests: XCTestCase {
         XCTAssertEqual(restored.state.doc.sidebarData.importedSpaces?.count, 2, "the Space ledger survives a restart")
     }
 
+    /// Spaces imported by build 27 kept Arc's slider value as the wash and Arc's saved "light" as the sun button; the
+    /// first launch after the fix turns both around once, and only for Spaces an import made.
+    func testThemesFromAnOldArcImportAreTurnedAroundOnceOnLoad() throws {
+        let d = Driver(startURL: nil)
+        let old = SpaceTheme(colors: [RGBA(0.15, 0.27, 0.42)], texture: .grain, intensity: 0.73, appearance: .light)
+        d.system(.sidebarData(.browserImported(d.window, BrowserImportResult(source: "Arc", spaces: [
+            ImportedSpace(key: "arc:N", title: "Navy", theme: old, today: [.tab(title: "Meet", url: url("https://meet.example.test/"))])]))))
+        let navy = try XCTUnwrap(d.state.doc.sidebarData.importedSpaces?["arc:N"])
+        XCTAssertEqual(d.state.doc.spaces[navy]?.theme.intensity, 0.73, "an import by the fixed reader is kept as it is")
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: d.savedFile) as? [String: Any])
+        var doc = try XCTUnwrap(object["doc"] as? [String: Any])
+        var sidebarData = try XCTUnwrap(doc["sidebarData"] as? [String: Any])
+        XCTAssertEqual(sidebarData.removeValue(forKey: "importedThemes") as? Int, 1)
+        doc["sidebarData"] = sidebarData; object["doc"] = doc
+        let repaired = Driver(file: try JSONSerialization.data(withJSONObject: object), startURL: nil)
+        let theme = try XCTUnwrap(repaired.state.doc.spaces[navy]?.theme)
+        XCTAssertEqual(theme.intensity, 0.27, accuracy: 1e-9)
+        XCTAssertEqual(theme.appearance, .auto)
+        let again = Driver(file: repaired.savedFile, startURL: nil)
+        XCTAssertEqual(again.state.doc.spaces[navy]?.theme.intensity ?? 0, 0.27, accuracy: 1e-9, "turned around only once")
+    }
+
     func testHTMLAndJSONRoundTripFoldersAndRejectExecutableLinks() throws {
         let document = ExportDocument(title: "Reading", entries: [.folder(title: "Swift & Co", children: [
             .link(title: "Docs <A>", url: url("https://example.test/docs?a=1&b=2")),

@@ -113,6 +113,7 @@ public enum StateCodec {
             }
             repairs.append("migrated window page addresses and split focus to v3")
         }
+        if doc.repairArcImportedThemes() { repairs.append("turned around the slider and appearance of themes imported from Arc") }
         if !doc.settings.advanced.restoreWindowsOnLaunch {
             // Keep saved public sidebar documents, but start one fresh window with no loaded selection.
             let id = WindowID(ctx.newID())

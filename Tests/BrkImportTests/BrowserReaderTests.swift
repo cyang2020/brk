@@ -189,6 +189,36 @@ final class BrowserReaderTests: XCTestCase {
         XCTAssertEqual(result.favorites["Default"], [.tab(title: "Mail", url: URL(string: "https://mail.example.test/")!)])
     }
 
+    /// The user's navy Space came in pale lavender: Arc's slider (more color to the right) was read as Brk's wash, and
+    /// the "light" Arc saves for its automatic button became Brk's sun, so it never followed dark mode. Also: a light and
+    /// dark pair keeps both, and a style with no colors to read takes the theme's palette color, not Brk's beige default.
+    func testArcThemeReadsTheSliderTheAppearanceAndPairs() throws {
+        func style(_ red: Double, _ green: Double, _ blue: Double, intensity: Double, translucency: String) -> [String: Any] {
+            ["style": ["color": ["_0": ["blendedSingleColor": ["_0": [
+                "color": ["red": red, "green": green, "blue": blue, "alpha": 1, "colorSpace": "extendedSRGB"],
+                "modifiers": ["intensityFactor": intensity, "overlay": "grain", "noiseFactor": 0], "translucencyStyle": translucency]]]]],
+             "contentOverBackgroundAppearance": "dark", "isVibrant": true]
+        }
+        let navy = try XCTUnwrap(ArcSidebar.theme(["background": ["single": ["_0": style(0.15, 0.27, 0.42, intensity: 0.73, translucency: "light")]]]))
+        XCTAssertEqual(navy.intensity, 0.27, accuracy: 1e-9)
+        XCTAssertEqual(navy.appearance, .auto)
+        XCTAssertLessThan(relativeLuminance(resolveTheme(navy, systemScheme: .dark).windowColor), 0.08, "navy stays dark in dark mode")
+
+        let pair = try XCTUnwrap(ArcSidebar.theme(["background": ["appearanceBased": [
+            "light": style(0.5, 0.7, 0.9, intensity: 0.5, translucency: "light"), "dark": style(0.3, 0.25, 0.45, intensity: 0.9, translucency: "dark")]]]))
+        XCTAssertEqual(pair.variants?.selection, .auto)
+        XCTAssertEqual(pair.variants?.light.colors.first?.color, RGBA(0.5, 0.7, 0.9))
+        XCTAssertEqual(pair.variants?.dark.colors.first?.color, RGBA(0.3, 0.25, 0.45))
+        let shown = try XCTUnwrap(resolveTheme(pair, systemScheme: .dark).gradient.first)
+        for (value, expected) in zip([shown.red, shown.green, shown.blue], [0.3, 0.25, 0.45]) {
+            XCTAssertEqual(value, expected, accuracy: 1e-9, "dark mode shows the dark style")
+        }
+
+        let named = try XCTUnwrap(ArcSidebar.theme(["background": ["single": ["_0": ["style": ["color": ["_0": ["basicColor": ["_0": "darkBlue"]]]]]]],
+                                                    "primaryColorPalette": ["shaded": ["red": 0.1, "green": 0.2, "blue": 0.5, "alpha": 1]]]))
+        XCTAssertEqual(named.colors, [RGBA(0.1, 0.2, 0.5)])
+    }
+
     /// A sidebar file that lists a folder under itself twice made the import build that folder 2^32 times.
     func testArcSidebarPlacesAnItemListedTwiceOnce() throws {
         let sidebar: [String: Any] = ["sidebar": ["containers": [["global": [:]], [

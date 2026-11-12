@@ -373,6 +373,12 @@ public struct ThemeMetrics: MetricGroup {
     public let darkColorDarkWash = Metric(207.0 / 255, .anatomy("f588406ceb:verify/visual-pairs/run-20261103/r5-6/REPORT.md: navy under the dark button runs from #2D4468 towards #CFCFCF"))
     public let darkColorDarkWashBase = Metric(0.19, .anatomy("f588406ceb:verify/visual-pairs/run-20261103/r5-6/REPORT.md: 22% at the slider's right end"))
     public let darkColorDarkWashSlope = Metric(0.62, .anatomy("f588406ceb:verify/visual-pairs/run-20261103/r5-6/REPORT.md: 78% at the slider's left end"))
+    /// What lies over every theme color while macOS is in dark mode (Arc follows the system for its saved themes):
+    /// grey at base + slope x intensity, measured on Arc 1.170 over a black backdrop with white, black and navy themes
+    /// at three slider positions (docs/checks/2026-11-12-space-colour.md).
+    public let darkModeMaterial = Metric(94.0 / 255, .anatomy("docs/checks/2026-11-12-space-colour.md: Arc in dark mode, grey under the theme color"))
+    public let darkModeMaterialBase = Metric(0.27, .anatomy("docs/checks/2026-11-12-space-colour.md: 27% at the slider's right end"))
+    public let darkModeMaterialSlope = Metric(0.53, .anatomy("docs/checks/2026-11-12-space-colour.md: 80% at the slider's left end"))
     public let gradientTexturePerFactor = Metric(100.0, .arc("Metal gradient texture size", .low))
     /// Tile sizes of Arc's own textures (px @1x). Ours are generated procedurally at these sizes.
     public let grainTile = Metric(155, .anatomy("visual-and-copy.md, Gradient and grain assets"))

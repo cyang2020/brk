@@ -126,6 +126,9 @@ struct SidebarDataSaved: Sendable, Equatable, Codable {
     var userName: String? = nil
     /// Source Space ("arc:<id>") to the Brk Space an import made from it, so importing again fills that Space.
     var importedSpaces: [String: SpaceID]? = nil
+    /// 1 once the themes of `importedSpaces` read Arc's slider and appearance the way Brk does (`repairArcImportedThemes`).
+    /// Nil in files written before that fix (build 27 and earlier).
+    var importedThemes: Int? = nil
 }
 
 public struct SidebarDataSnapshot: Sendable, Equatable, Codable {

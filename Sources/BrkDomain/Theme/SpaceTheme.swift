@@ -52,8 +52,9 @@ public struct SpaceTheme: Hashable, Sendable, Codable {
     /// scales the tile's contrast by it. Its exact role in Arc's shader was not recovered (layout-constants.md,
     /// "Not recovered"); this is our reading of the two separate controls.
     public var noise: Double
-    /// 0...1 (Arc: `intensityFactor`, the editor's sine slider). Texture opacity = intensity x the texture's
-    /// multiplier (Metrics.theme.*Opacity); wash opacity = min(0.2 + 0.55 x intensity, 0.5).
+    /// 0...1: how strong the wash over the color is. Arc's `intensityFactor` (its sine slider's position) runs the
+    /// other way, more color to the right, so an imported theme stores 1 - intensityFactor. Texture opacity = intensity x
+    /// the texture's multiplier (Metrics.theme.*Opacity); wash opacity: `themeWash`.
     public var intensity: Double
     public var appearance: AppearanceChoice
     public var variants: ThemeVariants? = nil
@@ -175,7 +176,7 @@ public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> 
             return rgb(hue: h, saturation: clamp01(s * style.saturation),
                        lightness: clamp01((l + style.lightness) * (scheme == .dark ? 1 - style.darkBias * 0.8 : 1)))
         }
-        var result = resolveTheme(legacy)
+        var result = resolveTheme(legacy, systemScheme: systemScheme)
         result.positions = (0..<3).map { style.colors.indices.contains($0) ? style.colors[$0].position : ThemePoint.anchors[$0] }
         return result
     }
@@ -196,7 +197,7 @@ public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> 
     case .tweed: Metrics.theme.tweedOpacity.value
     }
     let intensity = clamp01(theme.intensity)
-    let wash = themeWash(darkPrimary: darkPrimary, darkAppearance: theme.appearance == .dark, intensity: intensity)
+    let wash = themeWash(darkPrimary: darkPrimary, appearance: theme.appearance, systemScheme: systemScheme, intensity: intensity)
     return ResolvedTheme(scheme: scheme, gradient: gradient, texture: theme.texture, textureOpacity: intensity * multiplier,
                          textureContrast: clamp01(theme.noise), wash: wash,
                          tokens: scheme == .light ? .light : .dark, windowColor: mix(primary, wash, wash.alpha))
@@ -216,12 +217,20 @@ extension ResolvedTheme {
     }()
 }
 
-/// What lies over the gradient. Arc's code gives white, or black at 35%, at min(0.2 + 0.55 x intensity, 0.5). A dark
-/// color measures differently on Arc 1.170 (the navy preset across its slider, r5-6/REPORT.md): under the automatic and
-/// light buttons a white wash without that cap, under the dark button a lighter grey one, so navy never goes darker than
-/// the preset itself.
-private func themeWash(darkPrimary: Bool, darkAppearance: Bool, intensity: Double) -> RGBA {
+/// What lies over the gradient. Arc draws its theme over the system's window material, so the wash follows macOS's
+/// light or dark mode for every theme not set to light (a saved Arc theme always follows it: Arc does not save its sun
+/// button). In dark mode it is a dark grey (`darkModeMaterial`, docs/checks/2026-11-12-space-colour.md); a white
+/// one there turned the user's navy Space pale lavender.
+/// In light mode: Arc's code gives white, or black at 35%, at min(0.2 + 0.55 x intensity, 0.5). A dark color measures
+/// differently on Arc 1.170 (the navy preset across its slider, r5-6/REPORT.md): under the automatic and light buttons a
+/// white wash without that cap, under the dark button a lighter grey one, so navy never goes darker than the preset itself.
+private func themeWash(darkPrimary: Bool, appearance: AppearanceChoice, systemScheme: Scheme, intensity: Double) -> RGBA {
     let m = Metrics.theme
+    if systemScheme == .dark, appearance != .light {
+        let grey = m.darkModeMaterial.value
+        return RGBA(grey, grey, grey, m.darkModeMaterialBase.value + m.darkModeMaterialSlope.value * intensity)
+    }
+    let darkAppearance = appearance == .dark
     if darkPrimary {
         if darkAppearance {
             let grey = m.darkColorDarkWash.value
