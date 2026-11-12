@@ -421,6 +421,10 @@ public final class AppStore {
             default: break
             }
         }
+        // Keys, clicks and scrolls report activity dozens of times a second; almost all would change nothing.
+        if case .system(.window(let owner, .activity)) = input, state.activityIsRecent(in: owner, now: clock.now()) {
+            return KeyHandling(handled: false, shortcut: false)
+        }
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }, systemLanguage: Locale.preferredLanguages.first ?? "en"))
         var checkpointed = false
         if t.docChanged, let failure = t.checkpointFailure {

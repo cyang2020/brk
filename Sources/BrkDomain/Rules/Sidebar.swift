@@ -576,6 +576,9 @@ extension Work {
         }
     }
 
+    /// How old a window's last-interaction stamp may get before a new key, click or scroll replaces it.
+    static let activityResolution: Duration = .seconds(10)
+
     mutating func windowEvent(_ event: WindowEvent, in window: WindowID) {
         guard state.doc.windows[window] != nil, var session = state.session.windows[window] else { return }
         switch event {
@@ -589,6 +592,10 @@ extension Work {
             session.lastInteraction = ctx.now
             state.session.windows[window] = session
         case .activity:
+            // Every key, click and scroll reports activity, dozens a second while scrolling, and a changed state recomputes and
+            // redraws every window. Only Little Arc's idle archive reads this, in hours: a stamp under 10 s old stands, and the
+            // report changes nothing.
+            guard session.lastInteraction.map({ ctx.now.since($0) >= Self.activityResolution }) ?? true else { return }
             session.lastInteraction = ctx.now
             state.session.windows[window] = session
         case .geometry(let bounds, let contentSize):
@@ -677,4 +684,12 @@ func clamped(_ theme: SpaceTheme) -> SpaceTheme {
     t.noise = t.noise.isFinite ? min(max(t.noise, 0), 1) : SpaceTheme.default.noise
     t.intensity = t.intensity.isFinite ? min(max(t.intensity, 0), 1) : SpaceTheme.default.intensity
     return t
+}
+
+extension AppState {
+    /// A key, click or scroll in `window` now would leave its last-interaction stamp as it is (`Work.activityResolution`):
+    /// the store can skip that report without running a transition.
+    public func activityIsRecent(in window: WindowID, now: Instant) -> Bool {
+        session.windows[window]?.lastInteraction.map { now.since($0) < Work.activityResolution } ?? false
+    }
 }

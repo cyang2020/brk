@@ -249,6 +249,21 @@ final class TabsLittleBarTests: XCTestCase {
         XCTAssertNil(d.snapshot.windows[used])
     }
 
+    /// Scrolling reports activity dozens of times a second; each change recomputes and redraws every window (the sidebar
+    /// lagged with a large imported sidebar). Only a stamp 10 s old or older moves.
+    func testActivityUnderTenSecondsAfterTheLastStampChangesNothing() {
+        let d = Driver()
+        XCTAssertFalse(d.state.activityIsRecent(in: d.window, now: d.now), "no stamp yet")
+        XCTAssertTrue(d.system(.window(d.window, .activity)).changed, "the first report stamps the window")
+        d.advance(.seconds(3))
+        XCTAssertTrue(d.state.activityIsRecent(in: d.window, now: d.now), "the store may skip this report")
+        XCTAssertFalse(d.system(.window(d.window, .activity)).changed, "a scroll 3 s later redraws nothing")
+        d.advance(.seconds(7))
+        XCTAssertFalse(d.state.activityIsRecent(in: d.window, now: d.now))
+        XCTAssertTrue(d.system(.window(d.window, .activity)).changed, "10 s after the stamp it moves")
+        XCTAssertEqual(d.state.session.windows[d.window]?.lastInteraction, d.now)
+    }
+
     func testLittleArcPlayingSoundIsNeverArchived() throws {
         let d = Driver()
         let (panel, tab) = try little(d, "https://example.com/music")
