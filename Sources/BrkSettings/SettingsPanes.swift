@@ -106,6 +106,8 @@ struct PreviewsSheet: View {
         // Arc's seven boxes make its sheet 372 points tall; Brk's two make it shorter, the width stays Arc's.
         .frame(width: C.sheetSize.value.width, alignment: .topLeading)
         .background(ArtColor.rgb(0xFBFBFF))
+        // The sheet is light in both appearances, so its text must not take dark mode's white.
+        .environment(\.colorScheme, .light)
     }
 }
 

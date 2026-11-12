@@ -65,6 +65,8 @@ struct AirTrafficControlSheet: View {
         }
         .frame(width: A.size.value.width, height: A.size.value.height, alignment: .topLeading)
         .background(ArtColor.rgb(0xFBFBFF))
+        // The sheet is light in both appearances, so its text must not take dark mode's white.
+        .environment(\.colorScheme, .light)
         // Esc closes the sheet as × does.
         .background(Button("", action: finish).keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0))
         .background(IdentifiedRegion(id: .settingsField("airTrafficControlSheet")))
