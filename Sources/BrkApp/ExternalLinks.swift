@@ -53,7 +53,8 @@ public final class GetURLHandler: NSObject {
             return
         }
         if records { Self.received.append(text) }
-        log.notice("GetURL \(text, privacy: .public)")
+        // The link itself is private (it can carry a search or a token); the scheme says which kind of link came in.
+        log.notice("GetURL \(url.scheme ?? "?", privacy: .public) link \(text, privacy: .private)")
         send(.system(.externalURL(url)))
     }
 }

@@ -8,7 +8,8 @@ import XCTest
 @testable import BrkDomain
 
 /// The onboarding and Import from Another Browser… flow over a fresh profile's store, with the read answered in place of
-/// the other browser's files and the macOS keychain prompt.
+/// the other browser's files and the macOS keychain prompt, and an empty folder in place of Application Support (so the
+/// steps do not depend on which browsers this Mac has).
 @MainActor
 final class OnboardingFlowTests: XCTestCase {
     /// Stands in for the keychain prompt: the read waits until `answer()`.
@@ -32,7 +33,8 @@ final class OnboardingFlowTests: XCTestCase {
             engine: h.engine,
             now: { Instant(milliseconds: 1_790_000_000_000) },
             showBrowserWindow: { _ in },
-            read: read))
+            read: read,
+            applicationSupport: h.directory.appendingPathComponent("no-browsers", isDirectory: true)))
     }
 
     nonisolated private static func safari(_ read: ProfileRead) -> ImportRead {
@@ -73,8 +75,7 @@ final class OnboardingFlowTests: XCTestCase {
         defer { onboarding.close() }
         onboarding.handle(.pickBrowser("chrome"))
         onboarding.handle(.next)
-        if onboarding.state.step == .profiles { onboarding.handle(.next) }
-        XCTAssertEqual(onboarding.state.step, .keychain)
+        XCTAssertEqual(onboarding.state.step, .keychain, "no Chrome profiles found, so no profile step")
         onboarding.handle(.next)
         XCTAssertTrue(onboarding.state.waitingForPassword)
         XCTAssertFalse(onboarding.state.canGoBack)

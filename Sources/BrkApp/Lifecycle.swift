@@ -277,7 +277,12 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             store.confirmQuit(on: NSApp.keyWindow ?? NSApp.mainWindow) { [weak self] go in
                 guard let self else { return }
                 self.askingQuit = false
-                if go { Quit.confirmed = true; self.beginOrderedQuit() } else { NSApp.reply(toApplicationShouldTerminate: false) }
+                if go { Quit.confirmed = true; self.beginOrderedQuit(); return }
+                // Declined: a quit asked for meanwhile (Restart Brk Now, Restore Data) is declined with it, so a later
+                // ordinary quit neither skips the question, nor starts the app again, nor restores a backup.
+                Quit.declined()
+                self.pendingRestore = nil
+                NSApp.reply(toApplicationShouldTerminate: false)
             }
             return .terminateLater
         }
@@ -419,6 +424,12 @@ public enum Quit {
         if relaunch { self.relaunch = true }
         confirmed = true
         perform()
+    }
+
+    /// The "Warn before quitting" question was answered Cancel: nothing asked for until then still holds.
+    static func declined() {
+        confirmed = false
+        relaunch = false
     }
 
     /// What `request()` does. The default is the real quit; tests replace it to observe that a quit was asked for

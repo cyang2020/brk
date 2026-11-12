@@ -118,9 +118,17 @@ extension Doc {
 extension Work {
     /// Lands in `target`, the Space and profile the import started from, whichever Space the window shows now.
     mutating func applyBrowserImport(_ result: BrowserImportResult, into target: SidebarImportTarget, in window: WindowID) {
-        guard state.sidebarImportTarget(in: window) != nil, let home = state.doc.spaces[target.space], home.profile == target.profile else { return }
+        guard state.sidebarImportTarget(in: window) != nil else { return }
         var summary = BrowserImportSummary(source: result.source)
         summary.passwords = result.passwords; summary.cookies = result.cookies; summary.failures = result.failures
+        guard let home = state.doc.spaces[target.space], home.profile == target.profile else {
+            // The passwords and cookies are already in that profile; the finish screen counts them and says what is missing.
+            summary.failures.append("The Space this import started in was removed or moved to another profile, so its bookmarks, Spaces and history were not added")
+            state.session.browserImportSummary = summary
+            state.session.sidebarDataStatus = "Imported from \(result.source): \(summary.passwords) passwords, \(summary.cookies) cookies. " + summary.failures.joined(separator: " ")
+            toast(ToastCopy.importPartly, in: window)
+            return
+        }
 
         state.doc.repairArcImportedThemes()
         // Arc Spaces. A Space imported before is filled again (rows dedupe by address); the empty Space a fresh

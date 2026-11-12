@@ -1,6 +1,7 @@
 import AppKit
 import BrkBase
 @testable import BrkDomain
+import BrkLayout
 @testable import BrkSettings
 import XCTest
 
@@ -52,6 +53,42 @@ final class SiteControlsOverviewTests: XCTestCase {
             if let found = chip(in: child) { return found }
         }
         return nil
+    }
+
+    /// Share and Export link… open the save panel, whose answer a private, Little or blank window refuses
+    /// (`SiteControlSnapshot.canExport`): there both are off, even on a web page, while Capture and Copy URL still work.
+    func testShareAndExportLinkAreOffWhereTheExportCannotFinish() throws {
+        let host = SiteControlsHost(frame: .zero)
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: Metrics.siteControls.detailsSize.value), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.close() }
+        func control(_ field: String) -> NSControl? {
+            func walk(_ view: NSView) -> NSView? {
+                if view.accessibilityIdentifier() == ViewID.settingsField(field).identifier { return view }
+                for child in view.subviews { if let found = walk(child) { return found } }
+                return nil
+            }
+            return walk(host) as? NSControl
+        }
+        func settle() { for _ in 0..<3 { host.layoutSubtreeIfNeeded(); RunLoop.current.run(until: Date().addingTimeInterval(0.02)) } }
+        var value = snapshot("https://example.com/", secure: true)
+        host.render(value) { _ in }
+        XCTAssertEqual(control("siteShare")?.isEnabled, true)
+        value.canExport = false
+        host.render(value) { _ in }
+        XCTAssertEqual(control("siteShare")?.isEnabled, false)
+        XCTAssertEqual(control("siteCapture")?.isEnabled, true, "Capture still works there")
+
+        value.canExport = true
+        host.render(value) { _ in }
+        host.show(details: true); settle()
+        XCTAssertEqual(control("siteExportLink")?.isEnabled, true)
+        value.canExport = false
+        host.render(value) { _ in }; settle()
+        XCTAssertEqual(control("siteExportLink")?.isEnabled, false)
+        XCTAssertEqual(control("siteCopyURL")?.isEnabled, true, "Copy URL still works there")
     }
 
     func testSecurityRowShowsOnlyForWebPagesWithArcsHeights() throws {

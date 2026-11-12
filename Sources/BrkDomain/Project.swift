@@ -622,8 +622,9 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
     }
     if state.doc.windows[window]?.kind != .standard { enabled.remove(.peekEmail) }
     if state.heldTab(in: window) == nil { enabled.remove(.openTabIn) }
+    if !state.exportsFiles(in: window) { enabled.remove(.share) }
     if state.doc.windows[window]?.kind != .standard {
-        enabled.subtract([.share, .newEasel, .importFromBrowser, .gettingStarted, .newFolder, .pinTab, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
+        enabled.subtract([.newEasel, .importFromBrowser, .gettingStarted, .newFolder, .pinTab, .clearExplore, .newSpace, .editSpaceTheme, .renameSpace,
                           .changeProfile, .focusNextSpace, .focusPreviousSpace, .expandPinnedSection, .collapsePinnedSection, .collapseAllFolders, .expandAllFolders, .resetSpace, .joinLiveMeeting])
         enabled.subtract(ActionID.allCases.filter { if case .tabTools(.jumpSpace) = $0.spec.command { true } else { false } })
     }

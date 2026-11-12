@@ -557,9 +557,8 @@ extension Work {
         case .help(let action): effects.append(.app(.help(action, owner: window)))
         case .export(let subject):
             // Share-by-link replaced by a file (user decision): the document is built here from state, so the
-            // writer (BrkApp/ShareExport.swift) never reads the tree. The save panel answers with
-            // `.sidebarData(.exportSelected)`, which only a standard window takes, so elsewhere the export could never finish.
-            guard state.doc.windows[window]?.kind == .standard else { return }
+            // writer (BrkApp/ShareExport.swift) never reads the tree. Refused where the save panel's answer would be.
+            guard state.exportsFiles(in: window) else { return }
             if let document = exportDocument(for: subject, in: window) { effects.append(.export(document, owner: window)) }
         case .exit:
             // Arc's "Exit" (Esc; the menu takes Esc before text fields, as Arc's nib does): close the open overlay,

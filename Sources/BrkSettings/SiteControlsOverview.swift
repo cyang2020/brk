@@ -50,7 +50,8 @@ final class SiteControlsOverview: NSView {
     func render(_ value: SiteControlSnapshot, dispatch: @escaping Dispatch) {
         self.value = value; self.dispatch = dispatch
         let site = value.target != nil
-        for tile in [share, boost, capture, fullPage] { tile.isEnabled = site }
+        for tile in [boost, capture, fullPage] { tile.isEnabled = site }
+        share.isEnabled = site && value.canExport
         add.isEnabled = !privateSession
         let extensions = value.extensions.sorted {
             (value.pinnedExtensions.contains($0.id) ? 0 : 1, $0.name) < (value.pinnedExtensions.contains($1.id) ? 0 : 1, $1.name)

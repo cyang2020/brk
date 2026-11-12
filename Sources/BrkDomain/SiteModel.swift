@@ -62,6 +62,8 @@ public struct SiteControlSnapshot: Sendable, Equatable, Codable {
     /// The profile's EasyList-syntax lists and whether updates download.
     public var filterLists: [FilterListRecord] = []
     public var filterUpdates = true
+    /// Share and Export link… can finish in this window (`AppState.exportsFiles(in:)`); off in private, Little and blank windows.
+    public var canExport = true
 }
 
 struct SiteSession: Sendable, Equatable {

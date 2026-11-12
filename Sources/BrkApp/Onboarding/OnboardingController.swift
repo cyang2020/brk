@@ -25,6 +25,8 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         var showBrowserWindow: @MainActor (WindowID) -> Void
         /// Reads what the user picked, off the main thread (tests answer without files or the keychain).
         var read: @Sendable (ImportChoice, @escaping @Sendable (String?) -> Void) -> ImportRead = BrowserImportRun.read
+        /// Where the other browsers' profiles are looked for; nil is the user's Application Support (tests give an empty folder).
+        var applicationSupport: URL? = nil
     }
 
     private let host: Host
@@ -237,6 +239,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     // MARK: Discovery and import
 
     private var applicationSupport: URL {
+        if let root = host.applicationSupport { return root }
         if ImportKeys.testing, let root = ProcessInfo.processInfo.environment["BRK_TEST_IMPORT_ROOT"], !root.isEmpty {
             return URL(fileURLWithPath: root, isDirectory: true)
         }

@@ -1,6 +1,13 @@
 import BrkBase
 import Foundation
 
+extension AppState {
+    /// Whether an export can finish in this window: the save panel answers with `.sidebarData(.exportSelected)`, which
+    /// only a standard window takes. Elsewhere (private, Little and blank windows) Share… and the site controls' Share
+    /// and Export link… are off, and an export is refused before any panel opens.
+    func exportsFiles(in window: WindowID) -> Bool { doc.windows[window]?.kind == .standard }
+}
+
 extension Work {
     mutating func sidebarData(_ command: SidebarDataCommand, in window: WindowID) {
         guard state.doc.windows[window]?.kind == .standard else { return }

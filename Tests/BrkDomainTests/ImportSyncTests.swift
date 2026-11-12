@@ -173,6 +173,25 @@ final class ImportSyncTests: XCTestCase {
         XCTAssertEqual(StateCodec.currentVersion, 3)
     }
 
+    /// The Space a browser import started from was removed before Import was clicked. Its passwords and cookies are
+    /// already in the profile, so the finish screen counts them and says the rest was not added, instead of showing an
+    /// empty summary or an earlier import's numbers.
+    func testABrowserImportWhoseSpaceWasRemovedSaysWhatDidNotLand() throws {
+        let d = Driver(startURL: nil)
+        let home = try XCTUnwrap(d.state.sidebarImportTarget(in: d.window))
+        d.system(.sidebarData(.browserImported(d.window, target: home, BrowserImportResult(source: "Safari", passwords: 9))))
+        XCTAssertEqual(d.snapshot.sidebarData.lastImport?.passwords, 9, "an earlier import")
+        let rows = d.state.doc.tree.items.count
+        let removed = SidebarImportTarget(space: SpaceID("removed"), profile: home.profile, title: "Removed")
+        let result = BrowserImportResult(source: "Chrome", bookmarks: [.tab(title: "Doc", url: url("https://doc.example.test/"))], passwords: 3, cookies: 2)
+        d.system(.sidebarData(.browserImported(d.window, target: removed, result)))
+        XCTAssertEqual(d.state.doc.tree.items.count, rows, "the bookmarks did not land in another Space")
+        let summary = try XCTUnwrap(d.snapshot.sidebarData.lastImport)
+        XCTAssertEqual(summary.source, "Chrome")
+        XCTAssertEqual([summary.passwords, summary.cookies, summary.bookmarks], [3, 2, 0])
+        XCTAssertEqual(summary.failures, ["The Space this import started in was removed or moved to another profile, so its bookmarks, Spaces and history were not added"])
+    }
+
     /// An Arc import lands Space by Space (the empty starting Space takes the first one), keeps folders and splits, makes
     /// the other Arc profile's Brk profile by name, and a second import of the same data adds nothing.
     func testBrowserImportMapsArcSpacesOnceAndImportingAgainAddsNothing() throws {

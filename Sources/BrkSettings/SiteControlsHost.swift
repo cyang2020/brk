@@ -165,7 +165,7 @@ private struct SiteControlsView: View {
                 if value.target != nil {
                     HStack {
                         SettingsButton(title: "Copy URL", field: "siteCopyURL") { dispatch(.page(.copyURL(.plain))) }
-                        SettingsButton(title: "Export link…", field: "siteExportLink") { dispatch(.app(.export(.focusedTab))) }
+                        SettingsButton(title: "Export link…", field: "siteExportLink") { dispatch(.app(.export(.focusedTab))) }.disabled(!value.canExport)
                     }
                 }
                 extensionControls.id(value.context)

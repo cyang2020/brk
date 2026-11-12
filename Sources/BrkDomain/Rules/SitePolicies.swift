@@ -103,7 +103,7 @@ extension AppState {
                 clearing: session.sites.running.values.contains { $0.target.page.window == window },
                 result: session.sites.results[window], ready: siteTarget(in: window) != nil,
                 secure: target.map(secure) ?? false, security: target.flatMap(security),
-                filterLists: preferences.effectiveFilterLists, filterUpdates: preferences.filterUpdates ?? true))
+                filterLists: preferences.effectiveFilterLists, filterUpdates: preferences.filterUpdates ?? true, canExport: exportsFiles(in: window)))
         })
     }
 }
