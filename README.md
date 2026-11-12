@@ -229,6 +229,7 @@ Every fix, newest first, with the first build that has it (Brk › About Brk sho
 
 **2026-11-12**
 
+- **Brk quit when the pointer moved onto a row of a folder's hover card.** Hovering a collapsed folder, or a Favorite or Pinned tab that has a preview card, opens a card listing its pages. Putting the pointer on any row of that card closed Brk: highlighting the row redrew it, and the redraw asked for the highlight again, without end. Now the pointer on a row only highlights it, and ↑ and ↓ still move the highlight. Build 25.
 - **"Save password?" sat in the top-right corner of the page.** Brk now asks the way Arc does, with a card in the middle of the window: *Save password for (site)?* with Never on this site, No and Save. Saving an address or a card asks the same way (*Save Address?*, *Save this card?*). Build 21.
 - **Clicking an autofill suggestion did nothing.** Saved emails, addresses and passwords appeared in the list under a field, but neither a click nor ↓ and Return filled them in. The cause was a bug in the Chromium Embedded Framework 154 that Brk used; Brk now runs CEF 156 (Chromium 156.0.8078.88), where it is fixed. Build 20.
 - **Brk quit when a site offered to sign in with a passkey from your phone,** for example Canva's sign-in: Continue another way, then a passkey, then *Use a phone or tablet*. macOS closed Brk because Brk had not said why it might use Bluetooth. Brk now asks for Bluetooth permission instead, and declares every other permission a website can ask for. Build 18.
