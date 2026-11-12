@@ -10,7 +10,18 @@ public final class FaviconCache {
     private var failed: Set<URL> = []
     private let fetch: @Sendable (URL) async -> Data?
 
-    init(fetch: @escaping @Sendable (URL) async -> Data? = { try? await URLSession.shared.data(from: $0).0 }) { self.fetch = fetch }
+    /// Every favicon fetch outside Chromium goes through this (this cache's and the sidebar's): no disk cache, no cookies.
+    /// The URLs come from every profile and from incognito windows. Through URLSession.shared an incognito site's
+    /// favicon stayed in the app's disk cache after the window was gone, and a cookie it set went out with later fetches.
+    nonisolated public static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        return URLSession(configuration: configuration)
+    }()
+
+    init(fetch: @escaping @Sendable (URL) async -> Data? = { try? await FaviconCache.session.data(from: $0).0 }) { self.fetch = fetch }
 
     /// The cached image, or nil now and `then` once it arrives (never, if the fetch fails).
     public func image(for url: URL, then: @escaping (NSImage) -> Void) -> NSImage? {

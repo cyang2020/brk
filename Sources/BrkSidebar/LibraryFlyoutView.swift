@@ -266,8 +266,15 @@ final class LibraryFlyoutView: NSView {
 
     private func startTicker() {
         ticker?.invalidate()
-        ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.layoutRows() }
+        ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
+            // The window can close with the list open (⇧⌘W with the pointer on it) and no pointer exit follows: the list
+            // closes here, and the timer of a view that is gone stops itself instead of firing for good.
+            let gone = MainActor.assumeIsolated { () -> Bool in
+                guard let self, self.window?.isVisible == true else { self?.dismiss(); return true }
+                self.layoutRows()
+                return false
+            }
+            if gone { timer.invalidate() }
         }
     }
 

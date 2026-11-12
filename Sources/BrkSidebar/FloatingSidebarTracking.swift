@@ -50,7 +50,13 @@ final class FloatingSidebarTracking: NSResponder {
     }
     override func mouseMoved(with event: NSEvent) { moved(event) }
     override func mouseExited(with event: NSEvent) {
-        if menus.isEmpty && !staysOpen() { dismiss() }
+        guard menus.isEmpty, !staysOpen() else { return }
+        // Out over the window's left edge is Arc's hover zone outside the window: the moves there decide (`moved`).
+        if let root {
+            let point = root.convert(event.locationInWindow, from: nil)
+            if point.x <= 0, point.y >= 0, point.y <= root.bounds.height { return }
+        }
+        dismiss()
     }
     func stop() {
         if let area { root?.removeTrackingArea(area) }

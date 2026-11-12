@@ -61,8 +61,10 @@ public struct SpaceSwipe: Equatable, Sendable {
         let moved = abs(travelled.dx) + abs(travelled.dy)
         let sideways = abs(travelled.dy) <= abs(travelled.dx)
         if phase == .ended {
-            // A short touch that lifted before the distance: its sideways drift is a tiny swipe, as Arc takes it.
-            guard moved > 0, sideways else { self = SpaceSwipe(); return .cancel }
+            // A short touch that lifted before the distance: its sideways drift is a tiny swipe, as Arc takes it; a
+            // vertical flick is the list's, with the momentum that follows (it was dropped, and the list did not move).
+            guard moved > 0 else { self = SpaceSwipe(); return .cancel }
+            guard sideways else { self = SpaceSwipe(); return .handOver }
             ownsGesture = true
             return .begin(travel: travelled.dx - firstDelta)
         }

@@ -422,27 +422,34 @@ enum StarBadge {
 }
 
 /// Favicons by URL, loaded once and shared. Every view asking for a URL that is still loading is told when it lands.
+/// The fetch keeps nothing on disk and sends no cookies (`FaviconCache.session`).
 @MainActor
 final class FaviconStore {
     static let shared = FaviconStore()
     private var images: [URL: NSImage] = [:]
-    private var failed: Set<URL> = []
+    /// When each URL's last fetch failed.
+    private var failed: [URL: TimeInterval] = [:]
     private var waiting: [URL: [() -> Void]] = [:]
+    /// Seconds on a clock that only runs forward (tests move it).
+    var now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    /// A favicon whose fetch failed (offline at launch, a captive portal's page) is fetched again when asked this long
+    /// after; it stayed blank for the rest of the run. Asked sooner, nothing is fetched: rows redraw many times a second.
+    private static let retryAfter: TimeInterval = 30
 
     /// The image if it is already here; otherwise starts the load (once) and calls `ready` when it arrives.
     func image(for url: URL, ready: @escaping @MainActor () -> Void) -> NSImage? {
         if let image = images[url] { return image }
-        if failed.contains(url) { return nil }
+        if let failedAt = failed[url], now() - failedAt < Self.retryAfter { return nil }
         if waiting[url] != nil { waiting[url]!.append(ready); return nil }
         waiting[url] = [ready]
-        URLSession.shared.dataTask(with: url) { data, _, _ in
+        FaviconCache.session.dataTask(with: url) { data, _, _ in
             Task { @MainActor in FaviconStore.shared.finish(url, data: data) }
         }.resume()
         return nil
     }
 
     private func finish(_ url: URL, data: Data?) {
-        if let data, let image = NSImage(data: data) { images[url] = image } else { failed.insert(url) }
+        if let data, let image = NSImage(data: data) { images[url] = image; failed[url] = nil } else { failed[url] = now() }
         let callbacks = waiting.removeValue(forKey: url) ?? []
         if images[url] != nil { callbacks.forEach { $0() } }
     }

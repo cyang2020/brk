@@ -105,8 +105,11 @@ enum SplitToolsScenarios {
         try expect(try app.view().content.orientation == .vertical, "restart lost stacked layout")
         try expect(try app.view().content.panes.map(\.fraction) == vertical, "restart lost divider fractions")
         for pane in panes { try app.click(.splitSegment(pane)); try expect(try app.view().content.panes.first(where: \.focused)?.tab == pane, "sidebar segment missed \(pane)") }
-        try app.click(.rowClose(panes[0]))
-        try expect(try app.view().content.panes.count == 3, "pointer close did not remove first pane")
+        // Four boxes are too narrow for their titles, so they have no × (a click there focuses the pane): the first pane,
+        // picked in the sidebar, closes from the keyboard.
+        try app.click(.splitSegment(panes[0]))
+        try app.press("ctrl+shift+-")
+        try expect(try app.view().content.panes.count == 3, "Close this Split Pane did not remove the pane picked in the sidebar")
         for pane in panes.dropFirst() {
             try expect(try app.native().pages[PageID(window: app.window!, item: pane)]?.surfaceFrame != nil, "closing first pane detached a surviving page")
         }

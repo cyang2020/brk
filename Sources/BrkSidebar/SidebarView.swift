@@ -10,7 +10,7 @@ import BrkUIKit
 /// Translucent tokens over the themed background; while peeking, the same view is re-framed over the content with
 /// its own backdrop.
 ///
-/// Public surface (what BrkContent's root may call): `init(dispatch:)`, `render`, `focusRenameField`, `focusList`.
+/// Public surface (what BrkContent's root may call): `init(dispatch:)`, `render`, `focusRenameField`, `focusList`, `takeEscape`.
 /// Everything else in BrkSidebar is internal to W3.
 @MainActor
 public final class SidebarView: NSView {
@@ -531,6 +531,12 @@ public final class SidebarView: NSView {
         tablist.focusList()
     }
 
+    /// Escape while a hover card's search field has the keyboard: the card closes (true). The window routes Escape to
+    /// Exit before a text field's delegate sees it, so it asks here first.
+    public func takeEscape() -> Bool {
+        tablist.takeEscape() || favorites.takeEscape()
+    }
+
     // MARK: Brk's AI panel (docs/design/ai-right-panel.md)
 
     /// The Space whose dot in the dock is under `point` (window coordinates): where an AI list row dragged out of the panel
@@ -567,7 +573,9 @@ public final class SidebarView: NSView {
         guard floatingWatch == nil, let root = superview else { return }
         floatingWatch = FloatingSidebarTracking(root: root, staysOpen: { [weak self] in
             guard let self else { return false }
+            // A hover card reaches past the column's slack: on it, the pointer is still on the column's own things.
             return self.drag.isActive || self.tablist.isRenaming || self.favorites.isRenaming || self.window?.attachedSheet != nil
+                || self.tablist.hoverCardHasPointer || self.favorites.hoverCardHasPointer
         }, boundary: { [weak self] in
             (self?.last?.frames?.frame.maxX ?? 0) + Metrics.sidebar.floatingStayOpenSlack.value
         }, dismiss: { [weak self] in self?.dispatch(.sidebar(.peek(false))) })
@@ -924,13 +932,25 @@ final class URLPillView: HoverView {
         needsLayout = true
     }
 
+    /// A search field's magnifier is part of its placeholder: a click on it opens the command bar like the rest of the
+    /// pill (the button is off there, and took the click for nothing).
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let hit = super.hitTest(point)
+        return hit === siteInfo && searchField ? self : hit
+    }
+
     override func rightMouseDown(with event: NSEvent) { dispatch(.site(.controls)) }
 
-    override func mouseDown(with event: NSEvent) { isPressed = true }
+    /// Control-click is the right-click, as on the rows.
+    override func mouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.control) { rightMouseDown(with: event); return }
+        isPressed = true
+    }
 
     override func mouseUp(with event: NSEvent) {
+        let pressed = isPressed
         isPressed = false
-        guard bounds.contains(local(event)) else { return }
+        guard pressed, bounds.contains(local(event)) else { return }
         if let easel = pill?.share { dispatch(.easel(.share(easel))) } else { dispatch(.commandBar(.open(.editCurrent))) }
     }
 }

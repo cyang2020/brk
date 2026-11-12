@@ -114,6 +114,8 @@ public class WindowController: NSObject, NSWindowDelegate {
             if self?.root.savePromptKey(save: false) == true { return true }
             // Site search keeps its first Escape (it leaves the mode, the bar stays) whichever monitor runs first.
             if let self, self.root.commandBar.takeEscape(event) { return true }
+            // A sidebar hover card's search field: its Escape closes the card (the card is view state, Exit knows nothing of it).
+            if let self, event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty, self.root.sidebar.takeEscape() { return true }
             guard let self, self.lastSnapshot?.overlay != nil || self.pageFullscreen.nativeExitShouldExitDocument,
                   let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)

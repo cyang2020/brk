@@ -198,6 +198,12 @@ final class FavoritesView: NSView {
     /// A favorite's rename field is being edited.
     var isRenaming: Bool { tiles.values.contains { $0.isEditingName } }
 
+    /// The pointer is on a tile's hover card.
+    var hoverCardHasPointer: Bool { cards.hasPointer }
+
+    /// Escape while a hover card's search field has the keyboard closes the card.
+    func takeEscape() -> Bool { cards.takeEscape() }
+
     /// The rename field of `item` becomes first responder; false when that tile is not showing one.
     func focusRenameField(_ item: ItemID) -> Bool {
         guard let tile = tiles[item], let window else { return false }

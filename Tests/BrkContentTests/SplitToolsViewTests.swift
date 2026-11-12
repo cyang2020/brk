@@ -8,7 +8,7 @@ import XCTest
 
 @MainActor
 final class SplitToolsViewTests: XCTestCase {
-    func testFourPaneSegmentCentersSelectInsteadOfClosing() throws {
+    func testFourPaneSegmentsSelectInsteadOfClosing() throws {
         let ctx = Context(now: Instant(milliseconds: 1_790_000_000_000), newID: { UUID().uuidString })
         let size = CGSize(width: 1280, height: 776)
         var state = StateCodec.restore(nil, seed: RestoreSeed(startURL: URL(string: "https://fixture.example/"), contentSize: size), ctx: ctx).state
@@ -33,6 +33,10 @@ final class SplitToolsViewTests: XCTestCase {
             XCTAssertGreaterThan(segment.bounds.width, 0)
             let center = segment.convert(CGPoint(x: segment.bounds.midX, y: segment.bounds.midY), to: segment.superview)
             XCTAssertNotEqual(segment.hitTest(center)?.accessibilityIdentifier(), ViewID.rowClose(pane.tab).identifier)
+            // A box too narrow for its title has no ×: its right end, where the hidden × sits, focuses the pane too
+            // (a click there archived the pane's tab).
+            let end = segment.convert(CGPoint(x: segment.bounds.maxX - 3, y: segment.bounds.midY), to: segment.superview)
+            XCTAssertNotEqual(segment.hitTest(end)?.accessibilityIdentifier(), ViewID.rowClose(pane.tab).identifier, "the narrow box's right end closes its pane")
         }
     }
 

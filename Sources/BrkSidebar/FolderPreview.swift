@@ -110,10 +110,23 @@ final class FolderPreview {
     func close() {
         showTask?.cancel()
         hideTask?.cancel()
+        // Its search field ends editing as it goes, which would schedule a hide that closes the next card.
+        content?.onExit = nil
         content?.removeFromSuperview()
         content = nil
         row = nil
         item = nil
+    }
+
+    /// The pointer is on the card (the floating sidebar stays out while it is).
+    var hasPointer: Bool { content?.pointerInside == true }
+
+    /// Escape while the card's search field has the keyboard closes the card. The window routes Escape to Exit before
+    /// a text field's delegate sees it, so the window asks here first (`SidebarView.takeEscape`).
+    func takeEscape() -> Bool {
+        guard let content, content.isSearching, !content.isComposing else { return false }
+        close()
+        return true
     }
 
     private func show(_ view: FolderPreviewView, over row: NSView) {
@@ -122,6 +135,7 @@ final class FolderPreview {
             for command in commands { self?.dispatch(command) }
             self?.close()
         }
+        view.onCancel = { [weak self] in self?.close() }
         view.onExit = { [weak self] in self?.scheduleHide() }
         view.onEnter = { [weak self] in self?.hideTask?.cancel() }
         let size = view.fittingSize
@@ -182,8 +196,14 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
     var onOpen: (([Command]) -> Void)?
     var onExit: (() -> Void)?
     var onEnter: (() -> Void)?
+    /// Escape in the search field.
+    var onCancel: (() -> Void)?
     private(set) var pointerInside = false
-    var isSearching: Bool { searchable && (!search.stringValue.isEmpty || search.currentEditor() != nil) }
+    /// The search field has the keyboard. Text left in it after it lost the keyboard does not count: the card stayed
+    /// over the page for good then.
+    var isSearching: Bool { searchable && search.currentEditor() != nil }
+    /// An input method is composing in the search field (Escape is its own then).
+    var isComposing: Bool { (search.currentEditor() as? NSTextView)?.hasMarkedText() == true }
     /// A card without rows is not shown, except the calendar's, which says there is nothing coming.
     var hasContent: Bool { !entries.isEmpty || !emptyLabel.stringValue.isEmpty }
 
@@ -321,6 +341,10 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
 
     func controlTextDidChange(_ obj: Notification) { filter(search.stringValue) }
 
+    /// The field lost the keyboard (a click on the page): with the pointer off the card, the card goes as it does when
+    /// the pointer leaves. Nothing else would have closed it.
+    func controlTextDidEndEditing(_ obj: Notification) { if !pointerInside { onExit?() } }
+
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         switch selector {
         case #selector(NSResponder.insertNewline(_:)):
@@ -328,7 +352,7 @@ final class FolderPreviewView: NSView, NSTextFieldDelegate {
             return true
         case #selector(NSResponder.moveDown(_:)): highlight(min(highlighted + 1, max(0, rows.count - 1))); return true
         case #selector(NSResponder.moveUp(_:)): highlight(max(highlighted - 1, 0)); return true
-        case #selector(NSResponder.cancelOperation(_:)): search.stringValue = ""; onExit?(); return true
+        case #selector(NSResponder.cancelOperation(_:)): onCancel?(); return true
         default: return false
         }
     }

@@ -112,6 +112,12 @@ final class TablistView: NSScrollView {
     /// A rename field of some row is being edited.
     var isRenaming: Bool { rowViews.values.contains { $0.isEditingName } }
 
+    /// The pointer is on a row's hover card.
+    var hoverCardHasPointer: Bool { folderPreview.hasPointer }
+
+    /// Escape while a hover card's search field has the keyboard closes the card.
+    func takeEscape() -> Bool { folderPreview.takeEscape() }
+
     /// The rename field of `item` becomes first responder; false when it is not showing.
     func focusRenameField(_ item: ItemID) -> Bool {
         if rowViews[item] == nil, let rect = last?.frames.rows.first(where: { $0.kind == .item(item) })?.rect {
@@ -657,6 +663,10 @@ final class RowView: HoverView {
     var isEditingName: Bool { renameField.map { !$0.finished } ?? false }
 
     func render(_ row: Row, section: SectionKind, depth: Int, renaming: Bool, multiselected: Bool, palette: Palette) {
+        // A row that changed under the pointer (a folder just collapsed) reports its hover anew below, so its card is
+        // decided again. An unchanged one does not: that restarted the card's wait at every redraw, and a loading page
+        // redraws the sidebar several times a second, so the card never opened.
+        let changed = row != self.row
         self.row = row
         self.section = section
         self.depth = depth
@@ -733,7 +743,8 @@ final class RowView: HoverView {
             peekMarker.isHidden = true
         }
         if case .folder(let folder) = row, folder.group { title.textColor = palette.color(palette.tokens.foreground) } else { title.textColor = palette.ink.text }
-        if renaming, row.kind != .split { showRenameField(palette: palette) } else { retire() }
+        if renaming, row.kind != .split { showRenameField(palette: palette) } else { dropRenameField() }
+        if changed, reportedHover { reportedHover = false; onHover?(self, false) }
         stateChanged()
         needsLayout = true
     }
@@ -1026,9 +1037,14 @@ final class RowView: HoverView {
         return renameField?.focus(in: window) ?? false
     }
 
-    /// Drops the field without committing (the rename ended elsewhere: Esc through the menu, or the row left).
+    /// The row left the list: the pointer is off it, and its rename field goes without committing.
     func retire() {
         if reportedHover { reportedHover = false; onHover?(self, false) }
+        dropRenameField()
+    }
+
+    /// Drops the field without committing (the rename ended elsewhere: Esc through the menu, or the row left).
+    private func dropRenameField() {
         guard let field = renameField else { return }
         field.retire()
         renameField = nil
@@ -1743,11 +1759,16 @@ final class SpaceHeaderView: HoverView {
         needsLayout = true
     }
 
-    override func mouseDown(with event: NSEvent) { if interactive { isPressed = true } }
+    /// Control-click is the right-click, as on the rows.
+    override func mouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.control) { rightMouseDown(with: event); return }
+        if interactive { isPressed = true }
+    }
 
     override func mouseUp(with event: NSEvent) {
+        let pressed = isPressed
         isPressed = false
-        if interactive, bounds.contains(local(event)) { dispatch(.space(.togglePinnedSection(.current))) }
+        if pressed, interactive, bounds.contains(local(event)) { dispatch(.space(.togglePinnedSection(.current))) }
     }
 
     override func rightMouseDown(with event: NSEvent) {

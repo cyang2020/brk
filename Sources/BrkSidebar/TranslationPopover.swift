@@ -115,7 +115,10 @@ final class TranslationPopover: NSObject, NSPopoverDelegate {
         popover = nil
     }
 
-    func popoverDidClose(_ notification: Notification) { popover = nil }
+    /// A popover a second click replaced sends this after its fade, when `popover` is the new one already.
+    func popoverDidClose(_ notification: Notification) {
+        if notification.object as? NSPopover === popover { popover = nil }
+    }
 }
 
 /// What the popover is about: a translated page (Use Original), or one that can be translated (Translate, P50-g).

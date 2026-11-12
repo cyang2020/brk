@@ -153,4 +153,15 @@ final class SidebarReviewFixTests: XCTestCase {
         d.user(.tabTools(.siteDisplay(host: "mail.google.com", .hoverPreview, on: false)))
         XCTAssertNil(d.view.favorites.tiles.first(where: { $0.id == gmail })?.hoverCard, "Show Hover Preview off")
     }
+
+    /// Escape after Ctrl+Space gives the keyboard back to the page, as Return does. The key table sends Escape as Exit
+    /// before the list sees it, and Exit, finding no overlay, rename or dialog, left full screen and kept the sidebar.
+    func testExitGivesTheKeyboardBackFromTheSidebar() {
+        let d = Driver()
+        d.user(.tabTools(.reveal))
+        XCTAssertEqual(d.view.focus, .sidebar)
+        let exit = d.user(.app(.exit))
+        XCTAssertNotEqual(d.view.focus, .sidebar, "Escape left the keyboard in the sidebar")
+        XCTAssertFalse(exit.effects.contains(.window(d.window, .leaveFullScreen)), "Escape out of the sidebar also left full screen")
+    }
 }

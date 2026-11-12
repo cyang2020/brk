@@ -562,7 +562,8 @@ extension Work {
             if let document = exportDocument(for: subject, in: window) { effects.append(.export(document, owner: window)) }
         case .exit:
             // Arc's "Exit" (Esc; the menu takes Esc before text fields, as Arc's nib does): close the open overlay,
-            // else cancel a rename or dialog, else leave full screen (the window decides whether it is in one).
+            // else cancel a rename or dialog, else give the keyboard back to the page from the sidebar list (after
+            // Ctrl+Space; the list never sees this Esc), else leave full screen (the window decides whether it is in one).
             // The overlay rule has already closed an open overlay for this command (Exit does not keep it).
             if state.session.windows[window]?.recentCycle != nil { tabTools(.cancelRecent, in: window); return }
             guard !closedOverlay, var session = state.session.windows[window] else { return }
@@ -576,6 +577,7 @@ extension Work {
             else if session.pendingSpaceDeletion != nil { session.pendingSpaceDeletion = nil }
             else if session.profileDialog != nil { session.profileDialog = nil }
             else if session.dialog != nil { session.dialog = nil }
+            else if session.sidebarFocused { session.sidebarFocused = false }
             else if let tab = state.resolveTab(.focused, in: window), state.session.live[PageID(window: window, item: tab)]?.fullscreen == true {
                 effects.append(.page(PageID(window: window, item: tab), .exitFullscreen))
             } else { effects.append(.window(window, .leaveFullScreen)) }

@@ -30,9 +30,11 @@ class HoverView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     /// Labels, icons and fills inside never take the pointer: a hit on them is a hit on the nearest interactive
-    /// view (this one, a nested button, or the rename field).
+    /// view (this one, a nested button, or the rename field). A view faded out to nothing takes no click either, as a
+    /// hidden one: AppKit's hit test ignores alpha, so a row's ×, Tidy or the pill's copy link while not showing acted
+    /// on the click meant for the row or pill under it.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard let hit = super.hitTest(point) else { return nil }
+        guard alphaValue > 0, let hit = super.hitTest(point) else { return nil }
         return hit is HoverView || hit is RenameField || hit.superview is RenameField ? hit : self
     }
 

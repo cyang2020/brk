@@ -77,7 +77,10 @@ public final class PagePager<Page: Hashable>: NSObject {
         guard animated, host?.window?.isVisible == true else { return settle() }
         var start = from
         if abs(index - old) > 1 {
-            let width = origins[index] - origins[index - 1 >= 0 ? index - 1 : index]
+            // The page left stands right beside the new one: to its left, the width of the page before it away; to its
+            // right, the new page's own width away. (Before the first Space is the Library, far wider than a Space: a
+            // jump there from the right started that much too far.)
+            let width = old < index ? origins[index] - origins[index - 1] : origins[index + 1] - origins[index]
             start = origins[index] + (from - origins[old]) + (old < index ? -width : width)
         }
         startSpring(from: start, velocity: 0)

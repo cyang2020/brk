@@ -51,9 +51,15 @@ final class SpaceToolsLayoutTests: XCTestCase {
         XCTAssertEqual(swipe.update(horizontal: 0, vertical: 0, phase: .began, startsInSidebar: true, precise: true), .hold)
         XCTAssertEqual(swipe.update(horizontal: -2, vertical: 0, phase: .changed, startsInSidebar: true, precise: true), .hold)
         XCTAssertEqual(swipe.update(horizontal: 0, vertical: 0, phase: .ended, startsInSidebar: true, precise: true), .begin(travel: -2), "a short sideways touch is a tiny swipe")
+    }
+
+    /// A short vertical flick that lifts before the deciding distance is the list's, as a longer one is: the held events
+    /// go to the list and its momentum is not swallowed. It was dropped, momentum and all, and the list did not move.
+    func testAShortVerticalFlickIsHandedToTheList() {
+        var swipe = SpaceSwipe()
         XCTAssertEqual(swipe.update(horizontal: 0, vertical: 0, phase: .began, startsInSidebar: true, precise: true), .hold)
         XCTAssertEqual(swipe.update(horizontal: 0, vertical: -2, phase: .changed, startsInSidebar: true, precise: true), .hold)
-        XCTAssertEqual(swipe.update(horizontal: 0, vertical: 0, phase: .ended, startsInSidebar: true, precise: true), .cancel, "a short vertical touch is nothing")
+        XCTAssertEqual(swipe.update(horizontal: 0, vertical: 0, phase: .ended, startsInSidebar: true, precise: true), .handOver)
     }
 
     // MARK: Arc's rules, with what real Arc did under the same gestures (38d57390e3:verify/visual-pairs/run-20261103/Q19/)
