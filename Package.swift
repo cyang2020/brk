@@ -45,8 +45,9 @@ let package = Package(
         // The interface of BrkCore.framework, Brk's own Chromium build (engine/): ObjC protocols only. Nothing to link; the framework is found
         // at run time, so this package builds and runs on CEF with no Chromium tree present.
         .target(name: "CBrkCore"),
-        // The engine on BrkCore, picked with BRK_ENGINE=core. Imports no CefKit.
-        .target(name: "BrkCoreEngine", dependencies: ["BrkBase", "BrkEngine", "CBrkCore"], swiftSettings: strict),
+        // The engine on BrkCore, picked with BRK_ENGINE=core. Imports no CefKit; find's page script is shared through PageEditorScript.
+        .target(name: "BrkCoreEngine", dependencies: ["BrkBase", "BrkEngine", "CBrkCore", .product(name: "PageEditorScript", package: "CefSwift")],
+                swiftSettings: strict),
         // Themed window background: Metal gradient, procedural textures, crossfade.
         .target(name: "BrkTheme", dependencies: ["BrkBase", "BrkDomain"], swiftSettings: strict),
         // The view contract shared by every UI target: Dispatch, identify(_:), Palette, Copy. No views of its own.
@@ -104,7 +105,7 @@ let package = Package(
         .testTarget(name: "BrkControlTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkControl"], swiftSettings: strict),
         .testTarget(name: "BrkThemeTests", dependencies: ["BrkDomain", "BrkTheme"], swiftSettings: strict),
         .testTarget(name: "BrkEngineTests", dependencies: ["BrkBase", "BrkEngine"], swiftSettings: strict),
-        .testTarget(name: "BrkCEFTests", dependencies: ["BrkBase", "BrkDomain", "BrkCEF", .product(name: "CefKit", package: "CefSwift")], exclude: ["CaptureFixture.png"], swiftSettings: strict),
+        .testTarget(name: "BrkCEFTests", dependencies: ["BrkBase", "BrkDomain", "BrkEngine", "BrkCEF", .product(name: "CefKit", package: "CefSwift")], exclude: ["CaptureFixture.png"], swiftSettings: strict),
         .testTarget(name: "BrkLocalModelsTests", dependencies: ["BrkBase", "BrkLocalModels"], swiftSettings: strict),
         .testTarget(name: "BrkImportTests", dependencies: ["BrkBase", "BrkDomain", "BrkImport"], swiftSettings: strict, linkerSettings: [.linkedLibrary("sqlite3")]),
         .testTarget(name: "BrkAppTests", dependencies: ["BrkBase", "BrkDomain", "BrkApp", "BrkSettings", "BrkLocalModels"], swiftSettings: strict),

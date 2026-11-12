@@ -33,3 +33,8 @@ enable_widevine = false
 
 # No Google API keys of any kind.
 use_official_google_api_keys = false
+
+# Not Chromium's list of experiments for its test bots (testing/variations/fieldtrial_testing_config.json), which builds that are not
+# Google's official ones turn on at startup: it showed a "Search with Chromium" icon in the menu bar (OmniboxEverywhere) and turns on
+# hundreds of unfinished features. Chrome and CEF run without it.
+disable_fieldtrial_testing_config = true

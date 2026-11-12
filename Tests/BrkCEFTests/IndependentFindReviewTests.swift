@@ -4,6 +4,7 @@ import Foundation
 import XCTest
 @testable import CefKit
 @testable import BrkCEF
+@testable import BrkEngine
 
 @MainActor final class IndependentFindReviewTests: XCTestCase {
     final class Native {

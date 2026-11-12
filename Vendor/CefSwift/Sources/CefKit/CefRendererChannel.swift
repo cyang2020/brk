@@ -1,5 +1,6 @@
 import CCef
 import Foundation
+import PageEditorScript
 
 /// The source frame is supplied by CEF, never by page JavaScript. No web-callable global is installed.
 public struct CefRendererMessage: Sendable {
@@ -37,6 +38,7 @@ extension CefBrowser {
     public struct FrameDocument: Equatable, Sendable {
         public let frame: String
         public let document: String
+        public init(frame: String, document: String) { self.frame = frame; self.document = document }
     }
 
     public func focusedDocument() -> FrameDocument? {

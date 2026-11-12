@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "CefKit", targets: ["CefKit"]),
+        .library(name: "PageEditorScript", targets: ["PageEditorScript"]),
         .library(name: "CefSwiftUI", targets: ["CefSwiftUI"]),
         .executable(name: "cef-helper", targets: ["cef-helper"]),
         .plugin(name: "CefPlugin", targets: ["CefPlugin"]),
@@ -28,10 +29,12 @@ let package = Package(
             publicHeadersPath: "include",
             linkerSettings: [.linkedFramework("AppKit")]
         ),
+        // The page script of find's selection editing, which Brk's own engine runs too. No CEF in it.
+        .target(name: "PageEditorScript"),
         // Core Swift wrapper over the CEF C API.
         .target(
             name: "CefKit",
-            dependencies: ["CCef", "CCefAppKit"],
+            dependencies: ["CCef", "CCefAppKit", "PageEditorScript"],
             linkerSettings: [.linkedFramework("AppKit")]
         ),
         // First-class SwiftUI integration.

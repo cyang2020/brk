@@ -1,4 +1,4 @@
-/// Renderer revisions supplement CEF, which does not recount every same-document mutation.
+/// Renderer revisions supplement Chromium's find, which does not recount every same-document mutation.
 struct FindRevisions {
     private var versions: [String: Int] = [:]
     private(set) var needsInitial = false

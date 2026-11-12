@@ -22,6 +22,17 @@ final class EventInjector {
     private weak var pointerWindow: NSWindow?
 
     /// "cmd", "ctrl+shift", "alt", "" -> modifiers; nil for an unknown name.
+    /// A control op runs as a main-queue job, and taking an event from the queue runs one pass of the run loop inside it. Quit's
+    /// run-loop blocks wait while this is true: a quit started there could never finish (Quit, Lifecycle.swift).
+    private(set) static var isPumping = false
+
+    private static func pumpEvent(matching mask: NSEvent.EventTypeMask, until date: Date, inMode mode: RunLoop.Mode, dequeue: Bool) -> NSEvent? {
+        let outer = isPumping
+        isPumping = true
+        defer { isPumping = outer }
+        return NSApp.nextEvent(matching: mask, until: date, inMode: mode, dequeue: dequeue)
+    }
+
     static func modifiers(_ text: String) -> Modifiers? {
         var out = Modifiers()
         for part in text.lowercased().split(separator: "+").map(String.init) where !part.isEmpty {
@@ -114,7 +125,7 @@ final class EventInjector {
     /// socket, and the bar got "emojidefine" before the Tab, which then sent it to the agent.
     private func handleWaitingKeys(for window: NSWindow) throws {
         for _ in 0..<64 {
-            guard let waiting = NSApp.nextEvent(matching: [.keyDown, .keyUp, .flagsChanged], until: Date.distantPast, inMode: .default, dequeue: true) else { return }
+            guard let waiting = Self.pumpEvent(matching: [.keyDown, .keyUp, .flagsChanged], until: Date.distantPast, inMode: .default, dequeue: true) else { return }
             if NSApp.keyWindow != nil { NSApp.sendEvent(waiting) } else { try route(waiting, to: window) }
         }
     }
@@ -162,7 +173,7 @@ final class EventInjector {
 
     private static func dequeue(_ event: NSEvent) -> NSEvent {
         NSApp.postEvent(event, atStart: true)
-        return NSApp.nextEvent(matching: NSEvent.EventTypeMask(type: event.type), until: Date.distantPast, inMode: .default, dequeue: true) ?? event
+        return Self.pumpEvent(matching: NSEvent.EventTypeMask(type: event.type), until: Date.distantPast, inMode: .default, dequeue: true) ?? event
     }
 
     private func flags(_ modifiers: Modifiers) -> NSEvent.ModifierFlags { NSEvent.ModifierFlags(rawValue: modifiers.rawValue) }
@@ -235,7 +246,7 @@ final class EventInjector {
             let down = Self.dequeue(try mouse(.leftMouseDown, at: point, modifiers: modifiers, clickCount: n, in: window))
             NSApp.postEvent(try mouse(.leftMouseUp, at: point, modifiers: modifiers, clickCount: n, in: window), atStart: false)
             handle(down)
-            if let up = NSApp.nextEvent(matching: .leftMouseUp, until: Date.distantPast, inMode: .default, dequeue: true) { handle(up) }
+            if let up = Self.pumpEvent(matching: .leftMouseUp, until: Date.distantPast, inMode: .default, dequeue: true) { handle(up) }
         }
         // A modal session (an NSAlert's runModal) notices that a button stopped it only after its next event; a
         // physical click is followed by more events, this injected one by none, so it ends with an empty one.
@@ -296,7 +307,7 @@ final class EventInjector {
         let down = Self.dequeue(try mouse(.rightMouseDown, at: point, modifiers: [], clickCount: 1, in: window))
         NSApp.postEvent(try mouse(.rightMouseUp, at: point, modifiers: [], clickCount: 1, in: window), atStart: false)
         if window.isKeyWindow { NSApp.sendEvent(down) } else { target.rightMouseDown(with: down) }
-        if let up = NSApp.nextEvent(matching: .rightMouseUp, until: Date.distantPast, inMode: .default, dequeue: true) {
+        if let up = Self.pumpEvent(matching: .rightMouseUp, until: Date.distantPast, inMode: .default, dequeue: true) {
             if window.isKeyWindow { NSApp.sendEvent(up) } else { target.rightMouseUp(with: up) }
         }
     }

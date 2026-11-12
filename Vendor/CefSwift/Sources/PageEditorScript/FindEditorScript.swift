@@ -1,8 +1,10 @@
 import Foundation
 
-/// Created before page scripts, retained as a V8 function by the renderer, never published on window.
-enum FindEditorScript {
-    static let source = #"""
+/// The page side of find's selection capture, scoped search and replacement: one expression whose value is a function taking a JSON request
+/// and answering JSON. CEF's renderer evaluates it as each document's context is created and keeps the function, never on window; BrkCore
+/// keeps it on the global of Chrome's isolated world for the document. Shared by both engines, so it lives outside CefKit.
+public enum FindEditorScript {
+    public static let source = #"""
 (() => {
     const parse = JSON.parse, stringify = JSON.stringify;
     const tickets = new Map(), results = new Map();

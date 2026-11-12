@@ -1,7 +1,7 @@
 import BrkBase
 import Foundation
 import XCTest
-@testable import BrkCEF
+@testable import BrkEngine
 
 final class FindCorrelationTests: XCTestCase {
     func token(_ window: String, _ sequence: UInt64 = 1) -> SearchToken {

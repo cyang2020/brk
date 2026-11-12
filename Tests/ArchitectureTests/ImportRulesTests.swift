@@ -28,7 +28,7 @@ final class ImportRulesTests: XCTestCase {
         "BrkApp": ["NaturalLanguage", "PDFKit", "Carbon", "CoreServices", "UserNotifications", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "BrkImport", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "LocalAuthentication", "Security", "os"],
         "Brk": ["BrkApp", "BrkBase", "BrkCEF", "BrkCoreEngine", "BrkEngine", "AppKit", "Foundation"],
         // OS authorization of a site's camera, microphone, location and notifications (OSSiteAuthorization.swift, shared with BrkCEF).
-        "BrkCoreEngine": ["AVFoundation", "CoreLocation", "UserNotifications", "PDFKit", "BrkBase", "BrkEngine", "CBrkCore", "AppKit", "Foundation", "os"],
+        "BrkCoreEngine": ["AVFoundation", "CoreLocation", "UserNotifications", "PDFKit", "BrkBase", "BrkEngine", "CBrkCore", "PageEditorScript", "AppKit", "Foundation", "os"],
         // BrkCore.framework's interface: an Objective-C header, no Swift.
         "CBrkCore": [],
         "BrkE2E": ["PDFKit", "Vision", "ImageIO", "BrkBase", "BrkDomain", "BrkLayout", "BrkControl", "Foundation", "CoreGraphics"],

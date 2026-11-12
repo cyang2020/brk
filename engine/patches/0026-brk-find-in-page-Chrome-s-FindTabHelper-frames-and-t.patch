@@ -1,0 +1,470 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Thu, 12 Nov 2026 17:09:15 +0800
+Subject: [PATCH] brk: find in page (Chrome's FindTabHelper), frames and their
+ documents, a script in Chrome's isolated world of one frame, page fullscreen
+ to the shell, cookie import with a flush; a modifier key no longer asked
+ isARepeat
+
+---
+ brk/BUILD.gn                      |   2 +
+ brk/browser/brk_browser_window.mm |  36 ++++--
+ brk/browser/brk_profile.mm        |  69 ++++++++++++
+ brk/browser/brk_web_contents.mm   | 179 +++++++++++++++++++++++++++++-
+ 4 files changed, 275 insertions(+), 11 deletions(-)
+
+diff --git a/brk/BUILD.gn b/brk/BUILD.gn
+index f172c6afd2e1102ee19419117568dfa25a6219fb..f52c2fbad62884b8692215a3328b663388a2e978 100644
+--- a/brk/BUILD.gn
++++ b/brk/BUILD.gn
+@@ -62,6 +62,7 @@ source_set("browser") {
+     "//chrome/browser/ui",
+     "//components/content_settings/core/browser",
+     "//components/download/public/common:public",
++    "//components/find_in_page",
+     "//components/javascript_dialogs",
+     "//components/keep_alive_registry",
+     "//components/password_manager/core/browser",
+@@ -74,6 +75,7 @@ source_set("browser") {
+     "//content/public/browser",
+     "//extensions/browser",
+     "//extensions/common",
++    "//net",
+   ]
+   frameworks = [ "AppKit.framework" ]
+   data_deps = [ ":BrkCoreEarly" ]
+diff --git a/brk/browser/brk_browser_window.mm b/brk/browser/brk_browser_window.mm
+index 4cd3bb7d9ae5fb411c489f01902da511b2e02d8b..efdb2014c939164c5e32614d2ffb93908551a06f 100644
+--- a/brk/browser/brk_browser_window.mm
++++ b/brk/browser/brk_browser_window.mm
+@@ -43,18 +43,23 @@
+ 
+ namespace brkcore {
+ 
+-// Chrome's fullscreen and pointer lock state talks to this. Page fullscreen does not reach the shell yet (see
+-// docs/chromium/ARC-ENGINE.md), so the context says it cannot enter.
++// Chrome's fullscreen and pointer lock state talks to this. A page's fullscreen reaches the shell through the page
++// (-webContents:didChangeFullscreen:), and the shell takes the window in and out of macOS fullscreen as it does on CEF. So entering and
++// leaving here only record what Chrome asked for: Chrome's controller reads IsFullscreen right after asking, before the window's
++// animation, and a page's exit is ignored while it reads false.
+ class BrkExclusiveAccessContext : public ExclusiveAccessContext {
+  public:
+-  explicit BrkExclusiveAccessContext(BrowserWindowInterface* browser) : browser_(browser) {}
++  BrkExclusiveAccessContext(BrowserWindowInterface* browser, const BrkBrowserWindow* window)
++      : browser_(browser), window_(window) {}
+ 
+   Profile* GetProfile() override { return browser_->GetProfile(); }
+-  bool IsFullscreen() const override { return false; }
++  bool IsFullscreen() const override { return entered_ || window_->IsFullscreen(); }
+   void EnterFullscreen(const url::Origin& origin,
+                        ExclusiveAccessBubbleType bubble_type,
+-                       FullscreenTabParams fullscreen_tab_params) override {}
+-  void ExitFullscreen() override {}
++                       FullscreenTabParams fullscreen_tab_params) override {
++    entered_ = true;
++  }
++  void ExitFullscreen() override { entered_ = false; }
+   void UpdateExclusiveAccessBubble(const ExclusiveAccessBubbleParams& params,
+                                    ExclusiveAccessBubbleHideCallback first_hide_callback) override {
+     if (first_hide_callback) {
+@@ -66,18 +71,20 @@ class BrkExclusiveAccessContext : public ExclusiveAccessContext {
+   content::WebContents* GetWebContentsForExclusiveAccess() override {
+     return browser_->GetTabStripModel()->GetActiveWebContents();
+   }
+-  bool CanUserEnterFullscreen() const override { return false; }
++  bool CanUserEnterFullscreen() const override { return true; }
+   bool CanUserExitFullscreen() const override { return true; }
+ 
+  private:
+   const raw_ptr<BrowserWindowInterface> browser_;
++  const raw_ptr<const BrkBrowserWindow> window_;
++  bool entered_ = false;
+ };
+ 
+ BrkBrowserWindow::BrkBrowserWindow(BrowserWindowInterface* browser, BrkBrowser* owner)
+     : browser_(browser),
+       owner_(owner),
+       location_bar_(std::make_unique<BrkLocationBar>(browser)),
+-      exclusive_access_context_(std::make_unique<BrkExclusiveAccessContext>(browser)) {}
++      exclusive_access_context_(std::make_unique<BrkExclusiveAccessContext>(browser, this)) {}
+ 
+ BrkBrowserWindow::~BrkBrowserWindow() {
+   SetNativeWindow(nil);
+@@ -305,6 +312,15 @@ content::KeyboardEventProcessingResult BrkBrowserWindow::PreHandleKeyboardEvent(
+                          : content::KeyboardEventProcessingResult::NOT_HANDLED;
+ }
+ 
++namespace {
++
++// A modifier press reaches here as a raw key down whose NSEvent is FlagsChanged; asking such an event isARepeat throws.
++bool IsKeyDown(NSEvent* event) {
++  return event && event.type == NSEventTypeKeyDown;
++}
++
++}  // namespace
++
+ bool BrkBrowserWindow::HandleKeyboardEvent(const input::NativeWebKeyboardEvent& event) {
+   BrkBrowser* owner = owner_;
+   BrkWebContents* page = owner.focusedPage;
+@@ -313,7 +329,7 @@ bool BrkBrowserWindow::HandleKeyboardEvent(const input::NativeWebKeyboardEvent&
+   }
+   // An extension's shortcut (manifest "commands"), as Chrome's focus manager runs it for a key the page left.
+   NSEvent* key = event.os_event.Get();
+-  if (event.GetType() == blink::WebInputEvent::Type::kRawKeyDown && !(key && key.ARepeat)) {
++  if (event.GetType() == blink::WebInputEvent::Type::kRawKeyDown && !(IsKeyDown(key) && key.ARepeat)) {
+     if (!extension_keybindings_ && browser_->GetProfile()) {
+       if (TabListInterface* tabs = TabListInterface::From(browser_)) {
+         extension_keybindings_ = std::make_unique<BrkExtensionKeybindings>(browser_->GetProfile(), tabs);
+@@ -327,7 +343,7 @@ bool BrkBrowserWindow::HandleKeyboardEvent(const input::NativeWebKeyboardEvent&
+   // Not an auto-repeat: the shell's table leaves a held toggle's repeats to the page on purpose (Cmd+S hides the sidebar once), and the
+   // menu item with the same key would toggle again on each one.
+   NSEvent* native = event.os_event.Get();
+-  if (native && event.GetType() != blink::WebInputEvent::Type::kKeyUp && !native.ARepeat &&
++  if (IsKeyDown(native) && !native.ARepeat &&
+       (native.modifierFlags & NSEventModifierFlagCommand)) {
+     return [NSApp.mainMenu performKeyEquivalent:native];
+   }
+diff --git a/brk/browser/brk_profile.mm b/brk/browser/brk_profile.mm
+index 343e3437b92db4ac0d2d1664504efee42d700322..643a591b85a6e201a90fedb0ebbe4857deaa7a8a 100644
+--- a/brk/browser/brk_profile.mm
++++ b/brk/browser/brk_profile.mm
+@@ -3,6 +3,7 @@
+ #include <string>
+ 
+ #include "base/files/file_path.h"
++#include "base/barrier_closure.h"
+ #include "base/functional/bind.h"
+ #include "base/memory/scoped_refptr.h"
+ #include "base/memory/weak_ptr.h"
+@@ -14,6 +15,12 @@
+ #include "chrome/browser/extensions/extension_util.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "content/public/browser/storage_partition.h"
++#include "net/cookies/canonical_cookie.h"
++#include "net/cookies/cookie_access_result.h"
++#include "net/cookies/cookie_constants.h"
++#include "net/cookies/cookie_inclusion_status.h"
++#include "net/cookies/cookie_options.h"
++#include "url/gurl.h"
+ #include "services/network/public/mojom/clear_data_filter.mojom.h"
+ #include "services/network/public/mojom/cookie_manager.mojom.h"
+ #include "services/network/public/mojom/network_context.mojom.h"
+@@ -118,6 +125,68 @@
+       }));
+ }
+ 
++- (void)setCookies:(NSArray<NSDictionary<NSString*, id>*>*)cookies completion:(void (^)(NSUInteger))completion {
++  if (!_profile || cookies.count == 0) {
++    completion(0);
++    return;
++  }
++  network::mojom::CookieManager* manager =
++      _profile->GetDefaultStoragePartition()->GetCookieManagerForBrowserProcess();
++  __block NSUInteger accepted = 0;
++  // Written to disk before the answer, as CEF's import flushes: the app may restart right after an import.
++  base::RepeatingClosure done = base::BarrierClosure(cookies.count, base::BindOnce(^{
++                                                       manager->FlushCookieStore(base::BindOnce(^{
++                                                         completion(accepted);
++                                                       }));
++                                                     }));
++  auto string = [](NSDictionary* cookie, NSString* key) {
++    id value = cookie[key];
++    return std::string([value isKindOfClass:[NSString class]] ? [value UTF8String] : "");
++  };
++  auto time = [](NSDictionary* cookie, NSString* key) {
++    id value = cookie[key];
++    return [value isKindOfClass:[NSNumber class]] ? base::Time::FromSecondsSinceUnixEpoch([value doubleValue]) : base::Time();
++  };
++  for (NSDictionary* cookie in cookies) {
++    const GURL url(string(cookie, @"url"));
++    const bool http_only = [cookie[@"httpOnly"] boolValue];
++    net::CookieSameSite same_site = net::CookieSameSite::UNSPECIFIED;
++    switch ([cookie[@"sameSite"] intValue]) {
++      case 0: same_site = net::CookieSameSite::NO_RESTRICTION; break;
++      case 1: same_site = net::CookieSameSite::LAX_MODE; break;
++      case 2: same_site = net::CookieSameSite::STRICT_MODE; break;
++      default: break;
++    }
++    net::CookiePriority priority = net::COOKIE_PRIORITY_MEDIUM;
++    switch ([cookie[@"priority"] intValue]) {
++      case 0: priority = net::COOKIE_PRIORITY_LOW; break;
++      case 2: priority = net::COOKIE_PRIORITY_HIGH; break;
++      default: break;
++    }
++    net::CookieInclusionStatus status;
++    std::unique_ptr<net::CanonicalCookie> canonical = net::CanonicalCookie::CreateSanitizedCookie(
++        url, string(cookie, @"name"), string(cookie, @"value"), string(cookie, @"domain"), string(cookie, @"path"),
++        time(cookie, @"creation"), time(cookie, @"expires"), time(cookie, @"lastAccess"), [cookie[@"secure"] boolValue],
++        http_only, same_site, priority, /*partition_key=*/std::nullopt, &status);
++    if (!canonical) {
++      done.Run();
++      continue;
++    }
++    // As CEF's cookie manager and Chrome's importer: the import writes what the browser itself would accept from that site.
++    net::CookieOptions options;
++    if (http_only) {
++      options.set_include_httponly();
++    }
++    options.set_same_site_cookie_context(net::CookieOptions::SameSiteCookieContext::MakeInclusive());
++    manager->SetCanonicalCookie(*canonical, url, options, base::BindOnce(^(net::CookieAccessResult result) {
++                                  if (result.status.IsInclude()) {
++                                    accepted += 1;
++                                  }
++                                  done.Run();
++                                }));
++  }
++}
++
+ - (void)clearCacheWithCompletion:(void (^)(void))completion {
+   if (!_profile) {
+     completion();
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index dd5402d6adbe0e224db9738da108e1c161c9d948..148af3bd9b544ee157464c50513dcd38ce7c9aa0 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -10,6 +10,9 @@
+ #include "base/functional/bind.h"
+ #include "base/json/json_writer.h"
+ #include "base/memory/raw_ptr.h"
++#include "base/memory/weak_ptr.h"
++#include "base/scoped_observation.h"
++#include "base/token.h"
+ #include "base/strings/sys_string_conversions.h"
+ #include "base/task/single_thread_task_runner.h"
+ #include "base/strings/utf_string_conversions.h"
+@@ -20,6 +23,11 @@
+ #include "brk/browser/brk_permission_prompt.h"
+ #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
+ #include "chrome/browser/profiles/profile.h"
++#include "chrome/common/chrome_isolated_world_ids.h"
++#include "components/find_in_page/find_result_observer.h"
++#include "components/find_in_page/find_tab_helper.h"
++#include "components/find_in_page/find_types.h"
++#include "content/public/browser/document_user_data.h"
+ #include "components/content_settings/core/browser/host_content_settings_map.h"
+ #include "components/content_settings/core/common/content_settings.h"
+ #include "components/content_settings/core/common/content_settings_types.h"
+@@ -68,9 +76,42 @@ NSEventModifierFlags FlagsFromModifiers(int modifiers) {
+   return flags;
+ }
+ 
++// A random id for one document of a frame (Chromium keeps its own DocumentToken private to content/): a frame's next document gets a
++// new one, and Brk's isolated world state, which lives on that document's window, goes with it.
++class BrkDocumentID : public content::DocumentUserData<BrkDocumentID> {
++ public:
++  ~BrkDocumentID() override = default;
++  const std::string& value() const { return value_; }
++
++ private:
++  explicit BrkDocumentID(content::RenderFrameHost* frame)
++      : DocumentUserData(frame), value_(base::Token::CreateRandom().ToString()) {}
++  friend content::DocumentUserData<BrkDocumentID>;
++  DOCUMENT_USER_DATA_KEY_DECL();
++
++  const std::string value_;
++};
++
++DOCUMENT_USER_DATA_KEY_IMPL(BrkDocumentID);
++
++NSString* FrameID(content::RenderFrameHost* frame) {
++  return base::SysUTF8ToNSString(frame->GetFrameToken().ToString());
++}
++
++NSString* DocumentID(content::RenderFrameHost* frame) {
++  return base::SysUTF8ToNSString(BrkDocumentID::GetOrCreateForCurrentDocument(frame)->value());
++}
++
++// A frame of the page's current document tree that runs and is not on its way out.
++bool IsLiveFrame(content::RenderFrameHost* frame) {
++  return frame->IsRenderFrameLive() &&
++         frame->GetLifecycleState() == content::RenderFrameHost::LifecycleState::kActive;
++}
++
+ // Holds the page's Chromium side: the observer that turns Chromium's callbacks into delegate calls, and its DevTools session.
+ class BrkPage : public content::WebContentsObserver,
+-                public content::WebContentsUserData<BrkPage> {
++                public content::WebContentsUserData<BrkPage>,
++                public find_in_page::FindResultObserver {
+  public:
+   ~BrkPage() override = default;
+ 
+@@ -92,6 +133,9 @@ class BrkPage : public content::WebContentsObserver,
+     }
+   }
+   void DidFinishNavigation(content::NavigationHandle* handle) override {
++    if (handle->HasCommitted() && !handle->IsSameDocument()) {
++      FramesChanged();
++    }
+     if (!handle->IsInPrimaryMainFrame()) {
+       return;
+     }
+@@ -174,8 +218,41 @@ class BrkPage : public content::WebContentsObserver,
+       [delegate webContentsDidChangeSecurity:owner_];
+     }
+   }
++  void RenderFrameCreated(content::RenderFrameHost* frame) override { FramesChanged(); }
++  void RenderFrameDeleted(content::RenderFrameHost* frame) override { FramesChanged(); }
++  void RenderFrameHostChanged(content::RenderFrameHost* old_host, content::RenderFrameHost* new_host) override {
++    FramesChanged();
++  }
++  void DidToggleFullscreenModeForTab(bool entered_fullscreen, bool will_cause_resize) override {
++    id<BrkCoreWebContentsDelegate> delegate = owner_.delegate;
++    if ([delegate respondsToSelector:@selector(webContents:didChangeFullscreen:)]) {
++      [delegate webContents:owner_ didChangeFullscreen:entered_fullscreen];
++    }
++  }
+   void WebContentsDestroyed() override;
+ 
++  // Chrome's FindTabHelper exists once the page is a tab; its results go to the shell from the first search on.
++  void ObserveFind(find_in_page::FindTabHelper* helper) {
++    if (!find_observation_.IsObserving()) {
++      find_observation_.Observe(helper);
++    }
++  }
++  // find_in_page::FindResultObserver:
++  void OnFindResultAvailable(content::WebContents* contents) override {
++    find_in_page::FindTabHelper* helper = find_in_page::FindTabHelper::FromWebContents(contents);
++    id<BrkCoreWebContentsDelegate> delegate = owner_.delegate;
++    if (!helper || ![delegate respondsToSelector:@selector(webContents:didFindRequest:matches:active:final:)]) {
++      return;
++    }
++    const find_in_page::FindNotificationDetails& result = helper->find_result();
++    [delegate webContents:owner_
++           didFindRequest:result.request_id()
++                  matches:result.number_of_matches()
++                   active:result.active_match_ordinal()
++                    final:result.final_update()];
++  }
++  void OnFindTabHelperDestroyed(find_in_page::FindTabHelper* helper) override { find_observation_.Reset(); }
++
+  private:
+   friend class content::WebContentsUserData<BrkPage>;
+   BrkPage(content::WebContents* contents, BrkWebContents* owner)
+@@ -183,6 +260,23 @@ class BrkPage : public content::WebContentsObserver,
+         content::WebContentsUserData<BrkPage>(*contents),
+         owner_(owner) {}
+ 
++  // Frames come and go in bursts (a page with iframes): one report after the burst.
++  void FramesChanged() {
++    if (frames_report_posted_) {
++      return;
++    }
++    frames_report_posted_ = true;
++    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
++        FROM_HERE, base::BindOnce(&BrkPage::ReportFrames, weak_factory_.GetWeakPtr()));
++  }
++  void ReportFrames() {
++    frames_report_posted_ = false;
++    id<BrkCoreWebContentsDelegate> delegate = owner_.delegate;
++    if ([delegate respondsToSelector:@selector(webContentsFrameDocumentsChanged:)]) {
++      [delegate webContentsFrameDocumentsChanged:owner_];
++    }
++  }
++
+   void ReportLoading() {
+     content::WebContents& contents = GetWebContents();
+     [owner_.delegate webContents:owner_
+@@ -194,6 +288,9 @@ class BrkPage : public content::WebContentsObserver,
+   __weak BrkWebContents* owner_;
+   std::unique_ptr<brkcore::BrkDevToolsSession> devtools_;
+   bool closing_by_shell_ = false;
++  bool frames_report_posted_ = false;
++  base::ScopedObservation<find_in_page::FindTabHelper, find_in_page::FindResultObserver> find_observation_{this};
++  base::WeakPtrFactory<BrkPage> weak_factory_{this};
+ 
+   WEB_CONTENTS_USER_DATA_KEY_DECL();
+ };
+@@ -211,6 +308,7 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+ 
+ @interface BrkWebContents ()
+ - (void)contentsWillGo:(BOOL)byShell;
++- (content::RenderFrameHost*)liveFrame:(NSString*)frame;
+ @end
+ 
+ @implementation BrkWebContents {
+@@ -457,6 +555,85 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   }
+ }
+ 
++- (void)findText:(NSString*)text forward:(BOOL)forward matchCase:(BOOL)matchCase {
++  find_in_page::FindTabHelper* helper = _contents ? find_in_page::FindTabHelper::FromWebContents(_contents) : nullptr;
++  if (!helper) {
++    return;
++  }
++  BrkPage::FromWebContents(_contents)->ObserveFind(helper);
++  helper->StartFinding(base::SysNSStringToUTF16(text), forward, matchCase, /*find_match=*/true);
++}
++
++- (void)stopFindingClearingSelection:(BOOL)clear {
++  if (find_in_page::FindTabHelper* helper = _contents ? find_in_page::FindTabHelper::FromWebContents(_contents) : nullptr) {
++    helper->StopFinding(clear ? find_in_page::SelectionAction::kClear : find_in_page::SelectionAction::kKeep);
++  }
++}
++
++- (NSDictionary<NSString*, NSString*>*)frameDocuments {
++  NSMutableDictionary<NSString*, NSString*>* frames = [NSMutableDictionary dictionary];
++  if (_contents) {
++    _contents->GetPrimaryMainFrame()->ForEachRenderFrameHost([frames](content::RenderFrameHost* frame) {
++      if (IsLiveFrame(frame)) {
++        frames[FrameID(frame)] = DocumentID(frame);
++      }
++    });
++  }
++  return frames;
++}
++
++- (NSString*)focusedFrame {
++  content::RenderFrameHost* frame = _contents ? _contents->GetFocusedFrame() : nullptr;
++  if (!frame || content::WebContents::FromRenderFrameHost(frame) != _contents.get() || !IsLiveFrame(frame) ||
++      &frame->GetPage() != &_contents->GetPrimaryPage()) {
++    return nil;
++  }
++  return FrameID(frame);
++}
++
++- (content::RenderFrameHost*)liveFrame:(NSString*)frame {
++  if (!_contents) {
++    return nullptr;
++  }
++  const std::string wanted = base::SysNSStringToUTF8(frame);
++  content::RenderFrameHost* found = nullptr;
++  _contents->GetPrimaryMainFrame()->ForEachRenderFrameHost([&](content::RenderFrameHost* candidate) {
++    if (!found && IsLiveFrame(candidate) && candidate->GetFrameToken().ToString() == wanted) {
++      found = candidate;
++    }
++  });
++  return found;
++}
++
++- (void)evaluateIsolatedScript:(NSString*)script
++                       inFrame:(NSString*)frame
++                      document:(NSString*)document
++                    completion:(void (^)(NSString* _Nullable))completion {
++  content::RenderFrameHost* target = [self liveFrame:frame];
++  if (!target || ![DocumentID(target) isEqualToString:document]) {
++    completion(nil);
++    return;
++  }
++  // Chrome's world for its own page scripts (DOM distiller and the like): the page's scripts cannot reach it, and Brk's globals there
++  // have their own names. If the frame goes first, Chromium drops the callback; the caller has its own time limit.
++  target->ExecuteJavaScriptInIsolatedWorld(base::SysNSStringToUTF16(script), base::BindOnce(^(base::Value value) {
++                                             if (value.is_none()) {
++                                               completion(nil);
++                                               return;
++                                             }
++                                             std::string json;
++                                             base::JSONWriter::Write(value, &json);
++                                             completion(base::SysUTF8ToNSString(json));
++                                           }),
++                                           ISOLATED_WORLD_ID_CHROME_INTERNAL);
++}
++
++- (void)exitFullscreen {
++  if (_contents) {
++    _contents->ExitFullscreen(/*will_cause_resize=*/true);
++  }
++}
++
+ - (void)tabHelpersReady {
+   if (_contents) {
+     brkcore::UseShellPermissionPrompts(_contents);

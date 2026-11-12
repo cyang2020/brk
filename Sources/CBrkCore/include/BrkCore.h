@@ -242,6 +242,17 @@ NS_SWIFT_UI_ACTOR
 - (NSInteger)webContents:(id<BrkCoreWebContents>)contents
           runContextMenu:(NSArray<NSDictionary<NSString*, id>*>*)items
                     info:(NSDictionary<NSString*, id>*)info;
+/// A result of -findText:forward:matchCase: (Chrome's FindTabHelper): Chromium's request number, which only grows; how many matches;
+/// which one is current (0: none); and whether the count is final for this request.
+- (void)webContents:(id<BrkCoreWebContents>)contents
+     didFindRequest:(int)request
+            matches:(int)count
+             active:(int)ordinal
+              final:(BOOL)final;
+/// A frame of the page got a new document, or a frame came or went. -frameDocuments has the new state.
+- (void)webContentsFrameDocumentsChanged:(id<BrkCoreWebContents>)contents;
+/// The page entered or left fullscreen (an element's requestFullscreen, its exit, or -exitFullscreen). The shell sizes the window.
+- (void)webContents:(id<BrkCoreWebContents>)contents didChangeFullscreen:(BOOL)fullscreen;
 @end
 
 NS_SWIFT_UI_ACTOR
@@ -294,6 +305,24 @@ NS_SWIFT_UI_ACTOR
                           element:(NSString*)element
                         operation:(NSString*)operation
                            volume:(double)volume;
+/// Chrome's find in page: finds the next (or previous) match of `text` and highlights all of them. The same text again moves to the next
+/// match; other text or case starts a new search. Results come in -webContents:didFindRequest:matches:active:final:.
+- (void)findText:(NSString*)text forward:(BOOL)forward matchCase:(BOOL)matchCase;
+/// Ends the search. YES clears the found text's selection; NO keeps it as the page's selection.
+- (void)stopFindingClearingSelection:(BOOL)clear;
+/// The page's live frames (its out-of-process frames too), each with its current document: frame id to document id. A frame keeps
+/// its id for its life; each document a frame shows gets a new one.
+@property(nonatomic, readonly) NSDictionary<NSString*, NSString*>* frameDocuments;
+/// The frame that has keyboard focus, as a key of -frameDocuments; nil when none.
+@property(nonatomic, readonly, nullable) NSString* focusedFrame;
+/// Runs `script` (one expression) in Brk's isolated world of the frame, if it still shows `document`, and answers its value as JSON.
+/// The page's own scripts do not see that world's globals. nil when the frame or document is gone or the script threw.
+- (void)evaluateIsolatedScript:(NSString*)script
+                       inFrame:(NSString*)frame
+                      document:(NSString*)document
+                    completion:(void (^)(NSString* _Nullable json))completion;
+/// Takes the page out of fullscreen, as Escape does in Chrome.
+- (void)exitFullscreen;
 /// Writes a remembered choice into the profile's content settings for `requesting` embedded in `topLevel`: an allow (YES), a block
 /// (NO), or back to asking (nil).
 - (void)setPermission:(BrkCorePermissionKind)kinds
@@ -370,6 +399,11 @@ NS_SWIFT_UI_ACTOR
 - (void)clearCookiesWithCompletion:(void (^)(NSUInteger deleted))completion;
 /// Empties the profile's HTTP cache. Calls back when done.
 - (void)clearCacheWithCompletion:(void (^)(void))completion;
+/// Writes cookies into the profile, as Chrome's importer does. Each dictionary: `url` (the address the cookie is set from), `name`,
+/// `value`, `domain` ("" for a host-only cookie), `path`, `expires`, `creation`, `lastAccess` (seconds since 1970; no `expires`: a
+/// session cookie), `secure`, `httpOnly`, `sameSite` (-1 unspecified, 0 none, 1 lax, 2 strict), `priority` (0 low, 1 medium, 2 high).
+/// Calls back with how many the cookie store took.
+- (void)setCookies:(NSArray<NSDictionary<NSString*, id>*>*)cookies completion:(void (^)(NSUInteger accepted))completion;
 @end
 
 NS_SWIFT_UI_ACTOR

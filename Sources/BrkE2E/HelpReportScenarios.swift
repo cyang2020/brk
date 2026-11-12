@@ -71,7 +71,7 @@ enum HelpReportScenarios {
         let (bugTab, bug) = try waitForForm(app, "Report a Bug… opens the bug form in a tab", except: before)
         try expect(bug["template"] == "bug_report.yml", "template: \(bug)")
         try expect(bug["version"]?.hasPrefix("\(app.productPrefix) ") == true && bug["macos"]?.isEmpty == false
-                   && bug["mac"]?.isEmpty == false && bug["engine"]?.contains("CEF") == true, "bug form fields: \(bug)")
+                   && bug["mac"]?.isEmpty == false && bug["engine"]?.contains(app.engine == .core ? "BrkCore" : "CEF") == true, "bug form fields: \(bug)")
         try expect(!bug.values.contains { $0.contains(NSHomeDirectory()) }, "the form names the home folder: \(bug)")
         _ = try app.screenshot("report-a-bug")
 

@@ -259,30 +259,33 @@ cache get no load-finished callback; the popup's first frame is replaced when it
 
 ## Part 5: What is missing before BrkCore could be the default
 
-Measured with a sample of 38 other scenarios on `BRK_ENGINE=core` (`8145e3dcd3:verify/chromium/sample-core-1/REPORT.md`, then R7b fixed and rerun in
-`8145e3dcd3:verify/chromium/r7b-core-1/`): 19 pass, 19 fail. Every failure below is a `WebEngine` call `CoreEngine` does not implement yet, or a Chrome path that still
-opens Chrome's own UI. Nothing in this list was tried and found impossible.
+Measured on 2026-11-12 (main after this round) with every group in `scripts/native-sets.txt` but `real` (which spends the user's
+agent quota) on `BRK_ENGINE=core`, evidence in `~/brk-evidence/chromium/core-gateA2`, `core-gateB`, `core-gateC`: 119 of 119 pass.
+Two failed once inside a long group and passed alone, AIAgentLivePages and Input-SwipeIndicator (3 of 3 alone); both pass on CEF.
+What the earlier sample (2026-11-07, 19 of 38) was missing is built: links that ask for a new window, downloads, site data and rules,
+permission prompts, connection security, extensions, sound and media, page reading, profiles, page dialogs, context menus, save cards,
+find in page, page fullscreen, cookie import.
 
-| Area | Scenario that shows it | What has to be built |
+What still has no BrkCore body, none of it covered by a scenario on either engine:
+
+| Area | `WebEngine` call | What has to be built |
 | --- | --- | --- |
-| Links that ask for a new window (Shift+click, `window.open` with features) | W2-6 | a hook where Chrome opens a URL in a new window or popup (`OpenURLFromTab`, `AddNewContents`), sending it to the shell as CEF's `OnOpenURLFromTab` does |
-| Downloads | W2-11 | `DownloadManagerDelegate` events to `Transfers` (the CEF engine's flow, already engine-neutral) |
-| Website data and per-site policy | SitePolicy-clear, -blocking, -appearance, Boost-CSS | `clearSiteData`, `clearProfileData`, the request filter, website CSS, dark mode, Boost scripts: the CEF engine does these through DevTools and request handlers; on BrkCore they are direct Chromium calls |
-| Permission prompts | SitePermission-prompt, SitePolicy-permission | a `PermissionPrompt` factory for Brk's window (Arc's `permission_prompt_impl.cc`) |
-| Connection security in the site controls | SiteSecurity-secure, -invalid | `SecurityStateTabHelper` state to `PageEvent.securityChanged` |
-| Extension management beyond install and the action | Ext-catalog, Ext-shortcuts, Ext-controls | incognito access, commands, uninstall, pins: `ExtensionPrefs`, `CommandService`, `ExtensionRegistrar` |
-| Media, audio, picture in picture, capture | Audio1, MediaControls, CaptureProbe | `MediaSessionImpl`, audible state, `captureViewport` |
-| AI page reading and translation | AIPage, AITranslate | page text and language through the frame, as the CEF engine does over DevTools |
-| Profiles other than Default, profile deletion | W2-2 | named profiles load, but deletion and the directory scheme follow CEF's; to align |
-| Chrome dialogs that need a Views host | none in the sample | JavaScript alerts and other tab-modal dialogs need a `WebContentsModalDialogHost`; Brk's window answers none. Arc replaced 46 such entry points |
-| DevTools, find in page, context menus, fullscreen, print, task manager, tracing | not in the sample | each is a `WebEngine` call with no BrkCore body yet |
+| DevTools window | `perform(.toggleDevTools)`, `.developer(.inspect/.console/.network)` | a window for Chrome's `DevToolsWindow` (it opens a Browser of type devtools, which needs a Brk window as host) |
+| View source | `.developer(.source)` | open `view-source:` as a new page, as CEF does |
+| Cast | `perform(.cast)` | Chrome's media router dialog has a Views host; Brk needs its own list of sinks from `MediaRouter` |
+| Document picture in picture | `perform(.documentPictureInPicture)` | a window for the `documentPictureInPicture.requestWindow()` contents (Chrome's `PictureInPictureWindowManager`) |
+| Task manager | `tasks()`, `endTask` | Chrome's `TaskManagerInterface` rows and `KillTask` |
+| Tracing | `beginTrace`, `endTrace` | `content::TracingController` start and stop with a file |
+| Edit menu text services | `PageSurfaceView.prepareEditingMenu` | what CEF's surface asks the page for spelling and the Speech and Substitutions items |
+
+The build no longer turns on Chromium's list of experiments for its test bots (`disable_fieldtrial_testing_config` in
+`engine/args/brk.gn`): it had shown a "Search with Chromium" icon in the menu bar (OmniboxEverywhere) and turns on hundreds of
+unfinished features that Chrome and CEF run without.
 
 Beyond the scenarios:
 - **Release build.** This is a non-official build without LTO or PGO and without symbols for Chromium's code. A shipped engine needs the official
   configuration, a crash reporter and a dSYM; that build needs much more memory and time than this machine.
 - **Signing.** `dist-core/Brk.app` is signed ad hoc. Helpers need the hardened runtime and entitlements as in `scripts/build.sh` before notarization.
-- **Malloc zone.** Chromium's allocator replaces the process's default zone when the framework loads. Brk loads it with `dlopen` before other threads
-  exist, which is the case Chromium's code accepts; Chrome itself registers the zone first thing in `main`. A shipped Brk should do the same in its own `main`.
 - **Network calls home.** The test runs show Chromium's GCM client registering with Google even with `--disable-background-networking` and no API keys
   (`registration_request.cc` errors in the logs). The shipped engine should turn that off at build time.
-- **Updating Chromium.** Each new milestone means rebasing 12 patches; 20 of Chromium's own files are touched, most by one or two lines.
+- **Updating Chromium.** Each new milestone means rebasing 26 patches; 31 of Chromium's own files are touched (143 lines added, 15 removed), most by one or two lines.

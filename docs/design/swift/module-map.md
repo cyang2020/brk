@@ -34,7 +34,7 @@ Every module is a SwiftPM target. Paths are under `Sources/`.
 | Local models | `BrkLocalModels/` | ai-native slice B (2026-11-08) | the model downloads (pinned, SHA-256 checked), one llama.cpp helper process per model on a Unix socket, the Jev-shaped decision readout, embeddings, the search-by-meaning index file, clustering | `LocalModels`, `ModelCatalog`, `LlamaRuntime`, `ModelStore`, `ModelHelper`, `LocalEmbedder`, `LocalDecider`, `JevRequest`, `JevResponse`, `JevNoneRule`, `SemanticIndex`, `EmbeddingGroups` | BrkApp |
 | Composition root | `Brk/main.swift` | W2 | which engine runs; CEF before `NSApp` | the executable | (none) |
 | E2E runner | `BrkE2E/` | W6 | process launch, fixture server, polling, report writing, owned file-panel accessibility verification and system-wide input (`NativePickerInput.swift`: window-server key presses, the status item, a held hot key) | `brk-e2e` executable | (none) |
-| Vendored CefSwift | `Vendor/CefSwift/` at `ba6ebff` | W2 (bumps only) | the CEF C API, refcounting, the dlopen loader, the message pump | `CefKit` product, the `cef` command plugin, `cef-helper` | BrkCEF only |
+| Vendored CefSwift | `Vendor/CefSwift/` at `ba6ebff` | W2 (bumps only) | the CEF C API, refcounting, the dlopen loader, the message pump | `CefKit` product, the `cef` command plugin, `cef-helper`; `PageEditorScript` (find's page script, no CEF in it) | BrkCEF; BrkCoreEngine uses only `PageEditorScript` |
 
 ## Workers
 
@@ -60,7 +60,7 @@ BrkDomain   -> BrkBase
 BrkLayout   -> BrkDomain, BrkBase
 BrkEngine   -> BrkBase
 BrkCEF      -> BrkEngine, BrkBase, CefKit (vendored)
-BrkCoreEngine -> BrkEngine, BrkBase, CBrkCore (a header; BrkCore.framework is loaded at run time)
+BrkCoreEngine -> BrkEngine, BrkBase, CBrkCore (a header; BrkCore.framework is loaded at run time), PageEditorScript (vendored)
 BrkTheme    -> BrkDomain, BrkBase
 BrkUIKit    -> BrkLayout, BrkDomain, BrkBase
 BrkSidebar  -> BrkUIKit, BrkLayout, BrkDomain, BrkBase

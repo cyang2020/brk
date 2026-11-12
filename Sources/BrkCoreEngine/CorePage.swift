@@ -29,6 +29,8 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     var frozen = false
     var pictureInPictureDocument: DocumentToken?
     var audible = false
+    /// What checkSelection last reported for this document.
+    var reportedSelection = false
     let contextMenu = CoreContextMenu()
     /// The page's audio and video elements as last read (`CoreMedia.swift`).
     var mediaPlayers: [MediaPlayer] = []
@@ -65,6 +67,38 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
 
     var readyDocument: DocumentToken? { mainDocument.readyDocument }
 
+    /// Find in page, the same logic as on CEF (PageFind), over Chrome's find and FindEditorScript in an isolated world.
+    private(set) lazy var find: PageFind = {
+        let host = CoreFindHost(contents)
+        let find = PageFind(host: host) { [weak self] update in
+            guard let self else { return }
+            self.engine.findUpdated(update)
+        }
+        host.receive = { [weak find] message in find?.receive(message) }
+        findHost = host
+        return find
+    }()
+    private var findHost: CoreFindHost?
+
+    /// As CEF's frame, which holds a script until the renderer's frame exists: a script sent before this page's first document
+    /// committed waits for that document and runs once its own scripts have run (DOMContentLoaded), not in the empty starting
+    /// document that the navigation then replaces. nil once the first document is there.
+    private var scriptsBeforeFirstDocument: [String]? = []
+
+    func evaluate(_ script: String) {
+        if scriptsBeforeFirstDocument != nil { scriptsBeforeFirstDocument?.append(script); return }
+        contents.evaluateJavaScript(script, completion: nil)
+    }
+
+    private func runScriptsBeforeFirstDocument() {
+        guard let queued = scriptsBeforeFirstDocument else { return }
+        scriptsBeforeFirstDocument = nil
+        for script in queued {
+            contents.evaluateJavaScript("(()=>{const run=()=>{\n\(script)\n};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();})()",
+                                        completion: nil)
+        }
+    }
+
     /// A page Chromium made by itself for this address (target=_blank) is taken over, keeping its opener; otherwise a new one loads it.
     init(spec: PageSpec, url: URL, engine: CoreEngine, incarnation: PageLedger.Incarnation, browser: any BrkCoreBrowser) {
         id = spec.id
@@ -83,6 +117,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
         surface = CoreSurface(page: spec.id, contents: contents)
         super.init()
         contents.delegate = self
+        if contents.committedURL != nil { scriptsBeforeFirstDocument = nil }
         contents.audioMuted = spec.muted
         surface.onReadyForFocus = { [weak self] in
             guard let self else { return }
@@ -131,6 +166,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     func dropFocus() { contents.setPageFocused(false) }
 
     func close() {
+        find.invalidate()
         settlePermissionGrants(keeping: nil)
         captureRevision &+= 1
         reloadSequence.cancel()
@@ -141,6 +177,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     }
 
     func park() {
+        find.invalidate()
         captureRevision &+= 1
         contextMenu.cancel()
         cancelDialogs()
@@ -212,6 +249,8 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     func webContents(_ contents: any BrkCoreWebContents, didStartDocument url: URL?) {
         settlePermissionGrants(keeping: nil)
         detectedLanguage = nil
+        reportedSelection = false
+        runScriptsBeforeFirstDocument()
         mediaPlayers = []
         emit(mainDocument.started(url))
         refreshBoosts()
@@ -246,6 +285,8 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
 
     func webContents(_ contents: any BrkCoreWebContents, didFailLoadCode code: Int, description: String, url: String) {
         reloadSequence.cancel()
+        // The error page is the document now, as on CEF.
+        runScriptsBeforeFirstDocument()
         emit(mainDocument.loadFailed(code: code, description: description, url: url))
     }
 
@@ -276,6 +317,20 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     func webContents(_ contents: any BrkCoreWebContents, didChangeZoomLevel level: Double) { reportZoom() }
 
     func webContentsClosed(byPage contents: any BrkCoreWebContents) {}
+
+    @objc(webContents:didFindRequest:matches:active:final:)
+    func webContents(_ contents: any BrkCoreWebContents, didFindRequest request: Int32, matches count: Int32, active ordinal: Int32, final: Bool) {
+        find.nativeResult(id: Int(request), count: Int(count), ordinal: Int(ordinal), final: final)
+    }
+
+    @objc(webContentsFrameDocumentsChanged:)
+    func webContentsFrameDocumentsChanged(_ contents: any BrkCoreWebContents) { findHost?.framesChanged() }
+
+    /// The app takes the window into macOS fullscreen and back, as for CEF's page fullscreen.
+    @objc(webContents:didChangeFullscreen:)
+    func webContents(_ contents: any BrkCoreWebContents, didChangeFullscreen fullscreen: Bool) {
+        engine.pageDidEmit(self, .fullscreenChanged(fullscreen))
+    }
 
     /// Later: the framework calls this from inside Chromium's tab strip, which refuses any change while it notifies.
     func webContentsDidClose(_ contents: any BrkCoreWebContents) {

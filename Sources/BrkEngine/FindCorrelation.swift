@@ -1,6 +1,6 @@
 import BrkBase
 
-/// CEF 154 uses a process-wide counter and filters replies older than the current search session.
+/// The engine's find replies carry a growing request number (CEF's process-wide counter, Chrome's FindTabHelper request id) and filters replies older than the current search session.
 /// The first eligible ID binds a pending step. A final result releases the next queued step, not the session.
 struct FindCorrelation {
     struct Step: Equatable { let request: FindRequestID; let direction: FindDirection }

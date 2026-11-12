@@ -263,6 +263,12 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         Quit.fixtureTrace("delegate entered")
+        // AppKit's own quit (its timer after the last window closed) can fire inside a control op's event pump, where the ordered
+        // quit could never run (Quit): decline, and ask again once the op has returned.
+        if EventInjector.isPumping {
+            Quit.enqueue { NSApp.terminate(nil) }
+            return .terminateCancel
+        }
         guard !quitting, !askingQuit else { return .terminateLater }
         // A quit that did not come through `AppEffect.quit` (the Dock menu, a quit Apple event) asks "Warn before
         // quitting" here; a logout, restart or shut down does not.
@@ -404,7 +410,14 @@ public enum Quit {
     }
 
     static func enqueue(_ action: @escaping @MainActor () -> Void) {
-        RunLoop.main.perform(inModes: [.common, .modalPanel, .eventTracking]) { MainActor.assumeIsolated { fixtureTrace("run-loop block entered"); action() } }
+        RunLoop.main.perform(inModes: [.common, .modalPanel, .eventTracking]) {
+            MainActor.assumeIsolated {
+                // A control op's injected key can ask for the quit and then run the loop again from inside its main-queue job
+                // (the key-up): that is the deadlock above, so the block waits for the next pass after the op.
+                if EventInjector.isPumping { enqueue(action); return }
+                fixtureTrace("run-loop block entered"); action()
+            }
+        }
     }
 }
 

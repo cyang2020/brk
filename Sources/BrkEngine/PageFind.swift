@@ -1,16 +1,48 @@
 import BrkBase
-import CefKit
 import Foundation
+
+/// One frame's current document, as the engine names them. A new document of the same frame has a new `document`.
+public struct FindFrame: Hashable, Sendable {
+    public let frame: String
+    public let document: String
+    public init(frame: String, document: String) { self.frame = frame; self.document = document }
+}
+
+/// A message from a frame's find editor (FindEditorScript): "created" and "released" when documents come and go (an engine without
+/// per-document events sends "released" with any frame when its frames changed), "result" with the answer to `request`.
+public struct FindEditorMessage: Sendable {
+    public let frame: String
+    public let document: String
+    public let kind: String
+    public let request: String
+    public let payload: String
+    public init(frame: String, document: String, kind: String, request: String, payload: String) {
+        self.frame = frame; self.document = document; self.kind = kind; self.request = request; self.payload = payload
+    }
+}
+
+/// What find needs from an engine's page: Chromium's find in page and a way to ask each frame's editor.
+@MainActor
+public protocol FindHost: AnyObject {
+    /// Chromium's find: the next or previous match; the same text continues, other text starts over. Replies go to PageFind.nativeResult.
+    func startFinding(_ text: String, forward: Bool, matchCase: Bool)
+    func stopFinding(clearSelection: Bool)
+    var findFrames: [FindFrame] { get }
+    func focusedFindFrame() -> FindFrame?
+    func isCurrent(_ frame: FindFrame) -> Bool
+    /// Sends one request to the frame's editor; its answer comes to PageFind.receive as a "result". false when that document is gone.
+    func sendEditor(to frame: FindFrame, request: String, payload: String) -> Bool
+}
 
 /// One adapter per browser incarnation. It owns no browser lease, and is invalidated before presentation retires.
 @MainActor
-final class PageFind {
-    private unowned let browser: CefBrowser
+public final class PageFind {
+    private let host: any FindHost
     private let publish: (FindUpdate) -> Void
     private(set) var document: DocumentToken?
     private var correlation = FindCorrelation()
     private var scopedSearch: (SearchToken, FindQuery, SelectionTicket)?
-    private struct Selection { let ticket: SelectionTicket; let frame: CefBrowser.FrameDocument }
+    private struct Selection { let ticket: SelectionTicket; let frame: FindFrame }
     private var selection: Selection?
     private var captureRequest: FindRequestID?
     private enum Operation {
@@ -19,7 +51,7 @@ final class PageFind {
     }
     private struct Pending {
         let document: DocumentToken
-        let frame: CefBrowser.FrameDocument
+        let frame: FindFrame
         let operation: Operation
     }
     private var pending: [FindRequestID: Pending] = [:]
@@ -31,24 +63,25 @@ final class PageFind {
     private var revisions = FindRevisions()
     private var rendererUsed = false
 
-    init(browser: CefBrowser, publish: @escaping (FindUpdate) -> Void) { self.browser = browser; self.publish = publish }
+    /// `host` is kept strongly: give it an object that refers to the engine's page weakly or unowned.
+    public init(host: any FindHost, publish: @escaping (FindUpdate) -> Void) { self.host = host; self.publish = publish }
 
-    func observe(_ event: PageEvent) {
+    public func observe(_ event: PageEvent) {
         if case .documentChanged(let availability) = event {
             let next: DocumentToken? = if case .ready(let token) = availability { token } else { nil }
             if document != next { invalidate(); document = next }
         }
     }
-    func invalidate(nativeAlive: Bool = true, keepMutationHistory: Bool = false) {
+    public func invalidate(nativeAlive: Bool = true, keepMutationHistory: Bool = false) {
         if !keepMutationHistory { mutations.removeAll() }
         let hadNativeSearch = correlation.search != nil
         correlation.reset(); scopedSearch = nil
         pagePoll?.cancel(); pagePoll = nil; refresh?.cancel(); refresh = nil; revisions.removeAll()
         poll?.cancel(); poll = nil
         if nativeAlive {
-            if hadNativeSearch { browser.stopFinding() }
+            if hadNativeSearch { host.stopFinding(clearSelection: true) }
             if rendererUsed {
-                for frame in browser.frameDocuments { _ = browser.sendRenderer(to: frame, request: UUID().uuidString, payload: "{\"op\":\"release\"}") }
+                for frame in host.findFrames { _ = host.sendEditor(to: frame, request: UUID().uuidString, payload: "{\"op\":\"release\"}") }
             }
         }
         rendererUsed = false
@@ -56,14 +89,14 @@ final class PageFind {
         for task in timeouts.values { task.cancel() }; timeouts.removeAll()
     }
 
-    func perform(_ request: FindRequest) {
+    public func perform(_ request: FindRequest) {
         guard document == request.document else { return }
         switch request {
         case .search(let id, let token, let query, let scope):
             let hadNativeSearch = correlation.search != nil
             correlation.reset(); scopedSearch = nil
             pagePoll?.cancel(); pagePoll = nil; refresh?.cancel(); refresh = nil
-            if hadNativeSearch { browser.stopFinding() }
+            if hadNativeSearch { host.stopFinding(clearSelection: true) }
             guard !query.text.isEmpty else { publish(.matches(id, token, count: 0, ordinal: nil, passComplete: true)); return }
             switch scope {
             case .page:
@@ -72,19 +105,19 @@ final class PageFind {
                 revisions.beginQuery()
                 pollPage()
             case .editable(let ticket):
-                guard let selection, selection.ticket == ticket, browser.focusedDocument() == selection.frame else { publish(.failed(id, .staleSelection)); return }
+                guard let selection, selection.ticket == ticket, host.focusedFindFrame() == selection.frame else { publish(.failed(id, .staleSelection)); return }
                 scopedSearch = (token, query, ticket)
                 send(id, selection.frame, .search(token), ["op":"search", "ticket":ticket.id.rawValue,
                     "query":query.text, "caseSensitive":query.caseSensitive])
             }
         case .step(let id, let token, let direction):
             if let (search, query, ticket) = scopedSearch, search == token {
-                guard let selection, selection.ticket == ticket, browser.focusedDocument() == selection.frame else { publish(.failed(id, .staleSelection)); return }
+                guard let selection, selection.ticket == ticket, host.focusedFindFrame() == selection.frame else { publish(.failed(id, .staleSelection)); return }
                 send(id, selection.frame, .search(token), ["op":"search", "ticket":ticket.id.rawValue,
                     "query":query.text,"caseSensitive":query.caseSensitive,"step":true,"forward":direction == .next])
             } else if let step = correlation.step(id, token, direction) { run(step) }
         case .stop(let token):
-            if correlation.search == token { correlation.reset(); pagePoll?.cancel(); pagePoll = nil; refresh?.cancel(); refresh = nil; browser.stopFinding() }
+            if correlation.search == token { correlation.reset(); pagePoll?.cancel(); pagePoll = nil; refresh?.cancel(); refresh = nil; host.stopFinding(clearSelection: true) }
             if scopedSearch?.0 == token { scopedSearch = nil }
         case .release:
             let saved = document; invalidate(keepMutationHistory: true); document = saved
@@ -95,39 +128,39 @@ final class PageFind {
             let hadNativeSearch = correlation.search != nil
             correlation.reset(); scopedSearch = nil
             pagePoll?.cancel(); pagePoll = nil; refresh?.cancel(); refresh = nil
-            if hadNativeSearch { browser.stopFinding(clearSelection: false) }
+            if hadNativeSearch { host.stopFinding(clearSelection: false) }
             let ticket = SelectionTicket(id: SelectionID(UUID().uuidString), document: doc)
             selection = nil; poll?.cancel(); poll = nil
             for (old, _) in superseded { publish(.failed(old, .staleSelection)) }
             guard captureRequest == id else { return }
-            guard let frame = browser.focusedDocument() else { captureRequest = nil; publish(.failed(id, .unavailable)); return }
+            guard let frame = host.focusedFindFrame() else { captureRequest = nil; publish(.failed(id, .unavailable)); return }
             send(id, frame, .capture(ticket), ["op":"capture","ticket":ticket.id.rawValue])
         case .jump(let id, let ticket):
-            guard let selection, selection.ticket == ticket, browser.focusedDocument() == selection.frame else { publish(.failed(id, .staleSelection)); return }
+            guard let selection, selection.ticket == ticket, host.focusedFindFrame() == selection.frame else { publish(.failed(id, .staleSelection)); return }
             send(id, selection.frame, .jump(ticket), ["op":"jump","ticket":ticket.id.rawValue])
         case .replace(let id, let ticket, let query, let replacement, let all):
             if let result = mutations.begin(id, ticket: ticket) { publish(result); return }
-            guard let selection, selection.ticket == ticket, browser.focusedDocument() == selection.frame else { publish(.failed(id, .staleSelection)); return }
+            guard let selection, selection.ticket == ticket, host.focusedFindFrame() == selection.frame else { publish(.failed(id, .staleSelection)); return }
             poll?.cancel(); poll = nil
             send(id, selection.frame, .edit(ticket), ["op":"replace","request":id.rawValue,"ticket":ticket.id.rawValue,
                 "query":query.text,"caseSensitive":query.caseSensitive,"replacement":replacement,"all":all])
         }
     }
-    func nativeResult(id: Int, count: Int, ordinal: Int, final: Bool) {
+    public func nativeResult(id: Int, count: Int, ordinal: Int, final: Bool) {
         guard let (update, next) = correlation.receive(id: id, count: count, ordinal: ordinal, final: final, document: document) else { return }
         publish(update)
         if let next { run(next) }
     }
     private func run(_ step: FindCorrelation.Step) {
         guard correlation.current == step, let query = correlation.query, correlation.search?.document == document else { return }
-        browser.find(query.text, forward: step.direction == .next, matchCase: query.caseSensitive, findNext: true)
+        host.startFinding(query.text, forward: step.direction == .next, matchCase: query.caseSensitive)
     }
-    private func send(_ id: FindRequestID, _ frame: CefBrowser.FrameDocument, _ operation: Operation, _ parameters: [String: Any]) {
+    private func send(_ id: FindRequestID, _ frame: FindFrame, _ operation: Operation, _ parameters: [String: Any]) {
         guard let document, let data = try? JSONSerialization.data(withJSONObject: parameters),
               let payload = String(data: data, encoding: .utf8) else { return }
         rendererUsed = true
         pending[id] = Pending(document: document, frame: frame, operation: operation)
-        guard browser.sendRenderer(to: frame, request: id.rawValue, payload: payload) else {
+        guard host.sendEditor(to: frame, request: id.rawValue, payload: payload) else {
             if captureRequest == id { captureRequest = nil }
             pending[id] = nil; publish(.failed(id, .staleSelection)); return
         }
@@ -148,10 +181,10 @@ final class PageFind {
             publish(.failed(id, .failed("The page did not answer. Try selecting text again.")))
         }
     }
-    func receive(_ message: CefRendererMessage) {
+    public func receive(_ message: FindEditorMessage) {
         if message.kind == "released" || message.kind == "created" {
-            let retired = selection.flatMap { !browser.isCurrent($0.frame) ? $0.ticket : nil }
-            for (id, value) in pending where !browser.isCurrent(value.frame) {
+            let retired = selection.flatMap { !host.isCurrent($0.frame) ? $0.ticket : nil }
+            for (id, value) in pending where !host.isCurrent(value.frame) {
                 pending[id] = nil; timeouts.removeValue(forKey: id)?.cancel()
                 if captureRequest == id { captureRequest = nil }
                 switch value.operation {
@@ -168,12 +201,12 @@ final class PageFind {
         }
         let id = FindRequestID(message.request)
         guard let p = pending[id], p.document == document,
-              p.frame.frame == message.frame, p.frame.document == message.document, browser.isCurrent(p.frame) else { return }
+              p.frame.frame == message.frame, p.frame.document == message.document, host.isCurrent(p.frame) else { return }
         pending[id] = nil; timeouts.removeValue(forKey: id)?.cancel()
         if case .capture = p.operation {
             guard captureRequest == id else { return }
             captureRequest = nil
-            guard browser.focusedDocument() == p.frame else { publish(.failed(id, .staleSelection)); return }
+            guard host.focusedFindFrame() == p.frame else { publish(.failed(id, .staleSelection)); return }
         }
         guard let data = message.payload.data(using: .utf8),
               let value = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
@@ -223,7 +256,7 @@ final class PageFind {
         pagePoll = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self, self.correlation.search != nil else { return }
-                let frames = self.browser.frameDocuments.filter { self.browser.isCurrent($0) }
+                let frames = self.host.findFrames.filter { self.host.isCurrent($0) }
                 if frames.isEmpty, self.revisions.needsInitial { self.scheduleRefresh() }
                 for frame in frames {
                     self.send(FindRequestID(UUID().uuidString), frame, .revision, ["op":"revision"])
@@ -241,11 +274,11 @@ final class PageFind {
             guard let token = self.correlation.search, token.document == self.document,
                   let query = self.correlation.query, let step = self.correlation.current else { return }
             self.revisions.started()
-            self.correlation.pauseForRefresh(); self.browser.stopFinding()
+            self.correlation.pauseForRefresh(); self.host.stopFinding(clearSelection: true)
             self.correlation.resumeAfterRefresh()
             self.publish(.matches(step.request, token, count: 0, ordinal: nil, passComplete: false))
             guard self.correlation.search == token, self.correlation.current == step, self.correlation.query == query else { return }
-            self.browser.find(query.text, forward: step.direction == .next, matchCase: query.caseSensitive, findNext: true)
+            self.host.startFinding(query.text, forward: step.direction == .next, matchCase: query.caseSensitive)
         }
     }
     private func invalidateSelection(_ ticket: SelectionTicket) {
@@ -259,7 +292,7 @@ final class PageFind {
                 try? await Task.sleep(for: .milliseconds(350))
                 guard !Task.isCancelled, let self, let selection = self.selection, selection.ticket == ticket,
                       self.document == ticket.document else { return }
-                if self.browser.focusedDocument() != selection.frame { self.invalidateSelection(ticket); return }
+                if self.host.focusedFindFrame() != selection.frame { self.invalidateSelection(ticket); return }
                 if !self.pending.isEmpty { continue }
                 self.send(FindRequestID(UUID().uuidString), selection.frame, .validate(ticket), ["op":"validate","ticket":ticket.id.rawValue])
             }

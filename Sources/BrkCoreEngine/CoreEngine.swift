@@ -206,7 +206,8 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
             DispatchQueue.main.async { [weak live] in live?.reportZoom() }
         case .recover: live.prepareNavigation(); live.contents.reloadBypassingCache(false)
         case .media(let request): live.control(request)
-        case .toggleDevTools, .cast, .developer, .documentPictureInPicture, .exitFullscreen:
+        case .exitFullscreen: live.contents.exitFullscreen()
+        case .toggleDevTools, .cast, .developer, .documentPictureInPicture:
             log.notice("page action not available on this engine yet")
         }
     }
@@ -238,7 +239,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
 
     public func evaluate(_ script: String, in page: PageID) {
         guard running else { return }
-        live[page]?.contents.evaluateJavaScript(script, completion: nil)
+        live[page]?.evaluate(script)
     }
 
     public func evaluateForResult(_ script: String, in page: PageID) async throws -> String? {
@@ -274,7 +275,83 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         guard let page = live[id] else { return nil }
         var facts = page.facts
         facts.context = page.context
+        // As CEF's request context: a private window's data is in memory, with no folder.
+        if case .profile(let profile) = page.context { facts.nativeContextPath = profiles[profile]?.path }
+        facts.nativeContextIsGlobal = page.context == .profile(.default)
         return facts
+    }
+
+    /// As CEF: while the page's video is in picture in picture, the site rules treat the page as playing.
+    public func setPictureInPicture(_ active: Bool, document: DocumentToken) {
+        guard running, let page = live[document.browser.page], page.incarnation == document.browser, page.readyDocument == document else { return }
+        page.pictureInPictureDocument = active ? document : nil
+        page.refreshWebsitePolicy()
+    }
+
+    // MARK: Cookie import
+
+    /// Onboarding's import: the cookies go into the profile's cookie store, as CEF's cookie manager writes them (same address rule).
+    public func importCookies(_ cookies: [ImportedCookie], profile: ProfileID) async throws -> Int {
+        guard running else { throw CoreProtocolError(message: "The profile is closing") }
+        guard !cookies.isEmpty else { return 0 }
+        guard let target = await profileNow(profile) else { throw CoreProtocolError(message: "The profile did not load") }
+        let rows: [[String: Any]] = cookies.map { cookie in
+            let host = cookie.domain.hasPrefix(".") ? String(cookie.domain.dropFirst()) : cookie.domain
+            var row: [String: Any] = [
+                "url": (cookie.secure ? "https://" : "http://") + host + (cookie.path.hasPrefix("/") ? cookie.path : "/"),
+                "name": cookie.name, "value": cookie.value, "domain": cookie.domain.hasPrefix(".") ? cookie.domain : "",
+                "path": cookie.path, "secure": cookie.secure, "httpOnly": cookie.httpOnly,
+                "sameSite": cookie.sameSite, "priority": cookie.priority,
+            ]
+            func seconds(_ instant: Instant?) -> Double? { instant.map { Double($0.milliseconds) / 1000 } }
+            row["expires"] = seconds(cookie.expires)
+            row["creation"] = seconds(cookie.creation)
+            row["lastAccess"] = seconds(cookie.lastAccess)
+            return row
+        }
+        let accepted = await withCheckedContinuation { (continuation: CheckedContinuation<UInt, Never>) in
+            target.setCookies(rows) { continuation.resume(returning: $0) }
+        }
+        return Int(accepted)
+    }
+
+    /// The profile, loaded now if it is not yet (a first-run import comes before any page).
+    private func profileNow(_ id: ProfileID) async -> (any BrkCoreProfile)? {
+        if let loaded = profiles[id] { return loaded }
+        let directory = id == .default ? "Default" : ProfileDirectories.directoryName(id)
+        /// The framework calls back on the main thread; the profile object only crosses that one hop.
+        final class Loaded: @unchecked Sendable { var profile: (any BrkCoreProfile)? }
+        let box = Loaded()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            runtime.application.loadProfile(directory) { profile in
+                box.profile = profile
+                continuation.resume()
+            }
+        }
+        if let loaded = box.profile, profiles[id] == nil { profiles[id] = loaded }
+        return box.profile
+    }
+
+    // MARK: Find
+
+    public func find(_ request: FindRequest) {
+        guard running, let page = live[request.document.browser.page], page.incarnation == request.document.browser else { return }
+        page.find.perform(request)
+    }
+
+    func findUpdated(_ update: FindUpdate) { delegate?.engine(self, find: update) }
+
+    /// As CEF: whether the page has a selection now, reported when it changes.
+    public func checkSelection(_ id: PageID) {
+        guard running, let page = live[id], !page.isAIReader, let document = page.readyDocument else { return }
+        Task { @MainActor [weak self, weak page] in
+            let text = await self?.selectedText(id)
+            guard let self, let page, self.isLive(page), page.readyDocument == document else { return }
+            let selected = !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            guard page.reportedSelection != selected else { return }
+            page.reportedSelection = selected
+            self.pageDidEmit(page, .selectionChanged(document, selected))
+        }
     }
 
     // MARK: Output
@@ -467,6 +544,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
 
     func pageDidEmit(_ page: CorePage, _ event: PageEvent) {
         guard isLive(page) else { return }
+        page.find.observe(event)
         switch event {
         case .navigationRequested, .rendererGone: outputs.sourceGone(page.incarnation)
         case .gainedFocus:
