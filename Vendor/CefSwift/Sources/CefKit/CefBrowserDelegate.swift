@@ -107,6 +107,10 @@ public protocol CefBrowserDelegate: AnyObject {
     /// dialog; `false` for the native one.
     func browser(_ b: CefBrowser, runBeforeUnloadDialog message: String, isReload: Bool, callback: CefJSDialogCallback) -> Bool
 
+    /// Chromium cancelled the page's pending dialogs (a navigation, a renderer crash, the asking frame went). A dialog the
+    /// delegate still shows should go; answering its callback afterwards does nothing.
+    func browserDidResetDialogs(_ b: CefBrowser)
+
     // MARK: Context menu
 
     /// A context menu is about to appear. Mutate `menu` (clear, add custom
@@ -241,6 +245,7 @@ extension CefBrowserDelegate {
 
     public func browser(_ b: CefBrowser, runJSDialog dialog: CefJSDialog, callback: CefJSDialogCallback) -> Bool { false }
     public func browser(_ b: CefBrowser, runBeforeUnloadDialog message: String, isReload: Bool, callback: CefJSDialogCallback) -> Bool { false }
+    public func browserDidResetDialogs(_ b: CefBrowser) {}
 
     public func browser(_ b: CefBrowser, configureContextMenu menu: CefMenuModel, params: CefContextMenuParams) {}
     public func browser(_ b: CefBrowser, presentContextMenu menu: CefMenuModel, params: CefContextMenuParams, callback: CefRunContextMenuCallback) -> Bool { false }

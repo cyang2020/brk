@@ -333,6 +333,9 @@ final class ChromePage: CefBrowserDelegate {
         browser.closeNativeAuxiliaries()
         browser.closeDevTools()
         surface.returnViews()
+        // Forced, so a page's beforeunload never asks on tab close (audit #13, deferred). Asking needs a two-phase close:
+        // the domain keeps the tab and its live page until the page answers, and Stay keeps both. close(force: false)
+        // alone would leave a hidden live browser with no tab, and the views are already back, so the dialog has no window.
         chrome.browser.close(force: true)
     }
 
@@ -580,6 +583,8 @@ final class ChromePage: CefBrowserDelegate {
         if dialog.kind == .prompt {
             let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24)); input.stringValue = dialog.defaultPromptText
             alert.accessoryView = input; field = input
+            // The prompt's field takes the typing, as in Chrome; NSAlert would give the first responder to its OK button.
+            alert.layout(); alert.window.initialFirstResponder = input
         }
         if own { dialogSheet = alert } else { recordAuxiliary("dialog:\(dialog.kind):\(window.windowNumber):" + dialog.message) }
         alert.beginSheetModal(for: window) { [weak self] response in
@@ -591,8 +596,11 @@ final class ChromePage: CefBrowserDelegate {
     }
 
     /// Leaving or reloading the page while it has a `beforeunload` handler: Leave or Stay, on a sheet for the same reason.
+    /// A page that is not on screen (or whose window already has a sheet) stays, as a dismissed dialog does in Chrome:
+    /// its typed text is kept, and CefKit's app-modal fallback never runs.
     func browser(_ b: CefBrowser, runBeforeUnloadDialog message: String, isReload: Bool, callback: CefJSDialogCallback) -> Bool {
-        guard b === browser, let window = dialogWindow(b) else { return false }
+        guard b === browser else { return false }
+        guard let window = dialogWindow(b) else { callback.continue(success: false); return true }
         let alert = NSAlert()
         alert.messageText = isReload ? "Reload this page?" : "Leave this page?"
         alert.informativeText = message.isEmpty ? "Changes you made may not be saved." : message
@@ -614,6 +622,9 @@ final class ChromePage: CefBrowserDelegate {
         guard let window = surface.window, window.isVisible, !surface.isHiddenOrHasHiddenAncestor, window.attachedSheet == nil else { return nil }
         return window
     }
+
+    /// Chromium cancelled the page's dialogs: a navigation, a renderer that crashed, or the frame that asked went away.
+    func browserDidResetDialogs(_ b: CefBrowser) { if b === browser { cancelDialog() } }
 
     /// The page's document or its place in the window went: its dialog's sheet goes, answered as dismissed.
     private func cancelDialog() {

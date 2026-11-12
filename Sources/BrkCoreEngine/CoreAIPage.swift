@@ -15,7 +15,7 @@ extension CoreEngine {
               let title = value["title"] as? String, let language = value["language"] as? String,
               let nodes = value["nodes"] as? [[String: Any]], nodes.count <= 200 else { throw AIPageFailure.invalidReply }
         let parsed = try nodes.map { value -> AITextNode in
-            guard let id = value["id"] as? Int, let text = value["text"] as? String, text.count <= 1000 else { throw AIPageFailure.invalidReply }
+            guard let id = value["id"] as? Int, let text = value["text"] as? String, text.count <= 3000 else { throw AIPageFailure.invalidReply }
             return AITextNode(id: id, text: text)
         }
         return AIPageContent(document: document, url: url, title: String(title.prefix(500)), language: String(language.prefix(40)), text: text, nodes: parsed,
@@ -90,18 +90,19 @@ enum CoreAIPageScripts {
     (()=>{
       const root=document.querySelector('main,article,[role="main"]')||document.body;
       if(!root)return null;
-      const nodes=[],saved=[],parts=[];let length=0,partial=false;
+      // Pieces of up to 3,000 characters are read and translated, at most 200 of them and 24,000 characters. A longer
+      // piece is read for the text but not translated, and has its own 8,000 characters, so it takes nothing from
+      // translation. The text stays within 32,000 UTF-16 units, under the 100,000 UTF-8 bytes the readers accept.
+      const nodes=[],saved=[],parts=[];let length=0,long=0,partial=false;
       const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
       let node;
       while(node=walker.nextNode()){
         const e=node.parentElement,t=node.nodeValue;
         if(!e||!t.trim()||e.isContentEditable||e.closest('script,style,noscript,input,textarea,select,button,svg,canvas,iframe,[hidden],[aria-hidden="true"],[data-private]'))continue;
         const s=getComputedStyle(e);if(s.display==='none'||s.visibility==='hidden'||!e.getClientRects().length)continue;
+        if(t.length>3000){partial=true;if(long+t.length<=8000){parts.push(t);long+=t.length;}continue;}
         if(nodes.length>=200||length+t.length>24000){partial=true;break;}
-        parts.push(t);length+=t.length;
-        // Read, but too long to translate as one piece.
-        if(t.length>1000){partial=true;continue;}
-        const id=nodes.length;nodes.push({id,text:t});saved.push({node,text:t});
+        const id=nodes.length;nodes.push({id,text:t});saved.push({node,text:t});parts.push(t);length+=t.length;
       }
       globalThis.brkAIText=saved;
       return {url:location.href,title:document.title,language:document.documentElement.lang||'',text:parts.join('\n'),nodes,partial};

@@ -700,8 +700,11 @@ extension BrowserClient {
                 return 1
             }
         }
-        handler.pointee.on_reset_dialog_state = { _, browser in
+        handler.pointee.on_reset_dialog_state = { handlerSelf, browser in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))
+            BrowserClientCallbacks.run(handlerSelf, default: ()) { client, cefBrowser in
+                client.forwardingDelegate?.browserDidResetDialogs(cefBrowser)
+            }
         }
         handler.pointee.on_dialog_closed = { _, browser in
             cefRelease(browser.map(UnsafeMutableRawPointer.init))

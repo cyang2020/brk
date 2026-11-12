@@ -108,11 +108,15 @@ import UniformTypeIdentifiers
         start?()
     }
 
+    /// Takes the entry's sheet away. A destination still asked for is answered `.ownerGone`, never dropped: the output
+    /// waits for that answer with no time limit (only rendering is timed), and DocumentOutputs ignores a late one.
     func dismiss(_ id: OutputID) {
         guard let entry = entries[id] else { return }
         entry.retry?.invalidate(); entry.retry = nil; entry.start = nil
+        let reply = entry.reply; entry.reply = nil
+        defer { reply?(.ownerGone) }
         if let panel = entry.panel {
-            entries[id] = nil; entry.panel = nil; entry.reply = nil
+            entries[id] = nil; entry.panel = nil
             panel.cancel(nil)
             panel.sheetParent?.endSheet(panel, returnCode: .cancel)
             panel.orderOut(nil)
@@ -124,7 +128,6 @@ import UniformTypeIdentifiers
             }
         } else {
             entries[id] = nil
-            entry.reply = nil
             let printReply = entry.printReply; entry.printReply = nil
             printReply?(.ownerGone)
         }

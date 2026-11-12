@@ -105,7 +105,7 @@ let package = Package(
         .testTarget(name: "BrkControlTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkControl"], swiftSettings: strict),
         .testTarget(name: "BrkThemeTests", dependencies: ["BrkDomain", "BrkTheme"], swiftSettings: strict),
         .testTarget(name: "BrkEngineTests", dependencies: ["BrkBase", "BrkEngine"], swiftSettings: strict),
-        .testTarget(name: "BrkCEFTests", dependencies: ["BrkBase", "BrkDomain", "BrkEngine", "BrkCEF", .product(name: "CefKit", package: "CefSwift")], exclude: ["CaptureFixture.png"], swiftSettings: strict),
+        .testTarget(name: "BrkCEFTests", dependencies: ["BrkBase", "BrkDomain", "BrkEngine", "BrkCEF", .product(name: "CefKit", package: "CefSwift"), .product(name: "PageEditorScript", package: "CefSwift")], exclude: ["CaptureFixture.png"], swiftSettings: strict),
         .testTarget(name: "BrkLocalModelsTests", dependencies: ["BrkBase", "BrkLocalModels"], swiftSettings: strict),
         .testTarget(name: "BrkImportTests", dependencies: ["BrkBase", "BrkDomain", "BrkImport"], swiftSettings: strict, linkerSettings: [.linkedLibrary("sqlite3")]),
         .testTarget(name: "BrkAppTests", dependencies: ["BrkBase", "BrkDomain", "BrkApp", "BrkSettings", "BrkLocalModels"], swiftSettings: strict),

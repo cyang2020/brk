@@ -200,7 +200,7 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertFalse(blocked.effects.contains { if case .aiRead = $0 { true } else { false } })
         XCTAssertTrue(d.view.tabTools.toast?.text.contains("never translates") == true)
     }
-    /// A long article is read only in part (200 pieces, 24,000 characters, no piece over 1,000 characters): the rest
+    /// A long article is read only in part (200 pieces, 24,000 characters, no piece over 3,000 characters): the rest
     /// stayed in the page's own language while the pill said Translated, and nothing told the person.
     func testPartialTranslationSaysOnlyPartOfThePageWasTranslated() throws {
         let d = enabled(), whole = try content(d), page = whole.document.browser.page
@@ -212,6 +212,16 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertNil(d.view.tabTools.toast)
         d.system(.aiTranslated(id, true))
         XCTAssertTrue(d.view.tabTools.toast?.text.contains("part of this page") == true, "nothing said the page was translated only in part")
+    }
+    /// Paragraphs of up to 3,000 characters are translated now. A long Chinese paragraph comes back in English about
+    /// four times as long, and the 4,000-character cap on a translated piece turned the whole page's translation down.
+    func testALongParagraphTranslatedIntoALongerTextIsApplied() throws {
+        let d = enabled(), c = try content(d, text: String(repeating: "长", count: 3000))
+        let id = try readRequest(d.user(.assist(.translate("English"))))
+        d.system(.aiPageRead(id, c.document.browser.page, c))
+        let english = [AITextNode(id: 0, text: String(repeating: "long ", count: 2400))]
+        let t = d.system(.aiResult(id, .reply(.translation(english))))
+        XCTAssertTrue(t.effects.contains(.aiTranslate(id, c, english)), "the translation was turned down")
     }
     /// Arc's translation (P50): the page menu's Translate to English, the pill's Translated, Use Original with its
     /// "Translated back to French! Use ⌘Z to undo." toast, ⌘Z, and Choose Another Language.

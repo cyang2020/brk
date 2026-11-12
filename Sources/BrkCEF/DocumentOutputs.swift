@@ -178,7 +178,9 @@ import PDFKit
             operation.timedOut = true
             operation.cancelRequested = true
             operation.timeout?.invalidate()
-            let file: PartialFile = operation.files.map { .retained($0.directory, reason: "Native output has not drained") } ?? .absent
+            // A print's folder is deleted once the renderer or the print panel answers (cleanup), so it is not named.
+            let file: PartialFile = operation.printDirectory != nil ? .absent
+                : operation.files.map { .retained($0.directory, reason: "Native output has not drained") } ?? .absent
             dismiss(operation.request.id)
             publish(OutputUpdate(id: operation.request.id, document: operation.request.document, stage: .terminal(.failed("Output did not finish; native resources remain owned until completion", file))))
             if !operation.rendering && !operation.printing { finish(operation, .failed("Output timed out", file)) }

@@ -84,20 +84,22 @@ import XCTest
     }
 
     /// Save Page As checked the saved MHTML by reading, decoding and lowercasing the whole file on the main thread, so a
-    /// page of tens of MB stalled the app. The MIME header at the top is enough. The file here is sparse (512 MB long,
-    /// no disk used): reading all of it takes most of a second, reading the header a few milliseconds.
+    /// page of tens of MB stalled the app (0.98 s for 512 MB). The MIME header at the top is enough: nothing past the
+    /// first megabyte is read, so a header that only comes after it is not found.
     func testMHTMLCheckReadsOnlyTheHeader() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("brk-output-check-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let file = root.appendingPathComponent("large.mhtml")
-        try Fixture.bytes.write(to: file)
-        let handle = try FileHandle(forWritingTo: file)
+        let late = root.appendingPathComponent("late.mhtml")
+        try (Data(repeating: 0x20, count: 1_048_576) + Fixture.bytes).write(to: late)
+        XCTAssertThrowsError(try DocumentOutputs.validate(late, intent: .mhtml), "the check read past the first megabyte")
+        // A saved page with its header at the top passes, however long it is (sparse: 512 MB long, no disk used).
+        let large = root.appendingPathComponent("large.mhtml")
+        try Fixture.bytes.write(to: large)
+        let handle = try FileHandle(forWritingTo: large)
         try handle.truncate(atOffset: 512 * 1_048_576)
         try handle.close()
-        let began = Date()
-        try DocumentOutputs.validate(file, intent: .mhtml)
-        XCTAssertLessThan(Date().timeIntervalSince(began), 0.25)
+        XCTAssertNoThrow(try DocumentOutputs.validate(large, intent: .mhtml))
     }
 
     /// The time limit ran from the command, so a person still choosing a folder in the save panel had the panel closed
@@ -124,7 +126,8 @@ import XCTest
         f.outputs.start(request, context: f.context)
         let staging = try XCTUnwrap(f.renderings.first?.0)
         RunLoop.main.run(until: Date().addingTimeInterval(0.3))
-        guard case .failed? = f.terminals.first else { return XCTFail("the rendering was not timed") }
+        guard case .failed(_, let named)? = f.terminals.first else { return XCTFail("the rendering was not timed") }
+        XCTAssertEqual(named, .absent, "the failure named a recovery folder that is deleted once the renderer answers")
         try Data("%PDF-1.4".utf8).write(to: staging)
         f.renderings[0].1(.success(()))
         let folder = staging.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

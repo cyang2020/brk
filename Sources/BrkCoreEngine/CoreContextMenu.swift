@@ -26,7 +26,10 @@ final class CoreContextMenu: NSObject, NSMenuDelegate {
     static let translateCommand = 28_400
     static let splitLinkCommand = 28_401, littleLinkCommand = 28_402
     static let removed: Set<String> = ["Create QR Code for this Page", "Create QR Code for this Image"]
-    static let linkRows: Set<String> = ["Open Link in New Tab", "Open Link in New Window", "Open Link in Incognito Window",
+    /// No Open Link in Incognito Window yet: the bridge forwards only new-window opens (OpenURLFromTabHook), so an
+    /// off-the-record open takes Chrome's own path, toward a Chrome window of its own, not a Brk incognito window.
+    /// CEF's menu has the row.
+    static let linkRows: Set<String> = ["Open Link in New Tab", "Open Link in New Window",
                                         "Save Link As…", "Copy Link Address", "Copy", "Copy Link to Highlight", "Print…", "Inspect", "Speech"]
     static func isLinkRow(_ title: String) -> Bool { linkRows.contains(title) || (title.hasPrefix("Search ") && title.contains(" for ")) }
 

@@ -617,8 +617,10 @@ extension Work {
                   let plan = AIValidation.plan(groups, eligible: tabs) else { completeAI(id, text: "The plan was invalid or Today changed. No tabs were moved. Retry Organize Today Tabs."); return nil }
             applyAIOrganize(id, space: space, tabs: tabs, plan: plan)
         case (.translate(_, let content), .translation(let nodes)):
+            // A piece read for translation has up to 3,000 characters; Chinese or Japanese put into a Latin script runs
+            // to about four times as many.
             guard nodes.count == content.nodes.count, Set(nodes.map(\.id)).count == nodes.count,
-                  Set(nodes.map(\.id)) == Set(content.nodes.map(\.id)), nodes.allSatisfy({ $0.text.count <= 4000 }),
+                  Set(nodes.map(\.id)) == Set(content.nodes.map(\.id)), nodes.allSatisfy({ $0.text.count <= 16_000 }),
                   state.session.ai.requests[id] != nil else { completeAI(id, text: "The tool returned an invalid translation. The page was left unchanged."); return nil }
             state.session.ai.requests[id]?.translated = nodes
             effects.append(.aiTranslate(id, content, nodes))

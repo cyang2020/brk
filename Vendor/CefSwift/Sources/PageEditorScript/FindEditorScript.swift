@@ -8,13 +8,17 @@ public enum FindEditorScript {
 (() => {
     const parse = JSON.parse, stringify = JSON.stringify;
     const tickets = new Map(), results = new Map();
-    let composing = false, revision = 0;
-    const changed = () => { revision++; };
+    // `revision` guards the selection tickets and moves on any change, the selection's too. `content` is what page find
+    // recounts on: the page's nodes or fields changed. Page find moves the selection itself (Chromium makes the active
+    // match the selection when it stops, and clears it when the next search starts there), so counting selection
+    // changes would make every recount start another one.
+    let composing = false, revision = 0, content = 0;
+    const changed = () => { revision++; content++; };
     document.addEventListener('compositionstart', () => { composing = true; changed(); }, true);
     document.addEventListener('compositionend', () => { composing = false; changed(); }, true);
     document.addEventListener('input', changed, true);
     document.addEventListener('selectionchange', () => {
-        for (const t of tickets.values()) if (!same(t.signature,signature(t))) {changed();break;}
+        for (const t of tickets.values()) if (!same(t.signature,signature(t))) {revision++;break;}
     }, true);
     const observer = new MutationObserver(changed);
     let observing = false;
@@ -158,7 +162,7 @@ public enum FindEditorScript {
             switch(a.op) {
                 case 'revision':
                     if(!observing){observer.observe(document,{subtree:true,childList:true,characterData:true,attributes:true});observing=true;}
-                    sync();r={status:'revision',revision};break;
+                    sync();r={status:'revision',revision:content};break;
                 case 'capture':r=capture(a);break;
                 case 'search':r=search(a);break;
                 case 'jump':r=jump(a);break;
