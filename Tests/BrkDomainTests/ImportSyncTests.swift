@@ -233,7 +233,7 @@ final class ImportSyncTests: XCTestCase {
     func testThemesFromAnOldArcImportAreTurnedAroundOnceOnLoad() throws {
         let d = Driver(startURL: nil)
         let old = SpaceTheme(colors: [RGBA(0.15, 0.27, 0.42)], texture: .grain, intensity: 0.73, appearance: .light)
-        d.system(.sidebarData(.browserImported(d.window, BrowserImportResult(source: "Arc", spaces: [
+        d.system(.sidebarData(.browserImported(d.window, target: try XCTUnwrap(d.state.sidebarImportTarget(in: d.window)), BrowserImportResult(source: "Arc", spaces: [
             ImportedSpace(key: "arc:N", title: "Navy", theme: old, today: [.tab(title: "Meet", url: url("https://meet.example.test/"))])]))))
         let navy = try XCTUnwrap(d.state.doc.sidebarData.importedSpaces?["arc:N"])
         XCTAssertEqual(d.state.doc.spaces[navy]?.theme.intensity, 0.73, "an import by the fixed reader is kept as it is")
