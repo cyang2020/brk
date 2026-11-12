@@ -279,6 +279,7 @@ final class ChordRecorderView: NSView {
     private(set) var isRecording = false
     private var note: String?
     private var monitor: Any?
+    private var keyObserver: NSObjectProtocol?
     private let label = NSTextField(labelWithString: "")
 
     override init(frame: NSRect) {
@@ -323,6 +324,15 @@ final class ChordRecorderView: NSView {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             MainActor.assumeIsolated { self?.handle(event) ?? false } ? nil : event
         }
+        // A click in another window (a browser window behind Settings) leaves this view first responder of its own
+        // window, but the keys typed now are that window's: the recording ends when any other window becomes key.
+        keyObserver = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { [weak self] note in
+            let key = (note.object as? NSWindow).map(ObjectIdentifier.init)
+            MainActor.assumeIsolated {
+                guard let self, self.isRecording, key != self.window.map(ObjectIdentifier.init) else { return }
+                self.stop()
+            }
+        }
         refresh()
     }
 
@@ -331,6 +341,8 @@ final class ChordRecorderView: NSView {
         ShortcutRecording.isActive = false
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
+        if let keyObserver { NotificationCenter.default.removeObserver(keyObserver) }
+        keyObserver = nil
         refresh()
     }
 

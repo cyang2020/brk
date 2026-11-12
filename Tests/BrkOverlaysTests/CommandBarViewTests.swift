@@ -166,6 +166,31 @@ final class CommandBarViewTests: XCTestCase {
         XCTAssertEqual(editor.selectedRange(), NSRange(location: 3, length: 3), "the completed part selected, so the next key replaces it")
     }
 
+    /// The underlined text an input method is still composing (Pinyin "you" before a character is picked) is not typing
+    /// yet: the bar neither completes it to a site nor rewrites it when answers arrive, or the composition is lost.
+    func testTextAnInputMethodIsComposingIsNotCompleted() throws {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: box, styleMask: [.titled], backing: .buffered, defer: false)
+        let bar = commandBar([], [], siteSearch: [bing])
+        let view = makeBar(bar)
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.contentView = nil; window.orderOut(nil) }
+        XCTAssertTrue(view.focusInput())
+        let editor = try XCTUnwrap(view.input.currentEditor() as? NSTextView)
+        editor.setMarkedText("you", selectedRange: NSRange(location: 3, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        // A real input method's update reaches the delegate as a text change; setMarkedText called directly does not post one.
+        view.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: view.input))
+        XCTAssertNil(view.completion)
+        XCTAssertEqual(view.input.stringValue, "you")
+        var answered = bar
+        answered.suggestedFor = "you"
+        answered.suggestions = [EngineSuggestion("youtube music", kind: .query, relevance: 1500)]
+        view.show(answered, in: box, scheme: .light)
+        XCTAssertEqual(view.input.stringValue, "you", "late answers leave the composition alone too")
+        XCTAssertTrue(editor.hasMarkedText(), "the input method is still composing")
+    }
+
     /// Tab with a site-search offer beside the input (or Space after an engine's whole name) enters site search: the
     /// engine's pill, an empty input, Return searches there; Backspace in the empty input or Esc gives the typed name
     /// back, and only a second Esc closes the bar

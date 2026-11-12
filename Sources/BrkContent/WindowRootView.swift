@@ -60,6 +60,8 @@ public final class WindowRootView: NSView {
     private var last: (snapshot: WindowSnapshot, frames: WindowFrames)?
     private let thumbnails = PageThumbnails()
     private var switcherShown = false
+    /// The app turning active and inactive, for the veil. Block observers stay registered until removed: `deinit` removes them.
+    nonisolated(unsafe) private var activationObservers: [NSObjectProtocol] = []
     /// Takes the window's image as the window server shows it (BrkApp's `WindowCapture`), for the Ctrl+Tab
     /// switcher's page images. Nil (tests): the switcher shows white cards.
     public var captureWindow: (() -> CGImage?)? {
@@ -96,7 +98,7 @@ public final class WindowRootView: NSView {
         for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, libraryConversation, peek, findBar, aiAnswer, panelHandle, edgeDrop, linkPrompt, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay, itemPreview, downloadFlight] as [NSView] { addSubview(view) }
         pageCards.parent = self
         pageCards.below = toolbar
-        for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
+        activationObservers = [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification].map { name in
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak veil = inactiveVeil] _ in
                 guard let veil else { return }
                 MainActor.assumeIsolated { veil.update() }
@@ -158,6 +160,8 @@ public final class WindowRootView: NSView {
 
     @available(*, unavailable)
     public required init?(coder: NSCoder) { fatalError("not used") }
+
+    deinit { activationObservers.forEach(NotificationCenter.default.removeObserver) }
 
     public override var isFlipped: Bool { true }
     public func cancelDrag() -> Bool { sidebar.cancelDrag() }

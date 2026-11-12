@@ -144,8 +144,10 @@ struct ProfilesPane: View {
         let others = settings.profiles.filter { $0.profile.id != id }.map(\.profile.name)
         HStack(spacing: CardMetrics.controlGap.value) {
             if renaming == id {
+                // Return with the name as it was ends the rename: the field sends no commit for the value it started with.
                 SettingsTextField(field: "profileName-\(id)", text: row.profile.name, placeholder: ProfileCopy.renameTitle,
-                                  edit: { renames[id] = $0 }) { name in
+                                  edit: { renames[id] = $0 },
+                                  submit: { name in if ProfileCopy.trimmed(name) == row.profile.name { renames[id] = nil; renaming = nil } }) { name in
                     if ProfileCopy.acceptsName(name, among: others) {
                         dispatch(.profile(.rename(id, name: name)))
                         renames[id] = nil
@@ -209,6 +211,8 @@ struct ProfilesPane: View {
     }
 
     private func create(_ name: String) {
+        // Return in the empty New Profile row takes the row away; a taken name stays, with its note.
+        if ProfileCopy.trimmed(name).isEmpty { adding = false; return }
         guard ProfileCopy.acceptsName(name, among: names) else { return }
         dispatch(.profile(.create(name: ProfileCopy.trimmed(name), icon: nil)))
         newName = ""

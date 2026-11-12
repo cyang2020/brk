@@ -13,8 +13,12 @@ final class PageThumbnails {
     /// The window's image as the window server shows it; nil when the app gives none (tests).
     var capture: (() -> CGImage?)?
     private(set) var images: [ItemID: NSImage] = [:]
-    /// What the last render showed: the item a switcher card stands for and its rect in the window.
+    /// The Space each image was taken in. The switcher lists every tab of the Space it opens in, so that list can only
+    /// tell which of the same Space's images are of tabs since closed.
+    private var spaces: [ItemID: SpaceID] = [:]
+    /// What the last render showed: the item a switcher card stands for and its rect in the window, and the Space.
     private var shown: (item: ItemID, rect: CGRect)?
+    private var shownSpace: SpaceID?
     private var pending: Task<Void, Never>?
     private let settle: Duration = .milliseconds(350)
     /// Card images are kept at twice the switcher's 157.5 x 105 pt.
@@ -30,6 +34,15 @@ final class PageThumbnails {
     func afterRender(_ snapshot: WindowSnapshot, frames: WindowFrames, in view: NSView) {
         pending?.cancel()
         shown = Self.shownUnit(snapshot.content, frames: frames)
+        shownSpace = snapshot.space.id
+        // A tab of this Space that the open switcher does not list has closed (or moved away): its image goes.
+        if let recent = snapshot.tabTools.recent {
+            let listed = Set(recent.items.map(\.id))
+            for (item, space) in spaces where space == snapshot.space.id && !listed.contains(item) {
+                images[item] = nil
+                spaces[item] = nil
+            }
+        }
         let covered = snapshot.overlay != nil || snapshot.tabTools.recent != nil || snapshot.tabTools.toast != nil || snapshot.find != nil
             || snapshot.dialog != nil || snapshot.profileDialog != nil || snapshot.pendingSpaceDeletion != nil || snapshot.ai != nil
             || snapshot.boostEditor != nil || snapshot.capture != nil || frames.sidebarFloats
@@ -52,6 +65,7 @@ final class PageThumbnails {
         guard let window = view.window, window.isVisible, window.occlusionState.contains(.visible),
               let image = capture?(), let thumbnail = Self.thumbnail(of: image, rect: view.convert(target.rect, to: nil), window: window, size: size) else { return }
         images[target.item] = thumbnail
+        spaces[target.item] = shownSpace
     }
 
     /// `rect` (window coordinates, bottom-left origin) cut from the window's image and scaled to fill `size`, top

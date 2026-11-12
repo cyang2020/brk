@@ -42,6 +42,8 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
     var showDockDrop: ((SpaceID?) -> Void)?
     private var dragImage: NSImageView?
     private var dropSpace: SpaceID?
+    /// The rows changed while one was being dragged; they are made again when the drag ends.
+    private var rebuildAfterDrag = false
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -105,7 +107,11 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
         empty.textColor = style.secondary
         empty.stringValue = panel.groups.isEmpty ? (panel.search.isEmpty ? AIThreadWords.empty(language) : AIThreadWords.noMatches(language)) : ""
         empty.isHidden = !panel.groups.isEmpty
-        if structure { rebuild(panel, style: style) }
+        if structure {
+            // A row being dragged stays in the view tree until the drag ends: AppKit sends the rest of the drag, and its
+            // mouse-up, only to the view that took the press.
+            if dragImage != nil { rebuildAfterDrag = true } else { rebuild(panel, style: style) }
+        }
         needsLayout = true
     }
 
@@ -214,6 +220,12 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
             dragImage = nil
             dropSpace = nil
             showDockDrop?(nil)
+            if rebuildAfterDrag, let panel, let style {
+                rebuildAfterDrag = false
+                rebuild(panel, style: style)
+                for row in rows { row.usedDetail = row.row.id == panel.hovered ? panel.hoveredDetail : nil }
+                needsLayout = true
+            }
             if let space { dispatch(.assist(.moveConversation(view.row.id, space))) }
         }
     }

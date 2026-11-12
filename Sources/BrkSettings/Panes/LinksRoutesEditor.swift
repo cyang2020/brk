@@ -45,7 +45,7 @@ struct AirTrafficControlSheet: View {
             rule
             ScrollView {
                 VStack(alignment: .leading, spacing: A.routeGap.value) {
-                    ForEach(routes, id: \.route.id) { row in route(row.route) }
+                    ForEach(Array(routes.enumerated()), id: \.element.route.id) { index, row in route(row.route, at: index) }
                 }
                 .padding(.top, A.routesTop.value)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -77,11 +77,15 @@ struct AirTrafficControlSheet: View {
         Rectangle().fill(ArtColor.rgb(0xE5E5E9)).frame(height: CardMetrics.borderWidth.value).padding(.horizontal, A.padding.value)
     }
 
-    private func route(_ route: LinkRoute) -> some View {
+    private func route(_ route: LinkRoute, at index: Int) -> some View {
         let id = route.id.rawValue
         func update(pattern: String? = nil, destination: LinkDestination? = nil, match: LinkMatch? = nil) {
             send(.updateRoute(LinkRoute(id: route.id, pattern: pattern ?? route.pattern, destination: destination ?? route.destination,
                                         match: match ?? route.match ?? .matches)))
+        }
+        func move(to place: Int) -> (@MainActor () -> Void)? {
+            guard routes.indices.contains(place) else { return nil }
+            return { send(.moveRoute(route.id, index: place)) }
         }
         return VStack(alignment: .leading, spacing: A.lineGap.value) {
             HStack(spacing: 0) {
@@ -113,6 +117,7 @@ struct AirTrafficControlSheet: View {
             }
             .padding(.leading, A.openInLeading.value)
         }
+        .background(RouteOrderMenu(field: "route-\(id)-order", up: move(to: index - 1), down: move(to: index + 1)))
     }
 
     /// Every space in dock order, then Little Arc and Most Recent Space, as Arc's route destinations.
@@ -127,6 +132,43 @@ struct AirTrafficControlSheet: View {
     private func finish() {
         for row in routes where row.route.pattern.isEmpty { send(.removeRoute(row.route.id)) }
         close()
+    }
+}
+
+/// A route's right-click menu: Move Up and Move Down. Routes are tried top to bottom and the first match wins, so a
+/// specific route added after a general one has to be able to move above it. Arc's sheet (Q06-a) shows no control for
+/// the order; a menu keeps its look.
+private struct RouteOrderMenu: NSViewRepresentable {
+    let field: String
+    let up: (@MainActor () -> Void)?
+    let down: (@MainActor () -> Void)?
+
+    func makeNSView(context: NSViewRepresentableContext<Self>) -> Area { Area() }
+
+    func updateNSView(_ area: Area, context: NSViewRepresentableContext<Self>) {
+        area.identify(.settingsField(field))
+        area.up = up
+        area.down = down
+    }
+
+    final class Area: NSView {
+        var up: (@MainActor () -> Void)?
+        var down: (@MainActor () -> Void)?
+
+        override func menu(for event: NSEvent) -> NSMenu? {
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            for (tag, title, action) in [(0, SettingsCopy.moveRouteUp, up), (1, SettingsCopy.moveRouteDown, down)] {
+                let item = NSMenuItem(title: title, action: #selector(move(_:)), keyEquivalent: "")
+                item.target = self
+                item.tag = tag
+                item.isEnabled = action != nil
+                menu.addItem(item)
+            }
+            return menu
+        }
+
+        @objc private func move(_ item: NSMenuItem) { (item.tag == 0 ? up : down)?() }
     }
 }
 

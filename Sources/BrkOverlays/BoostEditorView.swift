@@ -112,7 +112,8 @@ final class BoostPanelWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .keyDown, event.keyCode == Key.escape.code { onEscape?(); return }
+        // Text an input method is still composing takes Escape itself: it cancels the composition.
+        if event.type == .keyDown, event.keyCode == Key.escape.code, (firstResponder as? NSTextView)?.hasMarkedText() != true { onEscape?(); return }
         if event.type == .leftMouseDown, !isKeyWindow { makeKey() }
         super.sendEvent(event)
     }
@@ -337,13 +338,22 @@ public final class BoostEditorView: NSView, NSTextFieldDelegate, NSTextViewDeleg
     }
     /// × keeps the edits (`.close`), but never past an origin the settings card could not read.
     private func closePanel() {
-        // A draft with nothing in it saves nothing, so its scope cannot be wrong: it closes.
-        if menuOpen || settings.unreadable, var draft = editor?.draft, !draft.isBlank, !settings.apply(to: &draft) { message.stringValue = Self.scopeRefusal; return }
+        if refusesScope() { return }
         dispatch(.boost(.close))
     }
+    /// The settings card holds a scope it could not read: the note says so, and the panel does not close and save.
+    private func refusesScope() -> Bool {
+        // A draft with nothing in it saves nothing, so its scope cannot be wrong: it closes.
+        guard menuOpen || settings.unreadable, var draft = editor?.draft, !draft.isBlank, !settings.apply(to: &draft) else { return false }
+        message.stringValue = Self.scopeRefusal
+        return true
+    }
     static let scopeRefusal = "Enter an HTTP(S) origin or a host name."
-    /// Escape anywhere in the panel is the window's Exit: leave Zap, else close and save.
-    func exit() { dispatch(.app(.exit)) }
+    /// Escape anywhere in the panel is the window's Exit: leave Zap, else close and save, which refuses a scope as × does.
+    func exit() {
+        if editor?.picking != true, refusesScope() { return }
+        dispatch(.app(.exit))
+    }
     private func toggleMenu() {
         menuOpen.toggle()
         settings.isHidden = !menuOpen

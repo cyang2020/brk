@@ -219,6 +219,34 @@ final class SpaceDialogHostTests: XCTestCase {
     }
 }
 
+/// The Edit Theme panel is its own window over the browser window. Cmd+M and Ctrl+Cmd+F take the browser window to the
+/// Dock or to its own full-screen Space without a click, so the panel closes then too instead of staying on the desktop.
+@MainActor
+final class ThemePanelWindowTests: XCTestCase {
+    func testThePanelClosesWhenItsWindowIsMinimizedOrGoesFullScreen() {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1280, height: 776), styleMask: [.titled], backing: .buffered, defer: false)
+        let other = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        other.isReleasedWhenClosed = false
+        defer { window.close(); other.close() }
+        var closes = 0
+        let panel = ThemePanelWindow(space: SpaceID("s"), draft: ThemeDraft(theme: editTheme), onChange: { _ in }, close: { closes += 1 })
+        panel.show(over: window, sidebarMaxX: 228, scheme: .light)
+        defer { panel.dismiss() }
+        func post(_ name: Notification.Name, _ object: NSWindow) {
+            NotificationCenter.default.post(name: name, object: object)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        post(NSWindow.willMiniaturizeNotification, other)
+        XCTAssertEqual(closes, 0, "another window's minimize is not this panel's")
+        post(NSWindow.willMiniaturizeNotification, window)
+        XCTAssertEqual(closes, 1, "Cmd+M closes the panel")
+        post(NSWindow.willEnterFullScreenNotification, window)
+        XCTAssertEqual(closes, 2, "Ctrl+Cmd+F closes the panel")
+    }
+}
+
 /// A063 (R4-9): the theme panel's edits step back and forward with Cmd+Z and Shift+Cmd+Z; a drag is one step.
 @MainActor
 final class ThemeEditorUndoTests: XCTestCase {

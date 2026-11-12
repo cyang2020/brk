@@ -54,6 +54,33 @@ final class ShortcutsPaneTests: XCTestCase {
         XCTAssertFalse(view.isRecording, "a recorder that loses focus must release the event monitor")
     }
 
+    /// A key cap left recording while the user goes to a browser window: that window's keys are its own (typing, Delete,
+    /// ⌘L), so the recording ends once another window takes the keyboard, and Delete there leaves the shortcut alone.
+    func test_theRecordingEndsWhenAnotherWindowBecomesKey() {
+        _ = NSApplication.shared
+        let settings = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 200, height: 80), styleMask: [.titled], backing: .buffered, defer: false)
+        let browser = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 200, height: 80), styleMask: [.titled], backing: .buffered, defer: false)
+        settings.isReleasedWhenClosed = false
+        browser.isReleasedWhenClosed = false
+        let view = ChordRecorderView(frame: CGRect(x: 0, y: 0, width: 132, height: 24))
+        settings.contentView = view
+        defer { view.stop(); settings.close(); browser.close() }
+        var recorded: [KeyChord?] = []
+        view.record = { recorded.append($0) }
+        view.start()
+        NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: settings)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        XCTAssertTrue(view.isRecording, "its own window becoming key keeps the recording")
+        NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: browser)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        XCTAssertFalse(view.isRecording)
+        XCTAssertFalse(ShortcutRecording.isActive)
+        let delete = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 1, windowNumber: browser.windowNumber,
+                                      context: nil, characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: 51)!
+        XCTAssertFalse(view.handle(delete), "Delete in the browser window goes on to that window")
+        XCTAssertEqual(recorded, [], "and does not remove the shortcut")
+    }
+
     /// changed shortcuts first, then Arc's list by name as Arc sorts it, then Brk's other actions; the filter matches
     /// titles and shortcuts
     func test_sectionsPutTheUsersShortcutsFirstAndFilter() {

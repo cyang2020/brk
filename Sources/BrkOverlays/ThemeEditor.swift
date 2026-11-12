@@ -541,6 +541,7 @@ final class ThemePanelWindow {
     private let panel: NSPanel
     private let model: ThemeEditorModel
     private var monitor: Any?
+    private var observers: [NSObjectProtocol] = []
     private var shown = false
     private let close: () -> Void
     var space: SpaceID
@@ -593,11 +594,19 @@ final class ThemePanelWindow {
                 MainActor.assumeIsolated { if let self, event.window !== self.panel { self.close() } }
                 return event
             }
+            // Cmd+M and Ctrl+Cmd+F take the window away with no click for the monitor: the panel closes with it.
+            observers = [NSWindow.willMiniaturizeNotification, NSWindow.willEnterFullScreenNotification].map { name in
+                NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.close() }
+                }
+            }
         }
     }
 
     func dismiss() {
         if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
+        for observer in observers { NotificationCenter.default.removeObserver(observer) }
+        observers = []
         shown = false
         panel.orderOut(nil)
     }

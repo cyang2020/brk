@@ -335,7 +335,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         typingOn = !typed.hasPrefix(text) && caretAtEnd()
         typed = text
         completion = nil
-        if pill == nil, typingOn, let bar, let domain = Suggest.completion(text, bar: bar, appName: Product.name) {
+        if pill == nil, typingOn, !composing(), let bar, let domain = Suggest.completion(text, bar: bar, appName: Product.name) {
             complete(to: domain)
         }
         switch pill {
@@ -351,6 +351,10 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         editor.selectedTextAttributes = savedSelection
         self.savedSelection = nil
     }
+
+    /// An input method is still composing (Pinyin's letters before a character is picked): writing a completion into the
+    /// field would throw its underlined text away.
+    private func composing() -> Bool { (input.currentEditor() as? NSTextView)?.hasMarkedText() == true }
 
     private func caretAtEnd() -> Bool {
         guard let editor = input.currentEditor() else { return true }
@@ -373,7 +377,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
     /// before the keystroke (Arc completes only to its first row). So the input never shows one site while Return opens
     /// another. Once the caret moves or text is selected otherwise, the input is left alone.
     private func followFirstRow() {
-        guard pill == nil, typingOn, let bar, let editor = input.currentEditor() else { return }
+        guard pill == nil, typingOn, !composing(), let bar, let editor = input.currentEditor() else { return }
         let length = (typed as NSString).length
         let shown = completion.map { typed + $0.dropFirst(typed.count) } ?? typed
         let left = NSRange(location: length, length: (shown as NSString).length - length)

@@ -170,6 +170,23 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertTrue(ProfilesPane.unused(snapshot(pane: nil).profiles).isEmpty, "the default profile is never unused")
     }
 
+    /// Return in the rename field with the name as it was leaves rename mode, and Return in an empty New Profile row
+    /// takes the row away; neither sends anything. Both used to stay until another name was committed.
+    func testReturnWithTheSameNameOrNoNameLeavesTheProfileField() throws {
+        let f = Fixture()
+        f.render(snapshot(pane: .profiles))
+        _ = f.click("editProfile")
+        XCTAssertNotNil(f.view("profileName-default"))
+        XCTAssertEqual(f.type("profileName-default", "Default"), [])
+        f.settle()
+        XCTAssertNil(f.view("profileName-default"), "the unchanged name ends the rename")
+        _ = f.click("addProfile")
+        XCTAssertNotNil(f.view("newProfileName"))
+        XCTAssertEqual(f.type("newProfileName", ""), [])
+        f.settle()
+        XCTAssertNil(f.view("newProfileName"), "Return with no name takes the empty row away")
+    }
+
     func testProfileNameCommitsFromTheNativeFieldEditor() throws {
         let f = Fixture()
         f.render(snapshot(pane: .profiles))
@@ -288,6 +305,46 @@ final class SettingsHostTests: XCTestCase {
         for _ in 0..<10 where f.window.attachedSheet != nil { f.settle() }
         if let open = f.window.attachedSheet { f.window.endSheet(open) }
         XCTAssertNil(f.window.attachedSheet, "× closes the sheet")
+    }
+
+    /// Routes are tried top to bottom and the first match wins, so a specific route added after a general one has to be
+    /// able to move above it: a route's right-click menu has Move Up and Move Down (none past either end).
+    func testARouteMovesUpAndDownFromItsMenu() throws {
+        let f = Fixture()
+        let general = LinkRoute(id: spotify, pattern: "google.com", destination: .space(work), match: .contains)
+        let specific = LinkRoute(id: github, pattern: "meet.google.com", destination: .space(personal), match: .contains)
+        f.render(snapshot(pane: .links, routes: [LinkRouteRow(route: general, destinationTitle: "Work"),
+                                                 LinkRouteRow(route: specific, destinationTitle: "Personal")]))
+        f.window.orderFront(nil)
+        defer { f.window.orderOut(nil); f.window.close() }
+        _ = f.click("airTrafficControl")
+        for _ in 0..<10 where f.window.attachedSheet == nil { f.settle() }
+        let sheet = try XCTUnwrap(f.window.attachedSheet)
+        func menu(_ route: LinkRouteID) throws -> NSMenu {
+            func walk(_ view: NSView) -> NSView? {
+                if view.accessibilityIdentifier() == ViewID.settingsField("route-\(route.rawValue)-order").identifier { return view }
+                for child in view.subviews { if let found = walk(child) { return found } }
+                return nil
+            }
+            let area = try XCTUnwrap(sheet.contentView.flatMap(walk), "the route has a menu")
+            let click = NSEvent.mouseEvent(with: .rightMouseDown, location: area.convert(CGPoint(x: 2, y: 2), to: nil), modifierFlags: [], timestamp: 1,
+                                           windowNumber: sheet.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            return try XCTUnwrap(area.menu(for: click))
+        }
+        let second = try menu(github)
+        XCTAssertEqual(second.items.map(\.title), [SettingsCopy.moveRouteUp, SettingsCopy.moveRouteDown])
+        XCTAssertEqual(second.items.map(\.isEnabled), [true, false], "the last route cannot move down")
+        f.sent = []
+        second.performActionForItem(at: 0)
+        f.settle()
+        XCTAssertEqual(f.sent, [.settings(.links(.moveRoute(github, index: 0)))])
+        let first = try menu(spotify)
+        XCTAssertEqual(first.items.map(\.isEnabled), [false, true], "the first route cannot move up")
+        f.sent = []
+        first.performActionForItem(at: 1)
+        f.settle()
+        XCTAssertEqual(f.sent, [.settings(.links(.moveRoute(spotify, index: 1)))])
+        if let open = f.window.attachedSheet { f.window.endSheet(open) }
     }
 
     func testProfileSettingsStayScopedAndDownloadsCanReturnToDefault() {

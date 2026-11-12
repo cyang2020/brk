@@ -52,6 +52,8 @@ final class SiteControlsOverview: NSView {
         let site = value.target != nil
         for tile in [boost, capture, fullPage] { tile.isEnabled = site }
         share.isEnabled = site && value.canExport
+        // A private window cannot edit Boosts (`AppState.boostProfile`); the menus' Boost items are off there too.
+        boost.isEnabled = site && !privateSession
         add.isEnabled = !privateSession
         let extensions = value.extensions.sorted {
             (value.pinnedExtensions.contains($0.id) ? 0 : 1, $0.name) < (value.pinnedExtensions.contains($1.id) ? 0 : 1, $1.name)

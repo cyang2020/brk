@@ -28,12 +28,12 @@ final class SiteControlsOverviewTests: XCTestCase {
                        "Connection is not secure: this page loaded content over plain HTTP.")
     }
 
-    private func snapshot(_ url: String?, secure: Bool = false) -> SiteControlSnapshot {
+    private func snapshot(_ url: String?, secure: Bool = false, context: BrowsingContext = .profile(.default)) -> SiteControlSnapshot {
         let page = PageID(window: WindowID("window"), item: ItemID("item"))
         let target = url.flatMap(URL.init(string:)).flatMap(SiteOrigin.init).map {
-            SiteTarget(document: DocumentToken(browser: BrowserToken(page: page, generation: 1), sequence: 1), context: .profile(.default), origin: $0)
+            SiteTarget(document: DocumentToken(browser: BrowserToken(page: page, generation: 1), sequence: 1), context: context, origin: $0)
         }
-        return SiteControlSnapshot(context: .profile(.default), applied: nil, rulesVersion: 1, rulesError: nil, extensionsLoaded: true,
+        return SiteControlSnapshot(context: context, applied: nil, rulesVersion: 1, rulesError: nil, extensionsLoaded: true,
                                    extensions: [], pinnedExtensions: [], extensionError: nil, target: target, profileName: "Default",
                                    rule: SiteRule(), appearance: .automatic, clearing: false, result: nil, secure: secure)
     }
@@ -45,6 +45,25 @@ final class SiteControlsOverviewTests: XCTestCase {
         value.ready = true
         XCTAssertNil(SiteControlsHost.clearNote(value))
         XCTAssertNil(SiteControlsHost.clearNote(snapshot(nil)), "no web page, no note")
+    }
+
+    /// A private window cannot edit Boosts (the reducer refuses, the menus disable New Boost and Edit Boost): its Boost
+    /// tile is off as Add Extension is, instead of closing the popover and doing nothing.
+    func testBoostIsOffInAPrivateWindow() throws {
+        let host = SiteControlsHost(frame: .zero)
+        func tile(_ field: String) -> NSControl? {
+            func walk(_ view: NSView) -> NSView? {
+                if view.accessibilityIdentifier() == ViewID.settingsField(field).identifier { return view }
+                for child in view.subviews { if let found = walk(child) { return found } }
+                return nil
+            }
+            return walk(host) as? NSControl
+        }
+        host.render(snapshot("https://example.com/")) { _ in }
+        XCTAssertEqual(tile("siteBoost")?.isEnabled, true)
+        host.render(snapshot("https://example.com/", context: .incognito(PrivateSessionID("private")))) { _ in }
+        XCTAssertEqual(tile("siteBoost")?.isEnabled, false)
+        XCTAssertEqual(tile("siteCapture")?.isEnabled, true, "capture still works there")
     }
 
     private func chip(in view: NSView) -> SecurityChip? {

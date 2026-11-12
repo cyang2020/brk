@@ -57,6 +57,8 @@ import BrkUIKit
             let width = min(360, rect.width, rect.height * 9 / 16)
             selection = value.request.mode == .portrait ? CGRect(x: rect.midX - width / 2, y: rect.midY - width * 8 / 9, width: width, height: width * 16 / 9) : .zero
         } else if retaken, value.request.mode != .portrait { selection = .zero }
+        // The window keeps one menu card: what was typed into its Send To… field last time would filter this capture's rows.
+        if fresh || retaken { menuCard.clearQuery() }
         let showMenu = value.image != nil && value.action == nil
         menuCard.isHidden = !showMenu
         if showMenu {
@@ -289,6 +291,10 @@ import BrkUIKit
         refresh()
     }
     func controlTextDidChange(_ obj: Notification) { refresh() }
+    func clearQuery() {
+        field.stringValue = ""
+        refresh()
+    }
     private func refresh() {
         let query = field.stringValue.trimmingCharacters(in: .whitespaces).lowercased()
         for (row, view) in rows {
