@@ -187,6 +187,53 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertNil(f.view("newProfileName"), "Return with no name takes the empty row away")
     }
 
+    /// The other ways out of the profile field: an edit that ends without Return (a click in another control, Settings
+    /// closing) ends the rename when the name is as it was and takes away an empty New Profile row (the field sends its
+    /// action then too); the pencil, pressed again, ends the rename; closing Settings ends a rename and an empty row nobody
+    /// typed in. The last two stayed, also across closing and reopening Settings.
+    func testEndingTheEditThePencilOrClosingSettingsLeavesTheProfileField() throws {
+        let f = Fixture()
+        f.render(snapshot(pane: .profiles))
+        func edit(_ field: String, _ text: String) throws {
+            let textField = try XCTUnwrap(f.view(field, NSTextField.self), "no field \(field)")
+            textField.selectText(nil)
+            let editor = try XCTUnwrap(textField.currentEditor() as? NSTextView)
+            editor.insertText(text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+        }
+        func endEditing() {
+            f.window.makeFirstResponder(nil)   // what a click in another field does
+            f.settle()
+        }
+        _ = f.click("editProfile")
+        try edit("profileName-default", "Default")
+        f.sent = []
+        endEditing()
+        XCTAssertNil(f.view("profileName-default"), "an edit that ends with the name as it was ends the rename")
+        _ = f.click("addProfile")
+        try edit("newProfileName", " ")
+        endEditing()
+        XCTAssertNil(f.view("newProfileName"), "an edit that ends with no name takes the row away")
+        XCTAssertEqual(f.sent, [], "nothing is renamed or created")
+
+        _ = f.click("editProfile")
+        XCTAssertNotNil(f.view("profileName-default"))
+        _ = f.click("editProfile")
+        XCTAssertNil(f.view("profileName-default"), "the pencil pressed again ends the rename")
+        _ = f.click("editProfile")
+        try edit("profileName-default", "Work")
+        XCTAssertEqual(f.click("editProfile"), [.profile(.rename(.default, name: "Work"))], "a new name typed is kept, as when the edit ends elsewhere")
+        XCTAssertNil(f.view("profileName-default"))
+
+        _ = f.click("editProfile")
+        _ = f.click("addProfile")
+        XCTAssertNotNil(f.view("profileName-default"))
+        XCTAssertNotNil(f.view("newProfileName"))
+        f.render(snapshot(pane: nil))   // Esc or ⌘W closes Settings
+        f.render(snapshot(pane: .profiles))
+        XCTAssertNil(f.view("profileName-default"), "a rename does not outlive the window")
+        XCTAssertNil(f.view("newProfileName"), "an empty New Profile row does not outlive the window")
+    }
+
     func testProfileNameCommitsFromTheNativeFieldEditor() throws {
         let f = Fixture()
         f.render(snapshot(pane: .profiles))
@@ -308,7 +355,9 @@ final class SettingsHostTests: XCTestCase {
     }
 
     /// Routes are tried top to bottom and the first match wins, so a specific route added after a general one has to be
-    /// able to move above it: a route's right-click menu has Move Up and Move Down (none past either end).
+    /// able to move above it: a route's right-click menu has Move Up and Move Down (none past either end). The menu is the
+    /// one AppKit finds for a right-click on the row's words and in its margin: the first one offered by the view the
+    /// sheet's hit test gives there or by a view it sits in (a view without a menu passes the click to its superview).
     func testARouteMovesUpAndDownFromItsMenu() throws {
         let f = Fixture()
         let general = LinkRoute(id: spotify, pattern: "google.com", destination: .space(work), match: .contains)
@@ -320,25 +369,35 @@ final class SettingsHostTests: XCTestCase {
         _ = f.click("airTrafficControl")
         for _ in 0..<10 where f.window.attachedSheet == nil { f.settle() }
         let sheet = try XCTUnwrap(f.window.attachedSheet)
-        func menu(_ route: LinkRouteID) throws -> NSMenu {
+        /// The menu for a right-click at `point`, top-left based in the route's row (its words start 56.5 points in, the
+        /// second line's 148).
+        func menu(_ route: LinkRouteID, at point: CGPoint, file: StaticString = #filePath, line: UInt = #line) throws -> NSMenu {
             func walk(_ view: NSView) -> NSView? {
-                if view.accessibilityIdentifier() == ViewID.settingsField("route-\(route.rawValue)-order").identifier { return view }
+                if view.accessibilityIdentifier() == ViewID.settingsField("route-\(route.rawValue)-row").identifier { return view }
                 for child in view.subviews { if let found = walk(child) { return found } }
                 return nil
             }
-            let area = try XCTUnwrap(sheet.contentView.flatMap(walk), "the route has a menu")
-            let click = NSEvent.mouseEvent(with: .rightMouseDown, location: area.convert(CGPoint(x: 2, y: 2), to: nil), modifierFlags: [], timestamp: 1,
+            let content = try XCTUnwrap(sheet.contentView)
+            let row = try XCTUnwrap(walk(content), "the route's row", file: file, line: line)
+            let inRow = CGPoint(x: point.x, y: row.isFlipped ? point.y : row.bounds.height - point.y)
+            let location = row.convert(inRow, to: nil)
+            let hit = try XCTUnwrap(content.superview.flatMap { content.hitTest($0.convert(location, from: nil)) }, file: file, line: line)
+            let click = NSEvent.mouseEvent(with: .rightMouseDown, location: location, modifierFlags: [], timestamp: 1,
                                            windowNumber: sheet.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
-            return try XCTUnwrap(area.menu(for: click))
+            let menu = sequence(first: hit, next: \.superview).lazy.compactMap { $0.menu(for: click) }.first
+            return try XCTUnwrap(menu, "a right-click at \(point) reaches \(hit), and neither it nor a view it sits in has a menu", file: file, line: line)
         }
-        let second = try menu(github)
+        let words = CGPoint(x: 160, y: 41)   // "Open in", on the route's second line
+        let margin = CGPoint(x: 20, y: 10)
+        let second = try menu(github, at: words)
         XCTAssertEqual(second.items.map(\.title), [SettingsCopy.moveRouteUp, SettingsCopy.moveRouteDown])
         XCTAssertEqual(second.items.map(\.isEnabled), [true, false], "the last route cannot move down")
+        XCTAssertEqual(try menu(github, at: margin).items.map(\.title), [SettingsCopy.moveRouteUp, SettingsCopy.moveRouteDown])
         f.sent = []
         second.performActionForItem(at: 0)
         f.settle()
         XCTAssertEqual(f.sent, [.settings(.links(.moveRoute(github, index: 0)))])
-        let first = try menu(spotify)
+        let first = try menu(spotify, at: words)
         XCTAssertEqual(first.items.map(\.isEnabled), [false, true], "the first route cannot move up")
         f.sent = []
         first.performActionForItem(at: 1)

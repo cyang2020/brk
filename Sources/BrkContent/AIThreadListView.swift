@@ -44,6 +44,8 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
     private var dropSpace: SpaceID?
     /// The rows changed while one was being dragged; they are made again when the drag ends.
     private var rebuildAfterDrag = false
+    /// Whether the left mouse button is down now (tests stand in for the hardware state).
+    var leftButtonDown: () -> Bool = { NSEvent.pressedMouseButtons & 1 != 0 }
 
     init(dispatch: @escaping Dispatch) {
         self.dispatch = dispatch
@@ -107,10 +109,12 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
         empty.textColor = style.secondary
         empty.stringValue = panel.groups.isEmpty ? (panel.search.isEmpty ? AIThreadWords.empty(language) : AIThreadWords.noMatches(language)) : ""
         empty.isHidden = !panel.groups.isEmpty
-        if structure {
+        // A drag whose mouse-up never reached its row (an alert or a menu took it): it is over, without a drop.
+        if dragImage != nil, !leftButtonDown() { endDrag() }
+        if structure || rebuildAfterDrag {
             // A row being dragged stays in the view tree until the drag ends: AppKit sends the rest of the drag, and its
             // mouse-up, only to the view that took the press.
-            if dragImage != nil { rebuildAfterDrag = true } else { rebuild(panel, style: style) }
+            if dragImage != nil { rebuildAfterDrag = true } else { rebuildAfterDrag = false; rebuild(panel, style: style) }
         }
         needsLayout = true
     }
@@ -216,10 +220,7 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
             if space != dropSpace { dropSpace = space; showDockDrop?(space) }
         case .ended:
             let space = dockSpace?(point)
-            dragImage?.removeFromSuperview()
-            dragImage = nil
-            dropSpace = nil
-            showDockDrop?(nil)
+            endDrag()
             if rebuildAfterDrag, let panel, let style {
                 rebuildAfterDrag = false
                 rebuild(panel, style: style)
@@ -228,6 +229,14 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
             }
             if let space { dispatch(.assist(.moveConversation(view.row.id, space))) }
         }
+    }
+
+    /// The drag picture and the dot's highlight go.
+    private func endDrag() {
+        dragImage?.removeFromSuperview()
+        dragImage = nil
+        dropSpace = nil
+        showDockDrop?(nil)
     }
 
     // MARK: Rename

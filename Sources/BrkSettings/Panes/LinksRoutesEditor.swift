@@ -83,10 +83,6 @@ struct AirTrafficControlSheet: View {
             send(.updateRoute(LinkRoute(id: route.id, pattern: pattern ?? route.pattern, destination: destination ?? route.destination,
                                         match: match ?? route.match ?? .matches)))
         }
-        func move(to place: Int) -> (@MainActor () -> Void)? {
-            guard routes.indices.contains(place) else { return nil }
-            return { send(.moveRoute(route.id, index: place)) }
-        }
         return VStack(alignment: .leading, spacing: A.lineGap.value) {
             HStack(spacing: 0) {
                 Image(systemName: "link").font(.system(size: A.symbolSize.value)).foregroundStyle(SettingsStyle.secondaryText)
@@ -117,7 +113,15 @@ struct AirTrafficControlSheet: View {
             }
             .padding(.leading, A.openInLeading.value)
         }
-        .background(RouteOrderMenu(field: "route-\(id)-order", up: move(to: index - 1), down: move(to: index + 1)))
+        // Routes are tried top to bottom and the first match wins, so a specific route added after a general one has to be
+        // able to move above it. Arc's sheet (Q06-a) shows no control for the order; a right-click menu on the row, its
+        // words and margins included, keeps its look.
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button(SettingsCopy.moveRouteUp) { send(.moveRoute(route.id, index: index - 1)) }.disabled(index == 0)
+            Button(SettingsCopy.moveRouteDown) { send(.moveRoute(route.id, index: index + 1)) }.disabled(index + 1 >= routes.count)
+        }
+        .background(IdentifiedRegion(id: .settingsField("route-\(id)-row")))
     }
 
     /// Every space in dock order, then Little Arc and Most Recent Space, as Arc's route destinations.
@@ -132,43 +136,6 @@ struct AirTrafficControlSheet: View {
     private func finish() {
         for row in routes where row.route.pattern.isEmpty { send(.removeRoute(row.route.id)) }
         close()
-    }
-}
-
-/// A route's right-click menu: Move Up and Move Down. Routes are tried top to bottom and the first match wins, so a
-/// specific route added after a general one has to be able to move above it. Arc's sheet (Q06-a) shows no control for
-/// the order; a menu keeps its look.
-private struct RouteOrderMenu: NSViewRepresentable {
-    let field: String
-    let up: (@MainActor () -> Void)?
-    let down: (@MainActor () -> Void)?
-
-    func makeNSView(context: NSViewRepresentableContext<Self>) -> Area { Area() }
-
-    func updateNSView(_ area: Area, context: NSViewRepresentableContext<Self>) {
-        area.identify(.settingsField(field))
-        area.up = up
-        area.down = down
-    }
-
-    final class Area: NSView {
-        var up: (@MainActor () -> Void)?
-        var down: (@MainActor () -> Void)?
-
-        override func menu(for event: NSEvent) -> NSMenu? {
-            let menu = NSMenu()
-            menu.autoenablesItems = false
-            for (tag, title, action) in [(0, SettingsCopy.moveRouteUp, up), (1, SettingsCopy.moveRouteDown, down)] {
-                let item = NSMenuItem(title: title, action: #selector(move(_:)), keyEquivalent: "")
-                item.target = self
-                item.tag = tag
-                item.isEnabled = action != nil
-                menu.addItem(item)
-            }
-            return menu
-        }
-
-        @objc private func move(_ item: NSMenuItem) { (item.tag == 0 ? up : down)?() }
     }
 }
 

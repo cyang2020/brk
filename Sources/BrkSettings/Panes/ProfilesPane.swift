@@ -70,6 +70,14 @@ struct ProfilesPane: View {
         .padding(.horizontal, Metrics.settings.horizontalPadding.value)
         .padding(.top, CardMetrics.paneTop.value)
         .onChange(of: selection) { subpage = nil }
+        // The pane's state outlives the window: closing Settings (Esc, ⌘W) ends a rename and takes away an empty New
+        // Profile row, so neither is still there when Settings opens again.
+        .onChange(of: settings.pane == nil) { _, closed in
+            guard closed else { return }
+            renaming = nil
+            renames = [:]
+            if ProfileCopy.trimmed(newName).isEmpty { adding = false }
+        }
         .alert(ProfileCopy.deleteTitle, isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             TextField(ProfileCopy.deleteTypePrompt, text: $typedName)
             Button(ProfileCopy.deleteButton, role: .destructive) {
@@ -144,7 +152,9 @@ struct ProfilesPane: View {
         let others = settings.profiles.filter { $0.profile.id != id }.map(\.profile.name)
         HStack(spacing: CardMetrics.controlGap.value) {
             if renaming == id {
-                // Return with the name as it was ends the rename: the field sends no commit for the value it started with.
+                // Ending the edit with the name as it was ends the rename: the field sends no commit for the value it started
+                // with, but it sends its action (`submit`) for Return and for any other end of the edit (a click in another
+                // control, Tab, Settings closing).
                 SettingsTextField(field: "profileName-\(id)", text: row.profile.name, placeholder: ProfileCopy.renameTitle,
                                   edit: { renames[id] = $0 },
                                   submit: { name in if ProfileCopy.trimmed(name) == row.profile.name { renames[id] = nil; renaming = nil } }) { name in
@@ -198,8 +208,12 @@ struct ProfilesPane: View {
             .disabled(refusal != nil)
             .help(refusal ?? ProfileCopy.deleteWarning(selected?.profile.name ?? ""))
             Rectangle().fill(SettingsStyle.cardBorder).frame(width: CardMetrics.borderWidth.value)
+            // The pencil starts a rename and, pressed again, ends it; a new name typed in the field is kept, as when the edit
+            // ends any other way.
             barButton(ProfileCopy.renameTitle, "rectangle.and.pencil.and.ellipsis", field: "editProfile") {
-                renaming = selected?.profile.id
+                let id = selected?.profile.id
+                if let renaming { renames[renaming] = nil }
+                renaming = renaming == id ? nil : id
             }
             Spacer(minLength: 0)
         }
@@ -211,7 +225,7 @@ struct ProfilesPane: View {
     }
 
     private func create(_ name: String) {
-        // Return in the empty New Profile row takes the row away; a taken name stays, with its note.
+        // Return, or any other end of the edit, in the empty New Profile row takes the row away; a taken name stays, with its note.
         if ProfileCopy.trimmed(name).isEmpty { adding = false; return }
         guard ProfileCopy.acceptsName(name, among: names) else { return }
         dispatch(.profile(.create(name: ProfileCopy.trimmed(name), icon: nil)))
