@@ -617,7 +617,15 @@ enum AIRealRightPanelScenarios {
             try NativeSystemInput.postSystemWide(KeyChord([], .returnKey))
             try app.waitUntil("the turn started", timeout: 15) { try app.view().ai?.busy == true }
             conversation = try app.view().ai?.conversation?.id
-            try app.waitUntil("the answer", timeout: 400) { try app.view().ai?.busy == false }
+            // The agent may reach for a tool of its own (Codex searches files with rg); Brk asks before each such call
+            // (ai-native.md rule 3). A person refuses those here, and the agent goes on with Brk's tab tools.
+            var refused = 0
+            while true {
+                try app.waitUntil("the answer or an approval", timeout: 400) { try app.view().ai?.busy == false || T.pending(app) != nil }
+                guard try app.view().ai?.busy == true, try T.pending(app) != nil, refused < 5 else { break }
+                try T.click(app, .aiControl("approval-deny"))
+                refused += 1
+            }
             let ai = try XCTUnwrapValue(try app.view().ai)
             page = ai.pages.last?.id
             T.shot(app, "2-answer")
