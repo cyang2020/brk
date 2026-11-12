@@ -192,6 +192,21 @@ final class WindowsSpecTests: XCTestCase {
         XCTAssertEqual(d.current?.url, url("https://example.com/plain"), "with the setting off, Shift+click is a plain tab")
     }
 
+    /// The link menu's Open Link in Incognito Window (Arc's link menu, Q07-b) opened the link as a Today tab of the
+    /// opener's profile, with its cookies and a history entry. It opens in a new incognito window.
+    func test_openLinkInIncognitoWindowOpensAPrivateWindow() throws {
+        let d = Driver()
+        let a = d.todayIDs[0]
+        let today = d.todayIDs
+        d.page(a, .openRequested(url("https://example.com/private"), .incognitoWindow))
+        let window = try XCTUnwrap(d.snapshot.windows.values.first { $0.kind == .incognito })
+        guard case .tab(let row)? = window.scratch?.rows.first else { return XCTFail("the private window has no tab") }
+        XCTAssertEqual(row.url, url("https://example.com/private"))
+        XCTAssertEqual(window.content.panes.map(\.tab), [row.id])
+        XCTAssertEqual(d.todayIDs, today, "nothing opened in the standard window's profile")
+        XCTAssertEqual(d.view.content.panes.map(\.tab), [a])
+    }
+
     /// a link from another app follows the first matching route, else the Links settings, else the most recent space
     func test_externalURLsAreRouted() throws {
         let d = Driver()

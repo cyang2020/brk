@@ -668,6 +668,7 @@ extension Work {
         completeAI(id, text: "The source or AI tool did not answer in time. The request was stopped; retry or use ordinary search.")
     }
     mutating func aiTranslated(_ id: AIRequestID, success: Bool) {
+        let asked = state.session.ai.requests[id]
         if success, let request = state.session.ai.requests[id], let page = request.page, let document = request.document,
            case .translate(let target) = request.purpose, state.session.live[page]?.document == .ready(document) {
             // The page's own language stays the first translation's (Choose Another Language translates the
@@ -679,6 +680,10 @@ extension Work {
             state.session.ai.translations[page] = AIPageTranslation(document: document, source: source, target: target, showingTranslation: true)
         }
         completeAI(id, text: success ? "Page translated. Controls and page structure were preserved. Reload to restore the original text." : "The document or text changed. Translation was not applied; reload and retry.", success: success)
+        // One read takes only part of a long page (AIPageContent.partial); the pill alone would say all of it was translated.
+        if success, let asked, let page = asked.page, asked.contents[page]?.partial == true {
+            toast("Only part of this page was translated.", in: asked.window)
+        }
     }
     private static let cancelled = "Request cancelled."
     private static let waiting = "Waiting for the local AI tool…"

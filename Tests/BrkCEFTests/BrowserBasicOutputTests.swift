@@ -82,4 +82,54 @@ import XCTest
         XCTAssertFalse(f.outputs.contains(context: .profile(.default)))
         XCTAssertFalse(FileManager.default.fileExists(atPath: f.destination.path))
     }
+
+    /// Save Page As checked the saved MHTML by reading, decoding and lowercasing the whole file on the main thread, so a
+    /// page of tens of MB stalled the app. The MIME header at the top is enough. The file here is sparse (512 MB long,
+    /// no disk used): reading all of it takes most of a second, reading the header a few milliseconds.
+    func testMHTMLCheckReadsOnlyTheHeader() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("brk-output-check-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("large.mhtml")
+        try Fixture.bytes.write(to: file)
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.truncate(atOffset: 512 * 1_048_576)
+        try handle.close()
+        let began = Date()
+        try DocumentOutputs.validate(file, intent: .mhtml)
+        XCTAssertLessThan(Date().timeIntervalSince(began), 0.25)
+    }
+
+    /// The time limit ran from the command, so a person still choosing a folder in the save panel had the panel closed
+    /// under them and the save reported failed. Only the native rendering is timed.
+    func testTimeLimitDoesNotRunWhileTheSavePanelIsOpen() throws {
+        let f = Fixture(); defer { f.dispose() }
+        var dismissals = 0
+        f.outputs.dismiss = { _ in dismissals += 1 }
+        f.outputs.timeLimit = 0.05
+        f.start()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        XCTAssertEqual(dismissals, 0, "the save panel stays open")
+        guard f.terminals.isEmpty else { return XCTFail("the save was reported failed while its panel was open: \(f.terminals)") }
+        f.accept(); try f.render()
+        XCTAssertEqual(f.terminals, [.saved(FileReceipt(url: f.destination, bytes: Int64(Fixture.bytes.count)))])
+    }
+
+    /// A print whose rendering passed the time limit kept the page's PDF in the temporary folder for good, private
+    /// windows too. Print output is never recovered: once the renderer has answered, its folder goes.
+    func testTimedOutPrintLeavesNoPDFBehind() throws {
+        let f = Fixture(); defer { f.dispose() }
+        f.outputs.timeLimit = 0.05
+        let request = OutputRequest(id: OutputID("print"), document: f.request.document, intent: .print, suggestedName: "Fixture")
+        f.outputs.start(request, context: f.context)
+        let staging = try XCTUnwrap(f.renderings.first?.0)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        guard case .failed? = f.terminals.first else { return XCTFail("the rendering was not timed") }
+        try Data("%PDF-1.4".utf8).write(to: staging)
+        f.renderings[0].1(.success(()))
+        let folder = staging.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        XCTAssertTrue(folder.lastPathComponent.hasPrefix("brk-output-"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path), "the page's PDF stayed in \(folder.path)")
+        XCTAssertTrue(f.outputs.isEmpty)
+    }
 }

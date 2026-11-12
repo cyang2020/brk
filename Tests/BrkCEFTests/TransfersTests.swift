@@ -134,6 +134,31 @@ import XCTest
         XCTAssertTrue(short.hasSuffix("é.txt"))
     }
 
+    /// A download cut off by a crash or a force quit left its partial file in a hidden .brk-transfer-* folder beside the
+    /// destination, and nothing ever removed it. The next download into that folder removes such leftovers; a folder
+    /// that holds a person's replaced file is left alone.
+    func testAbandonedPartialDownloadIsRemovedByTheNextDownload() throws {
+        let f = Fixture(); defer { f.dispose() }
+        let old = Date().addingTimeInterval(-2 * 3600)
+        let abandoned = f.directory.appendingPathComponent(".brk-transfer-" + UUID().uuidString)
+        let partial = abandoned.appendingPathComponent("file").appendingPathComponent("movie.mp4.crdownload")
+        try FileManager.default.createDirectory(at: partial.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(count: 1024).write(to: partial)
+        for url in [partial, partial.deletingLastPathComponent(), abandoned] {
+            try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: url.path)
+        }
+        let kept = f.directory.appendingPathComponent(".brk-transfer-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: kept.appendingPathComponent("file"), withIntermediateDirectories: true)
+        try Data("original".utf8).write(to: kept.appendingPathComponent("replaced"))
+        for url in [kept.appendingPathComponent("replaced"), kept.appendingPathComponent("file"), kept] {
+            try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: url.path)
+        }
+        let staged = try XCTUnwrap(f.decide(f.item()).resolutions[0])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: abandoned.path), "the abandoned partial download is still there")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: kept.appendingPathComponent("replaced").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: staged.deletingLastPathComponent().path))
+    }
+
     func testCollisionsAndConfirmedReplacementPreserveUnownedFiles() throws {
         let f = Fixture(); defer { f.dispose() }
         try FileManager.default.createDirectory(at: f.directory, withIntermediateDirectories: true)

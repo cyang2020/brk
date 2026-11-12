@@ -42,6 +42,9 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     /// The URL patterns DevTools blocks for this page now, and whether its network domain is on for that.
     var requestFilterPatterns: [String] = []
     var requestFilterEnabled = false
+    /// Where an allowed main-frame navigation goes, until its document starts or loading stops without one. The request
+    /// filter follows it: the new site's first requests must not get the blocking of the site still showing.
+    var navigatingTo: URL?
     var boostPolicy = BoostPolicy()
     var boostRevision: UInt64 = 0
     var boostDocument: DocumentToken?
@@ -237,7 +240,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
             else { reloadSequence.cancel(); expectedReloadBrowse = nil }
         }
         if !isRedirect { currentProgress = 0 }
-        if !isRedirect { cancelPermissions(); configureRequestFilter(url) }
+        if !isRedirect { cancelPermissions(); navigatingTo = url; configureRequestFilter(url) }
         emit(mainDocument.allowed(url, redirect: isRedirect))
         return true
     }
@@ -247,6 +250,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     }
 
     func webContents(_ contents: any BrkCoreWebContents, didStartDocument url: URL?) {
+        navigatingTo = nil
         settlePermissionGrants(keeping: nil)
         detectedLanguage = nil
         reportedSelection = false
@@ -270,6 +274,8 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     }
 
     func webContents(_ contents: any BrkCoreWebContents, didChangeLoading isLoading: Bool, canGoBack: Bool, canGoForward: Bool) {
+        // A navigation that ended without a document (stopped, a download): the filter goes back to the page showing.
+        if !isLoading, navigatingTo != nil { navigatingTo = nil; configureRequestFilter(contents.committedURL) }
         engine.pageDidEmit(self, .loadingChanged(isLoading: isLoading, canGoBack: canGoBack, canGoForward: canGoForward))
         emit(mainDocument.loadingChanged(isLoading))
         if isLoading { engine.pageLoadProgress(self, progress: currentProgress) } else { currentProgress = 0; reportSecurity() }

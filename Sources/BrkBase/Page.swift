@@ -123,6 +123,8 @@ public enum OpenDisposition: String, Hashable, Sendable, Codable {
     /// `window.open` with features. v1 opens it as a foreground tab; Peek and real popups plug in here later.
     case popup
     case newWindow
+    /// The link menu's Open Link in Incognito Window (Chromium's off-the-record open).
+    case incognitoWindow
 }
 
 /// Raw open intent retained at the browser boundary, even when the current domain policy opens a tab.

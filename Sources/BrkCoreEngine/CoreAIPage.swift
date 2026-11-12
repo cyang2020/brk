@@ -18,7 +18,8 @@ extension CoreEngine {
             guard let id = value["id"] as? Int, let text = value["text"] as? String, text.count <= 1000 else { throw AIPageFailure.invalidReply }
             return AITextNode(id: id, text: text)
         }
-        return AIPageContent(document: document, url: url, title: String(title.prefix(500)), language: String(language.prefix(40)), text: text, nodes: parsed)
+        return AIPageContent(document: document, url: url, title: String(title.prefix(500)), language: String(language.prefix(40)), text: text, nodes: parsed,
+                             partial: value["partial"] as? Bool)
     }
 
     public func translateAIPage(_ content: AIPageContent, replacements: [AITextNode]) async throws -> Bool {
@@ -89,18 +90,21 @@ enum CoreAIPageScripts {
     (()=>{
       const root=document.querySelector('main,article,[role="main"]')||document.body;
       if(!root)return null;
-      const nodes=[],saved=[];let length=0;
+      const nodes=[],saved=[],parts=[];let length=0,partial=false;
       const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
       let node;
-      while((node=walker.nextNode())&&nodes.length<200&&length<24000){
+      while(node=walker.nextNode()){
         const e=node.parentElement,t=node.nodeValue;
-        if(!e||!t.trim()||t.length>1000||e.isContentEditable||e.closest('script,style,noscript,input,textarea,select,button,svg,canvas,iframe,[hidden],[aria-hidden="true"],[data-private]'))continue;
+        if(!e||!t.trim()||e.isContentEditable||e.closest('script,style,noscript,input,textarea,select,button,svg,canvas,iframe,[hidden],[aria-hidden="true"],[data-private]'))continue;
         const s=getComputedStyle(e);if(s.display==='none'||s.visibility==='hidden'||!e.getClientRects().length)continue;
-        if(length+t.length>24000)break;
-        const id=nodes.length;nodes.push({id,text:t});saved.push({node,text:t});length+=t.length;
+        if(nodes.length>=200||length+t.length>24000){partial=true;break;}
+        parts.push(t);length+=t.length;
+        // Read, but too long to translate as one piece.
+        if(t.length>1000){partial=true;continue;}
+        const id=nodes.length;nodes.push({id,text:t});saved.push({node,text:t});
       }
       globalThis.brkAIText=saved;
-      return {url:location.href,title:document.title,language:document.documentElement.lang||'',text:nodes.map(x=>x.text).join('\n'),nodes};
+      return {url:location.href,title:document.title,language:document.documentElement.lang||'',text:parts.join('\n'),nodes,partial};
     })()
     """#
     /// Writes the translation and keeps, per text node, its own text and the translation (`brkAITranslation`), so

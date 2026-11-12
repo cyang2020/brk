@@ -86,7 +86,7 @@ extension ChromePage {
         let listed = FilterLists.hiddenSelectors(lists, documentURL: browser.url, pageFlags: FilterLists.pageFlags(lists, documentURL: browser.url))
         // One rule per selector, so a selector this Chromium does not support drops alone.
         let cosmetic = rule.blocking ? (rules.cosmeticSelectors + listed).map { $0 + "{display:none!important;}" }.joined(separator: "\n") : ""
-        let banners = rule.hideCookieBanners ? "[data-cookie-banner],[aria-label=\"cookie consent\"]{display:none!important;}" : ""
+        let banners = rule.hideCookieBanners ? CookieBanners.css : ""
         // A dedicated style element changes no inline user styles. Opt-out removes exactly this owner's CSS.
         let content = ":root{" + css + "}" + cosmetic + banners
         let literal = Self.jsString(content)
@@ -170,8 +170,7 @@ extension ChromePage {
                     _ = try await self.browser.protocolSession.call("Runtime.evaluate", ["expression": script, "contextId": contextID, "returnByValue": true])
                 }
                 guard self.policyRevision == revision, self.mainDocument.availability == .ready(document), self.engine.isLive(self) else { return }
-                let shouldFreeze = !policy.visible && rule.suspendWhenHidden && !rule.keepAlive && !rule.excludeSuspension
-                    && !self.websiteOperationProtected()
+                let shouldFreeze = !policy.visible && rule.suspendWhenHidden && !self.websiteOperationProtected()
                 var media = false
                 if shouldFreeze {
                     // Chromium automatically pauses muted media on hide. Preserve the document's playing

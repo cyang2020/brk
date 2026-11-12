@@ -78,7 +78,6 @@ enum CoreScenarios {
     }
 
     @Sendable static func dialogs(_ app: AppUnderTest) throws {
-        guard app.engine == .core else { throw Skipped(description: "needs BrkCore; CEF's dialogs are app-modal") }
         let url = app.site.url("page2.html")
         let item = try app.load(url)
         let page = PageID(window: app.window!, item: item)

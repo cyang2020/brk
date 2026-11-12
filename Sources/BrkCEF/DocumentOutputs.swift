@@ -29,6 +29,8 @@ import PDFKit
     var destination: (OutputDestinationPrompt, @escaping @MainActor (DestinationAnswer) -> Void) -> Void = { _, done in done(.ownerGone) }
     var print: (OutputRequest, URL, @escaping @MainActor (PrintAnswer) -> Void) -> Void = { _, _, done in done(.ownerGone) }
     var dismiss: (OutputID) -> Void = { _ in }
+    /// How long the native rendering may take before the output is reported failed.
+    var timeLimit: TimeInterval = 60
     var isEmpty: Bool { operations.isEmpty }
     func contains(_ id: OutputID) -> Bool { operations[id] != nil }
     func permitsRender(_ id: OutputID) -> Bool {
@@ -46,9 +48,6 @@ import PDFKit
         }
         let operation = Operation(request, context: context)
         operations[request.id] = operation
-        operation.timeout = Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in
-            MainActor.assumeIsolated { self?.reportTimeout(request.id) }
-        }
         if request.intent == .print {
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent("brk-output-" + UUID().uuidString, isDirectory: true)
             operation.printDirectory = directory
@@ -76,9 +75,15 @@ import PDFKit
             operation.rendering = false
             finish(operation, .cancelled(cleanup(operation))); return
         }
+        // Only the native rendering is timed: the save and print panels wait for the person as long as they take.
+        let id = operation.request.id
+        operation.timeout = Timer.scheduledTimer(withTimeInterval: timeLimit, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reportTimeout(id) }
+        }
         render(operation.request, operation.files!.staging) { [weak self, weak operation] result in
             guard let self, let operation, self.current(operation) else { return }
             operation.rendering = false
+            operation.timeout?.invalidate()
             self.rendered(result, operation)
         }
     }
@@ -146,7 +151,10 @@ import PDFKit
         publish(OutputUpdate(id: operation.request.id, document: operation.request.document, stage: stage))
     }
     private func cleanup(_ operation: Operation) -> PartialFile {
-        if operation.timedOut, let directory = operation.files?.directory { return .retained(directory, reason: "Output timed out; retained for recovery") }
+        // A print's PDF is only there for the print panel; nothing is recovered from it, timed out or not.
+        if operation.timedOut, operation.printDirectory == nil, let directory = operation.files?.directory {
+            return .retained(directory, reason: "Output timed out; retained for recovery")
+        }
         let result = operation.files?.cleanup() ?? .absent
         if let directory = operation.printDirectory {
             do { try FileManager.default.removeItem(at: directory) }
@@ -185,8 +193,10 @@ import PDFKit
 
     static func validate(_ url: URL, intent: OutputIntent) throws {
         if intent == .mhtml {
-            let bytes = try Data(contentsOf: url)
-            let text = String(decoding: bytes, as: UTF8.self)
+            // The MIME header is at the top. A page's MHTML can run to tens of MB, and this runs on the main thread.
+            let handle = try FileHandle(forReadingFrom: url)
+            defer { try? handle.close() }
+            let text = String(decoding: try handle.read(upToCount: 1_048_576) ?? Data(), as: UTF8.self)
             guard text.lowercased().contains("multipart/related"), text.contains("Content-Location:"), text.contains("boundary=") else { throw CocoaError(.fileReadCorruptFile) }
         } else {
             guard let document = PDFDocument(url: url), document.pageCount > 0,

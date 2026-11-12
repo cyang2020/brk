@@ -273,10 +273,14 @@ public final class PageFind {
             self.refresh = nil
             guard let token = self.correlation.search, token.document == self.document,
                   let query = self.correlation.query, let step = self.correlation.current else { return }
+            // After the first search, a refresh is a recount because the page changed. Chromium keeps the active match
+            // as the selection and a new search starts at the selection, so the active match stays; the count shown
+            // stays until the new one arrives.
+            let recount = !self.revisions.needsInitial
             self.revisions.started()
-            self.correlation.pauseForRefresh(); self.host.stopFinding(clearSelection: true)
+            self.correlation.pauseForRefresh(); self.host.stopFinding(clearSelection: !recount)
             self.correlation.resumeAfterRefresh()
-            self.publish(.matches(step.request, token, count: 0, ordinal: nil, passComplete: false))
+            if !recount { self.publish(.matches(step.request, token, count: 0, ordinal: nil, passComplete: false)) }
             guard self.correlation.search == token, self.correlation.current == step, self.correlation.query == query else { return }
             self.host.startFinding(query.text, forward: step.direction == .next, matchCase: query.caseSensitive)
         }

@@ -112,4 +112,27 @@ struct TransferFiles {
         do { try FileManager.default.removeItem(at: directory); return .removed }
         catch { return .retained(directory, reason: error.localizedDescription) }
     }
+
+    /// Removes the staging folders beside this one that a download cut off by a crash or a force quit left behind: not in
+    /// `owned` (this process's transfers), holding nothing but Chromium's partial file, and unchanged for an hour before
+    /// this folder was made (a download another Brk is writing keeps changing). A folder with a replaced file or
+    /// finished bytes is kept. The time is the file system's, read from this new folder.
+    func removeAbandonedNeighbours(owned: Set<String>) {
+        let manager = FileManager.default
+        let parent = directory.deletingLastPathComponent()
+        guard let made = (try? manager.attributesOfItem(atPath: directory.path))?[.modificationDate] as? Date,
+              let names = try? manager.contentsOfDirectory(atPath: parent.path) else { return }
+        let cutoff = made.addingTimeInterval(-3600)
+        for name in names where name.hasPrefix(".brk-transfer-") && name != directory.lastPathComponent {
+            let directory = parent.appendingPathComponent(name, isDirectory: true)
+            let folder = directory.appendingPathComponent("file", isDirectory: true)
+            guard !owned.contains(directory.standardizedFileURL.path),
+                  (try? manager.contentsOfDirectory(atPath: directory.path)) == ["file"],
+                  let partials = try? manager.contentsOfDirectory(atPath: folder.path),
+                  partials.allSatisfy({ $0.hasSuffix(".crdownload") }) else { continue }
+            let items = [directory, folder] + partials.map { folder.appendingPathComponent($0) }
+            let changed = items.contains { ((try? manager.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date ?? .distantFuture) > cutoff }
+            if !changed { try? manager.removeItem(at: directory) }
+        }
+    }
 }

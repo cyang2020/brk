@@ -531,6 +531,8 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     private func record(_ kind: PageLogEntry.Kind, _ page: CorePage) {
         pageLog.append(PageLogEntry(page: page.id, generation: page.incarnation.generation, kind: kind,
                                     browserID: Int(page.contents.tabID), uptime: ProcessInfo.processInfo.systemUptime))
+        // As on CEF: the newest entries are enough at quit, and a long session must not grow it.
+        if pageLog.count > 4096 { pageLog.removeFirst(pageLog.count - 4096) }
     }
 
     // MARK: Called by CorePage

@@ -57,7 +57,7 @@ extension CorePage {
             permissionSync += Self.changedPermissions(before, policy.preferences, top: origin)
             flushPermissionSync()
         }
-        configureRequestFilter(contents.committedURL)
+        configureRequestFilter(navigatingTo ?? contents.committedURL)
         if changed || (frozen && websiteOperationProtected()) { refreshWebsitePolicy() }
     }
 
@@ -116,7 +116,7 @@ extension CorePage {
         let css = policy.themeCSS.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value);" }.joined()
         let rules = policy.preferences.blockingRules ?? .builtIn
         let cosmetic = rule.blocking ? rules.cosmeticSelectors.map { $0 + "{display:none!important;}" }.joined(separator: "\n") : ""
-        let banners = rule.hideCookieBanners ? "[data-cookie-banner],[aria-label=\"cookie consent\"]{display:none!important;}" : ""
+        let banners = rule.hideCookieBanners ? CookieBanners.css : ""
         let content = ":root{" + css + "}" + cosmetic + banners
         if websiteStyleOwner?.document != document { websiteStyleOwner = (document, UUID().uuidString) }
         let owner = Self.jsString(websiteStyleOwner!.id)
@@ -189,8 +189,7 @@ extension CorePage {
                     _ = try await session.call("Runtime.evaluate", ["expression": script, "contextId": contextID, "returnByValue": true])
                 }
                 guard current() else { return }
-                let shouldFreeze = !policy.visible && rule.suspendWhenHidden && !rule.keepAlive && !rule.excludeSuspension
-                    && !self.websiteOperationProtected()
+                let shouldFreeze = !policy.visible && rule.suspendWhenHidden && !self.websiteOperationProtected()
                 var media = false
                 if shouldFreeze {
                     let expression = "Array.from(document.querySelectorAll('video,audio')).some(x=>!x.ended&&(!x.paused||globalThis.brkMedia?.playing.has(x)===true))"

@@ -342,6 +342,13 @@ extension Work {
         if url.isFileURL, tab.url?.isFileURL != true { return }
         let opener = page.item, window = page.window
         guard state.owns(page), let target = state.role(of: opener)?.space ?? state.doc.windows[window]?.space else { return }
+        // Open Link in Incognito Window: a new incognito window, from any kind of window.
+        if disposition == .incognitoWindow {
+            if state.session.privateSession == nil { state.session.privateSession = PrivateSessionID(ctx.newID()) }
+            let owner = newWindow(kind: .incognito, space: target, sidebar: (true, state.doc.windows[window]!.sidebarWidth), cascadingFrom: state.doc.windows[window]?.bounds)
+            openScratchTab(url, in: owner, focus: true)
+            return
+        }
         // Shift+click, Opt+Cmd+click and Pinned/Favorites links to other sites open as a Peek or a Little Arc per the
         // Links settings (Rules/Peek.swift). Private requests stay in their window's own container.
         switch specialOpen(for: url, from: opener, in: window) {
@@ -367,7 +374,7 @@ extension Work {
             return
         }
         switch disposition {
-        case .foregroundTab, .popup, .newWindow:
+        case .foregroundTab, .popup, .newWindow, .incognitoWindow:
             commitCycle(in: window)
             if let opened = openTab(url, inSpace: target, window: window, focus: true) { state.session.pageOpeners[opened] = opener }
         case .backgroundTab:

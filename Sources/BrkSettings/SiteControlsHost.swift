@@ -205,8 +205,6 @@ private struct SiteControlsView: View {
                     Text("Camera, microphone, location and notifications also need macOS authorization, which macOS asks for itself. Screen capture needs a source picker.").font(.caption).foregroundStyle(.secondary)
                     Divider()
                     Toggle("Suspend this site while its tab is hidden", isOn: Binding(get: { value.rule.suspendWhenHidden }, set: { on in change { $0.suspendWhenHidden = on } }))
-                    Toggle("Keep this site alive", isOn: Binding(get: { value.rule.keepAlive }, set: { on in change { $0.keepAlive = on } }))
-                    Toggle("Exclude this site from suspension", isOn: Binding(get: { value.rule.excludeSuspension }, set: { on in change { $0.excludeSuspension = on } }))
                     Text("Playing audio/video, audible WebAudio, picture in picture and active operations keep pages active. Automatic picture in picture is not available yet.").font(.caption).foregroundStyle(.secondary)
                     Divider()
                     Button("Clear cookies and refresh…") { dispatch(.site(.clear(kinds: [.cookies], scope: .site, reload: true))) }

@@ -200,6 +200,19 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertFalse(blocked.effects.contains { if case .aiRead = $0 { true } else { false } })
         XCTAssertTrue(d.view.tabTools.toast?.text.contains("never translates") == true)
     }
+    /// A long article is read only in part (200 pieces, 24,000 characters, no piece over 1,000 characters): the rest
+    /// stayed in the page's own language while the pill said Translated, and nothing told the person.
+    func testPartialTranslationSaysOnlyPartOfThePageWasTranslated() throws {
+        let d = enabled(), whole = try content(d), page = whole.document.browser.page
+        let c = AIPageContent(document: whole.document, url: whole.url, title: whole.title, language: whole.language,
+                              text: whole.text, nodes: whole.nodes, partial: true)
+        let id = try readRequest(d.user(.assist(.translate("English"))))
+        d.system(.aiPageRead(id, page, c))
+        d.system(.aiResult(id, .reply(.translation([AITextNode(id: 0, text: "Hello")]))))
+        XCTAssertNil(d.view.tabTools.toast)
+        d.system(.aiTranslated(id, true))
+        XCTAssertTrue(d.view.tabTools.toast?.text.contains("part of this page") == true, "nothing said the page was translated only in part")
+    }
     /// Arc's translation (P50): the page menu's Translate to English, the pill's Translated, Use Original with its
     /// "Translated back to French! Use ⌘Z to undo." toast, ⌘Z, and Choose Another Language.
     func testPageMenuTranslationPillPopoverAndUndo() throws {

@@ -48,12 +48,15 @@ struct MainDocumentState {
     mutating func finished(_ url: URL?) -> [PageEvent] {
         guard !failed, case .loading(let token) = document else { return [] }
         pendingAddress = nil
+        if let url { committedAddress = url }
         return (url.map { [.committed($0)] } ?? []) + changed(.ready(token))
     }
 
     mutating func loadingChanged(_ loading: Bool) -> [PageEvent] {
         guard !loading, !failed, case .ready = document, let address = pendingAddress else { return [] }
         pendingAddress = nil
+        // The domain shows this address now, so going back to the document's first address is a change again.
+        committedAddress = address
         return [.committed(address)]
     }
 

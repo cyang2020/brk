@@ -139,6 +139,7 @@ protocol TransferItem {
         }
         do {
             let files = try TransferFiles(destination: destination, chooseUnused: chooseUnused)
+            files.removeAbandonedNeighbours(owned: Set(operations.values.compactMap { $0.files?.directory.standardizedFileURL.path }))
             op.files = files
             op.accepted = true
             let decision = op.decision; op.decision = nil

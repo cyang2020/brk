@@ -819,6 +819,8 @@ public final class CEFEngine: WebEngine {
         let entry = PageLogEntry(page: page.id, generation: page.incarnation.generation, kind: kind,
                                  browserID: Int(page.browser.id), uptime: ProcessInfo.processInfo.systemUptime)
         pageLog.append(entry)
+        // Written out in full at each quit: the newest entries are enough there, and a long session must not grow it.
+        if pageLog.count > 4096 { pageLog.removeFirst(pageLog.count - 4096) }
         log.notice("pagelog \(kind.rawValue, privacy: .public) page=\(page.id.description, privacy: .public) generation=\(page.incarnation.generation, privacy: .public) browser=\(page.browser.id, privacy: .public)")
     }
 }

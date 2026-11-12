@@ -35,14 +35,20 @@ final class ChromePage: CefBrowserDelegate {
     var developerPanelTask: Task<Void, Never>?
     var developerTransport: CefDevTools?
     private var popupRequests: [PageOpenMetadata] = []
-    /// Dialogs and downloads that native children forwarded to this page, for the e2e harness.
+    /// Dialogs and downloads that native children forwarded to this page, for the e2e harness (kept only under it).
     var auxiliaryEvents: [String] = []
+    /// The page's own JavaScript or beforeunload dialog on its window, while it is up.
+    private var dialogSheet: NSAlert?
     var cast: PageCast?
     var drainingCasts: [PageCast] = []
     private func recordKey(_ receipt: PageKeyReceipt) {
         guard ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil else { return }
         keyReceipts.append(receipt)
         if keyReceipts.count > 64 { keyReceipts.removeFirst(keyReceipts.count - 64) }
+    }
+    private func recordAuxiliary(_ event: String) {
+        guard ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil else { return }
+        auxiliaryEvents.append(event)
     }
     private let contextMenu = PageContextMenu()
     private(set) lazy var linkPreviews = PageLinkPreviews(browser: browser, surface: surface, available: { [weak self] in
@@ -320,6 +326,7 @@ final class ChromePage: CefBrowserDelegate {
         linkPreviews.stop()
         reloadSequence.cancel()
         cancelPermissions()
+        cancelDialog()
         contextMenu.cancel()
         closeDeveloperWindows()
         stopCasting()
@@ -329,7 +336,7 @@ final class ChromePage: CefBrowserDelegate {
         chrome.browser.close(force: true)
     }
 
-    func park() { fullscreenTransition.cancelPending(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); closeDeveloperWindows(); stopCasting(); browser.closeNativeAuxiliaries(); captureRevision &+= 1; browser.executeJavaScript("if(document.pictureInPictureElement)document.exitPictureInPicture().catch(()=>{});"); closeDocumentPiP(); linkPreviews.stop(); surface.park() }
+    func park() { fullscreenTransition.cancelPending(); reloadSequence.cancel(); approvedExtensionDirectory = nil; cancelPermissions(); cancelDialog(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(); contextMenu.cancel(); closeDeveloperWindows(); stopCasting(); browser.closeNativeAuxiliaries(); captureRevision &+= 1; browser.executeJavaScript("if(document.pictureInPictureElement)document.exitPictureInPicture().catch(()=>{});"); closeDocumentPiP(); linkPreviews.stop(); surface.park() }
 
     /// Focus the attached input view without activating its window. Native layout repair also runs in inactive
     /// windows; making one key here would take focus from a different window's editor.
@@ -548,16 +555,22 @@ final class ChromePage: CefBrowserDelegate {
         let adopted = engine.offerPopupHost(host, url: url, context: context) {
             engine.pageDidEmit(self, .openRequested(url, disposition, metadata: openMetadata(request)))
         }
-        auxiliaryEvents.append("popup-tab:\(adopted):" + url.absoluteString)
+        recordAuxiliary("popup-tab:\(adopted):" + url.absoluteString)
         guard adopted else { host.discardPopupHost(); return nil }
         return host
     }
 
-    /// A JavaScript dialog of a native child this page opened (forwarded by CefKit, `b` is the child): a sheet on
-    /// the child's own window, so it neither blocks the app nor appears over the opener. The page's own dialogs
-    /// keep CefKit's presenter.
+    /// A JavaScript dialog of this page, or of a native child it opened (forwarded by CefKit, `b` is the child): a sheet
+    /// on the window it shows in, answered later. CefKit's own presenter runs an app-modal alert inside CEF's callback,
+    /// which blocks every window and stops every page until it is answered. As on BrkCore (CoreDialogs.swift), the
+    /// page's own dialog shows only while the page is on screen; otherwise Chromium gets it as dismissed, as Chrome does
+    /// not raise a background tab's dialog over another.
     func browser(_ b: CefBrowser, runJSDialog dialog: CefJSDialog, callback: CefJSDialogCallback) -> Bool {
-        guard b !== browser, engine.isLive(self), let window = b.nativeView?.window, window.isVisible else { return false }
+        let own = b === browser
+        guard let window = dialogWindow(b) else {
+            guard own else { return false }
+            callback.cancel(); return true
+        }
         let alert = NSAlert()
         alert.messageText = dialog.origin
         alert.informativeText = dialog.message
@@ -568,13 +581,45 @@ final class ChromePage: CefBrowserDelegate {
             let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24)); input.stringValue = dialog.defaultPromptText
             alert.accessoryView = input; field = input
         }
-        auxiliaryEvents.append("dialog:\(dialog.kind):\(window.windowNumber):" + dialog.message)
+        if own { dialogSheet = alert } else { recordAuxiliary("dialog:\(dialog.kind):\(window.windowNumber):" + dialog.message) }
         alert.beginSheetModal(for: window) { [weak self] response in
             let ok = response == .alertFirstButtonReturn
-            self?.auxiliaryEvents.append("dialog-answered:\(ok)")
+            if !own { self?.recordAuxiliary("dialog-answered:\(ok)") } else if self?.dialogSheet === alert { self?.dialogSheet = nil }
             callback.continue(success: ok, userInput: ok ? field?.stringValue : nil)
         }
         return true
+    }
+
+    /// Leaving or reloading the page while it has a `beforeunload` handler: Leave or Stay, on a sheet for the same reason.
+    func browser(_ b: CefBrowser, runBeforeUnloadDialog message: String, isReload: Bool, callback: CefJSDialogCallback) -> Bool {
+        guard b === browser, let window = dialogWindow(b) else { return false }
+        let alert = NSAlert()
+        alert.messageText = isReload ? "Reload this page?" : "Leave this page?"
+        alert.informativeText = message.isEmpty ? "Changes you made may not be saved." : message
+        alert.addButton(withTitle: isReload ? "Reload" : "Leave")
+        alert.addButton(withTitle: "Stay")
+        dialogSheet = alert
+        alert.beginSheetModal(for: window) { [weak self] response in
+            if self?.dialogSheet === alert { self?.dialogSheet = nil }
+            callback.continue(success: response == .alertFirstButtonReturn)
+        }
+        return true
+    }
+
+    /// Where a dialog of `b` goes: a native child's own window, or this page's window while the page shows in it and
+    /// the window has no other sheet. Nil: nowhere.
+    private func dialogWindow(_ b: CefBrowser) -> NSWindow? {
+        guard engine.isLive(self) else { return nil }
+        guard b === browser else { return b.nativeView?.window.flatMap { $0.isVisible ? $0 : nil } }
+        guard let window = surface.window, window.isVisible, !surface.isHiddenOrHasHiddenAncestor, window.attachedSheet == nil else { return nil }
+        return window
+    }
+
+    /// The page's document or its place in the window went: its dialog's sheet goes, answered as dismissed.
+    private func cancelDialog() {
+        guard let alert = dialogSheet else { return }
+        dialogSheet = nil
+        alert.window.sheetParent?.endSheet(alert.window, returnCode: .abort)
     }
 
     /// The Chrome runtime opens a popup window at its default size in the screen's corner, ignoring the window
@@ -595,7 +640,7 @@ final class ChromePage: CefBrowserDelegate {
         let left = features.x.map(CGFloat.init) ?? window.frame.minX
         let originY = features.y.map { top - CGFloat($0) - size.height } ?? (window.frame.maxY - size.height)
         window.setFrame(NSRect(x: left, y: originY, width: size.width, height: size.height), display: true)
-        auxiliaryEvents.append("placed:\(window.windowNumber):\(Int(window.frame.minX)),\(Int(top - window.frame.maxY)),\(Int(web.frame.width))x\(Int(web.frame.height))")
+        recordAuxiliary("placed:\(window.windowNumber):\(Int(window.frame.minX)),\(Int(top - window.frame.maxY)),\(Int(web.frame.width))x\(Int(web.frame.height))")
     }
 
     func browser(_ b: CefBrowser, auxiliaryCountChanged count: Int) {
@@ -611,11 +656,16 @@ final class ChromePage: CefBrowserDelegate {
 
     /// A link opened with a modifier (Cmd+click) arrives here (CEF's OnOpenURLFromTab), not as a popup. Handled the
     /// same way: a tab the domain creates; unhandled, CEF would make a Chrome-runtime browser without a client that
-    /// nothing closes and that crashes cef_shutdown. The wrapper does not forward the disposition on this path, so
-    /// every such open is a background tab (Cmd+click's); Cmd+Shift+click is not told apart.
+    /// nothing closes and that crashes cef_shutdown. The link menu's Open Link in New Window and Open Link in Incognito
+    /// Window come this way too, with their own disposition.
     func browser(_ b: CefBrowser, openURLFromTab request: CefWindowOpenRequest) -> Bool {
         guard let url = request.targetURL else { return true }
-        let disposition: OpenDisposition = request.disposition == .newBackgroundTab ? .backgroundTab : (request.disposition == .newWindow ? .newWindow : .foregroundTab)
+        let disposition: OpenDisposition = switch request.disposition {
+        case .newBackgroundTab: .backgroundTab
+        case .newWindow: .newWindow
+        case .offTheRecord: .incognitoWindow
+        default: .foregroundTab
+        }
         engine.pageDidEmit(self, .openRequested(url, disposition, metadata: openMetadata(request)))
         return true
     }
@@ -626,7 +676,9 @@ final class ChromePage: CefBrowserDelegate {
         return true
     }
 
-    func browserDidClose(_ b: CefBrowser) { closeDeveloperWindows(); stopCasting(); cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(nativeAlive: false); contextMenu.cancel(); engine.pageDidClose(self) }
+    /// Also the end of a page that closed itself (`window.close()`), which never goes through `close()`: its Allow this
+    /// time grants go back to what Brk remembers, and its link previews stop.
+    func browserDidClose(_ b: CefBrowser) { settlePermissionGrants(keeping: nil); linkPreviews.stop(); cancelDialog(); closeDeveloperWindows(); stopCasting(); cancelPermissions(); audio.invalidate(retire: true); audioTargetTransport?.invalidate(); find.invalidate(nativeAlive: false); contextMenu.cancel(); engine.pageDidClose(self) }
 
     /// A main-frame navigation the page is about to make. Redirects always go through; the rest ask the app
     /// (`WebEngineDelegate.shouldNavigateTo`), which cancels when a Peek opens instead.
@@ -638,7 +690,7 @@ final class ChromePage: CefBrowserDelegate {
             if expectedReloadBrowse == url { expectedReloadBrowse = nil }
             else { reloadSequence.cancel(); expectedReloadBrowse = nil }
         }
-        if !isRedirect { currentLoadProgress = 0 }
+        if !isRedirect { currentLoadProgress = 0; cancelDialog() }
         cancelPermissions()
         configureRequestFilter(url)
         contextMenu.cancel()
@@ -649,7 +701,7 @@ final class ChromePage: CefBrowserDelegate {
     func browser(_ b: CefBrowser, download: CefDownload, suggestedName: String, decision: CefDownloadDecisionCallback) {
         guard !isAIReader else { decision.resolve(nil); return }
         Self.turnOffDownloadBubble(b)
-        if b !== browser { auxiliaryEvents.append("download:" + suggestedName) }
+        if b !== browser { recordAuxiliary("download:" + suggestedName) }
         engine.download(self, item: download, name: suggestedName, decision: decision)
     }
     func browser(_ b: CefBrowser, download: CefDownload, control: CefDownloadControl?) {
