@@ -62,6 +62,9 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
     public var kind: WindowKind
     /// Saved outer frame (screen coordinates) to restore; nil for a new window.
     public var openInFolders: [FolderDestinationCandidate] = []
+    /// A Little Arc's "Open in <space> ⌘O": the space ⌘O moves its tab to (`.openIn(.current)`, the space of the standard
+    /// window used last), which can differ from the space the Little Arc opened in. Nil for the other kinds.
+    public var openInSpace: SpaceID? = nil
     public var exportOutcome: ExportOutcome? = nil
     public var output: OutputUpdate? = nil
     public var stayOnTop: Bool = false

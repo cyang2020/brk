@@ -1,5 +1,6 @@
 import AppKit
 import BrkBase
+import BrkEngine
 import Foundation
 import PDFKit
 import UniformTypeIdentifiers
@@ -28,7 +29,7 @@ import UniformTypeIdentifiers
     var chosenFixtures: [WindowID: URL] = [:]
 
     func destination(_ prompt: OutputDestinationPrompt, in window: NSWindow?, reply: @escaping @MainActor (DestinationAnswer) -> Void) {
-        guard let window, window.isVisible else { reply(.ownerGone); return }
+        guard let window, window.isStillOpen else { reply(.ownerGone); return }
         if let fixture = chosenFixtures.removeValue(forKey: prompt.request.document.browser.page.window) {
             reply(.accepted(fixture)); return
         }
@@ -60,7 +61,7 @@ import UniformTypeIdentifiers
     }
 
     func print(_ request: OutputRequest, pdf: URL, in window: NSWindow?, reply: @escaping @MainActor (PrintAnswer) -> Void) {
-        guard let window, window.isVisible else { reply(.ownerGone); return }
+        guard let window, window.isStillOpen else { reply(.ownerGone); return }
         let entry = Entry(request, window: window)
         entry.printReply = { [weak self, weak entry] answer in
             guard let self, let entry else { return }; self.entries[entry.request.id] = nil; reply(answer)
@@ -96,8 +97,9 @@ import UniformTypeIdentifiers
     /// Download and output sheets share AppKit's actual attached-sheet barrier. Work remains asynchronous.
     private func schedule(_ entry: Entry) {
         guard entries[entry.request.id] === entry else { return }
-        guard let window = entry.window, window.isVisible else { ownerGone(entry.request.document.browser.page.window); return }
-        if window.attachedSheet != nil {
+        guard let window = entry.window, window.isStillOpen else { ownerGone(entry.request.document.browser.page.window); return }
+        // A minimized window, or one of a hidden app, gets its panel once it is back on screen.
+        if window.attachedSheet != nil || !window.isVisible {
             entry.retry = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self, weak entry] _ in
                 MainActor.assumeIsolated { guard let self, let entry else { return }; self.schedule(entry) }
             }

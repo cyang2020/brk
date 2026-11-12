@@ -110,9 +110,11 @@ final class KeyRouter: WebEngineDelegate {
     /// A menu item fired (only happens while a native view has focus). From a key equivalent (`event` is the
     /// key-down) it is a `.menu`-stage key input with the id minted from that event, so the duplicate guard can see
     /// it; a mouse choice has no press and dispatches the action's command directly (a click is never a duplicate).
+    /// An item chosen with the keyboard (Return in the open menu or on a Help search result) also arrives with a
+    /// key-down, the Return, which is not its key equivalent: it runs its command like a click.
     func menuAction(_ action: ActionID, in window: WindowID, event: NSEvent?) {
         if case .find = action.spec.command, let native = NSApp.keyWindow ?? store.inputWindow, !(native is any HostWindow) { return }
-        if let event, let input = KeyInput(menuEvent: event) {
+        if let event, let input = KeyInput(menuEvent: event), store.state.action(for: input.press.chord) == action {
             _ = store.dispatchKey(window, input)
         } else {
             store.dispatch(.user(window, action.spec.command))

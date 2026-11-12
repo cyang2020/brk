@@ -1,3 +1,4 @@
+import AppKit
 import BrkBase
 import BrkDomain
 import Foundation
@@ -26,5 +27,20 @@ final class LittleEntryPointsTests: XCTestCase {
         XCTAssertEqual(off.links.globalLittleArcShortcut, false)
         XCTAssertNil(LittleEntryPoints.systemWideChord(off, environment: [:]))
         XCTAssertEqual(LittleEntryPoints.systemWideChord(settings(linksSwitch: true), environment: [:]), littleArc)
+    }
+
+    /// The system-wide shortcut and the status menu are used while another app is in front: Brk comes forward before
+    /// the action runs, so the new window is the key window and the typing goes to its bar, not to the other app.
+    func testEntryPointsFromOtherAppsActivateBrkFirst() throws {
+        let target = MenuTarget()
+        var calls: [String] = []
+        target.perform = { action, _ in calls.append(action.rawValue) }
+        let entry = LittleEntryPoints(target: target, environment: ["BRK_TEST_NO_GLOBAL_SHORTCUT": "1"],
+                                      activate: { calls.append("activate") }) { _ in }
+        defer { entry.stop() }
+        entry.enter(.showLittleArc)  // what the system-wide shortcut's handler runs
+        let item = try XCTUnwrap(entry.status.menu?.items.first { $0.representedObject as? String == ActionID.newWindow.rawValue })
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(item.action), to: item.target, from: item))
+        XCTAssertEqual(calls, ["activate", ActionID.showLittleArc.rawValue, "activate", ActionID.newWindow.rawValue])
     }
 }

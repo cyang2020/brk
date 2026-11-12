@@ -1,5 +1,6 @@
 import AppKit
 import BrkBase
+import BrkEngine
 
 @MainActor final class DownloadSheets {
     private final class Pending {
@@ -13,7 +14,7 @@ import BrkBase
     }
     private var pending: [Pending] = []
     func present(_ prompt: DownloadDestinationPrompt, in window: NSWindow?, reply: @escaping @MainActor (DestinationAnswer) -> Void) {
-        guard let window, window.isVisible else { reply(.ownerGone); return }
+        guard let window, window.isStillOpen else { reply(.ownerGone); return }
         pending.append(Pending(prompt, window: window, reply: reply))
         showNext(prompt.window)
     }
@@ -27,8 +28,9 @@ import BrkBase
     private func showNext(_ window: WindowID) {
         let entries = pending.filter { $0.prompt.window == window }
         guard !entries.contains(where: { $0.panel != nil }), let entry = entries.first else { return }
-        guard let owner = entry.window, owner.isVisible else { ownerGone(window); return }
-        if owner.attachedSheet != nil {
+        guard let owner = entry.window, owner.isStillOpen else { ownerGone(window); return }
+        // A minimized window, or one of a hidden app, gets its panel once it is back on screen.
+        if owner.attachedSheet != nil || !owner.isVisible {
             Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
                 MainActor.assumeIsolated { self?.showNext(window) }
             }

@@ -24,7 +24,9 @@ final class SavePromptCards {
     func present(_ prompt: SavePrompt, in root: WindowRootView?, scheme: Scheme, reply: @escaping @MainActor (SavePromptAnswer) -> Void) {
         guard let root, let window = root.window else { reply(.notNow); return }
         if let older = root.savePromptID { finish(older, .notNow) }
-        if NSApp.isActive, !window.isKeyWindow { window.makeKey() }
+        // The keys come back from Chromium's bubble, which can take them from this window, but never from another window
+        // the user has moved to (it is the main window then): the card waits until this window is chosen (`observeKey`).
+        if NSApp.isActive, window.isMainWindow, !window.isKeyWindow { window.makeKey() }
         shown[prompt.id] = Shown(root: root, reply: reply)
         root.showSavePrompt(prompt, scheme: scheme) { [weak self] answer in self?.finish(prompt.id, answer) }
         observeKey()

@@ -47,7 +47,7 @@ extension CoreEngine {
         let owner = delegate?.engine(self, ownerWindow: page.id.window)
         let available: () -> Bool = { [weak self, weak page, weak owner] in
             guard let self, let page, let owner else { return false }
-            return self.isLive(page) && owner.isVisible
+            return self.isLive(page) && owner.isStillOpen
         }
         let handle = CoreDownloadHandle(download)
         if decide {

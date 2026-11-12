@@ -11,8 +11,7 @@ extension Work {
     /// change), so `reduce` can hand back the input state without normalizing or comparing.
     mutating func routeKey(_ key: KeyInput, in window: WindowID) -> Bool {
         guard var memory = state.session.windows[window]?.keyRouting else { return false }
-        // The map is the table plus the user's overrides (F4); a conflicting chord routes to no one.
-        let map = state.doc.keyOverrides.isEmpty ? KeyRouting.defaultMap : KeyMap(overrides: state.doc.keyOverrides)
+        let map = state.keyMap
         // ⌘Z with no text field focused undoes Tidy while its groups are as Tidy left them. Arc 1.170 keeps Tidy on the
         // same undo list as Archive Tab (its binary's "Undo prompt for tidying explore tabs"): ⌘Z reaches it from the
         // sidebar and from a page, after its toast has gone (probed 2026-11-10: an archived tab came back on ⌘Z
@@ -37,4 +36,12 @@ extension Work {
         keyAction = action
         return true
     }
+}
+
+extension AppState {
+    /// The table plus the user's overrides (F4); a conflicting chord routes to no one.
+    var keyMap: KeyMap { doc.keyOverrides.isEmpty ? KeyRouting.defaultMap : KeyMap(overrides: doc.keyOverrides) }
+
+    /// The action a chord runs now, if any.
+    public func action(for chord: KeyChord) -> ActionID? { keyMap.lookup(chord)?.action }
 }

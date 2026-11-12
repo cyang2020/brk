@@ -239,17 +239,20 @@ extension Work {
     /// The tab "Open in" moves: the window's peeked tab, else a Little Arc's shown tab.
     func heldTab(in window: WindowID) -> ItemID? { state.heldTab(in: window) }
 
-    /// The standard window the user used last: the one whose shown tab is most recent, ties by id. The contract has
-    /// no key-window event (`WindowEvent` is geometry, modifiers, closed), so recency of what each window shows is
-    /// the signal; a window the user only looked at without choosing a tab does not count.
+    func mostRecentStandardWindow() -> WindowID? { state.mostRecentStandardWindow() }
+}
+
+extension AppState {
+    /// The standard window the user used last: the one that became key most recently, then the one whose shown tab is
+    /// most recent, ties by id.
     func mostRecentStandardWindow() -> WindowID? {
-        state.doc.windows.values.filter { $0.kind == .standard && $0.id != state.session.closedWindow }
+        doc.windows.values.filter { $0.kind == .standard && $0.id != session.closedWindow }
             .sorted { a, b in
-                let (x, y) = (state.session.windows[a.id]?.activationOrder ?? 0,
-                              state.session.windows[b.id]?.activationOrder ?? 0)
+                let (x, y) = (session.windows[a.id]?.activationOrder ?? 0,
+                              session.windows[b.id]?.activationOrder ?? 0)
                 if x != y { return x > y }
-                let ta = a.activeBySpace[a.space].map(state.lastActiveOf) ?? Instant(milliseconds: 0)
-                let tb = b.activeBySpace[b.space].map(state.lastActiveOf) ?? Instant(milliseconds: 0)
+                let ta = a.activeBySpace[a.space].map(lastActiveOf) ?? Instant(milliseconds: 0)
+                let tb = b.activeBySpace[b.space].map(lastActiveOf) ?? Instant(milliseconds: 0)
                 return ta != tb ? ta > tb : a.id < b.id
             }
             .first?.id
@@ -275,6 +278,15 @@ extension Command {
 }
 
 extension AppState {
+    /// The window of any kind the user used last (the one that became key most recently), ties by id: where BrkApp
+    /// sends what no key browser window takes, the menu, Settings and About while one of those is in front.
+    public func lastUsedWindow() -> WindowID? {
+        doc.windows.keys.max { a, b in
+            let (x, y) = (session.windows[a]?.activationOrder ?? 0, session.windows[b]?.activationOrder ?? 0)
+            return x != y ? x < y : a > b
+        }
+    }
+
     /// The tab "Open in" moves: the window's peeked tab, else a Little Arc's shown tab.
     func heldTab(in window: WindowID) -> ItemID? {
         if let peeked = peekedTab(in: window) { return peeked }

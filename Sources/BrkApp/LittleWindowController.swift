@@ -79,6 +79,13 @@ public final class LittleWindowController: WindowController {
         container.addSubview(tip)
         header.onChooseSpace = { [weak self] in self?.togglePicker() }
         picker.onDismiss = { [weak self] in self?.picker.isHidden = true }
+        // The picker is this panel's own view, not in the snapshot, so the key table's Exit cannot close it and would
+        // take Escape first: an open picker takes it before anything else.
+        let escape = panel.onEscapeBeforePage
+        panel.onEscapeBeforePage = { [weak self] event in
+            if let picker = self?.picker, !picker.isHidden { picker.onDismiss?(); return true }
+            return escape?(event) ?? false
+        }
         panel.contentView = container
     }
 
@@ -128,9 +135,12 @@ public final class LittleWindowController: WindowController {
         let palette = Palette(snapshot.theme)
         header.isHidden = !hasPage
         header.frame = CGRect(x: 0, y: 0, width: width, height: Metrics.littleArc.headerHeight.value)
-        header.render(host: page?.url.flatMap { $0.host ?? displayURL($0) } ?? snapshot.urlPill.text, space: snapshot.space,
+        // "Open in" names the space ⌘O moves the tab to, which follows the standard window used last.
+        let openIn = snapshot.dock.first { $0.id == snapshot.openInSpace ?? snapshot.space.id }
+        header.render(host: page?.url.flatMap { $0.host ?? displayURL($0) } ?? snapshot.urlPill.text,
+                      space: openIn?.id ?? snapshot.space.id, title: openIn?.title ?? snapshot.space.title,
                       canOpenIn: snapshot.enabledActions.contains(.openTabIn),
-                      accent: snapshot.dock.first { $0.id == snapshot.space.id }.map { ThemeAccent.ring(of: $0.color) } ?? ThemeAccent.splitFocusRing(snapshot.theme), palette: palette)
+                      accent: openIn.map { ThemeAccent.ring(of: $0.color) } ?? ThemeAccent.splitFocusRing(snapshot.theme), palette: palette)
         let tipFrame = Metrics.littleArc.tipFrame.value
         tip.isHidden = !(hasPage && snapshot.tabTools.littleTip)
         tip.frame = CGRect(x: width - tipFrame.minX - 8, y: tipFrame.minY, width: tipFrame.width, height: tipFrame.height)
@@ -142,7 +152,7 @@ public final class LittleWindowController: WindowController {
         closeButton.frame = CGRect(x: width - 22 - c, y: (input - c) / 2, width: c, height: c)
         closeButton.render(palette: palette)
         if !hasPage { picker.isHidden = true }
-        picker.render(spaces: snapshot.dock, current: snapshot.space.id, palette: palette, width: width)
+        picker.render(spaces: snapshot.dock, current: openIn?.id ?? snapshot.space.id, palette: palette, width: width)
         let trayHeight = Metrics.littleDownloads.trayHeight.value
         downloads.frame = CGRect(x: 0, y: container.bounds.height - trayHeight, width: width, height: trayHeight)
         downloads.render(hasPage ? snapshot.littleDownloads : [], dark: palette.scheme == .dark)
@@ -257,10 +267,10 @@ final class LittleHeaderView: NSView {
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { true }
 
-    func render(host: String?, space: SpaceSnapshot, canOpenIn: Bool, accent: NSColor, palette: Palette) {
+    func render(host: String?, space: SpaceID, title: String, canOpenIn: Bool, accent: NSColor, palette: Palette) {
         pill.render(host: host, palette: palette)
-        openIn.render(title: OpenInMenu.buttonTitle(space: space.title), space: space.title, accent: accent, enabled: canOpenIn, palette: palette)
-        openIn.onOpen = { [dispatch] in dispatch(.window(.openIn(.space(space.id)))) }
+        openIn.render(title: OpenInMenu.buttonTitle(space: title), space: title, accent: accent, enabled: canOpenIn, palette: palette)
+        openIn.onOpen = { [dispatch] in dispatch(.window(.openIn(.space(space)))) }
         openIn.onChoose = { [weak self] in self?.onChooseSpace?() }
         let parts = LittleLayout.header(width: bounds.width, buttonWidth: openIn.fittingWidth)
         pill.frame = parts.pill

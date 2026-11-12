@@ -49,7 +49,8 @@ public final class AppStore {
         guard let self, let window = self.commandWindow else { return }
         self.dispatch(.user(window, command))
     }
-    /// Fallback for in-process input while the display is locked or the app has no key window.
+    /// Fallback for in-process input while the display is locked or the app has no key window: the window last made,
+    /// last key, or last aimed at by the control socket.
     weak var inputWindow: NSWindow?
     private lazy var suggestions = SuggestionFetcher(send: { [weak self] in self?.dispatch($0) })
     private lazy var localSearch = LocalSearch.live(send: { [weak self] in self?.dispatch($0) })
@@ -337,7 +338,8 @@ public final class AppStore {
     public func windowController(_ id: WindowID?) -> WindowController? {
         if let id { return windows[id] }
         return windows.values.first { $0.window.isKeyWindow }
-            ?? windows.values.first { $0.window === inputWindow } ?? windows.values.first
+            ?? windows.values.first { $0.window === inputWindow }
+            ?? state.lastUsedWindow().flatMap { windows[$0] } ?? windows.values.first
     }
 
     /// The window a command from the menus, the Dock, the Settings or About window is sent to: the browser window
@@ -423,6 +425,8 @@ public final class AppStore {
 
     private func apply(_ input: Input) -> KeyHandling {
         if case .system(.window(let owner, .closed)) = input { spacePanels.ownerGone(owner) }
+        // The browser window the user moves to takes over from the one made last, for when About or a sheet is in front.
+        if case .system(.window(let id, .becameKey)) = input, let window = windows[id]?.window { inputWindow = window }
         if isTerminating, case .user = input { return KeyHandling(handled: false, shortcut: false) }
         if case .user(let window, .commandBar(let command)) = input {
             switch command {

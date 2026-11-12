@@ -172,7 +172,7 @@ public final class CEFEngine: WebEngine {
             guard let self, self.phase == .running, self.contexts.permitsWork(epoch.context),
                   let entry = self.resources.entries[request.document.browser], entry.context == epoch,
                   entry.presented, entry.resource.readyDocument == request.document,
-                  self.delegate?.engine(self, ownerWindow: request.document.browser.page.window)?.isVisible == true else { return false }
+                  self.delegate?.engine(self, ownerWindow: request.document.browser.page.window)?.isStillOpen == true else { return false }
             return true
         }
         outputs.publish = { [weak self] update in guard let self else { return }; self.delegate?.engine(self, output: update) }
@@ -804,14 +804,14 @@ public final class CEFEngine: WebEngine {
         let owner = delegate?.engine(self, ownerWindow: page.id.window)
         transfers.decision(item, name: name, owner: downloadOwner(page), available: { [weak self, weak page, weak owner] in
             guard let self, let page, let owner else { return false }
-            return self.isLive(page) && owner.isVisible
+            return self.isLive(page) && owner.isStillOpen
         }, callback: decision)
     }
     func download(_ page: ChromePage, item: CefDownload, control: CefDownloadControl?) {
         let owner = delegate?.engine(self, ownerWindow: page.id.window)
         transfers.update(item, owner: downloadOwner(page), available: { [weak self, weak page, weak owner] in
             guard let self, let page, let owner else { return false }
-            return self.isLive(page) && owner.isVisible
+            return self.isLive(page) && owner.isStillOpen
         }, control: control)
     }
 

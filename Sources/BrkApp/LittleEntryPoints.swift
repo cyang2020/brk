@@ -8,28 +8,32 @@ import Carbon
 /// New Little Arc Window binding while Links' "Open Little Arc when I press …" is on. It is registered exclusively, so
 /// a combination another app already holds fails instead of firing in both; the outcome goes to the store
 /// (`SystemEvent.globalShortcut`), which the Links pane and the e2e harness read.
-@MainActor final class LittleEntryPoints {
+@MainActor final class LittleEntryPoints: NSObject {
     private var hotKey: EventHotKeyRef?
     private var handler: EventHandlerRef?
     private var registered: KeyChord?
     private var wanted: KeyChord??
-    private let status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    let status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let target: MenuTarget
     private let environment: [String: String]
+    private let activate: () -> Void
     private let report: (GlobalShortcutStatus) -> Void
 
     init(target: MenuTarget, environment: [String: String] = ProcessInfo.processInfo.environment,
+         activate: @escaping () -> Void = { NSApp.activate(ignoringOtherApps: true) },
          report: @escaping (GlobalShortcutStatus) -> Void) {
         self.target = target
         self.environment = environment
+        self.activate = activate
         self.report = report
+        super.init()
         status.button?.image = NSImage(systemSymbolName: "macwindow.badge.plus", accessibilityDescription: "Little \(Product.name)")
         status.button?.toolTip = "New Little \(Product.name) Window"
         status.button?.setAccessibilityIdentifier("little-status-item")
         let menu = NSMenu()
         for action in [ActionID.showLittleArc, .newWindow, .quitArc] {
-            let item = NSMenuItem(title: action.title(appName: Product.name), action: #selector(MenuTarget.performAction(_:)), keyEquivalent: "")
-            item.target = target; item.representedObject = action.rawValue
+            let item = NSMenuItem(title: action.title(appName: Product.name), action: #selector(choose(_:)), keyEquivalent: "")
+            item.target = self; item.representedObject = action.rawValue
             menu.addItem(item)
         }
         status.menu = menu
@@ -38,10 +42,22 @@ import Carbon
             guard let data else { return OSStatus(eventNotHandledErr) }
             MainActor.assumeIsolated {
                 let owner = Unmanaged<LittleEntryPoints>.fromOpaque(data).takeUnretainedValue()
-                owner.target.perform?(.showLittleArc, nil)
+                owner.enter(.showLittleArc)
             }
             return noErr
         }, 1, &type, Unmanaged.passUnretained(self).toOpaque(), &handler)
+    }
+
+    /// Both entry points are used while another app is in front. Brk is activated first: a window an inactive app makes
+    /// key does not get the keyboard, so the Little Arc's bar would stay empty while the typing went to the other app.
+    func enter(_ action: ActionID) {
+        activate()
+        target.perform?(action, nil)
+    }
+
+    @objc private func choose(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let action = ActionID(rawValue: raw) else { return }
+        enter(action)
     }
 
     /// The combination to take system-wide, or nil: Links' "Open Little Arc when I press ⌥⌘N in any app" is off (the

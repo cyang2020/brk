@@ -314,3 +314,10 @@ extension WebEngine {
     public func tasks() -> [EngineTask] { [] }
     public func endTask(_ id: Int64) -> Bool { false }
 }
+
+extension NSWindow {
+    /// Whether the window can still own a page's prompt, download or output: on screen, minimized, or behind a hidden
+    /// app. `isVisible` is false for the last two as well (both order the window out), but they come back; a closed
+    /// window does not.
+    public var isStillOpen: Bool { isVisible || isMiniaturized || NSApp.isHidden }
+}

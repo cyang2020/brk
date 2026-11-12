@@ -38,6 +38,9 @@ public class WindowController: NSObject, NSWindowDelegate {
         )
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        // AppKit decides by itself that a floating (Stay on Top) window cannot go full screen and turns the green button
+        // into Zoom; said outright, the button stays Enter Full Screen at any level (`BrowserWindow.toggleFullScreen`).
+        window.collectionBehavior.insert(.fullScreenPrimary)
         self.init(id: id, kind: kind, engine: engine, send: send, routeKey: routeKey, window: window)
     }
 
@@ -717,6 +720,13 @@ public final class BrowserWindow: NSWindow, HostWindow {
     private func deliver(_ event: NSEvent) {
         if hostEvent(event) { return }
         super.sendEvent(event)
+    }
+
+    /// The green button calls this directly, not the controller's `toggleFullScreen()`: a Stay on Top window goes down
+    /// to the normal level here too before AppKit takes it to full screen.
+    public override func toggleFullScreen(_ sender: Any?) {
+        if !styleMask.contains(.fullScreen), level != .normal { level = .normal }
+        super.toggleFullScreen(sender)
     }
 
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {

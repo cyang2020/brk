@@ -59,7 +59,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
             guard let self, self.running, self.contexts.permitsWork(epoch.context),
                   let entry = self.resources.entries[request.document.browser], entry.context == epoch,
                   entry.presented, entry.resource.readyDocument == request.document,
-                  self.delegate?.engine(self, ownerWindow: request.document.browser.page.window)?.isVisible == true else { return false }
+                  self.delegate?.engine(self, ownerWindow: request.document.browser.page.window)?.isStillOpen == true else { return false }
             return true
         }
         outputs.publish = { [weak self] update in guard let self else { return }; self.delegate?.engine(self, output: update) }

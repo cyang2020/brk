@@ -21,8 +21,9 @@ enum TabIconPicker {
 
     /// Closes the open picker without a change. The popover is application-defined (a row's hover card, itself a
     /// transient popover, would otherwise close it), so a click outside it and leaving the app close it here.
-    /// Escape closes an open picker before anything else sees the key (Lifecycle's Escape monitor asks).
-    static var isOpen: Bool { shown != nil }
+    /// Escape closes an open picker before anything else sees the key (Lifecycle's Escape monitor asks). AppKit takes
+    /// the popover down by itself when its row goes (⌘W closed the tab), so it is open only while it is shown.
+    static var isOpen: Bool { shown?.isShown == true }
 
     static func close() {
         if let clicks { NSEvent.removeMonitor(clicks) }
