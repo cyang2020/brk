@@ -47,6 +47,11 @@ final class LibraryConversationPreview: NSView {
         transcript.onLink = { [weak self] url in
             if ["http", "https"].contains(url.scheme?.lowercased()) { self?.dispatch(.commandBar(.submit(url.absoluteString))) }
         }
+        // A page's Keep as Tab and its links work as in the panel; only its saves are off here.
+        transcript.onKeep = { [weak self] page in self?.dispatch(.assist(.keepPage(page))) }
+        transcript.pages.onEvent = { [weak self] page, event in
+            if case .link(let url) = event { self?.dispatch(.assist(.pageLink(page, url))) }
+        }
         separator.wantsLayer = true
         continueButton.identify(.aiControl("library-continue"))
         moveButton.identify(.aiControl("library-move"))
@@ -92,7 +97,8 @@ final class LibraryConversationPreview: NSView {
         isHidden = false
         if frame != card { frame = card }
         layer?.cornerRadius = cornerRadius
-        if theme != self.theme {
+        let restyled = theme != self.theme
+        if restyled {
             self.theme = theme
             style = AIPanelStyle(theme, onCard: true)
             appearance = NSAppearance(named: theme.scheme == .light ? .aqua : .darkAqua)
@@ -100,7 +106,7 @@ final class LibraryConversationPreview: NSView {
             let next = PageTheme(theme, background: AIPanelStyle.cardRGBA(theme.scheme))
             if next != pageTheme { pageTheme = next; transcript.pages.apply(next) }
         }
-        guard snapshot != self.snapshot, let style else { needsLayout = true; return }
+        guard snapshot != self.snapshot || restyled, let style else { needsLayout = true; return }
         self.snapshot = snapshot
         let language = AILanguage.of(detail.answer.conversation?.items ?? [], system: Locale.preferredLanguages.first ?? "en")
         let copy = AIPanelCopy(detail.answer.conversation?.items ?? [])

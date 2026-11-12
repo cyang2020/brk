@@ -105,7 +105,7 @@ extension Work {
             }
             askAgent(q, choice: agent, in: window)
         case .followUp(let text):
-            guard let q = aiQuestion(text) else { return }
+            guard let q = aiQuestion(text) else { tooLong(text, in: window); return }
             followUp(q, at: .panel(window), window: window)
         case .attach(let sources):
             guard aiEnabled(.commandBar, window) else { return }
@@ -163,7 +163,12 @@ extension Work {
 
     private func aiQuestion(_ text: String) -> String? {
         let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !q.isEmpty && q.count <= 2000 ? q : nil
+        return !q.isEmpty && q.count <= AIValidation.messageLimit ? q : nil
+    }
+    /// A message over the limit is not sent. The composer keeps it to shorten; this says why.
+    mutating func tooLong(_ text: String, in window: WindowID) {
+        guard text.trimmingCharacters(in: .whitespacesAndNewlines).count > AIValidation.messageLimit else { return }
+        toast("Messages can be up to \(AIValidation.messageLimit) characters. Shorten this one and send it again.", in: window)
     }
 
     /// Why Ask in Command Bar cannot run, or nil: the Max switch is off, or the provider is set to off. (Whether a
@@ -896,6 +901,12 @@ extension Work {
             case .organize: state.doc.settings.max.tidyOn
             }
             if !ownerExists || !sameContext || !sameDocument || !featureEnabled || providerChanged { completeAI(id, text: "The page or browsing context changed. Request cancelled.") }
+        }
+        // BrkApp waits for Shift over a hovered link until it hears the link is gone. A closed window or previews switched
+        // off leave no page to say so.
+        for window in state.session.ai.hover.keys where state.doc.windows[window] == nil || !state.doc.settings.max.enabled(.linkPreviews) {
+            state.session.ai.hover[window] = nil; state.session.ai.hoverDocuments[window] = nil
+            effects.append(.aiHover(window, nil, nil))
         }
         for window in Set(state.session.ai.answers.keys).union(state.session.ai.undo.keys).union(state.session.ai.hover.keys).union(state.session.ai.answerContexts.keys)
             .union(state.session.ai.previews.keys).union(state.session.ai.instantRows.keys)

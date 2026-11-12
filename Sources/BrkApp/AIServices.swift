@@ -17,7 +17,8 @@ final class AIServices {
     private var conversations: [AIRequestID: AgentSession] = [:]
     /// A turn's conversation, while it can still be stopped.
     private var turns: [AIRequestID: AIRequestID] = [:]
-    private var closing: [Task<Void, Never>] = []
+    /// Sessions on their way out, each until its close has finished; quit waits for them.
+    private(set) var closing: [UUID: Task<Void, Never>] = [:]
     private var refreshing: [AIProviderKind: Task<Void, Never>] = [:]
     /// The basic layer: one-shot tasks in a schema, on the subscription or a key (AIBasic.swift).
     let basic = AIBasicChannel(keys: .shared)
@@ -57,6 +58,14 @@ final class AIServices {
         wakeTask = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(milliseconds)) } catch { return }
             self?.send(.aiBasicTick)
+        }
+    }
+
+    private func whileClosing(_ close: @escaping @MainActor () async -> Void) {
+        let token = UUID()
+        closing[token] = Task { [weak self] in
+            await close()
+            self?.closing[token] = nil
         }
     }
 
@@ -276,10 +285,10 @@ final class AIServices {
         send(.aiPageRefresh(refresh.run.page, run: id, .finished(kind, detail: detail)))
         let running = refresh.session.currentTurn == id
         if running { refresh.session.stop(turn: id) }
-        closing.append(Task {
+        whileClosing {
             if running { try? await Task.sleep(for: .seconds(3)) }
             await refresh.session.close()
-        })
+        }
     }
 
     /// `Effect.aiStopRefresh`: the page is gone; nothing more is reported.
@@ -287,7 +296,7 @@ final class AIServices {
         guard let refresh = refreshes.removeValue(forKey: id) else { return }
         refresh.deadline.cancel()
         refresh.tools.stop()
-        closing.append(Task { await refresh.session.close() })
+        whileClosing { await refresh.session.close() }
     }
 
     /// The executable and how to talk to it for this instance: the fixture stands in for every agent in a test instance.
@@ -353,7 +362,7 @@ final class AIServices {
         let history = state()?.savedConversations[id]?.history() ?? ""
         conversations[id] = nil
         for (turn, owner) in turns where owner == id { turns[turn] = nil }
-        closing.append(Task { await old.close() })
+        whileClosing { await old.close() }
         guard makeSession(id, folder: folder, choice: choice, max: max, tabs: old.spec.access == .browser ? window : nil,
                           resume: AIResume(session: nil, history: history)) == nil, let session = conversations[id] else { return nil }
         if folder != nil { session.begin() }
@@ -368,6 +377,8 @@ final class AIServices {
         if readOnly {
             directory = FileManager.default.temporaryDirectory.appendingPathComponent("brk-ai-" + UUID().uuidString, isDirectory: true)
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } else {
+            old.handOverDirectory()
         }
         let kind = old.spec.kind
         var spec = AgentSpec(kind: kind, executable: old.spec.executable, model: model, effort: effort, access: old.spec.access, directory: directory,
@@ -377,7 +388,7 @@ final class AIServices {
         let session = AgentSession(spec: spec, environment: AgentEnvironment.forAgent(kind, account: spec.account), plain: old.plain) { [weak self] in self?.report($0, conversation: id, kind: kind) }
         conversations[id] = session
         for (turn, owner) in turns where owner == id { turns[turn] = nil }
-        closing.append(Task { await old.close() })
+        whileClosing { await old.close() }
         send(.aiConversation(id, .notice(readOnly ? AgentCopy.modelChangedFresh : AgentCopy.modelChanged)))
         return session
     }
@@ -395,8 +406,7 @@ final class AIServices {
         toolServices.removeValue(forKey: id)?.stop()
         guard let session = conversations.removeValue(forKey: id) else { return }
         for (turn, owner) in turns where owner == id { turns[turn] = nil }
-        closing.append(Task { await session.close() })
-        closing.removeAll { $0.isCancelled }
+        whileClosing { await session.close() }
     }
 
     private func report(_ output: AgentSession.Output, conversation id: AIRequestID, kind: AIProviderKind) {
@@ -522,7 +532,7 @@ final class AIServices {
         let running = tasks.values.flatMap { $0.values }
         cancelAll()
         for task in running { await task.value }
-        for task in closing { await task.value }
+        for task in closing.values { await task.value }
         for task in Array(renames.values) { await task.value }
         tasks.removeAll(); renames.removeAll(); closing.removeAll()
     }

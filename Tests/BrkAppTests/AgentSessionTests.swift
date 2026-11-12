@@ -26,13 +26,15 @@ final class AgentSessionTests: XCTestCase {
         return url
     }
 
-    private func session(_ kind: AIProviderKind, access: AgentAccess = .readOnly, model: String? = nil, directory: URL, log: URL? = nil, child: URL? = nil, readOnlyMode: String? = nil) -> (AgentSession, Recorder) {
+    private func session(_ kind: AIProviderKind, access: AgentAccess = .readOnly, model: String? = nil, directory: URL, log: URL? = nil, child: URL? = nil, readOnlyMode: String? = nil,
+                         resume: String? = nil) -> (AgentSession, Recorder) {
         let recorder = Recorder()
         var environment = ProcessInfo.processInfo.environment
         if let readOnlyMode { environment["BRK_AI_FIXTURE_ACP_READONLY"] = readOnlyMode }
         if let log { environment["BRK_AI_FIXTURE_LOG"] = log.path }
         if let child { environment["BRK_AI_FIXTURE_CHILD"] = child.path }
-        let spec = AgentSpec(kind: kind, executable: fixture, model: model, effort: nil, access: access, directory: directory)
+        var spec = AgentSpec(kind: kind, executable: fixture, model: model, effort: nil, access: access, directory: directory)
+        spec.resume = resume
         let session = AgentSession(spec: spec, environment: environment, plain: false) { output in
             switch output {
             case .started(let model, let effort): recorder.started = (model, effort)
@@ -190,6 +192,57 @@ final class AgentSessionTests: XCTestCase {
         }
     }
 
+    /// The first message starts the agent, so the turn begins before the agent is up. What the agent starts on its way
+    /// up (here the shell that ends its tree if Brk crashes; for a real agent also Brk's tab tools bridge) is not the
+    /// turn's: a Stop of that first turn leaves it.
+    func testStoppingTheFirstTurnLeavesWhatTheAgentStartedOnItsWayUp() async throws {
+        let folder = try directory(), childFile = folder.appendingPathComponent("child"), log = folder.appendingPathComponent("calls.jsonl")
+        let (session, _) = session(.claude, access: .tools, directory: folder, log: log, child: childFile)
+        let turn = AIRequestID("first")
+        session.send("fixture:slowstop", turn: turn)
+        try await wait("the command") { FileManager.default.fileExists(atPath: childFile.path) }
+        let child = try XCTUnwrap(Int32(String(contentsOf: childFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
+        let agent = try XCTUnwrap(entries(log).first?["pid"] as? Int32)
+        let watchers = ProcessTree.members(root: agent, in: ProcessTree.snapshot()).subtracting([agent, child])
+        XCTAssertFalse(watchers.isEmpty, "the watcher shell runs beside the agent")
+        session.stop(turn: turn)
+        try await wait("the command gone") { kill(child, 0) == -1 && errno == ESRCH }
+        // A stop's second signal, the one a shell cannot ignore, follows the first after `AgentProcess.grace`.
+        try await Task.sleep(for: .seconds(AgentProcess.grace + 0.5))
+        for watcher in watchers { XCTAssertEqual(kill(watcher, 0), 0, "the watcher \(watcher) was ended with the turn") }
+        await session.close()
+    }
+
+    /// Codex in a tab conversation: a command outside its sandbox's safe list asks in the panel, every time (no Allow for
+    /// Session), as Claude and the ACP agents do.
+    func testCodexInATabConversationAsksBeforeACommand() async throws {
+        let folder = try directory()
+        let (session, recorder) = session(.codex, access: .browser, directory: folder)
+        let turn = AIRequestID("command")
+        session.send("fixture:tool", turn: turn)
+        try await wait("an approval or the answer") { !recorder.approvals.isEmpty || recorder.finished[turn] != nil }
+        let approval = try XCTUnwrap(recorder.approvals.first, "declined without asking: \(String(describing: recorder.finished[turn]))")
+        XCTAssertEqual(approval.options.map(\.kind), [.allowOnce, .deny])
+        session.answer(approval: approval.id, option: approval.options[0].id)
+        try await wait("the answer") { recorder.finished[turn] != nil }
+        guard case .text(let text)? = recorder.finished[turn] else { return XCTFail("\(String(describing: recorder.finished[turn]))") }
+        XCTAssertTrue(text.hasSuffix("Done."), text)
+        await session.close()
+    }
+
+    /// An ACP agent continuing its session (`session/load`) first sends the earlier conversation back as updates; they are
+    /// not the new reply.
+    func testAResumedACPSessionsReplayIsNotPartOfTheReply() async throws {
+        let folder = try directory()
+        let (session, recorder) = session(.gemini, access: .tools, directory: folder, resume: "fixture-acp-session")
+        let turn = AIRequestID("after-resume")
+        session.send("hello again", turn: turn)
+        try await wait("the answer") { recorder.finished[turn] != nil }
+        XCTAssertEqual(recorder.finished[turn], .text("Fixture answer to: hello again"))
+        XCTAssertTrue(recorder.steps.isEmpty, "\(recorder.steps)")
+        await session.close()
+    }
+
     /// A request that names an agent gets that agent or the reason it cannot, whatever else is installed.
     func testAnExplicitChoiceNeverFallsBackToAnotherAgent() async throws {
         XCTAssertEqual(AIProviderSeam.resolve(.gemini, active: .claude, detected: [.claude]), .gemini)
@@ -239,6 +292,56 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertTrue(argv.contains("--resume"), "a session with tools on goes on where it was: \(argv)")
         XCTAssertNotEqual(calls.first?["pid"] as? Int32, calls.last?["pid"] as? Int32, "a new process for the new model")
         services.cancelAll()
+    }
+
+    /// A tab conversation works in a temporary folder of Brk's. A model picked between messages starts a new process in
+    /// that folder; the old session's close must leave it to the new one.
+    func testAModelPickedDuringATabConversationKeepsItsFolder() async throws {
+        let folder = try directory(), log = folder.appendingPathComponent("calls.jsonl")
+        let variables = ["BRK_CONTROL_SOCKET": folder.appendingPathComponent("unused.sock").path, "BRK_AI_FIXTURE_EXECUTABLE": fixture.path,
+                         "BRK_AI_FIXTURE_PROTOCOL": "1", "BRK_AI_FIXTURE_LOG": log.path]
+        for (name, value) in variables { setenv(name, value, 1) }
+        defer { for name in variables.keys { unsetenv(name) } }
+        var events: [SystemEvent] = []
+        let services = AIServices(engine: StubEngine(), send: { events.append($0) })
+        defer { services.cancelAll() }
+        func max(_ model: String?) throws -> MaxSnapshot {
+            var snapshot = try JSONDecoder().decode(MaxSnapshot.self, from: Data(#"{"settings":{"provider":"claude","renamePinnedTabs":false,"tidyTabs":false},"detected":["claude"],"active":"claude","agents":[],"askProvider":"Claude"}"#.utf8))
+            if let model { snapshot.settings.agentOptions = [.claude: AIAgentOptions(model: model)] }
+            return snapshot
+        }
+        let id = AIRequestID("conversation"), second = AIRequestID("second")
+        services.openConversation(id, folder: nil, choice: .claude, max: try max(nil), tabs: WindowID("window"))
+        services.answer(id, task: .ask("hello"), choice: .claude, max: try max(nil))
+        try await wait("the first answer") { events.contains { if case .aiResult(id, _) = $0 { true } else { false } } }
+        services.turn(conversation: id, turn: second, task: .ask("again"), max: try max("fixture-haiku"))
+        try await wait("the second answer") { events.contains { if case .aiResult(second, _) = $0 { true } else { false } } }
+        let calls = entries(log).filter { $0["prompt"] != nil }
+        let first = try XCTUnwrap(calls.first?["pid"] as? Int32), work = try XCTUnwrap(calls.last?["cwd"] as? String)
+        XCTAssertNotEqual(first, calls.last?["pid"] as? Int32, "a new process for the new model")
+        XCTAssertEqual(calls.first?["cwd"] as? String, work, "in the same folder")
+        try await wait("the first process gone") { kill(first, 0) == -1 }
+        // The old session's close runs once its process has exited.
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: work), "the new process's folder was deleted")
+    }
+
+    /// A closed session is waited for at quit while it closes, and forgotten once it has.
+    func testAClosedConversationIsForgottenOnceItHasClosed() async throws {
+        let folder = try directory()
+        let variables = ["BRK_CONTROL_SOCKET": folder.appendingPathComponent("unused.sock").path, "BRK_AI_FIXTURE_EXECUTABLE": fixture.path, "BRK_AI_FIXTURE_PROTOCOL": "1"]
+        for (name, value) in variables { setenv(name, value, 1) }
+        defer { for name in variables.keys { unsetenv(name) } }
+        let services = AIServices(engine: StubEngine(), send: { _ in })
+        defer { services.cancelAll() }
+        let max = try JSONDecoder().decode(MaxSnapshot.self, from: Data(#"{"settings":{"provider":"claude","renamePinnedTabs":false,"tidyTabs":false},"detected":["claude"],"active":"claude","agents":[],"askProvider":"Claude"}"#.utf8))
+        for n in 0..<3 {
+            let id = AIRequestID("conversation-\(n)")
+            services.openConversation(id, folder: folder.path, choice: .claude, max: max)
+            services.closeConversation(id)
+        }
+        XCTAssertFalse(services.closing.isEmpty, "quit waits for the closes")
+        try await wait("the closes forgotten", seconds: 5) { services.closing.isEmpty }
     }
 
     func testTheLoginShellsPathIsRead() async throws {

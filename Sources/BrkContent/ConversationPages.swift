@@ -104,7 +104,9 @@ final class TranscriptPages {
         view.identify(.aiControl("page-" + page.id.rawValue))
         let id = page.id
         revisions[id] = page.revision
-        view.onSave = { [weak self] text in self?.onSave?(id, text) }
+        // A transcript that keeps no saves (the Library's read-only preview) gives its pages none, so a page is told
+        // saving is off there instead of being told a dropped save worked.
+        if onSave != nil { view.onSave = { [weak self] text in self?.onSave?(id, text) } }
         view.onEvent = { [weak self] event in
             guard let self else { return }
             if case .height(let value) = event {

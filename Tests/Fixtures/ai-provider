@@ -411,6 +411,11 @@ def acp():
         elif method == 'authenticate': put({'jsonrpc': '2.0', 'id': rid, 'result': {}})
         elif method == 'session/new' or method == 'session/load':
             os.chdir(params.get('cwd') or os.getcwd())
+            if method == 'session/load':
+                # As gemini-cli does: the earlier conversation comes back as updates before the reply.
+                note({'sessionUpdate': 'user_message_chunk', 'content': {'type': 'text', 'text': 'An earlier question'}})
+                text('An earlier answer. ')
+                note({'sessionUpdate': 'tool_call', 'toolCallId': 'earlier-call', 'title': 'An earlier tool', 'kind': 'read', 'status': 'completed'})
             put({'jsonrpc': '2.0', 'id': rid, 'result': {'sessionId': session, 'models': {'currentModelId': 'fixture-flash', 'availableModels': [{'modelId': 'fixture-flash', 'name': 'Fixture Flash'}, {'modelId': 'fixture-pro', 'name': 'Fixture Pro'}]},
                  'modes': {'currentModeId': 'default', 'availableModes': [{'id': 'default', 'name': 'Default'}] if os.environ.get('BRK_AI_FIXTURE_ACP_READONLY') == 'absent' else [{'id': 'default', 'name': 'Default'}, {'id': 'plan', 'name': 'Plan'}, {'id': 'ask', 'name': 'Ask'}]}}})
         elif method in ('session/set_mode', 'session/set_model', 'session/set_config_option'):

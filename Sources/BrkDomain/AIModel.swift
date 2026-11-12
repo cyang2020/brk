@@ -612,6 +612,8 @@ public enum AILanguages {
 }
 
 public enum AIValidation {
+    /// The longest question or message, in characters, that goes to an agent.
+    public static let messageLimit = 2000
     public static func destination(_ text: String) -> URL? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count <= 2048, !trimmed.contains(where: \.isWhitespace),

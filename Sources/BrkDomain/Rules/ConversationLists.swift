@@ -290,7 +290,7 @@ extension Work {
             state.session.ai.panelSearch[window] = trimmed.isEmpty ? nil : trimmed
         case .listAsk(let text):
             let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !q.isEmpty, q.count <= 2000, state.doc.windows[window]?.kind == .standard else { return true }
+            guard !q.isEmpty, q.count <= AIValidation.messageLimit, state.doc.windows[window]?.kind == .standard else { tooLong(q, in: window); return true }
             state.session.ai.panelSearch[window] = nil
             assist(.ask(q), in: window)
             if state.session.ai.answers[window] != nil { state.session.ai.panelPage[window] = .conversation }

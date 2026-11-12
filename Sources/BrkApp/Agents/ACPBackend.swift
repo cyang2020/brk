@@ -203,7 +203,9 @@ import Foundation
     }
 
     private func notification(_ method: String, _ params: [String: Any]) {
-        guard method == "session/update", let update = params["update"] as? [String: Any] else { return }
+        // A session continued with `session/load` first gets its earlier conversation replayed as updates: none of it is
+        // the waiting turn's.
+        guard method == "session/update", isConfigured, let update = params["update"] as? [String: Any] else { return }
         switch update["sessionUpdate"] as? String {
         case "agent_message_chunk":
             if let text = (update["content"] as? [String: Any])?["text"] as? String { events?(.text(text)) }

@@ -116,7 +116,8 @@ final class AIAnswerDocumentView: NSView {
         approval.onResize = { [weak self] in self?.needsLayout = true }
         composer.onSend = { [weak self] message in
             guard let self, self.answer?.busy != true else { return }
-            self.composer.text = ""
+            // A message over the limit is refused with a toast and stays here to shorten.
+            if message.count <= AIValidation.messageLimit { self.composer.text = "" }
             self.send(.followUp(message))
         }
         composer.onStop = { [weak self] in self?.send(.stop) }

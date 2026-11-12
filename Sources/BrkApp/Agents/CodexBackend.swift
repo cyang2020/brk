@@ -222,17 +222,19 @@ import Foundation
     private var usageUpdates = 0
 
     private func request(_ id: Any, _ method: String, _ params: [String: Any]) {
-        // Read-only never asks; anything that does ask is refused without showing it.
+        // Read-only and a refresh never ask; anything that does ask is refused without showing it. A tab conversation asks
+        // the user every time (`ask`).
+        let asks = spec.access == .tools || spec.access == .browser
         switch method {
         case "item/commandExecution/requestApproval", "execCommandApproval":
-            guard spec.access == .tools else { peer?.respond(id, ["decision": method == "execCommandApproval" ? "denied" : "decline"]); return }
+            guard asks else { peer?.respond(id, ["decision": method == "execCommandApproval" ? "denied" : "decline"]); return }
             let command = (params["command"] as? String) ?? (params["command"] as? [String])?.joined(separator: " ") ?? ""
             let shown = Self.plainCommand(command)
             ask(id, key: "\(id)", legacy: method == "execCommandApproval", title: "Run: " + AgentCopy.oneLine(shown),
                 detail: [AgentCopy.detail(shown), params["reason"] as? String ?? ""].filter { !$0.isEmpty }.joined(separator: "\n"), decisions: params["availableDecisions"] as? [Any],
                 kind: .command, subject: AgentCopy.oneLine(shown))
         case "item/fileChange/requestApproval", "applyPatchApproval":
-            guard spec.access == .tools else { peer?.respond(id, ["decision": method == "applyPatchApproval" ? "denied" : "decline"]); return }
+            guard asks else { peer?.respond(id, ["decision": method == "applyPatchApproval" ? "denied" : "decline"]); return }
             let known = (params["itemId"] as? String).flatMap { files[$0] }
             ask(id, key: "\(id)", legacy: method == "applyPatchApproval", title: "Change files", detail: [known ?? "", params["reason"] as? String ?? ""].filter { !$0.isEmpty }.joined(separator: "\n"), decisions: params["availableDecisions"] as? [Any],
                 kind: .editFile, subject: known)

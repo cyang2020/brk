@@ -45,6 +45,11 @@ public struct AISuggestion: Hashable, Sendable, Codable {
     let at: Instant
 }
 
+struct AIFolderNaming: Equatable, Sendable {
+    let folder: ItemID
+    let title: String
+}
+
 struct AIBasicSession: Equatable, Sendable {
     /// Tabs waiting for the pause after their page settled, and when it ends.
     var namingDue: [ItemID: Instant] = [:]
@@ -60,8 +65,8 @@ struct AIBasicSession: Equatable, Sendable {
     var placing: [ItemID: WindowID] = [:]
     var placements: [AIRequestID: AIPlacementAsk] = [:]
     var suggestions: [ItemID: AISuggestion] = [:]
-    /// Folder names in flight: the folder and the window that asked.
-    var folderNaming: [AIRequestID: ItemID] = [:]
+    /// Folder names in flight: the folder and its name when asked. A name the user gave it meanwhile stays.
+    var folderNaming: [AIRequestID: AIFolderNaming] = [:]
     /// The reasons already told this session, so a failing agent says so once.
     var told: Set<String> = []
     /// Yes/no requests about candidate pairs: each question's key to the copy and the tab that stays.
@@ -265,19 +270,20 @@ extension Work {
     /// with an undo toast.
     mutating func nameFolder(_ folder: ItemID, in window: WindowID) {
         guard state.doc.settings.max.enabled(.folderNames), state.doc.windows[window]?.kind != .incognito,
-              case .folder? = state.doc.tree[folder]?.body else { return }
+              case .folder(let value)? = state.doc.tree[folder]?.body else { return }
         let tabs = state.doc.tree.tabs(under: folder).prefix(30).compactMap { id -> AITab? in
             guard let tab = state.displayedTab(id, in: window), let url = tab.url else { return nil }
             return AITab(id: id, title: tab.displayTitle, url: url)
         }
         guard !tabs.isEmpty else { toast("This folder has no tabs to name it after.", in: window); return }
         let id = requestAI(.nameFolder(folder, tabs: tabs), from: window)
-        state.session.ai.basic.folderNaming[id] = folder
+        state.session.ai.basic.folderNaming[id] = AIFolderNaming(folder: folder, title: value.title)
     }
 
     mutating func applyFolderName(_ id: AIRequestID, _ raw: String, in window: WindowID?) {
-        guard let folder = state.session.ai.basic.folderNaming.removeValue(forKey: id), let name = AIValidation.name(raw, limit: 60),
-              case .folder(let value)? = state.doc.tree[folder]?.body else { return }
+        guard let asked = state.session.ai.basic.folderNaming.removeValue(forKey: id), let name = AIValidation.name(raw, limit: 60),
+              case .folder(let value)? = state.doc.tree[asked.folder]?.body, value.title == asked.title else { return }
+        let folder = asked.folder
         let before = value.title
         state.doc.tree.updateFolder(folder) { $0.title = name }
         if let window, state.doc.windows[window] != nil {

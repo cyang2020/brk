@@ -73,8 +73,21 @@ final class BrkToolSocket: @unchecked Sendable {
     private let queue = DispatchQueue(label: "brk.tools.accept")
     private let lock = NSLock()
     private var source: DispatchSourceRead?
-    private var clients: Set<Int32> = []
+    private var clients: [Int32: Connection] = [:]
     private var closed = false
+
+    /// One accepted connection. Its descriptor stays open while anything can still reply on it (a tool call that ends
+    /// after the bridge went away), so a late reply never lands in a file or socket that took the same number; the last
+    /// reference closes it.
+    private final class Connection: @unchecked Sendable {
+        let fd: Int32
+        private let writes = NSLock()
+        init(_ fd: Int32) { self.fd = fd }
+        deinit { close(fd) }
+        func send(_ line: Data) { writes.withLock { _ = BrkToolSocket.writeAll(fd, line) } }
+        /// The bridge sees the end; a reply after it fails without a signal (SO_NOSIGPIPE).
+        func end() { shutdown(fd, SHUT_RDWR) }
+    }
 
     init(endpoint: BrkToolEndpoint, onMessage: @escaping @MainActor (Data, @escaping Reply) -> Void) {
         self.endpoint = endpoint
@@ -102,14 +115,14 @@ final class BrkToolSocket: @unchecked Sendable {
 
     /// Stops listening and drops every connection; the bridges see the end and exit.
     func stop() {
-        let open: Set<Int32> = lock.withLock {
+        let open: [Connection] = lock.withLock {
             closed = true
             source?.cancel()
             source = nil
-            defer { clients = [] }
-            return clients
+            defer { clients = [:] }
+            return Array(clients.values)
         }
-        for fd in open { shutdown(fd, SHUT_RDWR) }
+        for connection in open { connection.end() }
         endpoint.remove()
     }
 
@@ -123,26 +136,27 @@ final class BrkToolSocket: @unchecked Sendable {
         guard getpeereid(client, &uid, &gid) == 0, uid == getuid() else { close(client); return }
         var limit = timeval(tv_sec: 5, tv_usec: 0)
         setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &limit, socklen_t(MemoryLayout<timeval>.size))
-        let accepted: Bool = lock.withLock { guard !closed else { return false }; clients.insert(client); return true }
-        guard accepted else { close(client); return }
-        let thread = Thread { [self] in serve(client) }
+        let connection = Connection(client)
+        let accepted: Bool = lock.withLock { guard !closed else { return false }; clients[client] = connection; return true }
+        guard accepted else { return }
+        let thread = Thread { [self] in serve(connection) }
         thread.name = "brk.tools.connection"
         thread.start()
     }
 
-    private func serve(_ fd: Int32) {
+    private func serve(_ connection: Connection) {
+        let fd = connection.fd
         defer {
-            lock.withLock { _ = clients.remove(fd) }
-            close(fd)
+            lock.withLock { _ = clients.removeValue(forKey: fd) }
+            connection.end()
         }
         var splitter = LineSplitter()
         var chunk = [UInt8](repeating: 0, count: 65_536)
         var trusted = false
-        let writes = NSLock()
         let reply: Reply = { data in
             var line = data
             line.append(0x0A)
-            writes.withLock { _ = Self.writeAll(fd, line) }
+            connection.send(line)
         }
         while true {
             let n = read(fd, &chunk, chunk.count)

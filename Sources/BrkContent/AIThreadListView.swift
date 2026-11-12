@@ -69,7 +69,8 @@ final class AIThreadListView: NSView, NSTextFieldDelegate {
         composer.plus.isHidden = true
         composer.onSend = { [weak self] message in
             guard let self else { return }
-            self.composer.text = ""
+            // A message over the limit is refused with a toast and stays here to shorten.
+            if message.count <= AIValidation.messageLimit { self.composer.text = "" }
             self.dispatch(.assist(.listAsk(message)))
         }
         composer.onResize = { [weak self] in self?.needsLayout = true }

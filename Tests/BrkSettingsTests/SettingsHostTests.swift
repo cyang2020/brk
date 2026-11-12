@@ -315,6 +315,16 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(f.view("clearProfileData-work", NSButton.self)?.isEnabled, true, "Clear Browsing Data is a sub-page")
     }
 
+    /// Max is on while any feature uses the tool, Brk's three in More Settings… too. With only those left on, the button
+    /// offers Turn Off Max, which does what it says, not a Turn On Max that changes nothing.
+    func testMaxPaneCountsTheMoreSettingsFeaturesAsOn() {
+        let f = Fixture()
+        var max = MaxSettings.default
+        max.features = Dictionary(uniqueKeysWithValues: AIFeature.allCases.map { ($0, $0.inMoreSettings) })
+        f.render(snapshot(pane: .max, max: MaxSnapshot(settings: max, detected: [.claude], active: .claude)))
+        XCTAssertEqual(f.click("enableMax"), [.settings(.max(.enable(false)))])
+    }
+
     /// Advanced's More Settings… picks the local tool, shows what launch found on PATH and what the choice resolves
     /// to, and switches Brk's three AI features that Arc's Max pane does not list
     func testMoreSettingsShowsTheDetectedTools() {

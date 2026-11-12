@@ -309,6 +309,52 @@ final class BrkToolsTests: XCTestCase {
         XCTAssertEqual(n, 0, "no reply, the connection ends")
     }
 
+    /// A tool call that finishes after its bridge went away (a Stop that killed the agent, an approval answered a turn
+    /// later) replies into nothing: the connection's descriptor number may belong to another file or socket by then.
+    func testAReplyAfterTheBridgeLeftLandsInNoOtherFile() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("brkt-test-" + UUID().uuidString.prefix(8))
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let endpoint = try BrkToolEndpoint.make(in: folder)
+        let held = HeldReply()
+        let server = BrkToolSocket(endpoint: endpoint) { _, reply in held.value = reply }
+        try server.start()
+        defer { server.stop() }
+        func sockets() -> Set<Int32> {
+            Set((0..<getdtablesize()).filter { fd in var info = stat(); return fstat(fd, &info) == 0 && info.st_mode & S_IFMT == S_IFSOCK })
+        }
+        let before = sockets()
+        let client = socket(AF_UNIX, SOCK_STREAM, 0)
+        XCTAssertEqual(try withSocketPath(endpoint.socketPath) { connect(client, $0, $1) }, 0)
+        let lines = Data("{\"brkToolsToken\":\"\(endpoint.token)\"}\n{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\"}\n".utf8)
+        _ = lines.withUnsafeBytes { write(client, $0.baseAddress, $0.count) }
+        let asked = Date().addingTimeInterval(5)
+        while held.value == nil, Date() < asked { try await Task.sleep(for: .milliseconds(10)) }
+        var reply = try XCTUnwrap(held.value, "the call reached Brk")
+        held.value = nil
+        // Brk's end of this connection: the one other socket that opened with it.
+        let opened = sockets().subtracting(before).subtracting([client])
+        XCTAssertEqual(opened.count, 1, "\(opened)")
+        let served = try XCTUnwrap(opened.first)
+        // The bridge goes away while the call is still pending.
+        close(client)
+        let gone = Date().addingTimeInterval(0.5)
+        while fcntl(served, F_GETFD) != -1, Date() < gone { try await Task.sleep(for: .milliseconds(10)) }
+        let other = folder.appendingPathComponent("other-file")
+        XCTAssertTrue(FileManager.default.createFile(atPath: other.path, contents: nil))
+        if fcntl(served, F_GETFD) == -1 {
+            // The number is free: the next file Brk opens takes it.
+            let file = open(other.path, O_WRONLY)
+            XCTAssertEqual(dup2(file, served), served)
+            close(file)
+            addTeardownBlock { close(served) }
+        }
+        reply(Data("{\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{}}".utf8))
+        XCTAssertEqual(try Data(contentsOf: other).count, 0, "the late reply was written into another file")
+        reply = { _ in }
+    }
+
+    @MainActor private final class HeldReply { var value: BrkToolSocket.Reply? }
+
     private func withSocketPath<T>(_ path: String, _ body: (UnsafePointer<sockaddr>, socklen_t) -> T) throws -> T {
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)

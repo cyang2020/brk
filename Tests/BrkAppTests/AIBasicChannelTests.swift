@@ -172,4 +172,42 @@ final class AIBasicChannelTests: XCTestCase {
         XCTAssertEqual(reported[.anthropic], AIKeyStatus(stored: false))
         XCTAssertFalse(reported.description.contains("secret"), "a status never carries the key")
     }
+
+    /// Test runs for up to a minute and Save stays clickable: a result that comes back after another key was saved is
+    /// about the old key, and the new one shows none.
+    func testAKeyTestStillRunningSaysNothingAboutAKeySavedAfterIt() async throws {
+        URLProtocol.registerClass(HeldModelList.self)
+        defer { URLProtocol.unregisterClass(HeldModelList.self) }
+        let store = AIKeyStore(memoryOnly: true)
+        var reported: [AIService: AIKeyStatus] = [:]
+        store.onChange = { reported = $0 }
+        store.store(.anthropic, "sk-ant-first")
+        store.test(.anthropic)
+        XCTAssertEqual(reported[.anthropic], AIKeyStatus(stored: true, test: .testing))
+        let asked = await Task.detached { HeldModelList.requested() }.value
+        XCTAssertTrue(asked, "the test asked the service")
+        store.store(.anthropic, "sk-ant-second")
+        XCTAssertEqual(reported[.anthropic], AIKeyStatus(stored: true))
+        HeldModelList.release.signal()
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(reported[.anthropic], AIKeyStatus(stored: true), "the first key's result shows as the second key's")
+    }
+}
+
+/// Anthropic's model list, answered once the test lets it go. No request leaves the Mac.
+private final class HeldModelList: URLProtocol, @unchecked Sendable {
+    static let arrived = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+    /// The request reached the service, within ten seconds.
+    static func requested() -> Bool { arrived.wait(timeout: .now() + 10) == .success }
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "api.anthropic.com" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        Self.arrived.signal()
+        _ = Self.release.wait(timeout: .now() + 10)
+        guard let url = request.url, let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"]) else { return }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(#"{"data":[{"id":"claude-first"}]}"#.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }

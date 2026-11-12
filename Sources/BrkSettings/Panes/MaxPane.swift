@@ -15,12 +15,13 @@ struct MaxPane: View {
     @State private var explaining = false
     @State private var note: MaxCopy.Note?
     private var max: MaxSnapshot { context.settings.max }
-    /// Max is on when a tool may run and at least one feature uses it; Brk's default (the automatic tool, no
-    /// feature switched on) shows "Turn On Max", as Arc's default does.
+    /// Max is on when a tool may run and at least one feature uses it, Brk's three in More Settings… included (Turn On
+    /// Max with only those on would change nothing); Brk's default (the automatic tool, no feature switched on) shows
+    /// "Turn On Max", as Arc's default does.
     private var on: Bool { Self.isOn(max.settings) }
 
     static func isOn(_ settings: MaxSettings) -> Bool {
-        settings.provider != .off && (MaxFeature.allCases.contains { $0.isOn(settings) } || AIFeature.basicLayer.contains(where: settings.enabled))
+        settings.provider != .off && (MaxFeature.allCases.contains { $0.isOn(settings) } || AIFeature.allCases.contains(where: settings.enabled))
     }
 
     private func send(_ setting: MaxSetting) { context.dispatch(.settings(.max(setting))) }

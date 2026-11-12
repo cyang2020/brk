@@ -151,6 +151,18 @@ final class AIWorkflowTests: XCTestCase {
         XCTAssertNil(d.state.session.ai.requests[id])
         XCTAssertNil(d.view.aiPreview)
     }
+    /// BrkApp waits for Shift over a hovered link until it hears the link is gone. Previews switched off, or the window
+    /// closed with the pointer still on the link, tell it so: no page will say the pointer left.
+    func testAHoverWaitEndsWhenPreviewsTurnOffOrItsWindowCloses() throws {
+        let d = enabled(), tab = try XCTUnwrap(d.current?.id)
+        let c = try content(d)
+        XCTAssertTrue(d.page(tab, .linkHovered(start)).effects.contains(.aiHover(d.window, start, c.document)))
+        XCTAssertTrue(d.user(.settings(.max(.feature(.linkPreviews, false)))).effects.contains(.aiHover(d.window, nil, nil)), "previews off")
+        d.user(.settings(.max(.feature(.linkPreviews, true))))
+        XCTAssertTrue(d.page(tab, .linkHovered(start)).effects.contains(.aiHover(d.window, start, c.document)))
+        d.user(.window(.new))
+        XCTAssertTrue(d.user(.window(.close)).effects.contains(.aiHover(d.window, nil, nil)), "the window closed")
+    }
     func testInstantLinksRowOpensTheVerifiedResultsAndFailsInPlace() throws {
         let d = enabled()
         let before = d.todayIDs

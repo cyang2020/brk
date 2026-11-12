@@ -13,6 +13,8 @@ import Security
     /// Read once per launch; a Keychain read can ask the person when the app's signature changed since the key was saved.
     private var cache: [AIService: String?] = [:]
     private var tests: [AIService: AIKeyTest] = [:]
+    /// Counts each service's saves and removals: a test still running for the key before says nothing afterwards.
+    private var saves: [AIService: Int] = [:]
     /// Tells the reducer which services have keys (`SystemEvent.aiKeys`).
     var onChange: (@MainActor ([AIService: AIKeyStatus]) -> Void)?
 
@@ -50,6 +52,7 @@ import Security
     @discardableResult func store(_ service: AIService, _ text: String?) -> String? {
         let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         tests[service] = nil
+        saves[service, default: 0] += 1
         present[service] = nil
         defer { report() }
         if memoryOnly { cache[service] = .some(trimmed.isEmpty ? nil : trimmed); return nil }
@@ -75,10 +78,12 @@ import Security
         guard let key = key(service) else { return }
         tests[service] = .testing
         report()
+        let save = saves[service, default: 0]
         Task { [weak self] in
             let result = await AIKeyTester.test(service, key: key)
-            self?.tests[service] = result
-            self?.report()
+            guard let self, self.saves[service, default: 0] == save else { return }
+            self.tests[service] = result
+            self.report()
         }
     }
 

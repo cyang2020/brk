@@ -203,6 +203,17 @@ final class AIBasicLayerTests: XCTestCase {
         XCTAssertEqual(folderTitle(d, folder), "Untitled")
     }
 
+    /// A name the user typed while Name with AI waited is theirs: the answer that comes after it changes nothing.
+    func testANameTypedWhileNameWithAIWaitsIsKept() throws {
+        let d = Driver()
+        let folder = try XCTUnwrap(aiGroup(d, named: "Untitled", tabs: [d.open("https://recipes.example/soup"), d.open("https://recipes.example/stew")]))
+        d.user(.settings(.max(.feature(.folderNames, true))))
+        let (id, _) = try XCTUnwrap(aiEffects(d.user(.assist(.nameFolder(folder)))).first)
+        d.user(.item(.rename(folder, title: "Mine")))
+        d.system(.aiResult(id, .reply(.text("Soups"))))
+        XCTAssertEqual(folderTitle(d, folder), "Mine")
+    }
+
     /// A Today group made the way Tidy makes one, with the AI's name in its plan.
     private func aiGroup(_ d: Driver, named name: String, tabs: [ItemID]) -> ItemID? {
         let tidy = d.state.doc.settings.max.tidyTabs

@@ -23,13 +23,18 @@ import Foundation
     private let output: @MainActor (Output) -> Void
     private var backend: (any AgentBackend)?
     private var resume: String?
-    private var ownsDirectory: Bool { spec.access != .tools }
+    private var ownsDirectory: Bool { spec.access != .tools && !handedOver }
+    /// The temporary folder went on to the session that replaced this one (another model in the same conversation).
+    private var handedOver = false
     private(set) var currentTurn: AIRequestID?
     private var text = ""
     private var flushScheduled = false
     private var stopTask: Task<Void, Never>?
     private var stopping = false
     private var baseline: Set<pid_t> = []
+    /// The running turn was sent before the agent was up: what the agent starts on its way up (the crash watcher, its
+    /// MCP servers, Brk's tools bridge) joins `baseline` once it says it is ready.
+    private var baselineAtReady = false
     private var waiting: (turn: AIRequestID, prompt: String)?
     private var closed = false
     private var startDeadline: Task<Void, Never>?
@@ -105,6 +110,7 @@ import Foundation
         turnSpoke = false
         lastPrompt = prompt
         baseline = backend.process?.descendants() ?? []
+        baselineAtReady = !ready
         // Nothing to continue: the transcript goes ahead of the message, so the agent knows what was said.
         if resume == nil, let history, !history.isEmpty {
             self.history = nil
@@ -186,6 +192,9 @@ import Foundation
 
     func answer(approval: String, option: String) { backend?.answer(approval: approval, option: option) }
 
+    /// The session that replaces this one works in the same temporary folder: this one's close leaves it.
+    func handOverDirectory() { handedOver = true }
+
     /// Ends the session for good: its tree, its temporary folder. Returns when the process is gone.
     func close() async {
         closed = true
@@ -206,6 +215,8 @@ import Foundation
         case .ready(let model, let effort):
             ready = true
             startDeadline?.cancel()
+            if baselineAtReady, currentTurn != nil, let process = backend?.process { baseline.formUnion(process.descendants()) }
+            baselineAtReady = false
             output(.started(model: model, effort: effort))
         case .text(let delta):
             guard currentTurn != nil else { return }
