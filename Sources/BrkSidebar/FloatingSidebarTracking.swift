@@ -11,6 +11,8 @@ final class FloatingSidebarTracking: NSResponder {
     private let staysOpen: () -> Bool
     private let boundary: () -> CGFloat
     private let dismiss: () -> Void
+    /// Where the pointer is, in screen coordinates (tests put it somewhere).
+    var pointer: () -> NSPoint = { NSEvent.mouseLocation }
 
     init(root: NSView, staysOpen: @escaping () -> Bool, boundary: @escaping () -> CGFloat, dismiss: @escaping () -> Void) {
         self.root = root; self.staysOpen = staysOpen; self.boundary = boundary; self.dismiss = dismiss
@@ -24,7 +26,7 @@ final class FloatingSidebarTracking: NSResponder {
         }
         NotificationCenter.default.addObserver(self, selector: #selector(menuBegan(_:)), name: NSMenu.didBeginTrackingNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(menuEnded(_:)), name: NSMenu.didEndTrackingNotification, object: nil)
-
+        NotificationCenter.default.addObserver(self, selector: #selector(appResigned(_:)), name: NSApplication.didResignActiveNotification, object: nil)
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not used") }
     private func moved(_ event: NSEvent) {
@@ -48,6 +50,13 @@ final class FloatingSidebarTracking: NSResponder {
         guard let menu = notification.object as? NSMenu else { return }
         if menu.supermenu == nil || menu.supermenu === NSApp.mainMenu { menus.remove(ObjectIdentifier(rootMenu(menu))) }
     }
+    /// Another app came to the front (a click in the zone left of the window, ⌘Tab): no more moves come to decide, so the
+    /// column stays only with the pointer on it or its card. It stayed drawn over the page while Brk was in the back.
+    @objc private func appResigned(_ notification: Notification) {
+        guard let root, let window = root.window, menus.isEmpty, !staysOpen() else { return }
+        let point = root.convert(window.convertPoint(fromScreen: pointer()), from: nil)
+        if point.x < 0 || point.x > boundary() || point.y < 0 || point.y > root.bounds.height { dismiss() }
+    }
     override func mouseMoved(with event: NSEvent) { moved(event) }
     override func mouseExited(with event: NSEvent) {
         guard menus.isEmpty, !staysOpen() else { return }
@@ -65,6 +74,7 @@ final class FloatingSidebarTracking: NSResponder {
         monitor = nil
         NotificationCenter.default.removeObserver(self, name: NSMenu.didBeginTrackingNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: NSMenu.didEndTrackingNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSApplication.didResignActiveNotification, object: nil)
         menus = []
     }
 }

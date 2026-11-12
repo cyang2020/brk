@@ -682,6 +682,7 @@ final class LittleSpaceRow: NSView {
 /// them: the command bar alone has none).
 @MainActor
 public final class BrowserPanel: NSPanel, HostWindow {
+    public var keepsFetches = false
     public var onActivity: (() -> Void)?
     public var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
     public var onScrollWheel: ((NSEvent) -> Bool)?

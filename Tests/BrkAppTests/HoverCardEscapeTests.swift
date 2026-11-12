@@ -7,7 +7,8 @@ import XCTest
 
 /// Escape while the search field of a sidebar hover card (Arc Previews of a collapsed folder) has the keyboard closes
 /// the card. The window gave Escape to the key table first, as it does for every native field, and the table ran
-/// Exit: the card kept its text and stayed, and a full-screen window left full screen.
+/// Exit: the card kept its text and stayed, and a full-screen window left full screen. The keyboard then goes back to
+/// what the snapshot focuses (the page), not to the window itself.
 @MainActor
 final class HoverCardEscapeTests: XCTestCase {
     private final class Routed { var keys: [KeyInput] = [] }
@@ -44,7 +45,8 @@ final class HoverCardEscapeTests: XCTestCase {
         XCTAssertEqual(folder()?.collapsed, true)
 
         let routed = Routed()
-        let controller = WindowController(id: window, engine: FakeEngine(), send: { _ in }, routeKey: { routed.keys.append($0); return true })
+        let engine = FakeEngine()
+        let controller = WindowController(id: window, engine: engine, send: { _ in }, routeKey: { routed.keys.append($0); return true })
         defer { controller.window.orderOut(nil) }
         controller.root.frame = CGRect(x: 0, y: 0, width: 1280, height: 776)
         controller.render(project(state, pc).windows[window]!)
@@ -64,8 +66,11 @@ final class HoverCardEscapeTests: XCTestCase {
 
         let escape = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: controller.window.windowNumber,
                                                     context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
+        let focusedBefore = engine.focused.count
         XCTAssertTrue(controller.window.hostEvent(escape), "Escape was not taken")
         XCTAssertNil(find("sidebar-hover-card", in: controller.root), "Escape left the card open")
         XCTAssertTrue(routed.keys.isEmpty, "Escape went to the key table (Exit) instead of the card")
+        // The field went with the card: the snapshot's focus takes the keyboard back instead of the window itself.
+        XCTAssertGreaterThan(engine.focused.count, focusedBefore, "after Escape the keyboard stayed with the window, not the page")
     }
 }

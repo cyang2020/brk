@@ -269,7 +269,8 @@ final class LibraryTileView: NSView {
         image.contentTintColor = colors.foregroundSecondary
         image.image = symbol
         if let favicon {
-            image.image = FaviconCache.shared.image(for: favicon) { [weak self] loaded in
+            // The Library lists a profile's own records; an incognito window's pages record none (Rules/Library.swift).
+            image.image = FaviconCache.shared.image(for: favicon, keepingNothing: false) { [weak self] loaded in
                 self?.image.image = loaded
                 self?.layer?.backgroundColor = colors.placeholder.cgColor
             } ?? symbol

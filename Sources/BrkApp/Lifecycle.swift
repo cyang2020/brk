@@ -3,6 +3,7 @@ import BrkBase
 import BrkControl
 import BrkDomain
 import BrkEngine
+import BrkUIKit
 import os
 
 /// Launch and quit order. The app delegate.
@@ -109,6 +110,8 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         // CEF replaces signal handlers during bootstrap. Restore the app's crash trace after CEF initializes.
         CrashBacktrace.install()
         let directory = Product.dataDirectory()
+        // Favicons Brk fetches itself (the sidebar, the command bar) for standard windows stay in Brk's own cache.
+        FaviconFetch.keep(in: directory.appendingPathComponent("Favicons", isDirectory: true))
         let stateFile = StateFile(directory: directory)
         let clock: any Clock = options.testClock ? OffsetClock() : SystemClock()
         let ctx = Context(now: clock.now(), newID: { UUID().uuidString })

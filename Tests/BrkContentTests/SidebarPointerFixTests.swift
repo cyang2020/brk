@@ -246,6 +246,27 @@ final class SidebarPointerFixTests: XCTestCase {
         XCTAssertEqual(dismissed, 2, "leaving over the top edge kept the column")
     }
 
+    /// Another app coming to the front (a click in that zone left of the window, ⌘Tab) ends the moves that decide: the
+    /// column goes then unless the pointer is on it. It stayed drawn over the page while Brk was in the back.
+    func testTheFloatingSidebarGoesWhenAnotherAppComesToTheFront() {
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.setFrameOrigin(CGPoint(x: -6000, y: -6000))
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let root = NSView(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
+        window.contentView = root
+        var dismissed = 0
+        let tracking = FloatingSidebarTracking(root: root, staysOpen: { false }, boundary: { 300 }, dismiss: { dismissed += 1 })
+        defer { tracking.stop() }
+        tracking.pointer = { window.convertPoint(toScreen: CGPoint(x: 100, y: 300)) }
+        NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: NSApp)
+        XCTAssertEqual(dismissed, 0, "the column went with the pointer on it")
+        tracking.pointer = { window.convertPoint(toScreen: CGPoint(x: -100, y: 300)) }
+        NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: NSApp)
+        XCTAssertEqual(dismissed, 1, "the column stayed over the page with Brk in the back and the pointer off it")
+    }
+
     // MARK: The Space pager
 
     /// A jump to a Space that is not the current one's neighbour starts with the Space left standing one column width

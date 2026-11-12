@@ -147,7 +147,7 @@ final class IconView: NSView {
         dot.isHidden = true
         switch content {
         case .favicon(let url):
-            if let url, let loaded = FaviconStore.shared.image(for: url, ready: { [weak self] in
+            if let url, let loaded = FaviconStore.shared.image(for: url, keepingNothing: fetchesKeepNothing, ready: { [weak self] in
                 guard let self, self.content == .favicon(url) else { return }
                 self.needsLayout = true
             }) {
@@ -422,36 +422,59 @@ enum StarBadge {
 }
 
 /// Favicons by URL, loaded once and shared. Every view asking for a URL that is still loading is told when it lands.
-/// The fetch keeps nothing on disk and sends no cookies (`FaviconCache.session`).
+/// The fetch sends no cookies and keeps a response only for a window that may keep it (`FaviconFetch`).
 @MainActor
 final class FaviconStore {
     static let shared = FaviconStore()
-    private var images: [URL: NSImage] = [:]
-    /// When each URL's last fetch failed.
-    private var failed: [URL: TimeInterval] = [:]
+    /// Decoded favicons, each with when it was last asked for. Past `limit` the one asked for longest ago goes (it was
+    /// one image per favicon URL ever shown, incognito ones too, for the life of the process); asked again, it comes
+    /// back from Brk's favicon cache, or over the network for an incognito window.
+    private var images: [URL: (image: NSImage, asked: Int)] = [:]
+    private var asks = 0
+    /// When each URL's last fetch failed, and how long it waits before the next.
+    private var failed: [URL: (at: TimeInterval, wait: TimeInterval)] = [:]
     private var waiting: [URL: [() -> Void]] = [:]
+    let limit: Int
     /// Seconds on a clock that only runs forward (tests move it).
     var now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     /// A favicon whose fetch failed (offline at launch, a captive portal's page) is fetched again when asked this long
     /// after; it stayed blank for the rest of the run. Asked sooner, nothing is fetched: rows redraw many times a second.
-    private static let retryAfter: TimeInterval = 30
+    /// Each failure in a row doubles the wait, up to `longestRetry`: a favicon that never loads (a 404, a format
+    /// NSImage cannot read) is not asked for every 30 s for good.
+    static let firstRetry: TimeInterval = 30
+    static let longestRetry: TimeInterval = 30 * 60
+
+    init(limit: Int = 500) { self.limit = limit }
 
     /// The image if it is already here; otherwise starts the load (once) and calls `ready` when it arrives.
-    func image(for url: URL, ready: @escaping @MainActor () -> Void) -> NSImage? {
-        if let image = images[url] { return image }
-        if let failedAt = failed[url], now() - failedAt < Self.retryAfter { return nil }
+    /// `keepingNothing`: the favicon is drawn for an incognito window (`NSView.fetchesKeepNothing`).
+    func image(for url: URL, keepingNothing: Bool, ready: @escaping @MainActor () -> Void) -> NSImage? {
+        if let kept = images[url] {
+            asks += 1
+            images[url]?.asked = asks
+            return kept.image
+        }
+        if let failure = failed[url], now() - failure.at < failure.wait { return nil }
         if waiting[url] != nil { waiting[url]!.append(ready); return nil }
         waiting[url] = [ready]
-        FaviconCache.session.dataTask(with: url) { data, _, _ in
-            Task { @MainActor in FaviconStore.shared.finish(url, data: data) }
+        FaviconFetch.session(keepingNothing: keepingNothing).dataTask(with: url) { [weak self] data, _, _ in
+            Task { @MainActor in self?.finish(url, data: data) }
         }.resume()
         return nil
     }
 
     private func finish(_ url: URL, data: Data?) {
-        if let data, let image = NSImage(data: data) { images[url] = image; failed[url] = nil } else { failed[url] = now() }
         let callbacks = waiting.removeValue(forKey: url) ?? []
-        if images[url] != nil { callbacks.forEach { $0() } }
+        guard let data, let image = NSImage(data: data) else {
+            failed[url] = (now(), failed[url].map { min($0.wait * 2, Self.longestRetry) } ?? Self.firstRetry)
+            if failed.count > limit, let oldest = failed.min(by: { $0.value.at < $1.value.at })?.key { failed[oldest] = nil }
+            return
+        }
+        failed[url] = nil
+        asks += 1
+        images[url] = (image, asks)
+        if images.count > limit, let oldest = images.min(by: { $0.value.asked < $1.value.asked })?.key { images[oldest] = nil }
+        callbacks.forEach { $0() }
     }
 }
 

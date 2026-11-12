@@ -64,6 +64,8 @@ public class WindowController: NSObject, NSWindowDelegate {
             guard let self else { return }; self.send(.system(.window(self.id, .activity)))
         }
         if kind == .incognito { window.appearance = NSAppearance(named: .darkAqua) }
+        // Brk's own favicon fetches for the window's views keep their responses, except an incognito window's.
+        window.keepsFetches = kind != .incognito
         window.onPagePointerDown = { [weak self] page in
             guard let self, page.window == self.id,
                   self.lastSnapshot?.content.presentedPanes.contains(where: { $0.content == .page(page) }) == true else { return }
@@ -115,7 +117,12 @@ public class WindowController: NSObject, NSWindowDelegate {
             // Site search keeps its first Escape (it leaves the mode, the bar stays) whichever monitor runs first.
             if let self, self.root.commandBar.takeEscape(event) { return true }
             // A sidebar hover card's search field: its Escape closes the card (the card is view state, Exit knows nothing of it).
-            if let self, event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty, self.root.sidebar.takeEscape() { return true }
+            // The field went with the card and left the window itself first responder: the snapshot's focus (the page)
+            // takes the keyboard back, or typing went nowhere until a click.
+            if let self, event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty, self.root.sidebar.takeEscape() {
+                self.reapplyFocus()
+                return true
+            }
             guard let self, self.lastSnapshot?.overlay != nil || self.pageFullscreen.nativeExitShouldExitDocument,
                   let input = KeyInput(menuEvent: event) else { return false }
             return routeKey(input)
@@ -359,7 +366,7 @@ public class WindowController: NSObject, NSWindowDelegate {
 /// (standard and incognito windows) and `BrowserPanel` (Little Arc) conform; the shared event handling is in the
 /// extension, so both classes' `sendEvent` and `performKeyEquivalent` overrides are one line each.
 @MainActor
-public protocol HostWindow: NSWindow {
+public protocol HostWindow: FetchKeepingWindow {
     var onActivity: (() -> Void)? { get set }
     /// Called for every `flagsChanged` (and every mouse-down, which carries the modifiers held at that moment), so
     /// Control going up or down and a Shift held for a click reach the reducer whoever has focus.
@@ -683,6 +690,7 @@ final class RestingTrafficLights: NSView {
 /// The browser window. Never lets CEF's host windows take key status from it (they are its child windows).
 @MainActor
 public final class BrowserWindow: NSWindow, HostWindow {
+    public var keepsFetches = false
     public var onActivity: (() -> Void)?
     public var onFlagsChanged: ((NSEvent.ModifierFlags) -> Void)?
     public var onScrollWheel: ((NSEvent) -> Bool)?

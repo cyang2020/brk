@@ -1,11 +1,25 @@
 import AppKit
 import BrkBase
 import BrkDomain
+import BrkUIKit
 import XCTest
 @testable import BrkApp
 
 @MainActor
 final class F3WindowRegressionTests: XCTestCase {
+    /// Brk's own favicon fetches for a window's views keep their responses in Brk's cache, except an incognito window's,
+    /// which keep nothing (`FaviconFetch`). Every window's favicons kept nothing, so a launch fetched every restored
+    /// row's favicon again and drew them blank while offline.
+    func testOnlyAnIncognitoWindowsFaviconFetchesKeepNothing() {
+        _ = NSApplication.shared
+        for kind in [WindowKind.standard, .blank, .incognito] {
+            let controller = WindowController(id: WindowID("favicons-\(kind)"), kind: kind, engine: FakeEngine(), send: { _ in })
+            XCTAssertEqual(controller.root.fetchesKeepNothing, kind == .incognito, "a \(kind) window")
+        }
+        let little = LittleWindowController(id: WindowID("favicons-little"), engine: FakeEngine(), send: { _ in })
+        XCTAssertFalse(little.root.fetchesKeepNothing, "a Little Arc window")
+    }
+
     func testControlClicksKeepTheRecentTabWalkUntilControlRelease() throws {
         for type in [NSEvent.EventType.leftMouseDown, .rightMouseDown, .otherMouseDown] {
             let h = Harness()

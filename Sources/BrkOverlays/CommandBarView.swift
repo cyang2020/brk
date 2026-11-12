@@ -526,7 +526,7 @@ public final class CommandBarView: NSView, NSTextFieldDelegate {
         let glyph = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         leadingFavicon = favicon
         if let favicon {
-            leadingIcon.image = FaviconCache.shared.image(for: favicon) { [weak self] image in
+            leadingIcon.image = FaviconCache.shared.image(for: favicon, keepingNothing: fetchesKeepNothing) { [weak self] image in
                 if self?.leadingFavicon == favicon { self?.leadingIcon.image = image }
             } ?? glyph
         } else {
@@ -829,7 +829,7 @@ final class ResultRowView: NSView {
         if let picture = suggestion.icon.map(LocalIcons.image) {
             icon.image = picture
             hasFavicon = true
-        } else if let url = suggestion.favicon, let image = FaviconCache.shared.image(for: url, then: { [weak self] image in
+        } else if let url = suggestion.favicon, let image = FaviconCache.shared.image(for: url, keepingNothing: fetchesKeepNothing, then: { [weak self] image in
             guard let self, self.favicon == url else { return }
             self.icon.image = image
             self.hasFavicon = true

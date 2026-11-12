@@ -483,6 +483,11 @@ final class ControlExecutor {
                 at = view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
                 let hit = (window.contentView?.superview ?? window.contentView)?.hitTest(at)
                 print("[control] click id=\(viewID.identifier) window=\(window.windowNumber) view=\(NSStringFromClass(type(of: view))) frame=\(view.frame) visible=\(view.visibleRect) point=\(at) hit=\(hit.map { NSStringFromClass(type(of: $0)) } ?? "nil") key=\(window.isKeyWindow) active=\(NSApp.isActive)")
+                // A sidebar button faded out to nothing (a row's × or Tidy while the row is not hovered) takes no click: the
+                // click would act on the row under it. The scenario is told instead of clicking that row.
+                if sequence(first: view, next: \.superview).contains(where: { $0.alphaValue == 0 }), let hit, hit !== view, !hit.isDescendant(of: view) {
+                    throw Failure(message: "\(viewID.identifier) is not showing (faded out): a click there lands on \(NSStringFromClass(type(of: hit)))")
+                }
                 if let control = view as? NSControl { print("[control] native enabled=\(control.isEnabled) target=\(control.target.map { NSStringFromClass(type(of: $0)) } ?? "nil") action=\(control.action.map(NSStringFromSelector) ?? "nil")") }
             } else if let point {
                 at = c.root.convert(point, to: nil)

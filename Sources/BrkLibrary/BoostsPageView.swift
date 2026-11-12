@@ -201,7 +201,8 @@ final class BoostsPageView: NSView {
         image.imageScaling = .scaleProportionallyUpOrDown
         image.contentTintColor = colors.foregroundSecondary
         if let symbol { image.image = LibraryIcon.symbol(symbol, size: 18) }
-        if let favicon { image.image = FaviconCache.shared.image(for: favicon) { [weak self] loaded in self?.image.image = loaded; self?.slash.isHidden = true } }
+        // Boosts belong to a profile; an incognito window has none (Rules/BoostRules.swift).
+        if let favicon { image.image = FaviconCache.shared.image(for: favicon, keepingNothing: false) { [weak self] loaded in self?.image.image = loaded; self?.slash.isHidden = true } }
         slash.strokeColor = colors.foregroundTertiary.cgColor
         slash.lineWidth = 2
         slash.isHidden = image.image != nil

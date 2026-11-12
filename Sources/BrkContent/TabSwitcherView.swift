@@ -182,7 +182,7 @@ private final class SwitcherCard: NSView {
         placeholder.isHidden = false
         let drawn = image != nil
         pageSquare.isHidden = drawn
-        if let url = item.favicon, let cached = FaviconCache.shared.image(for: url, then: { [weak self] loaded in
+        if let url = item.favicon, let cached = FaviconCache.shared.image(for: url, keepingNothing: fetchesKeepNothing, then: { [weak self] loaded in
             guard let self, self.favicon == url else { return }
             self.icon.image = loaded
             self.placeholder.isHidden = true
