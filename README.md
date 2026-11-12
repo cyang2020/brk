@@ -8,12 +8,13 @@ Downloads of the release files of [cyang2020/brk](https://github.com/cyang2020/b
 | Apple silicon | 15 |
 | Intel | 1 |
 
-Stars: 11 · Forks: 1 (at 2026-11-11T22:27:56Z)
+Stars: 11 · Forks: 1 (at 2026-11-12T01:19:25Z)
 
 ## New downloads per day (UTC, last 30 days)
 
 | Day | New | Total |
 | --- | ---: | ---: |
+| 2026-11-12 | 0 | 16 |
 | 2026-11-11 | 16 | 16 |
 
 The full readings are in `downloads.tsv` (one row per file per reading) and `repo.tsv`.
