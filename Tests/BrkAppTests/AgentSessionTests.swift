@@ -27,12 +27,13 @@ final class AgentSessionTests: XCTestCase {
     }
 
     private func session(_ kind: AIProviderKind, access: AgentAccess = .readOnly, model: String? = nil, directory: URL, log: URL? = nil, child: URL? = nil, readOnlyMode: String? = nil,
-                         resume: String? = nil) -> (AgentSession, Recorder) {
+                         resume: String? = nil, bridge: URL? = nil) -> (AgentSession, Recorder) {
         let recorder = Recorder()
         var environment = ProcessInfo.processInfo.environment
         if let readOnlyMode { environment["BRK_AI_FIXTURE_ACP_READONLY"] = readOnlyMode }
         if let log { environment["BRK_AI_FIXTURE_LOG"] = log.path }
         if let child { environment["BRK_AI_FIXTURE_CHILD"] = child.path }
+        if let bridge { environment["BRK_AI_FIXTURE_BRIDGE"] = bridge.path }
         var spec = AgentSpec(kind: kind, executable: fixture, model: model, effort: nil, access: access, directory: directory)
         spec.resume = resume
         let session = AgentSession(spec: spec, environment: environment, plain: false) { output in
@@ -213,6 +214,28 @@ final class AgentSessionTests: XCTestCase {
         await session.close()
     }
 
+    /// The user can stop the first turn before the agent is even up. What the agent starts on its way up and as that turn
+    /// begins is still not the turn's: the watcher shell, and the MCP servers Claude may start only after it answered
+    /// initialize (Brk's tab tools bridge among them; here the fixture's stand-in). The command the turn ran goes.
+    func testAStopBeforeTheAgentIsUpLeavesWhatItStartedOnItsWayUp() async throws {
+        let folder = try directory(), log = folder.appendingPathComponent("calls.jsonl")
+        let childFile = folder.appendingPathComponent("child"), bridgeFile = folder.appendingPathComponent("bridge")
+        let (session, _) = session(.claude, access: .tools, directory: folder, log: log, child: childFile, bridge: bridgeFile)
+        let turn = AIRequestID("first")
+        session.send("fixture:slowstop", turn: turn)
+        session.stop(turn: turn)
+        try await wait("the command") { FileManager.default.fileExists(atPath: childFile.path) }
+        func pid(_ file: URL) throws -> Int32 { try XCTUnwrap(Int32(String(contentsOf: file, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines))) }
+        let child = try pid(childFile), bridge = try pid(bridgeFile)
+        let agent = try XCTUnwrap(entries(log).first?["pid"] as? Int32)
+        let watchers = ProcessTree.members(root: agent, in: ProcessTree.snapshot()).subtracting([agent, child, bridge])
+        XCTAssertFalse(watchers.isEmpty, "the watcher shell runs beside the agent")
+        try await wait("the command gone") { kill(child, 0) == -1 && errno == ESRCH }
+        try await Task.sleep(for: .seconds(AgentProcess.grace + 0.5))
+        for kept in watchers.union([bridge]) { XCTAssertEqual(kill(kept, 0), 0, "\(kept) was ended with the stopped turn (bridge \(bridge))") }
+        await session.close()
+    }
+
     /// Codex in a tab conversation: a command outside its sandbox's safe list asks in the panel, every time (no Allow for
     /// Session), as Claude and the ACP agents do.
     func testCodexInATabConversationAsksBeforeACommand() async throws {
@@ -231,16 +254,19 @@ final class AgentSessionTests: XCTestCase {
     }
 
     /// An ACP agent continuing its session (`session/load`) first sends the earlier conversation back as updates; they are
-    /// not the new reply.
+    /// not the new reply. gemini-cli sends most of them after its reply to session/load, so a folder conversation (no mode
+    /// to set) would otherwise send the message while the replay is still coming.
     func testAResumedACPSessionsReplayIsNotPartOfTheReply() async throws {
-        let folder = try directory()
-        let (session, recorder) = session(.gemini, access: .tools, directory: folder, resume: "fixture-acp-session")
-        let turn = AIRequestID("after-resume")
-        session.send("hello again", turn: turn)
-        try await wait("the answer") { recorder.finished[turn] != nil }
-        XCTAssertEqual(recorder.finished[turn], .text("Fixture answer to: hello again"))
-        XCTAssertTrue(recorder.steps.isEmpty, "\(recorder.steps)")
-        await session.close()
+        for access in [AgentAccess.tools, .browser] {
+            let folder = try directory()
+            let (session, recorder) = session(.gemini, access: access, directory: folder, resume: "fixture-acp-session")
+            let turn = AIRequestID("after-resume")
+            session.send("hello again", turn: turn)
+            try await wait("\(access): the answer") { recorder.finished[turn] != nil }
+            XCTAssertEqual(recorder.finished[turn], .text("Fixture answer to: hello again"), "\(access)")
+            XCTAssertTrue(recorder.steps.isEmpty, "\(access): \(recorder.steps)")
+            await session.close()
+        }
     }
 
     /// A request that names an agent gets that agent or the reason it cannot, whatever else is installed.

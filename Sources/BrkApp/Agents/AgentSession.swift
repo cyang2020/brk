@@ -31,10 +31,8 @@ import Foundation
     private var flushScheduled = false
     private var stopTask: Task<Void, Never>?
     private var stopping = false
+    /// What ran under the agent before the running turn did anything: a Stop of that turn leaves it.
     private var baseline: Set<pid_t> = []
-    /// The running turn was sent before the agent was up: what the agent starts on its way up (the crash watcher, its
-    /// MCP servers, Brk's tools bridge) joins `baseline` once it says it is ready.
-    private var baselineAtReady = false
     private var waiting: (turn: AIRequestID, prompt: String)?
     private var closed = false
     private var startDeadline: Task<Void, Never>?
@@ -46,7 +44,7 @@ import Foundation
     var history: String?
     /// The message of the running turn, sent again in a new session when the agent's own could not be continued.
     private var lastPrompt: String?
-    /// The running turn has shown something (text, a step, an approval).
+    /// The running turn has shown something (text, a step, an approval), or the one being stopped started a tool.
     private var turnSpoke = false
     /// This process was started to continue the agent's own session, and has not yet finished a turn.
     private var resuming = false
@@ -110,7 +108,6 @@ import Foundation
         turnSpoke = false
         lastPrompt = prompt
         baseline = backend.process?.descendants() ?? []
-        baselineAtReady = !ready
         // Nothing to continue: the transcript goes ahead of the message, so the agent knows what was said.
         if resume == nil, let history, !history.isEmpty {
             self.history = nil
@@ -215,8 +212,11 @@ import Foundation
         case .ready(let model, let effort):
             ready = true
             startDeadline?.cancel()
-            if baselineAtReady, currentTurn != nil, let process = backend?.process { baseline.formUnion(process.descendants()) }
-            baselineAtReady = false
+            // Until the turn (running or being stopped) has shown anything or started a tool, what is under the agent
+            // is what it started on its way up or as the turn began: the crash watcher, its MCP servers, Brk's tools
+            // bridge. Every ready counts: Claude's first is its answer to initialize, its next the init message that
+            // follows its MCP servers' start. The next message measures again.
+            if !turnSpoke, let process = backend?.process { baseline.formUnion(process.descendants()) }
             output(.started(model: model, effort: effort))
         case .text(let delta):
             guard currentTurn != nil else { return }
@@ -225,6 +225,8 @@ import Foundation
             scheduleFlush()
         case .step(let step):
             if let turn = currentTurn { turnSpoke = true; flush(); output(.step(step, turn)) }
+            // A tool of the turn being stopped: what runs from here on can be its.
+            else if stopping { turnSpoke = true }
         case .approval(let approval):
             if let turn = currentTurn { turnSpoke = true; flush(); output(.approval(approval, turn)) }
             else { backend?.answer(approval: approval.id, option: approval.options.first { $0.kind == .deny }?.id ?? "") }

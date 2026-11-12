@@ -25,6 +25,16 @@ import Foundation
     private var steps: [String: String] = [:]
     private var kinds: [String: AIStepKind?] = [:]
     private var sentFirst = false
+    /// `session/load` replays the earlier conversation as updates, none of them the waiting turn's. The protocol puts
+    /// the replay ahead of the reply, but gemini-cli (0.46) does not wait for it: only its first update comes before the
+    /// reply, the rest after. So a continued session counts as configured, and the waiting turn goes out, only once
+    /// updates have stopped for `replayQuiet`, or at the latest `replayCeiling` after it would have been.
+    static let replayQuiet: Duration = .milliseconds(250)
+    static let replayCeiling: Duration = .seconds(5)
+    private var replaying = false
+    private var lastReplay: ContinuousClock.Instant?
+    private var replayCutOff: ContinuousClock.Instant?
+    private var replayWait: Task<Void, Never>?
 
     init(spec: AgentSpec, environment: [String: String]) {
         self.spec = spec
@@ -76,6 +86,7 @@ import Foundation
         peer.onRequest = { [weak self] in self?.request($0, $1, $2) }
         try process.start(output: { [weak peer] in peer?.feed($0) }, exit: { [weak self] status, stderr in
             guard let self else { return }
+            self.replayWait?.cancel()
             self.peer?.failPending("\(self.spec.kind.displayName) stopped.")
             self.events?(.exited(status == 0 ? nil : Self.failure(self.spec.kind, status, stderr)))
         })
@@ -119,6 +130,7 @@ import Foundation
         }
         if let resume = spec.resume {
             session = resume
+            replaying = true
             peer?.request("session/load", parameters.merging(["sessionId": resume]) { _, new in new }, reply: opened)
         } else {
             peer?.request("session/new", parameters, reply: opened)
@@ -150,9 +162,31 @@ import Foundation
     }
 
     private func configured() {
+        if replaying { configureAfterReplay(); return }
         isConfigured = true
         events?(.ready(model: modelName, effort: spec.effort))
         if let queued { self.queued = nil; send(queued) }
+    }
+
+    private func configureAfterReplay() {
+        guard replayWait == nil else { return }
+        let now = ContinuousClock.now
+        lastReplay = now
+        replayCutOff = now + Self.replayCeiling
+        replayWait = Task { [weak self] in
+            while let due = self?.replayDue, ContinuousClock.now < due {
+                do { try await Task.sleep(until: due, clock: .continuous) } catch { return }
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.replaying = false
+            self.replayWait = nil
+            self.configured()
+        }
+    }
+
+    private var replayDue: ContinuousClock.Instant? {
+        guard let lastReplay, let replayCutOff else { return nil }
+        return min(lastReplay + Self.replayQuiet, replayCutOff)
     }
 
     private func refuseWithoutReadOnly() {
@@ -203,9 +237,10 @@ import Foundation
     }
 
     private func notification(_ method: String, _ params: [String: Any]) {
-        // A session continued with `session/load` first gets its earlier conversation replayed as updates: none of it is
-        // the waiting turn's.
-        guard method == "session/update", isConfigured, let update = params["update"] as? [String: Any] else { return }
+        guard method == "session/update" else { return }
+        // The earlier conversation, replayed after `session/load` (see `replayQuiet`).
+        if replaying { lastReplay = .now; return }
+        guard isConfigured, let update = params["update"] as? [String: Any] else { return }
         switch update["sessionUpdate"] as? String {
         case "agent_message_chunk":
             if let text = (update["content"] as? [String: Any])?["text"] as? String { events?(.text(text)) }

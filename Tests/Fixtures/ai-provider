@@ -218,12 +218,20 @@ def claude():
     next_request = {'n': 0}
     pending = {}
     interrupted = {'on': False}
+    bridge = {'started': False}
     def text(t):
         put({'type': 'stream_event', 'parent_tool_use_id': None, 'event': {'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': t}}})
     def result(t=None, error=False):
         put({'type': 'result', 'subtype': 'error_during_execution' if error else 'success', 'is_error': error, 'result': t, 'session_id': session})
     def turn(prompt):
         log(prompt)
+        # Claude can start its MCP servers (Brk's tools bridge among them) after it answered initialize: here as the first
+        # turn begins, ahead of its init message. A process that stays, its pid in BRK_AI_FIXTURE_BRIDGE.
+        if (path := os.environ.get('BRK_AI_FIXTURE_BRIDGE')) and not bridge['started']:
+            bridge['started'] = True
+            signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+            time.sleep(.2)
+            with open(path, 'w') as f: f.write(str(subprocess.Popen(['/bin/sleep', '300']).pid))
         # The model the agent really runs, as a full id: what is chosen, else the fixture's own default.
         chosen = sys.argv[sys.argv.index('--model') + 1] if '--model' in sys.argv else 'fixture-opus'
         put({'type': 'system', 'subtype': 'init', 'session_id': session, 'model': 'claude-' + chosen})
@@ -267,7 +275,8 @@ def claude():
             text('first\n'); time.sleep(2); text('second\n'); result('first\nsecond\n')
         elif prompt == 'fixture:hang': hang_ignoring_term()
         elif prompt == 'fixture:slowstop':
-            text('working'); background_child()
+            # A command runs once the model has answered, never as the turn begins.
+            time.sleep(.3); text('working'); background_child()
         elif prompt == 'fixture:fail':
             sys.stderr.write('fixture account unavailable\n'); sys.stderr.flush(); os._exit(23)
         elif prompt == 'fixture:empty': result('')
@@ -411,13 +420,16 @@ def acp():
         elif method == 'authenticate': put({'jsonrpc': '2.0', 'id': rid, 'result': {}})
         elif method == 'session/new' or method == 'session/load':
             os.chdir(params.get('cwd') or os.getcwd())
-            if method == 'session/load':
-                # As gemini-cli does: the earlier conversation comes back as updates before the reply.
-                note({'sessionUpdate': 'user_message_chunk', 'content': {'type': 'text', 'text': 'An earlier question'}})
-                text('An earlier answer. ')
-                note({'sessionUpdate': 'tool_call', 'toolCallId': 'earlier-call', 'title': 'An earlier tool', 'kind': 'read', 'status': 'completed'})
+            # session/load replays the earlier conversation as updates. The protocol puts them all ahead of the reply;
+            # gemini-cli 0.46 starts its replay without waiting for it, so only the first update comes before the reply and
+            # the rest follow it, one write at a time.
+            if method == 'session/load': note({'sessionUpdate': 'user_message_chunk', 'content': {'type': 'text', 'text': 'An earlier question'}})
             put({'jsonrpc': '2.0', 'id': rid, 'result': {'sessionId': session, 'models': {'currentModelId': 'fixture-flash', 'availableModels': [{'modelId': 'fixture-flash', 'name': 'Fixture Flash'}, {'modelId': 'fixture-pro', 'name': 'Fixture Pro'}]},
                  'modes': {'currentModeId': 'default', 'availableModes': [{'id': 'default', 'name': 'Default'}] if os.environ.get('BRK_AI_FIXTURE_ACP_READONLY') == 'absent' else [{'id': 'default', 'name': 'Default'}, {'id': 'plan', 'name': 'Plan'}, {'id': 'ask', 'name': 'Ask'}]}}})
+            if method == 'session/load':
+                for update in ({'sessionUpdate': 'agent_message_chunk', 'content': {'type': 'text', 'text': 'An earlier answer. '}},
+                               {'sessionUpdate': 'tool_call', 'toolCallId': 'earlier-call', 'title': 'An earlier tool', 'kind': 'read', 'status': 'completed'}):
+                    time.sleep(.05); note(update)
         elif method in ('session/set_mode', 'session/set_model', 'session/set_config_option'):
             if path := os.environ.get('BRK_AI_FIXTURE_LOG'):
                 with open(path, 'a') as f: f.write(json.dumps({'pid': os.getpid(), 'method': method, 'params': params})+'\n')
