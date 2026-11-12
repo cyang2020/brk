@@ -103,6 +103,15 @@ struct SidebarDrawMetrics: MetricGroup {
     let educationIconGap = Metric(6.0, .guess("SwiftUI's Label spacing; Arc uses Label with its title-and-icon style"))
     let tidyGlyph = Metric([7.0, 11.5], .anatomy("~/brk-arc-reference/P46/P46-b-arc.png: the broom is 14 x 23 px"))
     let tidySeparatorHeight = Metric(10.0, .guess("the bar between Tidy and Clear, about the height of the capitals"))
+    /// While Tidy works the divider's hairline becomes a moving wave: Arc's `SquiggleDivider`, built at bin:0x1001ab2e8
+    /// as SquiggleDivider(height: 8, amplitudeAnimationDuration: 0.4) (the pair at bin:0x103652850).
+    let tidyWaveHeight = Metric(8.0, .anatomy("bin:0x103652850, Arc 1.170: SquiggleDivider.height; the frame's height, half of it the amplitude"))
+    let tidyWaveRamp = Metric(0.4, .anatomy("bin:0x103652850 amplitudeAnimationDuration; bin:0x1002b1ec4 the amplitude ramps linearly over it, bin:0x1002b14e0 the end waits as long"))
+    let tidyWaveLength = Metric(1.6, .anatomy("bin:0x1002b1fa8: one wave is 1.6 heights long"))
+    let tidyWaveSpeed = Metric(5.0, .anatomy("bin:0x1002b1fb0: the phase is the clock's seconds times 5, so five waves pass a point each second, moving left"))
+    let tidyWaveControl = Metric(0.3, .anatomy("bin:0x1002b1ffc, bin:0x1002b22e4: each half wave is a cubic with its control points 0.3 and 0.7 of the way along, at the amplitude"))
+    let tidyWaveLineWidth = Metric(2.0, .anatomy("bin:0x1002b1f90: StrokeStyle lineWidth 2 while animating, 0.5 at rest (Brk keeps its own resting hairline)"))
+    let tidyWaveWidthDuration = Metric(0.2, .anatomy("bin:0x1002b1c14: the line width eases with timingCurve(0.25, 0.1, 0.25, 1, duration: 0.2)"))
     let titleTrailing = Metric(8.0, .guess("title end padding inside the selection, mirrors the 8 pt selection inset"))
     let closeTrailing = Metric(7.0, .anatomy("~/brk-arc-reference/Q13/Q13-press-row-arc.png: the × centres 19 from the row's right end"))
     let emptyFavicon = Metric(14.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's empty favicon is a 14 pt square centred 26 from the sidebar edge"))

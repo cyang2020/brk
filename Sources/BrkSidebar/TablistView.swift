@@ -1203,6 +1203,8 @@ final class PeekMarkerView: NSView {
 @MainActor
 final class DividerRowView: HoverView {
     private let line = NSView()
+    /// While Tidy works the hairline gives way to Arc's moving wave.
+    private let wave = TidyWaveView()
     private let clear: ClearButton
     /// Max's Tidy Tabs (P46-b): 🧹 Tidy left of Clear while the pointer is on the divider and Today has more than six
     /// tabs, a bar between them.
@@ -1231,6 +1233,9 @@ final class DividerRowView: HoverView {
         line.wantsLayer = true
         tidyBar.wantsLayer = true
         addSubview(line)
+        addSubview(wave)
+        wave.isHidden = true
+        wave.onShownChange = { [weak self] in self?.needsLayout = true }
         addSubview(clear)
         addSubview(tidyBar)
         addSubview(tidy)
@@ -1250,6 +1255,10 @@ final class DividerRowView: HoverView {
         cleanup.render(count: count, palette: palette)
         cleanup.isHidden = count == 0
         line.layer?.backgroundColor = palette.color(palette.tokens.separator).cgColor
+        // Arc strokes the wave in SidebarSeparator, the hairline's colour.
+        wave.color = palette.color(palette.tokens.separator).cgColor
+        wave.restWidth = Draw.hairline.value
+        wave.setLoading(tidying)
         tidyBar.layer?.backgroundColor = palette.color(palette.tokens.separator).cgColor
         clear.render(clearAction, palette: palette)
         tidy.render(palette: palette, busy: tidying)
@@ -1285,6 +1294,11 @@ final class DividerRowView: HoverView {
         cleanup.frame = CGRect(x: cleanupRight - cleanupSize.width, y: (bounds.height - cleanupSize.height) / 2, width: cleanupSize.width, height: cleanupSize.height)
         if cleanup.alphaValue > 0 && !cleanup.isHidden { end = cleanup.frame.minX - gaps[0] }
         line.frame = CGRect(x: inset, y: (bounds.height - hairline) / 2, width: max(0, end - inset), height: hairline)
+        // The wave is centred on the hairline over the same length, tall enough for its crests and the thick line.
+        let waveHeight = Draw.tidyWaveHeight.value + Draw.tidyWaveLineWidth.value
+        wave.frame = CGRect(x: line.frame.minX, y: line.frame.midY - waveHeight / 2, width: line.frame.width, height: waveHeight)
+        wave.isHidden = !wave.isShown
+        line.isHidden = wave.isShown
     }
 
     override func stateChanged() {
