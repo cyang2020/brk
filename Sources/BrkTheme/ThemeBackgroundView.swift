@@ -4,55 +4,143 @@ import BrkDomain
 import Metal
 import QuartzCore
 
-/// The window background: a blended gradient with a tiled texture over it, drawn by us with Metal, crossfading on
-/// space switch. Sits at the bottom of every window; the sidebar's translucent tokens and the content cards draw
-/// above it. Arc does the same with its WindowThemeUI Metal renderer (gradientFragment, overlayFragment,
-/// renderFragment; anatomy, "Space theme system").
+/// The window background: the system material, and over it the theme (a blended gradient with a tiled texture) drawn
+/// by us with Metal, part see-through, crossfading on space switch. Sits at the bottom of every window; the sidebar's
+/// translucent tokens and the content cards draw above it. Arc does the same: an NSVisualEffectView
+/// (`WindowBackgroundTranslucencyViewAppKit`) under its WindowThemeUI Metal layer, which is not opaque
+/// (gradientFragment, overlayFragment, renderFragment; anatomy, "Space theme system";
+/// docs/checks/2026-11-13-window-translucency.md).
+///
+/// The material is Arc's: `.light` behind the window, emphasized, following the window's active state. So while the
+/// window is key or main the blurred windows and desktop behind it show through the theme, and while it is not the
+/// material turns flat and the texture fades to Metrics.theme.inactiveTextureFactor (Arc's overlay alpha x 0.25). The
+/// system takes care of full screen (the desktop picture behind) and of Reduce Transparency (an opaque material).
 ///
 /// Usage (BrkContent/WindowRootView): `background.show(snapshot.theme, animated: themeChanged)` on every render.
 /// Equal themes are a no-op, so calling it on every snapshot is fine.
 ///
 /// Frames are drawn only when something changes: once per `show` without animation, on resize (in step with the
-/// window, the layer presents with the Core Animation transaction) and on a backing-scale change; a display link
-/// runs only while a crossfade is running. With no Metal device the view draws nothing and the window's own
-/// background color (`ResolvedTheme.windowColor`) shows.
+/// window, the layer presents with the Core Animation transaction), on a backing-scale change and when the window
+/// turns active or inactive; a display link runs only while a crossfade is running. With no Metal device the canvas
+/// shows a small image of the theme and the window's own background color (`ResolvedTheme.windowColor`) shows first.
 @MainActor
 public final class ThemeBackgroundView: NSView {
-    private let renderer: ThemeRenderer?
-    private var link: CADisplayLink?
-    private var fallbackTheme: ResolvedTheme?
+    private let material = NSVisualEffectView()
+    private let canvas = ThemeCanvasView(frame: .zero)
+    /// Observers of the window's key and main state (Arc's `WindowActiveStateTracker`). Block observers stay registered
+    /// until removed: leaving the window and `deinit` remove them.
+    nonisolated(unsafe) private var activeObservers: [NSObjectProtocol] = []
 
     public override init(frame: NSRect) {
-        renderer = ThemeRenderer(device: MTLCreateSystemDefaultDevice())
         super.init(frame: frame)
         wantsLayer = true
-        layerContentsRedrawPolicy = .duringViewResize
         autoresizingMask = [.width, .height]
-        renderer?.prewarm(scale: Int((NSScreen.main?.backingScaleFactor ?? 2).rounded()))
-        renderer?.onTileReady = { [weak self] kind in self?.tileArrived(kind) }
+        // `.light` (raw value 1) is deprecated in the SDK but is the material Arc's window uses; the semantic materials
+        // read differently over the same backdrop.
+        material.material = NSVisualEffectView.Material(rawValue: 1) ?? .underWindowBackground
+        material.blendingMode = .behindWindow
+        material.state = .followsWindowActiveState
+        material.isEmphasized = true
+        for view in [material, canvas] as [NSView] {
+            view.frame = bounds
+            view.autoresizingMask = [.width, .height]
+            addSubview(view)
+        }
     }
 
     @available(*, unavailable)
     public required init?(coder: NSCoder) { fatalError("not used") }
 
+    deinit { activeObservers.forEach(NotificationCenter.default.removeObserver) }
+
     public override var isFlipped: Bool { true }
 
-    public override func makeBackingLayer() -> CALayer {
+    /// The background takes the point as one view, as before it had parts.
+    public override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
+
+    /// Shows `theme`. `animated` crossfades gradient and texture over Metrics.motion.themeCrossfade (Arc's background
+    /// configuration is `single` or `transitioning`); otherwise it switches at once (launch, restore). A new theme
+    /// during a crossfade fades on from what is on screen.
+    public func show(_ theme: ResolvedTheme, animated: Bool) {
+        material.isHidden = theme.material == .opaque
+        canvas.show(theme, animated: animated)
+    }
+
+    /// Mixes two themes at `progress` (0: `base`, 1: `theme`) while a Space's page follows the fingers or settles (Arc's
+    /// colors follow the page position, linearly). `show` afterwards ends it. Without Metal it shows the nearer one.
+    public func scrub(from base: ResolvedTheme, to theme: ResolvedTheme, progress: Double) {
+        material.isHidden = base.material == .opaque && theme.material == .opaque
+        canvas.scrub(from: base, to: theme, progress: progress)
+    }
+
+    /// The no-Metal path preserves the positioned gradient and wash. Procedural texture remains a GPU approximation.
+    static func fallbackImage(_ theme: ResolvedTheme) -> CGImage? { ThemeCanvasView.fallbackImage(theme) }
+
+    public override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        activeObservers.forEach(NotificationCenter.default.removeObserver)
+        activeObservers = []
+    }
+
+    public override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window else { return }
+        let names: [Notification.Name] = [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification,
+                                          NSWindow.didBecomeMainNotification, NSWindow.didResignMainNotification]
+        activeObservers = names.map { name in
+            NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.activeChanged() }
+            }
+        }
+        activeChanged()
+    }
+
+    /// Arc counts the window active when it, or a window it is a child of, is key or main.
+    private func activeChanged() {
+        var current = window
+        var active = false
+        while let w = current, !active {
+            active = w.isKeyWindow || w.isMainWindow
+            current = w.parent
+        }
+        canvas.setActive(active)
+    }
+}
+
+/// The theme drawn with Metal into a layer that is not opaque, premultiplied (ThemeRenderer).
+@MainActor
+final class ThemeCanvasView: NSView {
+    private let renderer: ThemeRenderer?
+    private var link: CADisplayLink?
+    private var fallbackTheme: ResolvedTheme?
+
+    override init(frame: NSRect) {
+        renderer = ThemeRenderer(device: MTLCreateSystemDefaultDevice())
+        super.init(frame: frame)
+        wantsLayer = true
+        layerContentsRedrawPolicy = .duringViewResize
+        renderer?.prewarm(scale: Int((NSScreen.main?.backingScaleFactor ?? 2).rounded()))
+        renderer?.onTileReady = { [weak self] kind in self?.tileArrived(kind) }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+
+    override func makeBackingLayer() -> CALayer {
         guard let renderer else { return super.makeBackingLayer() }
         let layer = CAMetalLayer()
         layer.device = renderer.device
         layer.pixelFormat = ThemeRenderer.drawableFormat
         layer.colorspace = CGColorSpace(name: CGColorSpace.sRGB)
         layer.framebufferOnly = true
-        layer.isOpaque = true
+        layer.isOpaque = false
         layer.presentsWithTransaction = true
         return layer
     }
 
-    /// Shows `theme`. `animated` crossfades gradient and texture over Metrics.motion.themeCrossfade (Arc's background
-    /// configuration is `single` or `transitioning`); otherwise it switches at once (launch, restore). A new theme
-    /// during a crossfade fades on from what is on screen.
-    public func show(_ theme: ResolvedTheme, animated: Bool) {
+    func show(_ theme: ResolvedTheme, animated: Bool) {
         guard let renderer else {
             guard fallbackTheme != theme else { return }
             fallbackTheme = theme
@@ -70,15 +158,21 @@ public final class ThemeBackgroundView: NSView {
         if duration > 0 { animate() } else if scrubbed { _ = draw(at: CACurrentMediaTime()) } else { needsDisplay = true }
     }
 
-    /// Mixes two themes at `progress` (0: `base`, 1: `theme`) while a Space's page follows the fingers or settles (Arc's
-    /// colors follow the page position, linearly). `show` afterwards ends it. Without Metal it shows the nearer one.
-    public func scrub(from base: ResolvedTheme, to theme: ResolvedTheme, progress: Double) {
+    func scrub(from base: ResolvedTheme, to theme: ResolvedTheme, progress: Double) {
         guard let renderer else { return show(progress < 0.5 ? base : theme, animated: false) }
         renderer.scrub(from: base, to: theme, progress: progress)
         _ = draw(at: CACurrentMediaTime())
     }
 
-    /// The no-Metal path preserves the positioned gradient and wash. Procedural texture remains a GPU approximation.
+    /// The texture at full strength while the window is active, at Metrics.theme.inactiveTextureFactor while not.
+    func setActive(_ active: Bool) {
+        let scale = active ? 1 : Metrics.theme.inactiveTextureFactor.value
+        guard let renderer, renderer.textureScale != scale else { return }
+        renderer.textureScale = scale
+        if link == nil { needsDisplay = true }
+    }
+
+    /// The theme as a small image, for a Mac without Metal: the stand-in wash keeps it opaque.
     static func fallbackImage(_ theme: ResolvedTheme) -> CGImage? {
         let side = 64
         var bytes: [UInt8] = []
@@ -95,28 +189,30 @@ public final class ThemeBackgroundView: NSView {
                        provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
     }
 
-    public override var wantsUpdateLayer: Bool { true }
+    override var wantsUpdateLayer: Bool { true }
 
-    public override func updateLayer() {
+    override func updateLayer() {
         if draw(at: CACurrentMediaTime()) { animate() }
     }
 
-    public override func setFrameSize(_ newSize: NSSize) {
+    override func setFrameSize(_ newSize: NSSize) {
         let changed = newSize != frame.size
         super.setFrameSize(newSize)
         if changed { needsDisplay = true }
     }
 
-    public override func viewDidChangeBackingProperties() {
+    override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         if let scale = window?.backingScaleFactor { renderer?.prewarm(scale: Int(scale.rounded())) }
         needsDisplay = true
     }
 
-    public override func viewDidMoveToWindow() {
+    override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         needsDisplay = true
     }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     /// The shown theme's tile finished generating after the theme was first drawn without it: fade it in.
     private func tileArrived(_ kind: Texture) {

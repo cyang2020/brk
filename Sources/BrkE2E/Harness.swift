@@ -139,6 +139,8 @@ final class AppUnderTest {
     private(set) var notes: [String] = []
     /// Host windows seen key in any `native()` reply during the scenario.
     private(set) var hostKeyViolations: [String] = []
+    /// Page host windows Mission Control listed as windows of their own (empty "Brk" windows, 2026-11-13).
+    private(set) var hostListedViolations: [String] = []
     /// `NativeFacts.coveredByPages` seen on any `native()` read: a popup layered under the page it crosses.
     private(set) var popupLayerViolations: [String] = []
     private var crashBaseline: Set<String> = []
@@ -321,6 +323,7 @@ final class AppUnderTest {
         var problems: [String] = []
         if isRunning, quitOutcome == nil, client.isConnected { _ = try? native() }
         if !hostKeyViolations.isEmpty { problems.append("a CEF host window was key: \(hostKeyViolations.joined(separator: "; "))") }
+        if !hostListedViolations.isEmpty { problems.append("Mission Control listed an empty CEF host window: \(hostListedViolations.joined(separator: "; "))") }
         if !popupLayerViolations.isEmpty { problems.append("a view showed under a page it crosses: \(popupLayerViolations.joined(separator: "; "))") }
         if process != nil {
             if let outcome = try? quit() {
@@ -391,6 +394,12 @@ final class AppUnderTest {
                 let path = shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/\(scenarioID)-host-key-\(w.number)-native.json")
                 try? ControlWire.encode(facts).write(to: path)
             }
+        }
+        // An empty host on screen must not be listed; one in native fullscreen or on its way there is Chromium's.
+        let fullscreenHosts = Set(facts.pages.values.filter { $0.nativeFullscreenTransitioning == true }.compactMap(\.hostWindowNumber))
+        for w in facts.appWindows where w.listedInMissionControl == true && (hostNumbers.contains(w.number) || w.isPageHost == true) && !fullscreenHosts.contains(w.number) {
+            let entry = "window \(w.number) (\(w.className))"
+            if !hostListedViolations.contains(entry) { hostListedViolations.append(entry) }
         }
         for entry in facts.coveredByPages ?? [] where !popupLayerViolations.contains(entry) { popupLayerViolations.append(entry) }
         return facts

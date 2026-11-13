@@ -123,9 +123,10 @@ private final class SwitcherCard: NSView {
         wantsLayer = true
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = SwitcherMetrics.slotRadius.value
+        // The shadow is cast by a path, not by a white body: a body reaching the thumbnail's partly covered corner
+        // pixels showed as a light rim round a dark page (the card corners' bug of 2026-11-13).
         pageShadow.wantsLayer = true
         pageShadow.layer?.cornerRadius = SwitcherMetrics.thumbnailRadius.value
-        pageShadow.layer?.backgroundColor = NSColor.white.cgColor
         pageShadow.layer?.shadowColor = NSColor.black.cgColor
         pageShadow.layer?.shadowOpacity = 0.18
         pageShadow.layer?.shadowRadius = 3
@@ -158,11 +159,15 @@ private final class SwitcherCard: NSView {
         layer?.backgroundColor = selected ? selection.cgColor : nil
         page.image = image
         let ink: NSColor = dark ? .white : .black
-        page.layer?.backgroundColor = (image == nil ? ink.withAlphaComponent(0.06) : .white).cgColor
+        // A picture is its own face; without one the thumbnail is a faint ink wash over a white base.
+        page.layer?.backgroundColor = image == nil ? ink.withAlphaComponent(0.06).cgColor : nil
+        pageShadow.layer?.backgroundColor = image == nil ? NSColor.white.cgColor : nil
         let inset = m.thumbnailInset.value
         let pageRect = CGRect(x: inset, y: inset, width: bounds.width - 2 * inset, height: m.thumbnailHeight.value)
         page.frame = pageRect
         pageShadow.frame = pageRect
+        let radius = SwitcherMetrics.thumbnailRadius.value
+        pageShadow.layer?.shadowPath = CGPath(roundedRect: CGRect(origin: .zero, size: pageRect.size), cornerWidth: radius, cornerHeight: radius, transform: nil)
         let big = m.pagePlaceholderIcon.value
         let middle = CGRect(x: (pageRect.midX - big / 2).rounded(), y: (pageRect.midY - big / 2).rounded(), width: big, height: big)
         pageIcon.frame = middle

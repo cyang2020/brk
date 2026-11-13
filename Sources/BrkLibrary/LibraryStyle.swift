@@ -24,6 +24,7 @@ struct LibraryDrawMetrics: MetricGroup {
 /// A navigation cell (glyph over label) and the buttons at the column's foot.
 struct LibraryNavMetrics: MetricGroup {
     let glyphSize = Metric(21.0, .anatomy("P32-b: the Downloads circle is 21 pt across"))
+    let artSide = Metric(28.0, .anatomy("bin:0x10270a9f0: the page picture's Lottie view is 28 x 28, scale-aspect-fit, so the 128 board's 95.6 circle shows 21 across (P32-b)"))
     let labelFont = Metric(11.0, .anatomy("P32-a/b: \"Downloads\" is 60 pt wide and 8.5 tall whether open or not: 11 pt bold for every page"))
     let selectionRadius = Metric(12.0, .guess("the selected cell's corner radius, from the capture's rounding"))
     let footerGlyph = Metric(15.0, .anatomy("P32-a: the exit arrow and the gift glyph are 15 pt"))
@@ -450,8 +451,8 @@ public enum LibraryCopy {
     static let yesterdayPrefix = "Yesterday - "
 }
 
-/// SF Symbols standing in for Arc's Library icons (ARC_HomeButton's Lottie animations `screenshots`, `downloads`,
-/// `easels`, `spaces`, `boosts`, `archive`; Arc's files are not copied).
+/// SF Symbols for the Library's smaller glyphs and Brk's own Conversations page. The navigation column draws Arc's
+/// pictures in Brk's own shapes (`LibraryPageArt`, `LibraryPageIconView`; Arc's ARC_HomeButton files are not copied).
 enum LibraryIcon {
     /// The same glyph filled in, for the open page's cell: Arc's two-color icons show the theme's color inside the
     /// outline (P32-b white, Q18-navy-library-downloads navy). `macwindow` has no filled version.

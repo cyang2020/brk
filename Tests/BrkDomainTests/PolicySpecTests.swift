@@ -97,28 +97,51 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertEqual(grey("#757575"), .dark)
     }
 
-    /// the navy preset as Arc 1.170 draws it (r5-6/REPORT.md): the automatic and light buttons give the same white wash
-    /// over the color, which grows towards the slider's left; the dark button a grey one
-    func test_aDarkPresetTakesArcsWash() throws {
-        let navy = ThemePresets.drab[8]
-        XCTAssertEqual(navy, RGBA(hex: "#2D4468"))
-        func theme(_ appearance: AppearanceChoice, _ intensity: Double) -> ResolvedTheme {
-            resolveTheme(SpaceTheme(colors: [navy], texture: .grain, intensity: intensity, appearance: appearance))
+    /// Arc's theme layer over its `.light` window material (docs/checks/2026-11-13-window-translucency.md): the gradient at
+    /// 0.2 + 0.55 x the slider over a white underlay at min(that, 0.5), black at 35% of it only for a theme that follows a
+    /// dark macOS. Composed over the material as measured behind a black and a white window, Arc's white theme at
+    /// slider 0.78 reads 228 and 252 in light mode, 193 and 235 in dark mode.
+    func test_theThemeLayerFollowsArcsRule() throws {
+        let white = SpaceTheme(colors: [RGBA(1, 1, 1)], texture: .grain, intensity: 0.22, appearance: .auto)
+        func shown(_ t: ResolvedTheme, material: Double) -> Double {
+            let u = t.underlay
+            return 255 * (t.layerAlpha * t.gradient[0].red + (1 - t.layerAlpha) * (u.alpha * u.red + (1 - u.alpha) * material))
         }
-        for appearance in [AppearanceChoice.auto, .light] {
-            let resolved = theme(appearance, 0.25)
-            XCTAssertEqual(resolved.scheme, .dark, "\(appearance)")
-            XCTAssertEqual(resolved.wash.red, 1)
-            // Arc's sidebar at this slider position: #71849B.
-            assertColor(resolved.windowColor, 113, 132, 155, within: 4)
-        }
-        let dark = theme(.dark, 0.25)
-        XCTAssertEqual(dark.scheme, .dark)
-        // Arc under the dark button: #617187.
-        assertColor(dark.windowColor, 97, 113, 135, within: 5)
-        // Slider far left and far right under the automatic button: #BBC1C9 and #5B718C.
-        assertColor(theme(.auto, 0.96).windowColor, 187, 193, 201, within: 18)
-        assertColor(theme(.auto, 0.045).windowColor, 91, 113, 140, within: 4)
+        let light = resolveTheme(white), dark = resolveTheme(white, systemScheme: .dark)
+        XCTAssertEqual(light.layerAlpha, 0.629, accuracy: 1e-9)
+        XCTAssertEqual(light.underlay, RGBA(1, 1, 1, 0.5))
+        XCTAssertEqual(dark.underlay.red, 0)
+        XCTAssertEqual(dark.underlay.alpha, 0.175, accuracy: 1e-9)
+        XCTAssertEqual(light.material, .light)
+        // Over the black-backed material the window server's blend reads 3 to 4 levels above plain sRGB mixing (a test
+        // window with the same layers read 228 and 194 there, the same as Arc).
+        XCTAssertEqual(shown(light, material: 95.0 / 255), 228, accuracy: 5)
+        XCTAssertEqual(shown(light, material: 241.0 / 255), 252, accuracy: 1.5)
+        XCTAssertEqual(shown(dark, material: 95.0 / 255), 193, accuracy: 5)
+        XCTAssertEqual(shown(dark, material: 241.0 / 255), 235, accuracy: 1.5)
+
+        // The sun keeps the white underlay in dark mode; the moon too, and lifts the colors (black reads as grey 59).
+        var sun = white; sun.appearance = .light
+        XCTAssertEqual(resolveTheme(sun, systemScheme: .dark).underlay, RGBA(1, 1, 1, 0.5))
+        let moon = resolveTheme(SpaceTheme(colors: [RGBA(0, 0, 0)], texture: .grain, intensity: 0.5, appearance: .dark), systemScheme: .dark)
+        XCTAssertEqual(moon.underlay.red, 1)
+        XCTAssertEqual(moon.gradient[0].red * 255, 58.65, accuracy: 0.01)
+        // The slider's ends: the underlay's cap holds at the right end only.
+        let left = resolveTheme(SpaceTheme(colors: [RGBA(1, 1, 1)], texture: .grain, intensity: 1, appearance: .auto))
+        XCTAssertEqual([left.layerAlpha, left.underlay.alpha], [0.2, 0.2])
+        let right = resolveTheme(SpaceTheme(colors: [RGBA(1, 1, 1)], texture: .grain, intensity: 0, appearance: .auto))
+        XCTAssertEqual(right.layerAlpha, 0.75, accuracy: 1e-9)
+        XCTAssertEqual(right.underlay.alpha, 0.5)
+        // A light/dark pair following a dark system takes the dark underlay; set to dark it is the moon.
+        var pair = white
+        pair.variants = ThemeVariants(legacy: white)
+        pair.variants?.selection = .auto
+        XCTAssertEqual(resolveTheme(pair, systemScheme: .dark).underlay.red, 0)
+        pair.variants?.selection = .dark
+        XCTAssertEqual(resolveTheme(pair, systemScheme: .dark).underlay.red, 1)
+        // Incognito covers the material whole.
+        XCTAssertEqual(ResolvedTheme.incognito.material, .opaque)
+        XCTAssertEqual(ResolvedTheme.incognito.layerAlpha, 1)
     }
 
     /// lets a forced appearance override the luminance
@@ -126,12 +149,10 @@ final class PolicySpecTests: XCTestCase {
         let white = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#FFFFFF")], texture: .grain, intensity: 0, appearance: .dark))
         XCTAssertEqual(white.scheme, .dark)
         XCTAssertEqual(white.tokens.foreground, RGBA(1, 1, 1, 0.45))
-        XCTAssertEqual(white.wash.red, 0)
-        // Arc's light button on a dark color keeps the light ink over a white wash (r5-6/REPORT.md, the navy probe).
+        // Arc's light button on a dark color keeps the light ink (r5-6/REPORT.md, the navy probe).
         let black = resolveTheme(SpaceTheme(colors: [RGBA(hex: "#000000")], texture: .grain, intensity: 0, appearance: .light))
         XCTAssertEqual(black.scheme, .dark)
         XCTAssertEqual(black.tokens.foreground, RGBA(1, 1, 1, 0.45))
-        XCTAssertEqual(black.wash, RGBA(1, 1, 1, 0.2))
     }
 
     /// noise and intensity resolve separately: noise sets the texture contrast, intensity the texture opacity and wash (W5)
@@ -148,7 +169,7 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertEqual(resolve(.tweed, noise: 0.3, intensity: 0).textureContrast, 0.3)
         // Out-of-range stored values are clamped.
         let clamped = resolve(.denim, noise: 3, intensity: -1)
-        XCTAssertEqual([clamped.textureContrast, clamped.textureOpacity, clamped.wash.alpha], [1, 0, 0.2])
+        XCTAssertEqual([clamped.textureContrast, clamped.textureOpacity, clamped.layerAlpha], [1, 0, 0.75])
     }
 
     // MARK: themeFromPrimary (a new space's theme is one primary; resolveTheme adds its companions)

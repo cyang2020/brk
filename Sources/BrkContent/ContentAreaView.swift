@@ -97,13 +97,12 @@ public final class ContentAreaView: NSView {
             // Under the toolbar a card is the lower part of one white card: square top corners, one shadow for both.
             let toolbar = frames.toolbar.flatMap { $0.maxY == frame.rect.minY ? $0 : nil }
             shadow.frame = toolbar.map { frame.rect.union(CGRect(x: frame.rect.minX, y: $0.minY, width: frame.rect.width, height: $0.height)) } ?? frame.rect
-            shadow.layer?.cornerRadius = frame.cornerRadius
+            shadow.cornerRadius = frame.cornerRadius
             // An edge-to-edge page (Little Arc) casts none.
             shadow.isHidden = !Metrics.content.showsShadow.value || frame.cornerRadius == 0
             card.release(to: frame.rect)
             resting.append((frame.rect, shadow.frame))
-            card.layer?.cornerRadius = frame.cornerRadius
-            card.layer?.maskedCorners = toolbar == nil ? CardView.allCorners : [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            card.shape(radius: frame.cornerRadius, corners: toolbar == nil ? CardView.allCorners : [.layerMinXMinYCorner, .layerMaxXMinYCorner])
             card.identify(.card(frame.pane))
             let pane = content.panes.indices.contains(frame.pane) ? content.panes[frame.pane] : nil
             card.header(frame.header.flatMap { _ in pane }, orientation: content.orientation,
@@ -123,16 +122,15 @@ public final class ContentAreaView: NSView {
                 card.host(surface(page), placeholder: nil)
                 card.dragStrip(content.windowDragging && toolbar == nil && frame.header == nil && frame.rect.minY <= frames.contentArea.minY + 0.5
                                ? frame.pane : nil)
-            case .easel, .aiPage:
-                // The board or a kept page is drawn over its card by the root, on its own color.
-                card.host(nil, placeholder: nil)
+            case .easel, .aiPage, .history:
+                // The board, a kept page or the History page (`HistoryPageView`) is drawn over its card by the root, on its own color.
+                card.host(nil, placeholder: nil, coveredAbove: true)
                 card.dragStrip(nil)
-            case .blank, .history:
-                // The History page is drawn over its card by the root (`HistoryPageView`).
+            case .blank:
                 card.host(nil, placeholder: nil)
                 card.dragStrip(nil)
                 // Arc's empty content area is a #FCFCFC card, not the theme (Q02 b); dark keeps the empty color above.
-                if palette.scheme == .light { card.layer?.backgroundColor = Self.blankLight.cgColor }
+                if palette.scheme == .light { card.setFill(Self.blankLight) }
             case .crashed(let page):
                 card.host(nil, placeholder: "This tab has crashed")
                 card.dragStrip(nil)
@@ -296,23 +294,43 @@ public final class ContentAreaView: NSView {
     func endDrop() { clearDrop(); pageDrop = nil; dragSource = nil }
 }
 
-/// The soft shadow behind a card. A clipping layer cannot cast its own shadow, so this opaque sibling sits under the
-/// card with the same frame and radius (Metrics.content.shadowRadius, shadowOpacity, shadowOffset; hidden when
+/// The soft shadow behind a card. A clipping layer cannot cast its own shadow, so this sibling sits under the card
+/// with the same frame and radius (Metrics.content.shadowRadius, shadowOpacity, shadowOffset; hidden when
 /// showsShadow is off). The shadow goes through `NSView.shadow`: AppKit owns a layer-backed view's layer shadow and
 /// cleared the values set on the layer directly, so no shadow showed.
+///
+/// The opaque body that casts it is `EdgeFill`, a hair inside the frame: a body reaching the card's edge showed
+/// through the card's partly covered corner pixels as a white rim around a dark page.
 @MainActor
 final class ShadowView: NSView {
     /// The focused pane of a split: Arc lifts it with a wider shadow (SplitDropDraw.liftedShadow*).
     var lifted = false { didSet { if lifted != oldValue { shadow = Self.shadow(lifted: lifted) } } }
+    /// The card's corner radius; the body follows it.
+    var cornerRadius: CGFloat = 0 { didSet { if cornerRadius != oldValue { placeBody() } } }
+    private let body = EdgeFill(color: .white)
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.white.cgColor
-        layer?.cornerCurve = .continuous
+        body.inset = true
+        addSubview(body)
+        placeBody()
         shadow = Self.shadow(lifted: false)
         isHidden = !Metrics.content.showsShadow.value
     }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        placeBody()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        placeBody()
+    }
+
+    private func placeBody() { body.place(in: bounds, radius: cornerRadius, corners: CardView.allCorners, scale: window?.backingScaleFactor) }
+    var bodyFrame: CGRect { body.frame }
 
     private static func shadow(lifted: Bool) -> NSShadow {
         let s = NSShadow()
@@ -337,6 +355,8 @@ final class CardView: NSView {
     private var drag: PageDragStrip?
     /// The card's color where no page draws (an empty card, a page still loading).
     var emptyColor = NSColor.white
+    /// The card's own color, kept a hair inside its edge while a page or a view over the card draws its face.
+    private let fill = EdgeFill(color: .white)
 
     /// While a drop preview narrows the card, the page keeps the size it had (Arc clips it, P23-d).
     private var holdsPage = false
@@ -377,9 +397,35 @@ final class CardView: NSView {
         layer?.masksToBounds = true
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = Metrics.content.cornerRadius.value
-        layer?.backgroundColor = NSColor.white.cgColor
+        addSubview(fill)
+        placeFill()
         sad.isHidden = true
         addSubview(sad)
+    }
+
+    /// The card's corners: `radius` on `corners` (the card under the toolbar keeps its top ones square).
+    func shape(radius: CGFloat, corners: CACornerMask) {
+        layer?.cornerRadius = radius
+        layer?.maskedCorners = corners
+        placeFill()
+    }
+
+    /// The card's own color where nothing draws over it (Arc's #FCFCFC empty card).
+    func setFill(_ color: NSColor) { fill.color = color }
+    var fillFrame: CGRect { fill.frame }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        placeFill()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        placeFill()
+    }
+
+    private func placeFill() {
+        fill.place(in: bounds, radius: layer?.cornerRadius ?? 0, corners: layer?.maskedCorners ?? Self.allCorners, scale: window?.backingScaleFactor)
     }
 
     @available(*, unavailable)
@@ -388,7 +434,9 @@ final class CardView: NSView {
     override var isFlipped: Bool { true }
 
     /// Puts `surface` in the card (moving it here from another card if needed) or shows `placeholder` text.
-    func host(_ surface: NSView?, placeholder text: String?) {
+    /// `coveredAbove`: a view over the card draws its face (an Easel, a kept AI page, the History page), so the card's
+    /// own color stays inside the edge as it does under a page.
+    func host(_ surface: NSView?, placeholder text: String?, coveredAbove: Bool = false) {
         if let surface {
             if surface.superview !== self {
                 if hosted?.superview === self { hosted?.removeFromSuperview() }
@@ -404,7 +452,9 @@ final class CardView: NSView {
         }
         sad.isHidden = text == nil
         sad.frame = pageBounds
-        layer?.backgroundColor = (text == nil ? emptyColor : NSColor.windowBackgroundColor).cgColor
+        fill.color = text == nil ? emptyColor : NSColor.windowBackgroundColor
+        fill.inset = text == nil && (surface != nil || coveredAbove)
+        placeFill()
         if let paneHeader, subviews.last !== paneHeader { addSubview(paneHeader, positioned: .above, relativeTo: nil) }
     }
 
@@ -446,6 +496,38 @@ final class CardView: NSView {
         if !holdsPage { sad.frame = pageBounds }
         drag?.frame = dragBounds
         if let paneHeader { paneHeader.frame.size.width = bounds.width }
+    }
+}
+
+/// A rounded fill under a card's face: the card's own color, or the opaque body that casts its shadow. With `inset`
+/// it stops `Metrics.content.edgeFillInsetPixels` device pixels inside the edge, so the card's partly covered corner
+/// pixels show only the face and what lies behind the card, never this fill (a light rim round a dark page,
+/// 2026-11-13). Takes no clicks.
+@MainActor
+final class EdgeFill: NSView {
+    var color: NSColor { didSet { layer?.backgroundColor = color.cgColor } }
+    var inset = false
+
+    init(color: NSColor) {
+        self.color = color
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.backgroundColor = color.cgColor
+        layer?.cornerCurve = .continuous
+        autoresizingMask = []
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    /// Fills `bounds` of the owner, inside its edge when `inset`. `scale`: the window's backing scale (2 before it has one).
+    func place(in bounds: CGRect, radius: CGFloat, corners: CACornerMask, scale: CGFloat?) {
+        let d = inset ? Metrics.content.edgeFillInsetPixels.value / max(1, scale ?? 2) : 0
+        frame = CGRect(x: bounds.minX + d, y: bounds.minY + d, width: max(0, bounds.width - 2 * d), height: max(0, bounds.height - 2 * d))
+        layer?.cornerRadius = max(0, radius - d)
+        layer?.maskedCorners = corners
     }
 }
 

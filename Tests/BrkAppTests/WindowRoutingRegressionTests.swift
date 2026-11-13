@@ -124,7 +124,8 @@ final class WindowRoutingRegressionTests: XCTestCase {
         XCTAssertTrue(grid.isVisible)
         XCTAssertTrue(TabIconPicker.isOpen)
         XCTAssertTrue(h.store.dispatchKey(h.window, h.key("cmd+w", stage: .menu, id: 1)))
-        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        let closes = Date().addingTimeInterval(3)
+        while grid.isVisible, Date() < closes { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
         XCTAssertFalse(grid.isVisible)
         XCTAssertFalse(TabIconPicker.isOpen)
     }

@@ -34,7 +34,9 @@ final class StateFileTests: XCTestCase {
         file.schedule(Data("first".utf8))
         file.schedule(Data("second".utf8))
         XCTAssertEqual(file.read(), .absent, "nothing is written before the debounce elapses")
-        Thread.sleep(forTimeInterval: Metrics.persistence.saveDebounce.value + 0.3)
+        // Until the write lands, not a fixed time: GitHub's runners fire timers late; a fixed wait failed there (builds 35 to 37).
+        let lands = Date().addingTimeInterval(Metrics.persistence.saveDebounce.value + 3)
+        while file.read() == .absent, Date() < lands { Thread.sleep(forTimeInterval: 0.02) }
         XCTAssertEqual(file.read(), .data(Data("second".utf8)))
     }
 

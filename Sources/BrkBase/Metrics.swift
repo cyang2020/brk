@@ -245,6 +245,10 @@ public struct ContentMetrics: MetricGroup {
     public let statusBubbleMaxHeight = Metric(40.0, .guess("Chromium's status bubble widget is a short child of the page's host window; its other widgets are taller or are not at its bottom edge"))
     public let fullScreenCornerRadius = Metric(0.0, .arc("Content card corner radius", note: "0 in one state"))
     public let showsShadow = Metric(true, .arc("Content card shadow", .medium))
+    /// How far inside the card's edge, in device pixels, its own fill and its shadow's body stop while something else
+    /// draws the card's face. A rounded edge pixel is only partly covered; a fill reaching it showed through around a
+    /// dark page as a light rim (user report 2026-11-13). One pixel for the card's soft edge, one for the fill's own.
+    public let edgeFillInsetPixels = Metric(2.0, .derived(rule: "two antialiased edges must not overlap", from: ["Content card corner radius"]))
     /// Measured round Arc's card (2a96a9d7f0:verify/visual-pairs/run-20261103 P01-a, P23-a): 12% black just under it fading out
     /// within 9 pt, 7% just above it within 5. A split's focused pane casts a wider one (BrkContent's SplitDropDraw).
     public let shadowRadius = Metric(2.9, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, Arc captures P01-a: the edges fade like a 2.9 pt Gaussian"))
@@ -364,21 +368,21 @@ public struct ThemeMetrics: MetricGroup {
     public let sandOpacity = Metric(0.15, .arc("Theme texture opacity, as a multiple of the theme intensity", .medium, note: "sand"))
     public let denimOpacity = Metric(0.6, .arc("Theme texture opacity, as a multiple of the theme intensity", .medium, note: "denim"))
     public let tweedOpacity = Metric(0.4, .arc("Theme texture opacity, as a multiple of the theme intensity", .medium, note: "tweed"))
-    /// Wash: white in light, black at 35% in dark; opacity = min(base + slope x factor, cap).
-    public let darkWashAlpha = Metric(0.35, .arc("Theme background wash", .low, note: "dark: black at 35%"))
-    public let washBase = Metric(0.2, .arc("Theme background wash", .low, note: "0.2 +"))
-    public let washSlope = Metric(0.55, .arc("Theme background wash", .low, note: "0.55 x factor"))
-    public let washCap = Metric(0.5, .arc("Theme background wash", .low, note: "capped at 0.5"))
-    /// A dark color under Arc's dark button: from the navy preset at five slider positions (r5-6/REPORT.md).
-    public let darkColorDarkWash = Metric(207.0 / 255, .anatomy("f588406ceb:verify/visual-pairs/run-20261103/r5-6/REPORT.md: navy under the dark button runs from #2D4468 towards #CFCFCF"))
-    public let darkColorDarkWashBase = Metric(0.19, .anatomy("f588406ceb:verify/visual-pairs/run-20261103/r5-6/REPORT.md: 22% at the slider's right end"))
-    public let darkColorDarkWashSlope = Metric(0.62, .anatomy("f588406ceb:verify/visual-pairs/run-20261103/r5-6/REPORT.md: 78% at the slider's left end"))
-    /// What lies over every theme color while macOS is in dark mode (Arc follows the system for its saved themes):
-    /// grey at base + slope x intensity, measured on Arc 1.170 over a black backdrop with white, black and navy themes
-    /// at three slider positions (docs/checks/2026-11-12-space-colour.md).
-    public let darkModeMaterial = Metric(94.0 / 255, .anatomy("docs/checks/2026-11-12-space-colour.md: Arc in dark mode, grey under the theme color"))
-    public let darkModeMaterialBase = Metric(0.27, .anatomy("docs/checks/2026-11-12-space-colour.md: 27% at the slider's right end"))
-    public let darkModeMaterialSlope = Metric(0.53, .anatomy("docs/checks/2026-11-12-space-colour.md: 80% at the slider's left end"))
+    /// Arc's theme layer (bin 0x101530d98): the gradient at alpha base + slope x the slider position, over an underlay
+    /// white at min(that alpha, cap), or black at 35% of it in a dark window (docs/checks/2026-11-13-window-translucency.md).
+    public let darkWashAlpha = Metric(0.35, .arc("Theme layer underlay", note: "dark window: black at 35%"))
+    public let washBase = Metric(0.2, .arc("Theme layer alpha", note: "0.2 +"))
+    public let washSlope = Metric(0.55, .arc("Theme layer alpha", note: "0.55 x intensityFactor"))
+    public let washCap = Metric(0.5, .arc("Theme layer underlay", note: "white at min(alpha, 0.5)"))
+    /// The texture's opacity while the window is neither key nor main (Arc bin 0x101530cdc: x 0.25 when inactive).
+    public let inactiveTextureFactor = Metric(0.25, .arc("Theme overlay alpha while the window is inactive", note: "0.25"))
+    /// Arc's `.light` window material (NSVisualEffectView, behind window, emphasized) as it reads with nothing behind the
+    /// window (a window capture) and over a black window, sRGB; measured 2026-11-13 with a test window.
+    public let materialEmpty = Metric(218.0 / 255, .anatomy("docs/checks/2026-11-13-window-translucency.md: .light material, window capture"))
+    public let materialOverBlack = Metric(95.0 / 255, .anatomy("docs/checks/2026-11-13-window-translucency.md: .light material over a black window"))
+    /// How far the moon button lifts a theme's colors towards white: Arc's black theme reads as grey 59 under it and
+    /// its white theme stays white, with the same backdrop share as under the sun button (2026-11-12 probes).
+    public let moonLift = Metric(0.23, .anatomy("docs/checks/2026-11-13-window-translucency.md: black reads 59 under the moon"))
     public let gradientTexturePerFactor = Metric(100.0, .arc("Metal gradient texture size", .low))
     /// Tile sizes of Arc's own textures (px @1x). Ours are generated procedurally at these sizes.
     public let grainTile = Metric(155, .anatomy("visual-and-copy.md, Gradient and grain assets"))

@@ -567,8 +567,13 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     let history: [HistoryRow]? = historyShown ? state.doc.history.filter { $0.profile == historyProfile }.map {
         HistoryRow(id: $0.id, url: $0.url, title: $0.title, visitedAt: $0.visitedAt)
     } : nil
+    let websiteAppearance = state.sitePreferences(state.siteTarget(in: id)?.context ?? state.libraryContext(in: id)).appearance
+        ?? WebsiteAppearance(rawValue: state.doc.settings.general.webAppearance.rawValue) ?? .automatic
+    // Websites set to Dark make Arc's window dark: its theme takes the dark underlay (P19-b against P19-c,
+    // docs/checks/2026-11-13-window-translucency.md).
+    let windowScheme: Scheme = websiteAppearance == .dark ? .dark : ctx.systemScheme
     var snapshot = WindowSnapshot(capture: session.capture,
-        id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: doc.kind == .incognito ? .incognito : resolveTheme(theme, systemScheme: ctx.systemScheme),
+        id: id, rev: state.session.rev, now: ctx.now, kind: doc.kind, bounds: doc.bounds, theme: doc.kind == .incognito ? .incognito : resolveTheme(theme, systemScheme: windowScheme),
         sidebar: SidebarSnapshot(visible: doc.sidebarVisible, width: doc.sidebarWidth, peek: session.peek,
                                  toolbarVisible: doc.toolbarVisible, spaceHeaderVisible: doc.spaceHeaderVisible,
                                  hapticsEnabled: state.doc.settings.advanced.hapticsOnReorder),
@@ -585,8 +590,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         tabTools: projectTabTools(state, window: id, now: ctx.now),
         miniPlayers: projectMiniPlayers(state, window: id),
         boostEditor: state.boostProfile(in: id) == session.boostEditor?.profile ? session.boostEditor : nil,
-        websiteAppearance: state.sitePreferences(state.siteTarget(in: id)?.context ?? state.libraryContext(in: id)).appearance
-            ?? WebsiteAppearance(rawValue: state.doc.settings.general.webAppearance.rawValue) ?? .automatic
+        websiteAppearance: websiteAppearance
     )
     snapshot.history = history
     if history != nil, let profile = historyProfile, let results = session.meaning[.history] {
