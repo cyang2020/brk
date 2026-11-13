@@ -536,6 +536,7 @@ final class PointerSweepTests: XCTestCase {
                         var row = AIThreadRow(id: AIRequestID(id), title: title, state: state, detail: detail, updatedAt: rig.now)
                         row.pill = state == .waiting ? "Approve" : nil
                         row.agent = "Claude"
+                        row.current = id == "u1"
                         return row
                     }
                     panel.strips = [row("o1", "Elsewhere", .waiting, "Wants to edit a file")]
