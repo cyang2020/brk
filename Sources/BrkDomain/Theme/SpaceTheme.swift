@@ -224,7 +224,7 @@ private func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme, followsSyst
     let intensity = clamp01(theme.intensity)
     let layer = themeLayer(appearance: theme.appearance, followsDarkSystem: followsSystem && systemScheme == .dark, intensity: intensity)
     let stops = layer.lift > 0 ? gradient.map { mix($0, RGBA(1, 1, 1), layer.lift) } : gradient
-    let wash = solidWash(alpha: layer.alpha, underlay: layer.underlay, material: .light, systemScheme: systemScheme)
+    let wash = solidWash(alpha: layer.alpha, underlay: layer.underlay, systemScheme: systemScheme)
     var resolved = ResolvedTheme(scheme: scheme, gradient: stops, texture: theme.texture, textureOpacity: intensity * multiplier,
                                  textureContrast: clamp01(theme.noise), wash: wash,
                                  tokens: scheme == .light ? .light : .dark, windowColor: mix(stops[0], wash, wash.alpha))
@@ -267,9 +267,8 @@ private func themeLayer(appearance: AppearanceChoice, followsDarkSystem: Bool, i
     return (alpha, underlay, lift)
 }
 
-/// The theme layer and the material's stand-in color as one wash over the gradient (`ResolvedTheme.wash`).
-func solidWash(alpha: Double, underlay: RGBA, material: ThemeMaterial, systemScheme: Scheme) -> RGBA {
-    guard material != .opaque else { return RGBA(0, 0, 0, 0) }
+/// The theme layer and the `.light` material's stand-in color as one wash over the gradient (`ResolvedTheme.wash`).
+private func solidWash(alpha: Double, underlay: RGBA, systemScheme: Scheme) -> RGBA {
     let grey = ThemeMaterial.standIn(systemScheme)
     let u = underlay.alpha
     return RGBA(u * underlay.red + (1 - u) * grey, u * underlay.green + (1 - u) * grey, u * underlay.blue + (1 - u) * grey, 1 - alpha)
