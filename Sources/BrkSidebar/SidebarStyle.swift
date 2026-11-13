@@ -118,6 +118,42 @@ struct SidebarDrawMetrics: MetricGroup {
     let tidyBroomPivot = Metric(0.6, .anatomy("bin:0x100310f74: anchorPoint (0.6, 1), the top edge"))
     let tidyBroomSpring = Metric([1.5, 150.0, 15.0, 8.0], .anatomy("bin:0x1003114b8 to bin:0x1003114e4: CASpringAnimation mass, stiffness, damping, initial velocity; duration its settlingDuration"))
     let tidyBroomHold = Metric(0.4, .anatomy("bin:0x100310aa0: the swing back is dispatched 0.4 s after the press"))
+    /// The tab list's motions (Arc's `TablistOutlineView`; recordings in docs/checks/2026-11-13-sidebar-animations.md). A
+    /// change of the rows runs in `OutlineViewDiffableDataSource`'s animation group: added rows fade in, one removed row
+    /// fades out, several slide up and fade, the others slide to their new places.
+    let tablistListMotion = Metric(0.12, .anatomy("bin:0x100969f8c: setDuration 0.12 before beginUpdates; recorded: a new tab, a close, a restore, Clear, a pin all move 0.32, 0.60, 0.79, 0.90, 0.96, 1 in successive 1/60 s frames"))
+    let tablistListCurve = Metric([0.25, 0.1, 0.25, 1.0], .anatomy("no timing function set in the group, so Core Animation's default; the frames above fit it at 0.12 s (squared error 0.0002), not ease-out or linear"))
+    /// A folder opening: `animator().expandItem` outside any group (bin:0x1002a8798).
+    let tablistFolderOpen = Metric(0.2, .anatomy("recorded on a folder of 2 and of 6 rows: the rows below move 24, 36, 57, 67, 75, 83, 90, 95, 98, 100 percent, whatever the count"))
+    let tablistFolderOpenCurve = Metric([0.0, 0.0, 0.58, 1.0], .anatomy("those frames fit ease-out at 0.2 s (squared error 0.0001); Core Animation's default curve misses by 60 times more"))
+    /// A folder closing: `animator().collapseItem` in its own animation group (bin:0x1002a8720, block bin:0x1002ad290).
+    let tablistFolderClose = Metric(0.25, .anatomy("NSAnimationContext's default length; recorded on a folder of 2 and of 6 rows: 6, 17, 31, 46, 59, 70, 78, 84, 89, 93, 96, 98, 99, 100 percent"))
+    let tablistFolderCloseCurve = Metric([0.25, 0.1, 0.25, 1.0], .anatomy("those frames fit Core Animation's default curve at 0.25 s (squared error 0.0001)"))
+    /// Arc's folder glyph (`FolderIcon.FolderIconView`): the paths of bin:0x10166cc40, the
+    /// open state of bin:0x10166c6a8, run as an implicit animation from the representable's update (bin:0x10166e22c).
+    /// The divider's Clear, Tidy and cleanup buttons appear while the pointer is over the sidebar or the divider.
+    let dividerFade = Metric(0.1, .anatomy("bin:0x1001aca1c: setDuration 0.1 before animator().alphaValue; recorded, Clear reads 32, 54, 75, 100 percent in successive 1/60 s frames"))
+    let dividerFadeCurve = Metric([0.0, 0.0, 0.58, 1.0], .anatomy("bin:0x1001ac9e4: functionWithName kCAMediaTimingFunctionEaseOut"))
+    let clearArrowPress = Metric(3.0, .anatomy("bin:0x10030f764: the ↓'s centre constraint goes to 3 while Clear is pressed, back to 0 on release (bin:0x10030f924)"))
+    let clearArrowPressDuration = Metric(0.175, .anatomy("bin:0x10030f734: setDuration 0.175 with implicit animation allowed"))
+    let folderIconSide = Metric(17.0, .anatomy("bin:0x1003eef90: the sidebar's folder cell makes its FolderIconView 17 x 17 (the SwiftUI representable's 16 x 16 at bin:0x10166e1c4 is used elsewhere); recorded, Arc's closed glyph is 38 px across at 2x, as 17 + the 1.5 outline"))
+    let folderIconRadiusDivisor = Metric(7.0, .anatomy("bin:0x10166cc78: corner radius = (width / 7) rounded"))
+    let folderIconLine = Metric(1.25, .anatomy("bin:0x10166cc84: the outline is 1.25 rounded to whole device pixels (1.5 at 2x)"))
+    let folderIconFrontTop = Metric(0.25, .anatomy("bin:0x10166cd28: the front flap starts a quarter of the height down, rounded, then to device pixels"))
+    let folderIconTabDivisor = Metric(1.5, .anatomy("bin:0x10166cd40: the back's tab is the front's top / 1.5, rounded down"))
+    let folderIconTabEnd = Metric([0.42, 0.58], .anatomy("bin:0x10166cd58, bin:0x10166cd88: the tab's top ends at 0.42 of the width, its slope at 0.58"))
+    let folderIconPerspective = Metric(350.0, .anatomy("bin:0x10166c81c: m34 = -1/350"))
+    let folderIconOpenShift = Metric(3.0, .anatomy("bin:0x1037526d8: open, both halves move 3 pt right (1.5 when peeked)"))
+    let folderIconOpenTurn = Metric(32.0, .anatomy("bin:0x1037526f8: open, both halves turn 32° about the vertical axis"))
+    let folderIconBackTilt = Metric(28.0, .anatomy("bin:0x103752738: open, the back panel tips 28° about its bottom edge (away)"))
+    let folderIconFrontTilt = Metric(-30.0, .anatomy("bin:0x103752718: open, the front flap tips -30° about its bottom edge (forward)"))
+    let folderIconFrontShade = Metric(0.15, .anatomy("bin:0x10166b7bc: the front's shading is black from 0 to 0.15, shown only open"))
+    let folderIconFrontShadeAxis = Metric([0.1, 0.0, 0.9, 1.0], .anatomy("bin:0x10166b838 to bin:0x10166b864: start (0.1, 0), end (0.9, 1)"))
+    let folderIconBackShade = Metric(0.36, .anatomy("bin:0x10166bb0c: the back's shading is black from 0 to 0.36, masked by the back's path"))
+    let folderIconBackShadeAxis = Metric([0.0, 0.0, 0.6, 1.0], .anatomy("bin:0x10166bb90 to bin:0x10166bbac: start (0, 0), end (0.6, 1)"))
+    let folderIconClosedBackShading = Metric(0.2, .anatomy("bin:0x10166c6a8: the back's shading at 0.2 while closed, 1 open"))
+    let folderIconTurn = Metric(0.25, .anatomy("an implicit Core Animation transition: CATransaction's default 0.25 s; recorded, the glyph turns with the rows of a closing folder"))
+    let folderIconTurnCurve = Metric([0.25, 0.1, 0.25, 1.0], .anatomy("an implicit transition's default curve; the recorded glyph frames fit it"))
     let titleTrailing = Metric(8.0, .guess("title end padding inside the selection, mirrors the 8 pt selection inset"))
     let closeTrailing = Metric(7.0, .anatomy("~/brk-arc-reference/Q13/Q13-press-row-arc.png: the × centres 19 from the row's right end"))
     let emptyFavicon = Metric(14.0, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, P01-a: Arc's empty favicon is a 14 pt square centred 26 from the sidebar edge"))

@@ -172,10 +172,11 @@ final class DragController {
         if let sidebar, let context {
             session.target = target(at: sidebar.rootPoint(fromWindow: event.locationInWindow), item: session.item, context: context)
         }
-        var lands = false
+        var lands = false, settles = false
         if case .favorites? = session.target { lands = true }
+        if case .list? = session.target, !session.preview.isHidden { settles = true }
         // The grid goes from its drag layout straight to the document's new one, so the command comes before any render.
-        finish(session, keepsImage: lands)
+        finish(session, keepsImage: lands || settles)
         if lands { sidebar?.favorites.arriving = session.item.id }
         switch session.target {
         case .content(let command)?: dispatch(command)
@@ -190,7 +191,26 @@ final class DragController {
         }
         sidebar?.renderAfterDrag()
         if lands { land(session.preview, on: session.item.id) }
+        if settles { settle(session.preview, on: session.item.id) }
         return true
+    }
+
+    /// A drop in the tab list (Arc's dragging session slides its image to the destination, recorded 2026-11-13): the image
+    /// glides from where it was let go onto the row's new place over `Draw.dropLanding`, ease-out, while the other rows
+    /// slide aside; the row shows when it arrives.
+    private func settle(_ image: DragImage, on id: ItemID) {
+        landing = image
+        guard let tablist = sidebar?.tablist, let row = tablist.rowView(id), let host = image.superview else { return endLanding() }
+        let card = RowGeometry(bounds: row.bounds, depth: 0).selection
+        let end = host.convert(card, from: row)
+        tablist.arriving = id
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = Draw.dropLanding.value
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            image.animator().frame = end
+        }, completionHandler: { [weak self] in
+            MainActor.assumeIsolated { if self?.landing === image { self?.endLanding() } }
+        })
     }
 
     /// A drop on the grid (Arc, Q21): the image glides from where it was let go into the tile's cell over `Draw.dropLanding`,
@@ -213,6 +233,7 @@ final class DragController {
         landing?.removeFromSuperview()
         landing = nil
         sidebar?.favorites.arriving = nil
+        sidebar?.tablist.arriving = nil
     }
 
     /// Ends a drag without moving anything (the sidebar went away under it).

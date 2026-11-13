@@ -60,6 +60,10 @@ final class TablistView: NSScrollView {
     /// Open Live Folders without rows: their one-line note, by folder.
     private var livePlaceholders: [ItemID: LivePlaceholderView] = [:]
     private var now = Instant(milliseconds: 0)
+    /// Arc's row motions (`TablistMotion`, `TablistAnimator`): rows on their way out, by item, with their top in document
+    /// points, so a row that comes back half-way keeps its view and its motion.
+    private let animator = TablistAnimator()
+    private var departing: [ItemID: (view: RowView, top: Double)] = [:]
 
     init(dispatch: @escaping Dispatch, drag: DragController) {
         self.dispatch = dispatch
@@ -145,6 +149,7 @@ final class TablistView: NSScrollView {
         self.tools = tools
         self.now = now
         multiselection = tools.selected
+        let previous = last
         last = (space, renaming, f, palette)
 
         var rows: [ItemID: (row: Row, section: SectionKind)] = [:]
@@ -187,10 +192,19 @@ final class TablistView: NSScrollView {
         document.frame = CGRect(x: 0, y: 0, width: width, height: max(contentBottom, f.tablistViewport.height))
 
         multiselection.removeAll { rows[$0] == nil }
+        let dividerWasHidden = divider.isHidden
         divider.isHidden = !f.rows.contains { $0.kind == .divider }
         renderedRows = rows
         renderedLit = lit
-        placeRows(refresh: true)
+        // Rows still on their way out stay where they are on screen while their section's frame moves.
+        for (id, entry) in departing {
+            guard let container = entry.view.superview else { departing[id] = nil; continue }
+            entry.view.frame.origin.y = entry.top - container.frame.minY
+        }
+        let moment = CACurrentMediaTime()
+        let plan = motionPlan(from: previous, to: space, frames: f)
+        if let plan { animator.begin(plan, at: moment) }
+        placeRows(refresh: true, plan: plan, before: previous?.frames, now: moment)
         var seen: Set<ItemID> = []
         for frame in f.rows {
             switch frame.kind {
@@ -200,21 +214,26 @@ final class TablistView: NSScrollView {
                 divider.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
                 divider.render(canClear: space.today.kind == .today && !space.today.rows.isEmpty, clearAction: space.today.clearAction,
                                canTidy: space.today.canTidy, tidying: space.today.tidying, cleanup: space.today.cleanup, space: space.id, palette: palette)
+                move(divider, .divider, plan: plan, fresh: dividerWasHidden, now: moment)
             case .newTab:
                 newTab.frame = frame.rect.offsetBy(dx: -todaySection.frame.minX, dy: -todaySection.frame.minY)
                 newTab.render(palette: palette, current: newTabCurrent)
+                move(newTab, .newTab, plan: plan, fresh: false, now: moment)
             case .livePlaceholder(let id):
                 guard case .folder(let folder)? = rows[id]?.row, let live = folder.live else { continue }
                 seen.insert(LivePlaceholderView.key(id))
                 let container = rows[id]?.section == .pinned ? pinnedSection : todaySection
+                var made = false
                 let view = livePlaceholders[id] ?? {
-                    let made = LivePlaceholderView(dispatch: dispatch)
-                    livePlaceholders[id] = made
-                    return made
+                    let created = LivePlaceholderView(dispatch: dispatch)
+                    livePlaceholders[id] = created
+                    made = true
+                    return created
                 }()
                 if view.superview !== container { container.addSubview(view) }
                 view.frame = frame.rect.offsetBy(dx: -container.frame.minX, dy: -container.frame.minY)
                 view.render(folder: id, live: live, depth: frame.depth, palette: palette)
+                move(view, frame.kind, plan: plan, fresh: made, now: moment)
             case .topSpacer:
                 break
             }
@@ -242,7 +261,8 @@ final class TablistView: NSScrollView {
     /// Gives a view to each row within one viewport of the visible part of the list (and to the rows that must keep theirs:
     /// one being renamed, pressed or dragged, a drop or join target) and retires the others. `refresh`: a render, so rows that
     /// keep their views draw the new snapshot too; a scroll only draws the rows it adds.
-    private func placeRows(refresh: Bool) {
+    /// `plan`: the render's motion from the layout `before` (`TablistMotion`), started at `now`.
+    private func placeRows(refresh: Bool, plan: TablistMotionPlan? = nil, before: SidebarFrames? = nil, now: CFTimeInterval = CACurrentMediaTime()) {
         guard let last else { return }
         let f = last.frames
         let visible = contentView.documentVisibleRect
@@ -252,27 +272,109 @@ final class TablistView: NSScrollView {
         var keep = Set([last.renaming, drag.heldItem, splitJoinTarget, dropFolder].compactMap { $0 })
         for (id, view) in rowViews where view.isEditingName { keep.insert(id) }
         var placed: Set<ItemID> = []
+        var shown: [(id: ItemID, view: RowView, made: Bool, revived: Double?, rect: CGRect)] = []
         for frame in f.rows {
             guard case .item(let id) = frame.kind, let (row, section) = renderedRows[id] else { continue }
             guard keep.contains(id) || (frame.rect.maxY >= near.minY && frame.rect.minY <= near.maxY) else { continue }
             placed.insert(id)
             let container = section == .pinned ? pinnedSection : todaySection
             let existing = rowViews[id]
-            let view = existing ?? makeRow(id)
+            // A row on its way out that is back (a folder opened again half-way) keeps its view and the motion it has.
+            var revived: Double?
+            if existing == nil, let entry = departing.removeValue(forKey: id), entry.view.superview != nil {
+                animator.revive(entry.view)
+                entry.view.departing = false
+                rowViews[id] = entry.view
+                revived = entry.top
+            }
+            let view = rowViews[id] ?? makeRow(id)
             if view.superview !== container { container.addSubview(view) }
             view.frame = frame.rect.offsetBy(dx: -container.frame.minX, dy: -container.frame.minY)
             if refresh || existing == nil {
-                view.render(row, section: section, depth: frame.depth, renaming: last.renaming == id, multiselected: multiselection.contains(id), palette: last.palette)
+                view.render(row, section: section, depth: frame.depth, renaming: last.renaming == id, multiselected: multiselection.contains(id), palette: last.palette,
+                            animated: plan?.toggled[id] != nil)
                 view.lit = renderedLit.contains(id)
                 view.dropInto = dropFolder == id
                 view.joinLeading = splitJoinTarget == id ? splitJoinLeading : nil
             }
+            shown.append((id, view, existing == nil && revived == nil, revived, frame.rect))
         }
+        let oldRects = plan.map { plan in plan.departures.isEmpty ? [:] : Dictionary((before?.rows ?? []).map { ($0.kind, $0.rect) }, uniquingKeysWith: { a, _ in a }) } ?? [:]
         for (id, view) in rowViews where !placed.contains(id) {
             view.retire()
-            view.removeFromSuperview()
             rowViews[id] = nil
+            guard let departure = plan?.departures[.item(id)], let old = oldRects[.item(id)], let container = view.superview else {
+                view.removeFromSuperview()
+                continue
+            }
+            // Arc's way out: drawn from its old place, under the rows that move over it.
+            var top = Double(old.minY), clipLine: Double?
+            if case .slideUp(let by, let clip, _, _) = departure {
+                top -= by
+                clipLine = clip - top
+            }
+            view.frame = CGRect(x: old.minX - container.frame.minX, y: top - container.frame.minY, width: old.width, height: old.height)
+            view.departing = true
+            view.hideForDeparture(titles: clipLine != nil)
+            departing[id] = (view, top)
+            animator.depart(view, departure: departure, clipLine: clipLine, now: now)
         }
+        for entry in shown {
+            let kind = RowFrame.Kind.item(entry.id)
+            switch plan?.arrivals[kind] {
+            case .fade?:
+                if entry.made { animator.fadeIn(entry.view, now: now) }
+                animator.slide(entry.view, kind: kind, fresh: false, now: now)
+            case .underFolder(let clip)?:
+                animator.slide(entry.view, kind: kind, fresh: false, now: now)
+                let opening = plan?.slides[kind]?.first { $0.timing == .folderOpen }?.dy ?? 0
+                animator.clip(entry.view, below: clip - entry.rect.minY, slide: opening, timing: .folderOpen, now: now)
+            case nil:
+                animator.slide(entry.view, kind: kind, fresh: entry.made, now: now)
+            }
+            // Back from its way out somewhere the plan did not expect (several rows cleared, then restored): it moves from
+            // where it is drawn.
+            if let top = entry.revived {
+                let planned = (plan?.slides[kind] ?? []).reduce(0) { $0 + $1.dy }
+                let missing = top - entry.rect.minY - planned
+                if abs(missing) > 0.5 { animator.extraSlide(entry.view, kind: kind, dy: missing, now: now) }
+            }
+            if plan?.moved.contains(kind) == true { animator.raise(entry.view, now: now) }
+        }
+        if let plan, !plan.moved.isEmpty {
+            // A row moving into another section passes over the rows of the one it leaves.
+            let into = Set(plan.moved.compactMap { kind -> SectionKind? in
+                guard case .item(let id) = kind else { return nil }
+                return renderedRows[id]?.section
+            })
+            if into.count == 1, let section = into.first {
+                animator.raise(section == .pinned ? pinnedSection : todaySection, now: now)
+            }
+        }
+    }
+
+    /// The motion of the divider, New Tab and a Live Folder's note: they slide like rows, and fade in when they appear.
+    private func move(_ view: NSView, _ kind: RowFrame.Kind, plan: TablistMotionPlan?, fresh: Bool, now: CFTimeInterval) {
+        if plan?.arrivals[kind] != nil { animator.fadeIn(view, now: now) }
+        animator.slide(view, kind: kind, fresh: fresh, now: now)
+    }
+
+    /// Arc moves the rows only within one Space at one width, and not under a drag (rows hold still until the drop).
+    private func motionPlan(from previous: (space: SpaceSnapshot, renaming: ItemID?, frames: SidebarFrames, palette: Palette)?, to space: SpaceSnapshot,
+                            frames f: SidebarFrames) -> TablistMotionPlan? {
+        guard let previous, previous.frames.rows != f.rows else { return nil }
+        guard previous.space.id == space.id, abs(previous.frames.tablistViewport.width - f.tablistViewport.width) < 0.5, window != nil,
+              !isHiddenOrHasHiddenAncestor, !drag.isActive else {
+            stopMotion()
+            return nil
+        }
+        let plan = TablistMotion.plan(from: previous.frames.rows, previous.space, to: f.rows, space)
+        return plan.isEmpty ? nil : plan
+    }
+
+    private func stopMotion() {
+        animator.stopAll()
+        departing.removeAll()
     }
 
     private func makeRow(_ id: ItemID) -> RowView {
@@ -437,6 +539,15 @@ final class TablistView: NSScrollView {
 
     func rowView(_ id: ItemID) -> RowView? { rowViews[id] }
 
+    /// The row a dropped image is gliding onto (`DragController.settle`): hidden until the image arrives.
+    var arriving: ItemID? {
+        didSet {
+            guard arriving != oldValue else { return }
+            if let oldValue { rowViews[oldValue]?.alphaValue = 1 }
+            if let arriving { rowViews[arriving]?.alphaValue = 0 }
+        }
+    }
+
     static func find(_ id: ItemID, in rows: [Row]) -> Row? {
         for row in rows {
             if row.id == id { return row }
@@ -576,6 +687,8 @@ final class RowView: HoverView {
     /// Brk's own: the outline and tint in the Space's color while the AI conversation under the pointer used this row's tab.
     private let litMark = NSView()
     private let icon = IconView()
+    /// A folder's glyph: Arc's drawn folder that opens and closes in 3D (`FolderIconView`).
+    private let folderIcon = FolderIconView()
     private let title = NSTextField(labelWithString: "")
     /// "Double-click to rename" under the title, on a tab just dropped on the Space name strip (Q13-h).
     private let renameHint = NSTextField(labelWithString: SidebarCopy.renameHint)
@@ -600,6 +713,8 @@ final class RowView: HoverView {
     /// The AI list row or chip under the pointer used this row's tab (docs/design/ai-right-panel.md, 悬停高亮).
     var lit = false { didSet { if lit != oldValue { showLit() } } }
     var dropInto = false { didSet { if dropInto != oldValue { stateChanged() } } }
+    /// The row left the list and is drawn only for its way out (`TablistAnimator`): it takes no pointer and keeps its look.
+    var departing = false
     var dragSource = false { didSet { alphaValue = dragSource ? Draw.dragSourceAlpha.value : 1 } }
     /// The row a tab drag left while the pointer is over the content: Arc keeps it in place on the selected-row card
     /// with its × showing (P23-d), and the white drag card follows the pointer instead.
@@ -645,7 +760,8 @@ final class RowView: HoverView {
         litMark.layer?.cornerCurve = .continuous
         litMark.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
         litMark.isHidden = true
-        for view in [background, litMark, joinSlot, icon, title, renameHint, suggestion, audio, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
+        for view in [background, litMark, joinSlot, icon, folderIcon, title, renameHint, suggestion, audio, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
+        folderIcon.isHidden = true
         suggestion.isHidden = true
         suggestion.accept = { [weak self] in if let id = self?.row?.id { self?.dispatch(.assist(.acceptSuggestion(id))) } }
         suggestion.dismiss = { [weak self] in if let id = self?.row?.id { self?.dispatch(.assist(.dismissSuggestion(id))) } }
@@ -662,7 +778,8 @@ final class RowView: HoverView {
 
     var isEditingName: Bool { renameField.map { !$0.finished } ?? false }
 
-    func render(_ row: Row, section: SectionKind, depth: Int, renaming: Bool, multiselected: Bool, palette: Palette) {
+    /// `animated`: the folder just opened or closed, so its glyph turns (Arc's FolderIconView).
+    func render(_ row: Row, section: SectionKind, depth: Int, renaming: Bool, multiselected: Bool, palette: Palette, animated: Bool = false) {
         // A row that changed under the pointer (a folder just collapsed) reports its hover anew below, so its card is
         // decided again. An unchanged one does not: that restarted the card's wait at every redraw, and a loading page
         // redraws the sidebar several times a second, so the card never opened.
@@ -678,6 +795,7 @@ final class RowView: HoverView {
         audio.isHidden = true
         renameHint.isHidden = true
         suggestion.isHidden = true
+        folderIcon.isHidden = true
         renderLive(row, palette: palette)
         switch row {
         case .tab(let tab):
@@ -722,7 +840,14 @@ final class RowView: HoverView {
         case .folder(let folder):
             title.stringValue = folder.title
             title.font = .systemFont(ofSize: Draw.rowTitleFont.value, weight: .semibold)
-            icon.render(folder.icon.map(IconContent.custom) ?? .folder(open: !folder.collapsed), tint: palette.ink.secondary, palette: palette)
+            if let custom = folder.icon {
+                icon.render(.custom(custom), tint: palette.ink.secondary, palette: palette)
+            } else {
+                icon.render(.none, tint: palette.ink.secondary)
+                folderIcon.isHidden = false
+                folderIcon.render(folder.collapsed ? .collapsed : .expanded, ink: HueInk(palette), animated: animated)
+                folderIcon.identify(.tabTool("folder-glyph-" + (folder.collapsed ? "closed-" : "open-") + folder.id.rawValue))
+            }
             // A Live Folder's hover button refreshes it (none while it is already refreshing).
             hasButton = folder.live != nil && folder.live?.state != .loading
             button.isHidden = !hasButton
@@ -821,6 +946,8 @@ final class RowView: HoverView {
         background.frame = g.selection
         litMark.frame = g.selection
         icon.frame = g.icon
+        let side = Draw.folderIconSide.value
+        folderIcon.frame = CGRect(x: g.icon.midX - side / 2, y: g.icon.midY - side / 2, width: side, height: side)
         button.frame = g.button
         audio.frame = g.speaker
         let height = title.intrinsicContentSize.height
@@ -887,8 +1014,21 @@ final class RowView: HoverView {
         litMark.layer?.backgroundColor = palette.focusColor.withAlphaComponent(Metrics.ai.litTint.value).cgColor
     }
 
+    override func hitTest(_ point: NSPoint) -> NSView? { departing ? nil : super.hitTest(point) }
+
+    /// On its way out: Arc's sliding rows lose their titles at once and keep their icons (collapse, Clear's slide-up).
+    func hideForDeparture(titles: Bool) {
+        button.alphaValue = 0
+        // The harness and accessibility no longer find it: the row it stood for is gone.
+        for view in [self, button, folderIcon, audio] as [NSView] { view.setAccessibilityIdentifier(nil) }
+        guard titles else { return }
+        for label in [title, renameHint] as [NSView] { label.isHidden = true }
+        suggestion.isHidden = true
+        for segment in segments { segment.showsTitle = false }
+    }
+
     override func stateChanged() {
-        guard let palette, let row else { return }
+        guard let palette, let row, !departing else { return }
         if lit { showLit() }
         let hovered = isHovered && !isEditingName && !isPressed
         if hovered != reportedHover { reportedHover = hovered; onHover?(self, hovered) }
@@ -929,6 +1069,12 @@ final class RowView: HoverView {
 
     /// The row's icon, title and button for the drag image: no card and no shadow, the image has its own.
     func dragImage() -> NSImage? {
+        // The folder glyph is drawn by layers, which a view's cached image leaves out: the picture gets the drawn glyph.
+        let drawnFolder = !folderIcon.isHidden
+        if drawnFolder, let palette {
+            folderIcon.isHidden = true
+            icon.render(.folder(open: folderIcon.state == .expanded), tint: palette.ink.secondary, palette: palette)
+        }
         layoutSubtreeIfNeeded()
         let shadow = background.shadow, fill = background.layer?.backgroundColor
         background.shadow = nil
@@ -936,6 +1082,10 @@ final class RowView: HoverView {
         defer {
             background.shadow = shadow
             background.layer?.backgroundColor = fill
+            if drawnFolder, let palette {
+                folderIcon.isHidden = false
+                icon.render(.none, tint: palette.ink.secondary)
+            }
         }
         guard let rep = bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
         cacheDisplay(in: bounds, to: rep)
@@ -1368,9 +1518,15 @@ final class DividerRowView: HoverView {
 
     override func stateChanged() {
         let hovering = isHovered || clear.isHovered || tidy.isHovered || cleanup.isHovered
-        clear.alphaValue = canClear && (sidebarHovered || hovering) ? 1 : 0
-        tidy.alphaValue = canTidy && (hovering || tidying) ? 1 : 0
-        cleanup.alphaValue = cleanupCount > 0 && hovering ? 1 : 0
+        let shown: [(NSView, CGFloat)] = [(clear, canClear && (sidebarHovered || hovering) ? 1 : 0), (tidy, canTidy && (hovering || tidying) ? 1 : 0),
+                                          (cleanup, cleanupCount > 0 && hovering ? 1 : 0)]
+        // Arc fades the divider's buttons in and out (bin:0x1001ac9c0); a window not on screen yet takes them at once.
+        let curve = Draw.dividerFadeCurve.value.map(Float.init)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = window == nil ? 0 : Draw.dividerFade.value
+            context.timingFunction = CAMediaTimingFunction(controlPoints: curve[0], curve[1], curve[2], curve[3])
+            for (view, alpha) in shown where view.alphaValue != alpha { view.animator().alphaValue = alpha }
+        }
         needsLayout = true
     }
 }
@@ -1587,11 +1743,27 @@ final class ClearButton: HoverView {
         needsLayout = true
     }
 
+    /// Arc's press: the ↓ sinks `Draw.clearArrowPress` while the button is held (bin:0x10030f714, back at bin:0x10030f8d4).
+    private var arrowSunk = false
+
     override func layout() {
         super.layout()
-        let width = Draw.clearArrowWidth.value
-        arrow.frame = CGRect(x: Self.cellInset, y: 0, width: width, height: bounds.height)
+        arrow.frame = arrowFrame
         label.frame = CGRect(x: arrowRoom, y: 0, width: bounds.width - arrowRoom, height: bounds.height)
+    }
+
+    private var arrowFrame: CGRect {
+        CGRect(x: Self.cellInset, y: arrowSunk ? Draw.clearArrowPress.value : 0, width: Draw.clearArrowWidth.value, height: bounds.height)
+    }
+
+    private func sinkArrow(_ sunk: Bool) {
+        guard sunk != arrowSunk else { return }
+        arrowSunk = sunk
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Draw.clearArrowPressDuration.value
+            context.allowsImplicitAnimation = true
+            arrow.animator().frame = arrowFrame
+        }
     }
 
     override func stateChanged() {
@@ -1604,10 +1776,14 @@ final class ClearButton: HoverView {
         (superview as? HoverView)?.stateChanged()
     }
 
-    override func mouseDown(with event: NSEvent) { isPressed = true }
+    override func mouseDown(with event: NSEvent) {
+        isPressed = true
+        sinkArrow(true)
+    }
 
     override func mouseUp(with event: NSEvent) {
         isPressed = false
+        sinkArrow(false)
         if bounds.contains(local(event)) { action() }
     }
 }
