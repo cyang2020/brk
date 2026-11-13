@@ -1321,17 +1321,7 @@ final class ReduceSpecTests: XCTestCase {
         assertUnchanged(d.state, reduce(d.state, .key(WindowID("ghost"), KeyInput(press: press, stage: .beforePage, pressID: PressID(raw: 1))), d.ctx))
     }
 
-    // MARK: every command
-    /// reduce is total over every case: each sample against a rich state and against a fresh one, unknown ids
-    /// included, without trapping; the rich state survives a restart afterwards.
-    func test_reduceIsTotalOverEveryCommandAndEvent() throws {
-        let d = richDriver()
-        for command in CommandInventory.commands { d.user(command) }
-        for event in CommandInventory.events { d.system(event) }
-        let r = Driver()
-        for command in CommandInventory.commands { r.user(command) }
-        guard case .restored = Driver(file: d.savedFile).outcome else { return XCTFail("the state after every command does not restore") }
-    }
+    // Every command and event against rich and fresh states: CommandSweepTests.
 
     // MARK: - electron-v1:src/domain/auto-archive-stamps-on-leaving-screen.test.ts
     // MARK: auto-archive stamps a tab as it leaves the screen

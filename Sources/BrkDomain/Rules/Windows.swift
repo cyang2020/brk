@@ -266,6 +266,15 @@ extension Command {
     /// back, a new incognito, blank or Little window only takes its space); everything else shows something in it.
     var reopensClosedWindow: Bool {
         switch self {
+        // The Settings window's and the menus' commands that show something in the window: a page (Settings' Passwords
+        // row, Extensions > Manage Extensions…), a dialog (New Profile, Change Profile) or a panel or sheet on it
+        // (Getting Started, Import…, Add Extension…, Share…). Left closed, the window has no host to show them in, and the
+        // button or menu item did nothing (a page asked for there was left as an empty row).
+        case .settings(.openBrowserPage), .profile(.openDialog), .app(.export),
+             .sidebarData(.welcome), .sidebarData(.importFile), .sidebarData(.importBrowser), .sidebarData(.syncSettings),
+             .sidebarData(.importSelected), .sidebarData(.connectSelectedFolder),
+             .site(.extensions), .site(.extensionShortcuts), .site(.nativeExtensions), .site(.removeExtension), .site(.addExtension),
+             .site(.installSelectedExtension), .site(.executeExtensionInstall), .site(.loadBlockingRules): true
         case .settings, .profile, .sidebarData, .site: false
         case .tabTools(.preferences), .page(.copyURL): false
         case .later(.aiCommandBar), .app(.help(.open)): true
