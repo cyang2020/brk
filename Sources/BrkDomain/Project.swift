@@ -107,12 +107,7 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
         case .mostRecentSpace: "Most Recent Space"
         }
     }
-    let bindings = KeyBindings.resolve(overrides: doc.keyOverrides)
-    let shortcuts = ActionID.allCases.compactMap { action -> ShortcutRow? in
-        guard let binding = bindings[action] else { return nil }
-        return ShortcutRow(action: action, title: action.spec.title, menu: action.spec.menu, state: binding.state, source: binding.source,
-                           priority: binding.priority)
-    }
+    let shortcuts = doc.keyOverrides.isEmpty ? ShortcutRow.table : ShortcutRow.rows(KeyBindings.resolve(overrides: doc.keyOverrides))
     let active = state.activeAgent
     return SettingsSnapshot(
         sidebarData: state.sidebarDataSnapshot,
@@ -142,6 +137,20 @@ func projectSettings(_ state: AppState) -> SettingsSnapshot {
         tabPreferences: TabPreferenceSnapshot(includeFavoritesInNumbers: doc.tabPreferences.includeFavoritesInNumbers, hoverPreviews: doc.tabPreferences.hoverPreviews),
         littleArcShortcut: state.session.globalShortcut
     )
+}
+
+extension ShortcutRow {
+    /// The Settings window's Shortcuts list for these bindings, in the table's order.
+    static func rows(_ bindings: [ActionID: ResolvedBinding]) -> [ShortcutRow] {
+        ActionID.allCases.compactMap { action in
+            guard let binding = bindings[action] else { return nil }
+            return ShortcutRow(action: action, title: action.spec.title, menu: action.spec.menu, state: binding.state, source: binding.source,
+                               priority: binding.priority)
+        }
+    }
+
+    /// The list with no shortcut remapped, the same on every projection.
+    static let table = rows(KeyBindings.resolve(overrides: [:]))
 }
 
 func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) -> WindowSnapshot? {
