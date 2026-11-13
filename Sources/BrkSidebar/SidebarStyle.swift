@@ -217,6 +217,20 @@ struct SidebarDrawMetrics: MetricGroup {
     let dockPlusInk = Metric(0.53, .anatomy("2a96a9d7f0:verify/visual-pairs/run-20261103 Q11-a-arc, Q11-b-arc: + and × read #717878 and #6B6F70 on #EFFAFB"))
     let dockGlyphInkDark = Metric(0.62, .anatomy("~/brk-arc-reference/Q18/Q18-navy-row-hover-arc.png: the Library glyph and the + read white at this strength over the theme"))
     let dockButtonGlyph = Metric(15.0, .guess("Library and + glyph size in their 32 pt buttons"))
+    let dockPlusBars = Metric([14.0, 2.0], .anatomy("bin:0x100af2384: PlusMenuIcon is two RoundedRectangles, the size wide and 2 high, one turned 90°; 2a96a9d7f0:verify/visual-pairs/run-20261103 Q11-b-arc: the + spans 28 px at 2x"))
+    let dockPlusSpring = Metric([0.2, 0.5], .anatomy("bin:0x100af267c: rotationEffect(isOpen ? 45° : 0) with .spring(response: 0.2, dampingFraction: 0.5)"))
+
+    // The Library button's picture and its hover motion (Arc 1.170: ARCUI `BoxOfThingsIcon`, body bin:0x100ae93b4,
+    // hover handler bin:0x100aeaab4). Offsets are points from the button's centre, y down; angles in degrees, clockwise.
+    let libraryIconSpring = Metric([0.5, 1.0], .anatomy("bin:0x100aefbe4: BoxOfThingsIcon(animation: .spring(response: 0.5, dampingFraction: 1)); every piece animates with it on `isHovered`"))
+    let libraryIconTwinkle = Metric([0.15, 0.3], .anatomy("bin:0x100aeaab4: on each hover change (in and out) isHovered is set and twinkle1 toggled; asyncAfter 0.15 toggles twinkle1 and twinkle2 (bin:0x100aeb00c), asyncAfter 0.3 toggles twinkle2 (bin:0x100aeb11c); those two land without animation; nothing at all happens with Reduce Motion on"))
+    let libraryIconBox = Metric([0.0, 3.5, 0.9], .anatomy("bin:0x100aea9a8: Image(box).offset(0, 3.5).opacity(0.9); ~/brk-arc-reference/Q19/Q19-edge-210-arc.png puts the box 750 to 758.5 in the 735 to 767 button"))
+    let libraryIconStar = Metric([-2.5, -3.0, -9.0, -2.5, -4.5, 105.0], .anatomy("bin:0x100ae9850 to bin:0x100ae99ac: rest offset (-2.5, -3) turned -0.15708 rad, hovered (-2.5, -4.5) turned 1.8326 rad"))
+    let libraryIconStarMask = Metric([0.0, -8.0, 28.0, 11.0], .anatomy("bin:0x100ae9a74, bin:0x10369d0c0: the star is masked by a 28 x 11 rectangle moved (0, -8), so it shows only above the box"))
+    let libraryIconTriangle = Metric([4.5, -3.5, 225.0, 6.5, -5.0, 85.0, 0.15, 0.2], .anatomy("bin:0x100ae9e74 to bin:0x100ae9fa0: rest (4.5, -3.5) turned 3.927 rad, hovered (6.5, -5) turned 1.4835 rad; twinkle1 scales it to 0.15 and fades it to 0.2"))
+    let libraryIconDot = Metric([2.0, -7.5, 3.0, -10.0, 0.1, 0.2], .anatomy("bin:0x100aea434 to bin:0x100aea490: rest (2, -7.5), hovered (3, -10); twinkle2 scales it to 0.1 and fades it to 0.2"))
+    let libraryIconGlow = Metric([0.0, -7.0, 0.275, 0.4, 0.3, 0.875, 0.56], .anatomy("bin:0x100ae9548 to bin:0x100ae973c, bin:0x10369d0a0: Image(glow) 81 x 27 scaled (0.275, 0.4), moved (0, -7), white at 0.3 while hovered, blur 0.875, shown in a dark scheme only; ARCUI's glow.pdf foot is 0.56 of its top"))
+    let libraryIconShine = Metric([1.0, 1.0, 2.0, 0.2, 2.0], .anatomy("bin:0x100ae99b4, bin:0x100aea0b8, bin:0x100aea500, bin:0x100ae9254: in a dark scheme while hovered the star, triangle and dot get a white shadow of radius 1, 1 and 2, and the whole picture one at 0.2 of radius 2"))
     let inactiveSpaceAlpha = Metric(0.45, .anatomy("cra L115: inactive space icons in the dock are dimmed; amount guessed"))
 
     // States and motion.
