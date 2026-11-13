@@ -295,6 +295,12 @@ NS_SWIFT_UI_ACTOR
 - (void)deleteSelection;
 - (void)undoEdit;
 - (void)redoEdit;
+@property(nonatomic) BOOL spellCheckingEnabled;
+@property(nonatomic, readonly) BOOL hasDeveloperTools;
+/// Opens a standalone DevTools window (toggle, inspect, console or network).
+- (void)developerOperation:(NSString*)operation;
+- (void)showCastDialog;
+
 /// Closes it now, without unload handlers. -webContentsDidClose: follows, possibly before this returns.
 - (void)close;
 /// The visible entry's connection now.
@@ -415,6 +421,11 @@ NS_SWIFT_UI_ACTOR
 - (int)run;
 /// The profile named `directory` under the user data folder, loading it if needed; nil when it could not be.
 - (void)loadProfile:(NSString*)directory completion:(void (^)(id<BrkCoreProfile> _Nullable profile))completion;
+/// Chromium's task manager snapshots, refreshed once per second while the app uses it.
+- (NSArray<NSDictionary<NSString*, id>*>*)tasks;
+- (BOOL)endTask:(int64_t)taskID;
+- (BOOL)beginTrace;
+- (void)endTraceAtPath:(NSString*)path completion:(void (^)(BOOL written))completion;
 /// Starts Chromium's own shutdown; -runWithArguments: returns when it is done. Close every page first.
 - (void)quit;
 @end

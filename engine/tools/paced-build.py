@@ -9,6 +9,8 @@ compilers finish what they are doing, no new ones start) and SIGCONT once the re
 - someone holds /tmp/brk-core-native.lock. Other agents' native checks are timing-sensitive. This script never takes
   that lock for more than the instant of a probe, and never waits in its queue.
 - the machine is short of memory (memory_pressure reports less than --min-free-percent free, or swap is growing fast).
+- a --pause-file exists. engine/build.sh gives each out directory one ($BRK_LOGS/pause-<out>) and creates the other directories' files
+  while it runs, so a short development relink never runs beside a long release build (one Chromium build at a time on 16 GB).
 
 It writes one line per state change to the log and refreshes a status file next to the log, so an unattended build can
 be read later. It survives the shell that started it (start it with nohup). Exit status is the build's.
@@ -85,6 +87,7 @@ def main():
     parser.add_argument('--resume-free-percent', type=int, default=22)
     parser.add_argument('--swap-growth-mb-per-min', type=float, default=1500)
     parser.add_argument('--nice', type=int, default=15)
+    parser.add_argument('--pause-file', action='append', default=[])
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ['--'] else args.command
@@ -147,7 +150,9 @@ def main():
                                                   swapGrowthMBPerMinute=round(growth), pausedSeconds=round(paused_seconds),
                                                   elapsedSeconds=round(now - started), updated=time.strftime('%F %T'))))
         holder = native_lock_holder()
-        reason = f'native lock held by {holder}' if holder else ('memory short' if memory_short else None)
+        asked = next((f for f in args.pause_file if os.path.exists(f)), None)
+        reason = (f'native lock held by {holder}' if holder else 'memory short' if memory_short
+                  else f'pause file {asked}' if asked else None)
         if reason and not paused_for:
             os.kill(process.pid, signal.SIGSTOP)
             paused_for = reason

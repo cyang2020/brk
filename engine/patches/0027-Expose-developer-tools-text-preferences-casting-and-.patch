@@ -1,0 +1,226 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Fri, 13 Nov 2026 15:52:19 +0800
+Subject: [PATCH] Expose developer tools, text preferences, casting and
+ diagnostics to Brk
+
+---
+ brk/browser/brk_application.mm  | 80 +++++++++++++++++++++++++++++++++
+ brk/browser/brk_web_contents.mm | 71 +++++++++++++++++++++++++++++
+ 2 files changed, 151 insertions(+)
+
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index 35b85199571018bfc54269b909842d5028899819..09dde45c9f2adc35bbc6e686fc89d43d86715b1a 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -1,10 +1,16 @@
+ #import "brk/browser/brk_application.h"
+ 
++#include <algorithm>
+ #include <map>
+ #include <memory>
+ #include <string>
+ #include <vector>
+ 
++#include "base/time/time.h"
++#include "base/trace_event/trace_config.h"
++#include "chrome/browser/task_manager/task_manager_interface.h"
++#include "chrome/browser/task_manager/task_manager_observer.h"
++#include "content/public/browser/tracing_controller.h"
+ #include "base/command_line.h"
+ #include "base/compiler_specific.h"
+ #include "base/files/file_path.h"
+@@ -35,12 +41,45 @@ extern "C" {
+ int ChromeMain(int argc, const char** argv);
+ }
+ 
++namespace {
++class BrkTaskObserver : public task_manager::TaskManagerObserver {
++ public:
++  BrkTaskObserver() : TaskManagerObserver(base::Seconds(1), task_manager::REFRESH_TYPE_CPU |
++      task_manager::REFRESH_TYPE_MEMORY_FOOTPRINT | task_manager::REFRESH_TYPE_GPU_MEMORY) {
++    task_manager::TaskManagerInterface::GetTaskManager()->AddObserver(this);
++  }
++  ~BrkTaskObserver() override {
++    task_manager::TaskManagerInterface::GetTaskManager()->RemoveObserver(this);
++  }
++};
++
++NSString* TaskKind(task_manager::Task::Type type) {
++  using T = task_manager::Task;
++  switch (type) {
++    case T::BROWSER: return @"browser";
++    case T::GPU: return @"gpu";
++    case T::ZYGOTE: return @"zygote";
++    case T::UTILITY: return @"utility";
++    case T::RENDERER: return @"renderer";
++    case T::EXTENSION: return @"extension";
++    case T::GUEST: return @"guest";
++    case T::SANDBOX_HELPER: return @"sandboxHelper";
++    case T::DEDICATED_WORKER: return @"dedicatedWorker";
++    case T::SHARED_WORKER: return @"sharedWorker";
++    case T::SERVICE_WORKER: return @"serviceWorker";
++    default: return @"unknown";
++  }
++}
++}  // namespace
++
+ @implementation BrkApplication {
+   // Brk keeps running with no Browser (a window with no page yet), and profiles stay loaded across that.
+   std::unique_ptr<ScopedKeepAlive> _keepAlive;
+   std::map<std::string, std::unique_ptr<ScopedProfileKeepAlive>> _profileKeepAlives;
+   std::vector<std::string> _arguments;
+   BOOL _quitting;
++  std::unique_ptr<BrkTaskObserver> _taskObserver;
++  BOOL _tracing;
+ }
+ 
+ - (NSString*)version {
+@@ -91,11 +130,52 @@ int ChromeMain(int argc, const char** argv);
+   }
+ }
+ 
++- (NSArray<NSDictionary<NSString*, id>*>*)tasks {
++  if (_quitting) return @[];
++  if (!_taskObserver) _taskObserver = std::make_unique<BrkTaskObserver>();
++  auto* manager = task_manager::TaskManagerInterface::GetTaskManager();
++  NSMutableArray* result = [NSMutableArray array];
++  for (auto id : manager->GetTaskIdsList()) {
++    NSMutableDictionary* item = [@{@"id": @(id), @"kind": TaskKind(manager->GetType(id)),
++        @"title": base::SysUTF16ToNSString(manager->GetTitle(id)), @"killable": @(manager->IsTaskKillable(id))} mutableCopy];
++    double cpu = manager->GetPlatformIndependentCPUUsage(id);
++    if (cpu >= 0) item[@"cpu"] = @(cpu);
++    if (auto bytes = manager->GetMemoryFootprintUsage(id)) item[@"memory"] = @(bytes->InBytes());
++    bool duplicates = false;
++    if (auto bytes = manager->GetGpuMemoryUsage(id, &duplicates)) item[@"gpuMemory"] = @(bytes->InBytes());
++    [result addObject:item];
++  }
++  return result;
++}
++
++- (BOOL)endTask:(int64_t)taskID {
++  if (_quitting || !_taskObserver) return NO;
++  auto* manager = task_manager::TaskManagerInterface::GetTaskManager();
++  const auto& ids = manager->GetTaskIdsList();
++  if (std::find(ids.begin(), ids.end(), taskID) == ids.end()) return NO;
++  return manager->IsTaskKillable(taskID) && manager->KillTask(taskID);
++}
++
++- (BOOL)beginTrace {
++  if (_quitting || _tracing) return NO;
++  _tracing = content::TracingController::GetInstance()->StartTracing(base::trace_event::TraceConfig(), base::OnceClosure());
++  return _tracing;
++}
++
++- (void)endTraceAtPath:(NSString*)path completion:(void (^)(BOOL))completion {
++  if (_quitting || !_tracing) { completion(NO); return; }
++  _tracing = NO;
++  auto endpoint = content::TracingController::CreateFileEndpoint(base::FilePath(base::SysNSStringToUTF8(path)),
++      base::BindOnce(^{ completion([[NSFileManager defaultManager] fileExistsAtPath:path]); }));
++  if (!content::TracingController::GetInstance()->StopTracing(endpoint)) completion(NO);
++}
++
+ - (void)quit {
+   if (_quitting) {
+     return;
+   }
+   _quitting = YES;
++  _taskObserver.reset();
+   _profileKeepAlives.clear();
+   _keepAlive.reset();
+   // With a remote debugging port and no startup window, Chromium waits for a DevTools client to close it. The shell is closing it; release that
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index 148af3bd9b544ee157464c50513dcd38ce7c9aa0..bd4d989fce42a414731ee720fa93204acd50e12b 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -53,12 +53,45 @@
+ #include "ui/gfx/native_ui_types.h"
+ #include "url/gurl.h"
+ 
++#include "chrome/browser/devtools/devtools_window.h"
++#include "chrome/browser/devtools/devtools_toggle_action.h"
++#include "chrome/browser/devtools/devtools_ui_bindings.h"
++#include "chrome/common/pref_names.h"
++#include "components/prefs/pref_service.h"
++#include "components/prefs/scoped_user_pref_update.h"
++#include "components/spellcheck/browser/pref_names.h"
++#include "components/media_router/browser/media_router_dialog_controller.h"
++#include "components/media_router/browser/media_router_metrics.h"
++#include "content/public/browser/devtools_agent_host.h"
++#include "content/public/browser/devtools_manager_delegate.h"
++
+ namespace {
+ 
+ NSURL* NSURLFromGURL(const GURL& url) {
+   return url.is_valid() ? net::NSURLWithGURL(url) : nil;
+ }
+ 
++content::WebContents* ToolsFrontend(content::WebContents* inspected) {
++  for (const auto& host : content::DevToolsAgentHost::GetOrCreateAll()) {
++    auto* front = host->GetWebContents();
++    auto* window = front ? DevToolsWindow::AsDevToolsWindow(front) : nullptr;
++    if (window && window->GetInspectedWebContents() == inspected) return front;
++  }
++  return nullptr;
++}
++
++void SelectToolsPanel(base::WeakPtr<content::WebContents> inspected, std::string panel, int tries) {
++  if (!inspected) return;
++  auto* front = ToolsFrontend(inspected.get());
++  auto* bindings = front ? DevToolsUIBindings::ForWebContents(front) : nullptr;
++  if (bindings && !front->IsLoading()) {
++    bindings->CallClientMethod("DevToolsAPI", "showPanel", base::Value(panel));
++  } else if (tries > 0) {
++    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(FROM_HERE,
++        base::BindOnce(&SelectToolsPanel, inspected, panel, tries - 1), base::Milliseconds(100));
++  }
++}
++
+ NSEventModifierFlags FlagsFromModifiers(int modifiers) {
+   NSEventModifierFlags flags = 0;
+   if (modifiers & blink::WebInputEvent::kMetaKey) {
+@@ -742,6 +775,44 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   [_delegate webContents:self didHoverLink:url.is_empty() ? nil : NSURLFromGURL(url)];
+ }
+ 
++- (BOOL)hasDeveloperTools {
++  return _contents && DevToolsWindow::GetInstanceForInspectedWebContents(_contents) != nullptr;
++}
++
++- (BOOL)spellCheckingEnabled {
++  if (!_contents) return NO;
++  return Profile::FromBrowserContext(_contents->GetBrowserContext())->GetPrefs()->GetBoolean(spellcheck::prefs::kSpellCheckEnable);
++}
++
++- (void)setSpellCheckingEnabled:(BOOL)enabled {
++  if (_contents) Profile::FromBrowserContext(_contents->GetBrowserContext())->GetPrefs()->SetBoolean(spellcheck::prefs::kSpellCheckEnable, enabled);
++}
++
++- (void)developerOperation:(NSString*)operation {
++  if (!_contents) return;
++  Profile* profile = Profile::FromBrowserContext(_contents->GetBrowserContext());
++  // Brk owns the page card, so DevTools opens in its own window.
++  ScopedDictPrefUpdate prefs(profile->GetPrefs(), prefs::kDevToolsPreferences);
++  prefs->Set("currentDockState", "\"undocked\"");
++  if ([operation isEqualToString:@"toggle"]) {
++    if (auto* front = ToolsFrontend(_contents)) { front->Close(); return; }
++  }
++  if ([operation isEqualToString:@"inspect"]) {
++    DevToolsWindow::OpenDevToolsWindow(_contents, DevToolsToggleAction::Inspect(), DevToolsOpenedByAction::kInspectorModeShortcut);
++  } else {
++    std::string panel = [operation isEqualToString:@"network"] ? "network" : "console";
++    DevToolsWindow::OpenDevToolsWindow(_contents, profile, DevToolsOpenedByAction::kUnknown,
++        content::DevToolsManagerDelegate::DevToolsOptions(panel));
++    SelectToolsPanel(_contents->GetWeakPtr(), panel, 100);
++  }
++}
++
++- (void)showCastDialog {
++  if (!_contents) return;
++  media_router::MediaRouterDialogController::GetOrCreateForWebContents(_contents)->ShowMediaRouterDialog(
++      media_router::MediaRouterDialogActivationLocation::APP_MENU);
++}
++
+ @end
+ 
+ namespace {
