@@ -556,43 +556,43 @@ final class PointerSweepTests: XCTestCase {
     /// only the visible rows and their neighbours have views, including after scrolling and switching Spaces. Counting
     /// those views catches the old cost per row directly, without timing other agents' work on this Mac.
     func testABigImportKeepsRowViewsNearTheVisiblePart() throws {
-            let rig = try SweepRig()
-            defer { rig.close() }
-            var serial = 0
-            func tab(_ host: String) -> ImportNode {
-                serial += 1
-                return .tab(title: "\(host) page \(serial)", url: URL(string: "https://\(host).example.com/\(serial)")!)
+        let rig = try SweepRig()
+        defer { rig.close() }
+        var serial = 0
+        func tab(_ host: String) -> ImportNode {
+            serial += 1
+            return .tab(title: "\(host) page \(serial)", url: URL(string: "https://\(host).example.com/\(serial)")!)
+        }
+        let spaces = (0..<5).map { index in
+            ImportedSpace(key: "arc:\(index)", title: "Space \(index)",
+                          theme: SpaceTheme(colors: [ThemePresets.drab[index]], texture: .grain, intensity: 0.25, appearance: .auto),
+                          pinned: [.folder(title: "Docs", children: (0..<24).map { _ in tab("docs") }),
+                                   .folder(title: "Work", children: (0..<24).map { _ in tab("work") })] + (0..<4).map { _ in tab("pin") },
+                          today: [.split(orientation: .horizontal, panes: [tab("left"), tab("right")])] + (0..<60).map { _ in tab("today") })
+        }
+        let result = BrowserImportResult(source: "Arc", spaces: spaces, profiles: [ImportedProfileData(favorites: (0..<8).map { _ in tab("fav") })])
+        rig.system(.sidebarData(.browserImported(rig.id, target: try XCTUnwrap(rig.state.sidebarImportTarget(in: rig.id)), result)))
+        let dock = rig.snapshot().dock.map(\.id)
+        XCTAssertEqual(dock.count, 6, "the import made its 5 Spaces")
+        XCTAssertGreaterThanOrEqual(serial, 560)
+        func rowViews(_ view: NSView) -> [RowView] {
+            (view as? RowView).map { [$0] } ?? view.subviews.flatMap(rowViews)
+        }
+        for space in dock.suffix(5) {
+            rig.run(.space(.focus(space)))
+            rig.render()
+            let list = rig.root.sidebar.tablist
+            let height = list.contentView.bounds.height
+            let bottom = max(0, (list.documentView?.bounds.height ?? 0) - height)
+            let limit = Int(ceil(3 * height / Metrics.tablist.rowHeight.value)) + 4
+            for y in [0, bottom / 2, bottom] {
+                list.contentView.scroll(to: CGPoint(x: 0, y: y))
+                list.reflectScrolledClipView(list.contentView)
+                let rows = rowViews(list)
+                XCTAssertGreaterThan(rows.count, 10, "the imported rows must actually be drawn")
+                XCTAssertLessThanOrEqual(rows.count, limit, "\(serial) tabs: \(rows.count) row views for a \(height)-point viewport")
             }
-            let spaces = (0..<5).map { index in
-                ImportedSpace(key: "arc:\(index)", title: "Space \(index)",
-                              theme: SpaceTheme(colors: [ThemePresets.drab[index]], texture: .grain, intensity: 0.25, appearance: .auto),
-                              pinned: [.folder(title: "Docs", children: (0..<24).map { _ in tab("docs") }),
-                                       .folder(title: "Work", children: (0..<24).map { _ in tab("work") })] + (0..<4).map { _ in tab("pin") },
-                              today: [.split(orientation: .horizontal, panes: [tab("left"), tab("right")])] + (0..<60).map { _ in tab("today") })
-            }
-            let result = BrowserImportResult(source: "Arc", spaces: spaces, profiles: [ImportedProfileData(favorites: (0..<8).map { _ in tab("fav") })])
-            rig.system(.sidebarData(.browserImported(rig.id, target: try XCTUnwrap(rig.state.sidebarImportTarget(in: rig.id)), result)))
-            let dock = rig.snapshot().dock.map(\.id)
-            XCTAssertEqual(dock.count, 6, "the import made its 5 Spaces")
-            XCTAssertGreaterThanOrEqual(serial, 560)
-            func rowViews(_ view: NSView) -> [RowView] {
-                (view as? RowView).map { [$0] } ?? view.subviews.flatMap(rowViews)
-            }
-            for space in dock.suffix(5) {
-                rig.run(.space(.focus(space)))
-                rig.render()
-                let list = rig.root.sidebar.tablist
-                let height = list.contentView.bounds.height
-                let bottom = max(0, (list.documentView?.bounds.height ?? 0) - height)
-                let limit = Int(ceil(3 * height / Metrics.tablist.rowHeight.value)) + 4
-                for y in [0, bottom / 2, bottom] {
-                    list.contentView.scroll(to: CGPoint(x: 0, y: y))
-                    list.reflectScrolledClipView(list.contentView)
-                    let rows = rowViews(list)
-                    XCTAssertGreaterThan(rows.count, 10, "the imported rows must actually be drawn")
-                    XCTAssertLessThanOrEqual(rows.count, limit, "\(serial) tabs: \(rows.count) row views for a \(height)-point viewport")
-                }
-                XCTAssertGreaterThan(SurfaceChecks.sweep(list, in: rig.window), 10)
-            }
+            XCTAssertGreaterThan(SurfaceChecks.sweep(list, in: rig.window), 10)
+        }
     }
 }

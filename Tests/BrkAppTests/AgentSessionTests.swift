@@ -27,13 +27,14 @@ final class AgentSessionTests: XCTestCase {
     }
 
     private func session(_ kind: AIProviderKind, access: AgentAccess = .readOnly, model: String? = nil, directory: URL, log: URL? = nil, child: URL? = nil, readOnlyMode: String? = nil,
-                         resume: String? = nil, bridge: URL? = nil) -> (AgentSession, Recorder) {
+                         resume: String? = nil, bridge: URL? = nil, streamRelease: URL? = nil) -> (AgentSession, Recorder) {
         let recorder = Recorder()
         var environment = ProcessInfo.processInfo.environment
         if let readOnlyMode { environment["BRK_AI_FIXTURE_ACP_READONLY"] = readOnlyMode }
         if let log { environment["BRK_AI_FIXTURE_LOG"] = log.path }
         if let child { environment["BRK_AI_FIXTURE_CHILD"] = child.path }
         if let bridge { environment["BRK_AI_FIXTURE_BRIDGE"] = bridge.path }
+        if let streamRelease { environment["BRK_AI_FIXTURE_STREAM_RELEASE"] = streamRelease.path }
         var spec = AgentSpec(kind: kind, executable: fixture, model: model, effort: nil, access: access, directory: directory)
         spec.resume = resume
         let session = AgentSession(spec: spec, environment: environment, plain: false) { output in
@@ -65,11 +66,13 @@ final class AgentSessionTests: XCTestCase {
     func testEveryAgentStreamsAndAnswersFollowUpsInOneProcess() async throws {
         for kind in AIProviderKind.allCases {
             let folder = try directory(), log = folder.appendingPathComponent("log.jsonl")
-            let (session, recorder) = session(kind, directory: folder, log: log)
+            let release = folder.appendingPathComponent("release-stream")
+            let (session, recorder) = session(kind, directory: folder, log: log, streamRelease: release)
             let first = AIRequestID("first"), second = AIRequestID("second")
             session.send("fixture:stream", turn: first)
             try await wait("\(kind): text before the end") { recorder.partials[first] == "first\n" }
             XCTAssertNil(recorder.finished[first], "\(kind) ended early")
+            try Data().write(to: release)
             try await wait("\(kind): the end") { recorder.finished[first] != nil }
             XCTAssertEqual(recorder.finished[first], .text("first\nsecond"), "\(kind)")
             if kind == .claude { XCTAssertEqual(recorder.started?.model, "claude-fixture-opus", "what the agent says it runs, when the list does not name it") }
