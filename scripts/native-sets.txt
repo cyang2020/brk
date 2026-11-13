@@ -74,7 +74,6 @@ downloads LibraryFlyout-Flight
 downloads LittleDownloads-Pill
 
 # pages：页面右键菜单、页面身份、缩放、复制粘贴、存储打印、弹窗、历史
-pages T12
 pages I1
 pages I5
 pages BB2
@@ -86,6 +85,8 @@ pages W2-12
 pages Autofill-Pick
 pages Password-SaveCard
 pages Core-dialogs
+pages PageReal-Menus
+pages PageReal-Keys
 
 # sites：广告拦截、清站点数据、权限、证书、扩展
 sites SitePolicy-blocking

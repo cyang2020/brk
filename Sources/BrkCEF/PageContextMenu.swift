@@ -44,7 +44,7 @@ import CefKit
                   !surface.isHiddenOrHasHiddenAncestor, valid() else { self.cancel(); return }
             let menu = self.makeMenu(items, target: request)
             request.menu = menu
-            _ = menu.popUp(positioning: nil, at: point, in: surface)
+            menu.popUpAsContextMenu(at: point, in: surface)
             guard self.pending === request else { return }
             self.pending = nil
             if let command = request.selected, valid() {

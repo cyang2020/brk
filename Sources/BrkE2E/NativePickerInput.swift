@@ -478,6 +478,63 @@ enum NativeSystemInput {
         return nil
     }
 
+    /// The rows of the pop-up menu the app has open (a page's context menu) inside `frame` (the menu window's screen
+    /// frame, top-left origin), each with its screen frame and whether it is enabled. Such a menu belongs to no window,
+    /// so `frame(pid:title:)`, which searches the windows, never finds its rows: they are read as the child AXMenu of the
+    /// application, or else by asking what element is at each height down the menu. Empty: no rows found.
+    static func openMenuRows(pid: Int32, in frame: CGRect) -> [(title: String, frame: CGRect, enabled: Bool)] {
+        let app = AXUIElementCreateApplication(pid)
+        func row(_ item: AXUIElement) -> (title: String, frame: CGRect, enabled: Bool) {
+            var point = CGPoint.zero, size = CGSize.zero
+            if let value = NativePickerInput.attribute(item, kAXPositionAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgPoint, &point) }
+            if let value = NativePickerInput.attribute(item, kAXSizeAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgSize, &size) }
+            return (NativePickerInput.string(item, kAXTitleAttribute), CGRect(origin: point, size: size), NativePickerInput.attribute(item, kAXEnabledAttribute) as? Bool ?? false)
+        }
+        let children = NativePickerInput.attribute(app, kAXChildrenAttribute) as? [AXUIElement] ?? []
+        if let menu = children.first(where: { NativePickerInput.string($0, kAXRoleAttribute) == kAXMenuRole }) {
+            return (NativePickerInput.attribute(menu, kAXChildrenAttribute) as? [AXUIElement] ?? []).map(row).filter { !$0.title.isEmpty }
+        }
+        var rows: [(title: String, frame: CGRect, enabled: Bool)] = []
+        var y = frame.minY + 1
+        while y < frame.maxY {
+            var hit: AXUIElement?
+            AXUIElementSetMessagingTimeout(app, 0.5)
+            let asked = AXUIElementCopyElementAtPosition(app, Float(frame.midX), Float(y), &hit)
+            if asked == .cannotComplete { break }   // the app does not answer: do not wait out every height
+            if asked == .success, var node = hit {
+                for _ in 0..<3 where NativePickerInput.string(node, kAXRoleAttribute) != kAXMenuItemRole {
+                    guard let up = NativePickerInput.parent(node) else { break }
+                    node = up
+                }
+                if NativePickerInput.string(node, kAXRoleAttribute) == kAXMenuItemRole {
+                    let found = row(node)
+                    if found.frame.height > 0, found.frame.maxY > y {
+                        if !found.title.isEmpty { rows.append(found) }
+                        y = found.frame.maxY + 1
+                        continue
+                    }
+                }
+            }
+            y += 3
+        }
+        if rows.isEmpty { print("[AX] no rows in the open menu at \(frame); application children: \(children.map { NativePickerInput.string($0, kAXRoleAttribute) })") }
+        return rows
+    }
+
+    /// The screen frame (top-left origin) of the sheet on one of the app's windows, if one is open.
+    static func sheetFrame(pid: Int32) -> CGRect? {
+        let windows = NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? []
+        for window in windows {
+            for child in NativePickerInput.attribute(window, kAXChildrenAttribute) as? [AXUIElement] ?? [] where NativePickerInput.string(child, kAXRoleAttribute) == kAXSheetRole {
+                var point = CGPoint.zero, size = CGSize.zero
+                if let value = NativePickerInput.attribute(child, kAXPositionAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgPoint, &point) }
+                if let value = NativePickerInput.attribute(child, kAXSizeAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgSize, &size) }
+                if size.width > 0, size.height > 0 { return CGRect(origin: point, size: size) }
+            }
+        }
+        return nil
+    }
+
     /// Opens the pop-up button whose identifier is `identifier` in the app's windows with AXPress and presses its item
     /// titled `title`, as a user picking from it does.
     static func choosePopUp(pid: Int32, identifier: String, title: String) throws {
