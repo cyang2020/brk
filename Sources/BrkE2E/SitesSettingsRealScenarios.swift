@@ -561,9 +561,17 @@ enum SitesSettingsRealScenarios {
             try Real.move(app, to: CGPoint(x: title.midX, y: title.midY))
             try pressInPane(app, in: .window("Shortcuts"), identifier: field("shortcut-menu-\(action)"), "the row's … menu")
             app.sleep(0.5)
+            if let rect = NativeSystemInput.placeFrame(pid: pid, .window("Shortcuts")) {
+                let capture = Process()
+                capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                capture.arguments = ["-x", "-R", "\(Int(rect.minX)),\(Int(rect.minY)),\(Int(rect.width)),\(Int(rect.height))",
+                                     app.shotsDirectory.appendingPathComponent("\(app.scenarioID)-shortcut-menu.png").path]
+                try capture.run(); capture.waitUntilExit()
+            }
             try Real.type(app, "remove")
             try Real.key(app, [], .returnKey)
-            try app.waitUntil("Reload has no shortcut") { try settings(app).shortcuts.first { $0.action.rawValue == action }?.state == .unset }
+            do { try app.waitUntil("Reload has no shortcut") { try settings(app).shortcuts.first { $0.action.rawValue == action }?.state == .unset } }
+            catch { throw Check(description: "\(error); current Reload shortcut: \(String(describing: try settings(app).shortcuts.first { $0.action.rawValue == action }))") }
             try pressInPane(app, in: .window("Shortcuts"), identifier: field("shortcut-reset-all"), "Reset All Shortcuts")
             try app.waitUntil("Reload's shortcut back") { try settings(app).shortcuts.first { $0.action.rawValue == action }?.state == row.state }
             return "typing in the filter showed the Reload row; its hover … menu removed the shortcut; Reset All Shortcuts restored it"

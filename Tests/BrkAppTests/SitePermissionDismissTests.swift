@@ -9,6 +9,9 @@ import XCTest
 final class SitePermissionDismissTests: XCTestCase {
     func testDismissingAPromptTakesItsPopoverOffScreen() throws {
         _ = NSApplication.shared
+        let appearance = NSApp.appearance
+        NSApp.appearance = NSAppearance(named: .aqua)
+        defer { NSApp.appearance = appearance }
         let window = NSWindow(contentRect: CGRect(x: 200, y: 200, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = NSView()
