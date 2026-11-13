@@ -548,19 +548,12 @@ enum PageRealScenarios {
 
     private static let outputStatus = ViewID.tabTool("output-status")
 
-    /// ⌘P and ⇧⌘S open their sheets; a real click on Cancel closes each with nothing written and nothing said (Arc
-    /// shows nothing after a cancel). The status line while the print sheet is open must read over the page.
+    /// ⌘P and ⇧⌘S open their sheets; real Cancel clicks close each silently. A real Save then writes the page to the
+    /// owned fixture destination. Its status is measured after the sheet closes: AppKit dims the parent behind a sheet.
     private static func outputs(_ app: AppUnderTest, _ page: PageID, _ appearance: Scheme) throws {
         try key(app, .command, .p)
         try app.waitUntil("the print sheet after ⌘P", timeout: 20) { try sheet(app) }
         try sheetDrawn(app, "print", appearance)
-        try app.waitUntil("the status line while printing") { isShown(try app.native(), outputStatus) }
-        let facts = try app.native()
-        let line = try visible(facts, outputStatus).frame
-        let pixels = try SidebarReviewScenarios.pixels(app, "\(appearance)-print-status", line.insetBy(dx: 2, dy: 2))
-        let ink = inked(pixels, from: median(pixels))
-        try expect(Double(ink) > 37.5 * facts.backingScale * facts.backingScale,
-                   "the status line's words barely show in \(appearance): \(ink) pixels stand out from its background \(median(pixels))")
         try clickButton(app, "Cancel")
         try app.waitUntil("Print cancelled", timeout: 10) { if case .terminal(.cancelled)? = try outputStage(app) { return true }; return false }
         try app.waitUntil("the print sheet gone") { try !sheet(app) }
@@ -573,7 +566,29 @@ enum PageRealScenarios {
         try app.waitUntil("Save Page As cancelled", timeout: 10) { if case .terminal(.cancelled)? = try outputStage(app) { return true }; return false }
         try app.waitUntil("the save sheet gone") { try !sheet(app) }
         try expect(!isShown(try app.native(), outputStatus), "a status line stays after Save Page As was cancelled")
-        app.passed("\(appearance): ⌘P and ⇧⌘S opened their sheets drawn \(appearance); Cancel closed them and nothing was said")
+
+        // Setup chooses an owned directory and filename; the key opens the actual panel and the real Save click
+        // accepts it. Neither configureSavePanel nor a control-channel answer completes the panel.
+        let destination = app.dataDirectory.appendingPathComponent("\(appearance)-page.mhtml")
+        try app.perform(.configureSavePanel(window: app.window, path: destination.path))
+        try key(app, [.shift, .command], .s)
+        try app.waitUntil("the save sheet for the real Save click") { try app.native().sheetClass?.contains("SavePanel") == true }
+        try clickButton(app, "Save")
+        try app.waitUntil("Save wrote the page", timeout: 15) {
+            guard case .terminal(.saved(let receipt))? = try outputStage(app) else { return false }
+            return receipt.url.resolvingSymlinksInPath() == destination.resolvingSymlinksInPath() && receipt.bytes > 0
+                && FileManager.default.fileExists(atPath: destination.path)
+        }
+        try app.waitUntil("the completed save sheet gone") { try !sheet(app) }
+        try front(app)
+        let facts = try app.native()
+        let line = try visible(facts, outputStatus).frame
+        let pixels = try SidebarReviewScenarios.pixels(app, "\(appearance)-saved-status", line.insetBy(dx: 2, dy: 2))
+        let ink = inked(pixels, from: median(pixels))
+        try expect(Double(ink) > 37.5 * facts.backingScale * facts.backingScale,
+                   "the saved status barely shows in \(appearance): \(ink) pixels stand out from its background \(median(pixels))")
+        app.note("\(appearance) saved status: background \(median(pixels)), \(ink) ink pixels")
+        app.passed("\(appearance): Print and Save sheets drew \(appearance); Cancel was silent; a real Save wrote the file and its status reads over the active page")
     }
 
     /// ⌘= twice, ⌘- and ⌘0 with the page focused.
