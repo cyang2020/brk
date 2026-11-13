@@ -183,7 +183,11 @@ final class AppUnderTest {
         environment["BRK_TEST_CLOCK"] = "1"
         environment["BRK_TEST_FILE_PANEL_DIRECTORY"] = dataDirectory.path
         if let remoteDebuggingPort { environment["BRK_REMOTE_DEBUGGING_PORT"] = String(remoteDebuggingPort) }
-        if !["Onboarding-Import", "Onboarding-RealArc"].contains(scenarioID) { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
+        if !["Onboarding-Import", "Onboarding-RealArc", "Onboarding-Paths"].contains(scenarioID) { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
+        if scenarioID == "Onboarding-Paths" {
+            // A made-up Arc folder under this run's folder; passwords are turned off on the keychain step.
+            environment["BRK_TEST_IMPORT_ROOT"] = try OnboardingScenarios.makeArcFixture(in: dataDirectory, site: site).path
+        }
         if scenarioID == "Onboarding-Import" {
             // A made-up Chrome profile under this run's folder; the source key is a fixture password, never the keychain.
             environment["BRK_TEST_IMPORT_ROOT"] = try OnboardingScenarios.makeChromeFixture(in: dataDirectory, site: site).path

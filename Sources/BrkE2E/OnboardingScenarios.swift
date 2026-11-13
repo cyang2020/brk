@@ -3,6 +3,7 @@ import BrkControl
 import BrkDomain
 import CoreGraphics
 import Foundation
+import ImageIO
 
 /// First-run onboarding and import from another browser, through the real window with real clicks and typing
 /// (window-server events posted at each control's rectangle, which the app reports over the control socket).
@@ -12,6 +13,8 @@ enum OnboardingScenarios {
                  cefOnly: "cookies, Login Data and autofill are Chromium's", importFlow),
         Scenario("Onboarding-RealArc", "opt-in: this Mac's Arc profile imported through onboarding into a throwaway data folder, every screen captured",
                  cefOnly: "a real Chromium profile", realArc),
+        Scenario("Onboarding-Paths", "first run by real keys and clicks, light then dark: Return, Back, Skip, Escape, no import, a theme drag, ad blocker NO, Enable Max then Not now, ⌘Q brings setup back; an Arc folder through the picker, Favorites picks, the red button finishes; Import from Another Browser… with a file through the open panel; Check for Updates…; every screen's text readable in both appearances",
+                 paths),
     ]
 
     /// The fixture Chrome's "Chrome Safe Storage" password; the encrypted values below were made with it (PBKDF2 and
@@ -101,9 +104,30 @@ enum OnboardingScenarios {
         try app.waitUntil("Brk's onboarding window is key", timeout: 4) { current = try facts(app); return current.isKey }
         try app.waitUntil("control \(control) is on screen", timeout: 6) { current = try facts(app); return current.controls[control] != nil }
         guard let rect = current.controls[control] else { throw Check(description: "no control \(control) on \(current.step ?? "?")") }
-        let point = CGPoint(x: rect.midX, y: rect.midY)
-        guard case .hello(let hello) = try app.send(.hello), let front = PhysicalPointer.frontmost(at: point), front.pid == hello.pid else {
-            throw Check(description: "another window is in front of Brk's onboarding window at \(point); real click not posted")
+        try clickScreen(app, CGPoint(x: rect.midX, y: rect.midY))
+    }
+
+    /// Who owns the frontmost window at a screen point, for a refused click's message.
+    static func windowOwner(at point: CGPoint) -> String {
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        for info in list {
+            guard let layer = info[kCGWindowLayer as String] as? Int, layer < 20, let bounds = info[kCGWindowBounds as String] as? [String: Double] else { continue }
+            let rect = CGRect(x: bounds["X"] ?? 0, y: bounds["Y"] ?? 0, width: bounds["Width"] ?? 0, height: bounds["Height"] ?? 0)
+            if rect.contains(point) { return "\(info[kCGWindowOwnerName as String] as? String ?? "?") window \(info[kCGWindowNumber as String] as? Int ?? 0) at \(rect)" }
+        }
+        return "no window"
+    }
+
+    static func pid(_ app: AppUnderTest) throws -> pid_t {
+        guard case .hello(let hello) = try app.send(.hello) else { throw Check(description: "hello") }
+        return hello.pid
+    }
+
+    /// Real mouse events at a screen point (top-left origin), only while one of this run's windows is the frontmost
+    /// window there.
+    static func clickScreen(_ app: AppUnderTest, _ point: CGPoint) throws {
+        guard let front = PhysicalPointer.frontmost(at: point), front.pid == (try pid(app)) else {
+            throw Check(description: "another window is in front of Brk at \(point) (\(windowOwner(at: point))); real click not posted")
         }
         let source = CGEventSource(stateID: .hidSystemState)
         for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
@@ -301,5 +325,408 @@ enum OnboardingScenarios {
         try shot(app, "18-safari-full-disk-access")
         try click(app, "skip")
         try app.waitUntil("import window closed") { try facts(app).step == nil }
+    }
+
+    // MARK: Onboarding-Paths
+
+    /// `<data>/arc-root`: a made-up Arc folder, small, as ~/brk-evidence/sidebar-lag/make-arc.py makes a big one: Arc's
+    /// sidebar file with two Spaces and no Favorites (so the Favorites step offers Brk's own sites), and a Default profile
+    /// whose Bookmarks hold a folder of two and one more. Every address is the fixture site's.
+    static func makeArcFixture(in data: URL, site: FixtureServer) throws -> URL {
+        let root = data.appendingPathComponent("arc-root", isDirectory: true)
+        try? FileManager.default.removeItem(at: root)
+        let profile = root.appendingPathComponent("Arc/User Data/Default", isDirectory: true)
+        try FileManager.default.createDirectory(at: profile, withIntermediateDirectories: true)
+        // Arc writes its lists as alternating id, value pairs.
+        var items: [Any] = []
+        func tab(_ id: String, _ title: String, _ page: String) -> String {
+            items += [id, ["id": id, "childrenIds": [String](), "data": ["tab": ["savedURL": site.url(page).absoluteString, "savedTitle": title]]] as [String: Any]]
+            return id
+        }
+        func holder(_ id: String, _ title: String?, _ children: [String], list: Bool) -> String {
+            let kind = list ? "list" : "itemContainer"
+            var item: [String: Any] = ["id": id, "childrenIds": children, "data": [kind: [String: Any]()]]
+            if let title { item["title"] = title }
+            items += [id, item]
+            return id
+        }
+        func space(_ id: String, _ title: String, pinned: [String], today: [String]) -> [Any] {
+            let pinnedID = holder(id + "-pinned", nil, pinned, list: false), todayID = holder(id + "-today", nil, today, list: false)
+            return [id, ["id": id, "title": title, "containerIDs": ["pinned", pinnedID, "unpinned", todayID], "profile": ["default": true],
+                         "customInfo": ["iconType": ["emoji_v2": title == "Home" ? "🏠" : "💼"]]] as [String: Any]]
+        }
+        let spaces = space("space-home", "Home", pinned: [holder("home-reading", "Reading", [tab("t1", "Arc Page Two", "page2.html"), tab("t2", "Arc Reading", "index.html?arc-reading")], list: true),
+                                                      tab("t3", "Arc Pinned", "index.html?arc-pinned")],
+                           today: [tab("t4", "Arc Today", "index.html?arc-today")])
+            + space("space-work", "Work", pinned: [tab("t5", "Arc Work", "index.html?arc-work")], today: [])
+        let containers: [Any] = [["global": [String: Any]()] as [String: Any], ["spaces": spaces, "items": items] as [String: Any]]
+        let sidebar: [String: Any] = ["sidebar": ["containers": containers]]
+        try JSONSerialization.data(withJSONObject: sidebar).write(to: root.appendingPathComponent("Arc/StorableSidebar.json"))
+        func url(_ name: String, _ page: String) -> [String: Any] { ["type": "url", "name": name, "url": site.url(page).absoluteString] }
+        let recipes: [String: Any] = ["type": "folder", "name": "Recipes", "children": [url("Soup", "index.html?soup"), url("Bread", "index.html?bread")]]
+        let bar: [String: Any] = ["type": "folder", "name": "Bookmarks bar", "children": [recipes, url("Docs", "index.html?docs")]]
+        let other: [String: Any] = ["type": "folder", "name": "Other bookmarks", "children": [Any]()]
+        let bookmarks: [String: Any] = ["version": 1, "roots": ["bookmark_bar": bar, "other": other]]
+        try JSONSerialization.data(withJSONObject: bookmarks).write(to: profile.appendingPathComponent("Bookmarks"))
+        return root
+    }
+
+    static func settings(_ app: AppUnderTest) throws -> SettingsSnapshot {
+        guard case .settings(let settings) = try app.send(.settings) else { throw Check(description: "settings did not answer") }
+        return settings
+    }
+
+    /// A control's screen rectangle on the current screen.
+    static func control(_ app: AppUnderTest, _ id: String) throws -> CGRect {
+        var rect: CGRect?
+        try app.waitUntil("control \(id) is on screen", timeout: 6) { rect = try facts(app).controls[id]; return rect != nil }
+        return rect!
+    }
+
+    /// A real key press posted to Brk while its onboarding window is key.
+    static func key(_ app: AppUnderTest, _ chord: KeyChord) throws {
+        _ = try facts(app, activate: true)
+        try app.waitUntil("Brk's onboarding window is key", timeout: 4) { try facts(app).isKey }
+        PhysicalKeys.press(chord, pid: try pid(app))
+        usleep(300_000)
+    }
+
+    /// A real drag between two screen points: press, glide with the button down, release.
+    static func dragScreen(_ app: AppUnderTest, from start: CGPoint, to end: CGPoint) throws {
+        guard let front = PhysicalPointer.frontmost(at: start), front.pid == (try pid(app)) else {
+            throw Check(description: "another window is in front of Brk at \(start); real drag not posted")
+        }
+        let source = CGEventSource(stateID: .hidSystemState)
+        func post(_ type: CGEventType, _ point: CGPoint, wait: UInt32) throws {
+            guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left) else { throw Check(description: "mouse event") }
+            event.post(tap: .cghidEventTap)
+            usleep(wait)
+        }
+        try post(.mouseMoved, start, wait: 150_000)
+        try post(.leftMouseDown, start, wait: 120_000)
+        for step in 1...24 {
+            let t = Double(step) / 24, eased = t * t * (3 - 2 * t)
+            try post(.leftMouseDragged, CGPoint(x: start.x + (end.x - start.x) * eased, y: start.y + (end.y - start.y) * eased), wait: 12_000)
+        }
+        usleep(150_000)
+        try post(.leftMouseUp, end, wait: 300_000)
+    }
+
+    /// The red button of the app's window titled `title`.
+    static func closeButton(_ app: AppUnderTest, window title: String) throws -> CGPoint {
+        guard let rect = NativeSystemInput.closeButtonFrame(pid: try pid(app), window: title) else { throw Check(description: "no close button on the window \(title)") }
+        return CGPoint(x: rect.midX, y: rect.midY)
+    }
+
+    /// The name field's text, as Accessibility reads it.
+    static func nameField(_ app: AppUnderTest) throws -> String? {
+        let field = try control(app, "name-field")
+        return NativeSystemInput.elements(pid: try pid(app), role: "AXTextField").first { $0.frame.intersects(field) }?.value
+    }
+
+    static func windowTexts(_ app: AppUnderTest) throws -> [String] { try windowTextFrames(app).map(\.text) }
+
+    /// The texts Accessibility lists in the onboarding window itself (the browser window under it has its own), with
+    /// their screen rectangles.
+    static func windowTextFrames(_ app: AppUnderTest) throws -> [(text: String, frame: CGRect)] {
+        NativeSystemInput.staticTexts(pid: try pid(app), window: try facts(app).frame)
+    }
+
+    /// The screen as it is now, captured, and the contrast of every text the window lists to Accessibility against what
+    /// is behind it, measured on the picture: a label left in its light-mode ink on the dark background (or the reverse)
+    /// measures about 1:1. Apple's text recognition is no judge of this: it reads near-black text on Brk's dark column.
+    /// Also says when the step's left column is not in the appearance asked for. Returns what failed.
+    static func readable(_ app: AppUnderTest, _ name: String, dark: Bool) throws -> [String] {
+        let current = try facts(app)
+        let url = try app.windowScreenshot(name, number: current.windowNumber)
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            throw Check(description: "cannot read \(url.lastPathComponent)")
+        }
+        let width = image.width, height = image.height
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        bytes.withUnsafeMutableBytes { raw in
+            guard let context = CGContext(data: raw.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        // WCAG's relative luminance; the bitmap's first row is the picture's top.
+        let linear = (0...255).map { value -> Double in let c = Double(value) / 255; return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        func luminance(_ x: Int, _ y: Int) -> Double {
+            let i = (y * width + x) * 4
+            return 0.2126 * linear[Int(bytes[i])] + 0.7152 * linear[Int(bytes[i + 1])] + 0.0722 * linear[Int(bytes[i + 2])]
+        }
+        var problems: [String] = []
+        // The left column's background, 2% in and 60% down: below the text, beside nothing.
+        let column = luminance(Int(Double(width) * 0.02), Int(Double(height) * 0.6))
+        if dark ? (column > 0.1) : (column < 0.5) { problems.append("\(name): the left column's luminance is \(String(format: "%.2f", column)) in \(dark ? "dark" : "light") mode") }
+        let texts = try windowTextFrames(app)
+        if texts.isEmpty { problems.append("\(name): Accessibility lists no text in the window") }
+        let scale = Double(width) / current.frame.width, bounds = CGRect(x: 0, y: 0, width: width, height: height)
+        var lowest = Double.infinity, measured: [String] = []
+        // A blank line a screen keeps its place with (the picker's " ") has no ink to measure.
+        for (text, rect) in texts where text.contains(where: { $0.isLetter || $0.isNumber }) {
+            let box = CGRect(x: (rect.minX - current.frame.minX) * scale, y: (rect.minY - current.frame.minY) * scale,
+                             width: rect.width * scale, height: rect.height * scale).integral.intersection(bounds)
+            guard box.width >= 4, box.height >= 4 else { continue }
+            var values: [Double] = []
+            for y in Int(box.minY)..<Int(box.maxY) { for x in Int(box.minX)..<Int(box.maxX) { values.append(luminance(x, y)) } }
+            values.sort()
+            // Glyphs cover a small part of their box: the middle value is the background, the far end the ink.
+            let background = values[values.count / 2], low = values[values.count / 100], high = values[values.count * 99 / 100]
+            let ink = background - low > high - background ? low : high
+            let contrast = (max(background, ink) + 0.05) / (min(background, ink) + 0.05)
+            lowest = min(lowest, contrast)
+            measured.append("\(String(format: "%.1f", contrast)):1 at pixels \(Int(box.minX)),\(Int(box.minY)) \(Int(box.width))x\(Int(box.height)): \(text.prefix(40))")
+            // WCAG's floor for large text; a wrong-appearance ink measures about 1.1.
+            if contrast < 3 { problems.append("\(name): \"\(text)\" has contrast \(String(format: "%.1f", contrast)):1 against its background") }
+        }
+        // Kept beside the run's logs too: the scenario reports them at its end, which a later failure never reaches.
+        let log = app.shotsDirectory.deletingLastPathComponent().appendingPathComponent("logs/\(app.scenarioID)-readable.txt")
+        let line = "\(name): \(texts.count) texts, lowest contrast \(String(format: "%.1f", lowest)):1, \(problems.count) problems" + (problems + measured).map { "\n  " + $0 }.joined() + "\n"
+        if let handle = try? FileHandle(forWritingTo: log) { handle.seekToEndOfFile(); handle.write(Data(line.utf8)); try? handle.close() }
+        else { try? line.write(to: log, atomically: true, encoding: .utf8) }
+        return problems
+    }
+
+    /// Folders' tabs, all levels.
+    static func leafTitles(_ rows: [Row]) -> [String] {
+        rows.flatMap { row -> [String] in
+            switch row {
+            case .tab(let tab): [tab.title]
+            case .folder(let folder): leafTitles(folder.children)
+            case .split: []
+            }
+        }
+    }
+
+    static func importedFolder(_ view: WindowSnapshot, _ title: String) -> FolderRow? {
+        for row in view.space.pinned.rows { if case .folder(let folder) = row, folder.title == title { return folder } }
+        return nil
+    }
+
+    @Sendable static func paths(_ app: AppUnderTest) throws {
+        guard NativePickerInput.available else { throw Check(description: "the runner may not use Accessibility") }
+        try app.waitUntil("the onboarding window opens on Welcome", timeout: 15) { try facts(app).step == "welcome" }
+        var unreadable: [String] = []
+        defer { try? app.perform(.setAppAppearance(nil)) }
+
+        // Light: Return on Welcome and in the name field, Back, Skip for now, Escape.
+        try app.perform(.setAppAppearance(.light))
+        try key(app, KeyChord([], .returnKey))
+        try waitStep(app, "name")
+        try click(app, "name-field")
+        PhysicalKeys.type("Robin", pid: try pid(app))
+        try key(app, KeyChord([], .returnKey))
+        try waitStep(app, "pickBrowser")
+        try click(app, "back"); try waitStep(app, "name")
+        try app.waitUntil("Back shows the typed name in the field again") { try nameField(app) == "Robin" }
+        unreadable += try readable(app, "L-name", dark: false)
+        try click(app, "skip"); try waitStep(app, "pickBrowser")
+        app.passed("Return on Welcome and Return in the name field each went one step; Back showed the name again; Skip for now went on")
+        try key(app, KeyChord([], .escape))
+        usleep(500_000)
+        let afterEscape = try facts(app).step
+        try expect(afterEscape == "pickBrowser", "Escape changed the onboarding window: it shows \(afterEscape ?? "nothing")")
+        unreadable += try readable(app, "L-pick-browser", dark: false)
+
+        // No import: "No thanks", Back, then the footer's Skip for now.
+        try click(app, "start-fresh"); try waitStep(app, "favorites")
+        try click(app, "back"); try waitStep(app, "pickBrowser")
+        try click(app, "skip"); try waitStep(app, "favorites")
+        unreadable += try readable(app, "L-favorites", dark: false)
+        app.passed("Escape left the window as it was; No thanks and Skip for now both skip the import; Back from Favorites returns to the picker")
+
+        // A real drag on the theme editor's pad (340 pt square, 8 pt into the editor) moves the selected color there.
+        try click(app, "next"); try waitStep(app, "theme")
+        let before = try app.view().theme
+        let editor = try control(app, "theme-editor")
+        let pad = CGRect(x: editor.minX + 8, y: editor.minY + 8, width: 340, height: 340)
+        try dragScreen(app, from: CGPoint(x: pad.minX + pad.width * 0.3, y: pad.midY), to: CGPoint(x: pad.minX + pad.width * 0.82, y: pad.minY + pad.height * 0.3))
+        try app.waitUntil("the drag in the theme editor recolors the Space") { try app.view().theme != before }
+        let dragged = try app.view().theme
+        unreadable += try readable(app, "L-theme", dark: false)
+        try click(app, "back"); try waitStep(app, "favorites")
+        try click(app, "next"); try waitStep(app, "theme")
+        usleep(500_000)
+        try expect(try app.view().theme == dragged, "Back and Next on the theme step changed the Space's colors")
+        app.passed("a real drag on the theme pad recolored the Space; Back and Next kept it")
+
+        // Ad blocker NO survives Back; Enable Max, then Back and Not now turns it off again.
+        try click(app, "next"); try waitStep(app, "adBlocker")
+        try click(app, "adblock-no")
+        unreadable += try readable(app, "L-ad-blocker", dark: false)
+        try click(app, "back"); try waitStep(app, "theme")
+        try click(app, "next"); try waitStep(app, "adBlocker")
+        try click(app, "next"); try waitStep(app, "max")
+        try app.waitUntil("NO turns the ad blocker off") { try settings(app).general.blockAds == false }
+        unreadable += try readable(app, "L-max", dark: false)
+        try click(app, "next")
+        try app.waitUntil("Enable Max moves on", timeout: 6) { try ["defaultBrowser", "finish"].contains(facts(app).step) }
+        try app.waitUntil("Enable Max turns Max on") { try settings(app).max.settings.provider != .off }
+        if try facts(app).step == "defaultBrowser" {
+            usleep(500_000)
+            try click(app, "back"); try waitStep(app, "max")
+            try click(app, "skip"); try waitStep(app, "defaultBrowser")
+            try app.waitUntil("Not now after Back turns Max off again") { try settings(app).max.settings.provider == .off }
+            unreadable += try readable(app, "L-default-browser", dark: false)
+            try click(app, "default-no"); try click(app, "next")
+        } else {
+            app.note("this Brk is the Mac's default browser: no default browser step, and Not now after Back was not tried")
+        }
+        try waitStep(app, "finish")
+        let greeting = try windowTexts(app)
+        try expect(greeting.contains("Welcome to Brk."), "the finish screen still greets a name after Skip: \(greeting)")
+        unreadable += try readable(app, "L-finish", dark: false)
+        app.passed("ad blocker NO kept through Back and saved; Enable Max turned Max on and Not now after Back turned it off; the skipped name is not greeted")
+
+        // ⌘Q on the last screen: setup is not done, so the next launch shows it again.
+        let quitting = try pid(app)
+        try key(app, KeyChord([.command], .q))
+        let start = ProcessInfo.processInfo.systemUptime
+        while kill(quitting, 0) == 0, ProcessInfo.processInfo.systemUptime - start < 20 { usleep(200_000) }
+        try expect(kill(quitting, 0) != 0, "Brk did not quit on ⌘Q during onboarding")
+        let outcome = try app.quit()
+        try expect(outcome.clean, "the ⌘Q quit: \(outcome.exit)")
+        try app.launch()
+        try app.waitUntil("setup shows again after ⌘Q", timeout: 15) { try facts(app).step == "welcome" }
+        try expect(try ImportSyncScenarios.data(app).needsOnboarding, "⌘Q during onboarding saved setup as done")
+        app.passed("⌘Q during onboarding quit cleanly and the next launch showed setup again")
+
+        // Dark: an Arc folder through the picker, Back on the keychain step, passwords off, bookmarks and Favorites picked.
+        try app.perform(.setAppAppearance(.dark))
+        try click(app, "welcome-next"); try waitStep(app, "name")
+        try click(app, "name-field")
+        PhysicalKeys.type("Robin", pid: try pid(app))
+        unreadable += try readable(app, "D-name", dark: true)
+        try click(app, "next"); try waitStep(app, "pickBrowser")
+        try click(app, "browser-arc")
+        unreadable += try readable(app, "D-pick-browser", dark: true)
+        try click(app, "next"); try waitStep(app, "keychain")
+        try click(app, "back"); try waitStep(app, "pickBrowser")
+        try click(app, "next"); try waitStep(app, "keychain")
+        try click(app, "secrets-toggle")
+        unreadable += try readable(app, "D-keychain", dark: true)
+        try click(app, "next"); try waitStep(app, "progress")
+        try app.waitUntil("the Arc import finishes", timeout: 30) { try facts(app).progressDone }
+        let read = try facts(app)
+        try expect(read.failures.isEmpty, "Arc import failures: \(read.failures)")
+        unreadable += try readable(app, "D-progress", dark: true)
+        try click(app, "next"); try waitStep(app, "bookmarks")
+        // Recipes (0.0) opens; Bread (0.0.1) is left out.
+        try click(app, "bookmark-expand-0.0")
+        try click(app, "bookmark-0.0.1")
+        unreadable += try readable(app, "D-bookmarks", dark: true)
+        try click(app, "next"); try waitStep(app, "favorites")
+        try click(app, "site-https://github.com/")
+        try click(app, "site-https://www.wikipedia.org/")
+        try click(app, "site-https://www.wikipedia.org/")
+        unreadable += try readable(app, "D-favorites", dark: true)
+        try click(app, "next"); try waitStep(app, "theme")
+        unreadable += try readable(app, "D-theme", dark: true)
+        try click(app, "next"); try waitStep(app, "adBlocker")
+        try click(app, "adblock-yes")
+        unreadable += try readable(app, "D-ad-blocker", dark: true)
+        try click(app, "next"); try waitStep(app, "max")
+        unreadable += try readable(app, "D-max", dark: true)
+        try click(app, "skip")
+        try app.waitUntil("Not now moves on", timeout: 6) { try ["defaultBrowser", "finish"].contains(facts(app).step) }
+        if try facts(app).step == "defaultBrowser" {
+            usleep(500_000)
+            try click(app, "default-no")
+            unreadable += try readable(app, "D-default-browser", dark: true)
+            try click(app, "next")
+        }
+        try waitStep(app, "finish")
+        let finish = try facts(app)
+        app.note("Finish summary: " + finish.summary.joined(separator: "; "))
+        try expect(finish.summary.contains("2 Spaces from Arc") && finish.summary.contains("2 bookmarks in Pinned"), "finish summary: \(finish.summary)")
+        unreadable += try readable(app, "D-finish", dark: true)
+
+        // The red button finishes setup with what was picked.
+        try clickScreen(app, try closeButton(app, window: "Welcome to Brk"))
+        try app.waitUntil("the red button closes the onboarding window") { try facts(app).step == nil }
+        try app.waitUntil("Brk 101 opens in the browser window", timeout: 15) { try currentTab(app.view())?.title == "Brk 101" }
+        let data = try ImportSyncScenarios.data(app)
+        try expect(!data.needsOnboarding && data.userName == "Robin", "after the red button: setup done \(!data.needsOnboarding), name \(data.userName ?? "none")")
+        var view = try app.view()
+        try expect(view.space.title == "Home" && view.dock.map(\.title) == ["Home", "Work"], "Spaces after the Arc import: \(view.dock.map(\.title)), showing \(view.space.title)")
+        let fromArc = try XCTUnwrapValue(importedFolder(view, "Imported from Arc"))
+        try expect(leafTitles(fromArc.children).sorted() == ["Docs", "Soup"], "the Arc bookmarks in Pinned: \(leafTitles(fromArc.children))")
+        try expect(view.favorites.tiles.map { $0.url?.absoluteString } == ["https://github.com/"], "Favorites after the picks: \(view.favorites.tiles.map(\.title))")
+        try expect(try settings(app).general.blockAds != false, "ad blocker YES did not turn it back on")
+        _ = try app.screenshot("D-sidebar")
+        app.passed("Arc's two Spaces and the two ticked bookmarks came over, the Favorites pick and the typed name were kept, and the red button finished setup")
+
+        // Brk › Import from Another Browser… in the menu bar; a bookmarks file chosen in the open panel with the keyboard.
+        // The file sits in a folder whose path has only keys AIThreadsScenarios.type knows (lower case, digits, - and /).
+        let owner = try pid(app)
+        let folder = URL(fileURLWithPath: "/tmp/brk-onboarding-paths-\(getpid())", isDirectory: true)
+        try? FileManager.default.removeItem(at: folder)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("bookmarks.html")
+        try """
+            <!DOCTYPE NETSCAPE-Bookmark-file-1>
+            <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+            <TITLE>Bookmarks</TITLE>
+            <H1>Bookmarks</H1>
+            <DL><p>
+                <DT><A HREF="\(app.site.url("index.html?file-one").absoluteString)">File One</A>
+                <DT><A HREF="\(app.site.url("index.html?file-two").absoluteString)">File Two</A>
+            </DL><p>
+            """.write(to: file, atomically: true, encoding: .utf8)
+        try NativeSystemInput.chooseMainMenu(pid: owner, menu: "Brk", item: "Import from Another Browser…")
+        try waitStep(app, "pickBrowser")
+        try click(app, "browser-file")
+        unreadable += try readable(app, "D-import-pick", dark: true)
+        try click(app, "next")
+        // The panel is another process's view inside Brk's sheet: keys reach it from the window server, as a keyboard's do
+        // (Accessibility reports its rows' places off the panel, so no click). ⇧⌘G, the file's path, Return to go there
+        // and select it, Return for Import; each only while Brk is the active app.
+        try app.waitUntil("the open panel opens", timeout: 8) { try app.native().appWindows.contains { $0.className == "NSOpenPanel" && $0.isVisible && $0.isKey } }
+        usleep(1_000_000)
+        func active() throws { try expect(try app.native().appActive == true, "Brk is not the active app; no key posted") }
+        try active(); try AIThreadsScenarios.key([.command, .shift], .g)
+        usleep(800_000)
+        try active(); try AIThreadsScenarios.type(file.path)
+        usleep(500_000)
+        try active(); try AIThreadsScenarios.key([], .returnKey)
+        usleep(1_000_000)
+        try active(); try AIThreadsScenarios.key([], .returnKey)
+        try waitStep(app, "progress")
+        try app.waitUntil("the file import finishes", timeout: 15) { try facts(app).progressDone }
+        try click(app, "next"); try waitStep(app, "bookmarks")
+        unreadable += try readable(app, "D-import-bookmarks", dark: true)
+        try click(app, "next"); try waitStep(app, "finish")
+        let imported = try facts(app)
+        try expect(imported.summary == ["2 bookmarks in Pinned"], "the file import's finish screen: \(imported.summary)")
+        unreadable += try readable(app, "D-import-finish", dark: true)
+        try click(app, "next")
+        try app.waitUntil("Done closes the import window") { try facts(app).step == nil }
+        view = try app.view()
+        let fromFile = try XCTUnwrapValue(importedFolder(view, "Imported from bookmarks.html"))
+        try expect(leafTitles(fromFile.children) == ["File One", "File Two"], "the file's bookmarks in Pinned: \(leafTitles(fromFile.children))")
+        app.passed("Import from Another Browser… took a bookmarks file chosen in the real open panel into Pinned")
+
+        // Brk › Check for Updates…: the alert names this build; Open Latest Build opens the Latest build release.
+        try NativeSystemInput.chooseMainMenu(pid: owner, menu: "Brk", item: "Check for Updates…")
+        var open: CGRect?
+        try app.waitUntil("the update alert opens", timeout: 8) {
+            open = NativeSystemInput.frame(pid: owner, title: "Open Latest Build", roles: ["AXButton"])
+            return open != nil
+        }
+        let alert = NativeSystemInput.staticTexts(pid: owner).map(\.text)
+        try expect(alert.contains("Brk has no update channel") && alert.contains { $0.hasPrefix("This copy is Brk ") && $0.contains("does not update itself") },
+                   "the update alert says: \(alert)")
+        _ = try app.screenshotSheet("D-updates")
+        let tabsBefore = Set(allTabs(try app.view()).map(\.id))
+        try clickScreen(app, CGPoint(x: open!.midX, y: open!.midY))
+        try app.waitUntil("Open Latest Build opens the Latest build release in a tab", timeout: 10) {
+            allTabs(try app.view()).contains { !tabsBefore.contains($0.id) && $0.url?.host == "github.com" && $0.url?.path.hasSuffix("/releases/tag/latest") == true }
+        }
+        app.passed("Check for Updates… named this build and Open Latest Build opened the release page in a tab")
+
+        try expect(unreadable.isEmpty, "onboarding screens with hard-to-read text:\n" + unreadable.joined(separator: "\n"))
+        app.passed("every text on every onboarding screen stands out from its background (3:1 or more) in light and in dark")
     }
 }

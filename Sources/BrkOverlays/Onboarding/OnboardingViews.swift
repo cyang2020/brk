@@ -742,7 +742,16 @@ private struct SiteMark: View {
         let name = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
         let hue = Double(name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xffff } % 360) / 360
         Text(String(name.prefix(1)).uppercased()).font(.system(size: side * 0.5, weight: .bold)).foregroundStyle(.white)
-            .frame(width: side, height: side).background(RoundedRectangle(cornerRadius: side * 0.26, style: .continuous).fill(Color(hue: hue, saturation: 0.55, brightness: 0.78)))
+            .frame(width: side, height: side).background(RoundedRectangle(cornerRadius: side * 0.26, style: .continuous).fill(Self.tile(hue: hue)))
+    }
+
+    /// The tile behind the white letter. Yellows and greens at this saturation and brightness are so light that the
+    /// letter measured 2.2:1 on GitHub's gold: those are darkened to a luminance where white keeps 3.5:1.
+    static func tile(hue: Double) -> Color {
+        let raw = NSColor(hue: hue, saturation: 0.55, brightness: 0.78, alpha: 1).usingColorSpace(.sRGB) ?? .gray
+        var color = RGBA(Double(raw.redComponent), Double(raw.greenComponent), Double(raw.blueComponent))
+        if relativeLuminance(color) > 0.25 { color = themeShade(color, luminance: 0.25) }
+        return Color(red: color.red, green: color.green, blue: color.blue)
     }
 }
 
