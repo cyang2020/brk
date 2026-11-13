@@ -2,10 +2,9 @@ import BrkBase
 import CoreGraphics
 import Foundation
 
-/// Keyboard input through the window server, addressed to the app under test only (`CGEvent.postToPid`): the events
-/// enter Brk's event queue as a keyboard's do and take AppKit's whole path (key window, menu key equivalents, the
-/// field editor, Chromium's key handling), unlike the control socket's in-process `press`, which hands events to
-/// `NSApp.sendEvent` directly. Posting to one process cannot type into another app.
+/// Keyboard input through the window server: the events take AppKit's whole path (key window, menu key equivalents,
+/// the field editor, Chromium's key handling). `press` and `type` address only the app under test; `strike` uses the
+/// active app, which the caller checks first.
 enum PhysicalKeys {
     private static let modifierKeys: [(Modifiers, CGKeyCode, CGEventFlags)] = [
         (.control, 59, .maskControl), (.option, 58, .maskAlternate), (.shift, 56, .maskShift), (.command, 55, .maskCommand),
@@ -37,6 +36,41 @@ enum PhysicalKeys {
             event.flags = []
             event.post(tap: .cghidEventTap)
         }
+    }
+
+    /// A US keyboard's key for each character it can type, with Shift or not.
+    private static let usKeys: [Character: (code: CGKeyCode, shift: Bool)] = {
+        var map: [Character: (CGKeyCode, Bool)] = [" ": (49, false), "\t": (48, false), "\r": (36, false), ".": (47, false), ",": (43, false), "/": (44, false), "-": (27, false), "=": (24, false), "'": (39, false),
+                                                   "%": (23, true), "?": (44, true), ":": (41, true), "(": (25, true), ")": (29, true), "+": (24, true), "*": (28, true)]
+        for key in Key.allCases {
+            let name = key.description
+            guard name.count == 1, let character = name.first, character.isASCII, character.isLetter || character.isNumber else { continue }
+            map[character] = (CGKeyCode(key.code), false)
+            if character.isLetter { map[Character(name.uppercased())] = (CGKeyCode(key.code), true) }
+        }
+        map["#"] = (20, true)
+        return map
+    }()
+
+    /// Text struck as a US keyboard types it (key codes at the HID tap, Shift held for a capital), into whichever app
+    /// is active: the caller makes sure that is this run's Brk. "\t" is Tab and "\r" Return. Key events that carry only
+    /// a character (`type(_:pid:)`) do not reach AppKit's text fields this way.
+    static func strike(_ text: String) throws {
+        let source = CGEventSource(stateID: .hidSystemState)
+        func post(_ code: CGKeyCode, _ down: Bool, _ flags: CGEventFlags) {
+            guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { return }
+            event.flags = flags
+            event.post(tap: .cghidEventTap)
+            usleep(12_000)
+        }
+        for character in text {
+            guard let key = usKeys[character] else { throw Check(description: "no key for \(character)") }
+            if key.shift { post(56, true, .maskShift) }
+            post(key.code, true, key.shift ? .maskShift : [])
+            post(key.code, false, key.shift ? .maskShift : [])
+            if key.shift { post(56, false, []) }
+        }
+        clearSystemModifiers(KeyChord([.shift], .a))
     }
 
     /// Text as key events carrying their characters (no modifiers), one per character.

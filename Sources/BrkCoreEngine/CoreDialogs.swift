@@ -40,6 +40,7 @@ extension CorePage {
             let accepted = response == .alertFirstButtonReturn
             self?.trace("[page-dialog] answered page=\(self?.id.description ?? "-") accepted=\(accepted)")
             if self?.openDialog?.alert === alert { self?.openDialog = nil }
+            if dialog.kind == .beforeUnload, !accepted { self?.reloadRefused() }
             dialog.answer(accepted, text: accepted ? field?.stringValue : nil)
         }
         if let field { window.makeFirstResponder(field) }

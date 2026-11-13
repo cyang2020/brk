@@ -333,7 +333,8 @@ final class ChromePage: CefBrowserDelegate {
         browser.closeNativeAuxiliaries()
         browser.closeDevTools()
         surface.returnViews()
-        // Forced, so a page's beforeunload never asks on tab close (audit #13, deferred). Asking needs a two-phase close:
+        // Forced, and Chromium's beforeunload question for it is answered Leave (`runBeforeUnloadDialog`), so a page never
+        // asks on tab close (audit #13, deferred). Asking needs a two-phase close:
         // the domain keeps the tab and its live page until the page answers, and Stay keeps both. close(force: false)
         // alone would leave a hidden live browser with no tab, and the views are already back, so the dialog has no window.
         chrome.browser.close(force: true)
@@ -575,7 +576,7 @@ final class ChromePage: CefBrowserDelegate {
             callback.cancel(); return true
         }
         let alert = NSAlert()
-        alert.messageText = dialog.origin
+        alert.messageText = Self.dialogTitle(origin: dialog.origin)
         alert.informativeText = dialog.message
         alert.addButton(withTitle: "OK")
         var field: NSTextField?
@@ -595,23 +596,44 @@ final class ChromePage: CefBrowserDelegate {
         return true
     }
 
+    /// "example.com says", as Chrome and BrkCore title a page's dialog: CEF hands over the frame's whole address
+    /// (path and query too), which named the page rather than the site that asks.
+    static func dialogTitle(origin: String) -> String {
+        guard let url = URL(string: origin), ["http", "https"].contains(url.scheme?.lowercased()), let host = url.host, !host.isEmpty else { return "This page says" }
+        return (url.port.map { "\(host):\($0)" } ?? host) + " says"
+    }
+
     /// Leaving or reloading the page while it has a `beforeunload` handler: Leave or Stay, on a sheet for the same reason.
     /// A page that is not on screen (or whose window already has a sheet) stays, as a dismissed dialog does in Chrome:
     /// its typed text is kept, and CefKit's app-modal fallback never runs.
     func browser(_ b: CefBrowser, runBeforeUnloadDialog message: String, isReload: Bool, callback: CefJSDialogCallback) -> Bool {
         guard b === browser else { return false }
-        guard let window = dialogWindow(b) else { callback.continue(success: false); return true }
+        // Brk is closing this page (its tab went, or the app quits). Chromium asks even though the close is forced;
+        // staying cancelled the close and left a live browser with no tab, which also held up the quit.
+        guard engine.isLive(self) else { callback.continue(success: true); return true }
+        guard let window = dialogWindow(b) else { stay(callback); return true }
         let alert = NSAlert()
         alert.messageText = isReload ? "Reload this page?" : "Leave this page?"
-        alert.informativeText = message.isEmpty ? "Changes you made may not be saved." : message
+        // Chrome's words, as on BrkCore. A page's own text is ignored by every browser; CEF puts its placeholder "Is it
+        // OK to leave/reload this page?" in `message`.
+        alert.informativeText = "Changes you made may not be saved."
         alert.addButton(withTitle: isReload ? "Reload" : "Leave")
         alert.addButton(withTitle: "Stay")
         dialogSheet = alert
         alert.beginSheetModal(for: window) { [weak self] response in
             if self?.dialogSheet === alert { self?.dialogSheet = nil }
-            callback.continue(success: response == .alertFirstButtonReturn)
+            if response == .alertFirstButtonReturn { callback.continue(success: true) }
+            else if let self { self.stay(callback) }
+            else { callback.continue(success: false) }
         }
         return true
+    }
+
+    /// The page stays: Chromium drops the reload that asked, so no document comes to finish Brk's reload sequence,
+    /// which would otherwise hold every later reload of this page (⌘R did nothing after Stay).
+    private func stay(_ callback: CefJSDialogCallback) {
+        reloadSequence.cancel()
+        callback.continue(success: false)
     }
 
     /// Where a dialog of `b` goes: a native child's own window, or this page's window while the page shows in it and

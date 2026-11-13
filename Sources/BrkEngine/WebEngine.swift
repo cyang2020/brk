@@ -223,6 +223,22 @@ open class PageSurfaceView: NSView {
     open func prepareEditingMenu() async {}
 }
 
+extension NSMenu {
+    /// A context menu at `point` (in `view`) when there is no right click's event to hand AppKit (a page's menu comes
+    /// from Chromium, a sidebar menu from the store), placed as macOS places a right click's menu: below and right of
+    /// the point, or above it where the screen ends first. `popUp(positioning:at:in:)` keeps the menu's top at the
+    /// point, so a right click low on the screen got a cut-off menu with a scroll arrow. Returns once the menu closes.
+    public func popUpAsContextMenu(at point: CGPoint, in view: NSView) {
+        guard let window = view.window,
+              let event = NSEvent.mouseEvent(with: .rightMouseDown, location: view.convert(point, to: nil), modifierFlags: [],
+                                             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                             context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else {
+            popUp(positioning: nil, at: point, in: view); return
+        }
+        NSMenu.popUpContextMenu(self, with: event, for: view)
+    }
+}
+
 extension WebEngine {
     public func find(_ request: FindRequest) {
         if let id = request.requestID { delegate?.engine(self, find: .failed(id, .unavailable)) }

@@ -206,7 +206,7 @@ final class AppUnderTest {
             if scenarioID == "QuickBar-Spotlight" { environment["BRK_LOCAL_SEARCH_SPOTLIGHT"] = "1" }
             if scenarioID != "QuickBar-NoRates" { environment["BRK_CURRENCY_RATES_FILE"] = QuickBarScenarios.ratesFile(self).path }
         }
-        if (scenarioID.hasPrefix("AI") && !scenarioID.hasPrefix("AIReal")) || scenarioID == "QuickBar-Prefix" {
+        if (scenarioID.hasPrefix("AI") && !scenarioID.hasPrefix("AIReal")) || scenarioID == "QuickBar-Prefix" || scenarioID == "PageReal-Menus" {
             environment["BRK_AI_FIXTURE_EXECUTABLE"] = site.root.deletingLastPathComponent().appendingPathComponent("Fixtures/ai-provider").path
             environment["BRK_AI_FIXTURE_LOG"] = dataDirectory.appendingPathComponent("ai-fixture.jsonl").path
         }

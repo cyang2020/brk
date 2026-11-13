@@ -97,38 +97,11 @@ enum QuickBarScenarios {
 
     // MARK: Real keys
 
-    private static let codes: [Character: (code: CGKeyCode, shift: Bool)] = {
-        var map: [Character: (CGKeyCode, Bool)] = [" ": (49, false), "\t": (48, false), "\r": (36, false), ".": (47, false), ",": (43, false), "/": (44, false), "-": (27, false), "=": (24, false), "'": (39, false),
-                                                   "%": (23, true), "?": (44, true), ":": (41, true), "(": (25, true), ")": (29, true), "+": (24, true), "*": (28, true)]
-        for key in Key.allCases {
-            let name = key.description
-            guard name.count == 1, let character = name.first, character.isASCII, character.isLetter || character.isNumber else { continue }
-            map[character] = (CGKeyCode(key.code), false)
-            if character.isLetter { map[Character(name.uppercased())] = (CGKeyCode(key.code), true) }
-        }
-        map["#"] = (20, true)
-        return map
-    }()
-
     /// Text as a US keyboard types it, posted at the window server while this Brk is the active app. "\t" is Tab and "\r"
     /// Return, struck in the same burst as the letters before them.
     private static func type(_ app: AppUnderTest, _ text: String) throws {
         try WindowServerKeys.ensureFrontmost(app, app.window!)
-        let source = CGEventSource(stateID: .hidSystemState)
-        func post(_ code: CGKeyCode, _ down: Bool, _ flags: CGEventFlags) {
-            guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { return }
-            event.flags = flags
-            event.post(tap: .cghidEventTap)
-            usleep(12_000)
-        }
-        for character in text {
-            guard let key = codes[character] else { throw Check(description: "no key for \(character)") }
-            if key.shift { post(56, true, .maskShift) }
-            post(key.code, true, key.shift ? .maskShift : [])
-            post(key.code, false, key.shift ? .maskShift : [])
-            if key.shift { post(56, false, []) }
-        }
-        PhysicalKeys.clearSystemModifiers(KeyChord([.shift], .a))
+        try PhysicalKeys.strike(text)
     }
 
     private static func press(_ app: AppUnderTest, _ modifiers: Modifiers = [], _ key: Key) throws {
