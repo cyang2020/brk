@@ -7,8 +7,8 @@ import Foundation
 
 enum MediaScenarios {
     static let all = [
-        Scenario("R55-Row", "a real click plays: the row shows one speaker between icon and title and nothing at its end; clicking the speaker mutes and unmutes the real tab", cefOnly: "real mouse and Chrome media", rowSpeaker),
-        Scenario("R55-Card", "a playing tab left behind shows a card over the dock; the pointer makes it taller with its title; a real click on Pause really pauses without changing the tab; Play plays; shown again the card goes", cefOnly: "real mouse and Chrome media", card),
+        Scenario("R55-Row", "a real click plays: the row shows one speaker between icon and title and nothing at its end; clicking the speaker mutes and unmutes the real tab", rowSpeaker),
+        Scenario("R55-Card", "a playing tab left behind shows a card over the dock; the pointer makes it taller with its title; a real click on Pause really pauses without changing the tab; Play plays; shown again the card goes", card),
         ]
     static func row(_ app: AppUnderTest, _ item: ItemID) throws -> TabRow? { tab(item, in: try app.view()) }
     @Sendable static func controls(_ app: AppUnderTest) throws {

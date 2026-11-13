@@ -10,7 +10,7 @@ import Foundation
 enum SitePermissionScenarios {
     static let all = [
         Scenario("SitePermission-prompt", "Brk's prompt: Allow this time, Never allow, remembered denial, back to Ask, Allow while visiting",
-                 cefOnly: "CEF permission callbacks", prompt),
+                 prompt),
     ]
 
     @Sendable static func prompt(_ app: AppUnderTest) throws {

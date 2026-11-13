@@ -12,11 +12,11 @@ import Foundation
 enum AIRightPanelScenarios {
     static let all: [Scenario] = [
         Scenario("AIAgentRightPanel-Migration", "old data with a pinned, a foldered and an archived conversation row and one in another Space: after the launch no conversation row is left, each conversation is in its Space's list, the kept page's row and the emptied folder stay",
-                 cefOnly: "native panel and a seeded data folder", migration),
+                 migration),
         Scenario("AIAgentRightPanel-Toggle", "the title row's chat button: a click opens, a second closes, the open fill, the waiting count, the narrow row's … with its count, no button with AI off",
-                 cefOnly: "native title row", toggle),
+                 toggle),
         Scenario("AIAgentRightPanel-EdgeDrop", "a tab dragged toward the window's right edge: the split slot over the page first, then the drop area in the last 40 pt; letting go opens a new conversation with the tab as a chip; a drop before the band still splits",
-                 cefOnly: "native drag", edgeDrop),
+                 edgeDrop),
     ]
 
     private typealias T = AIThreadsScenarios
@@ -567,8 +567,7 @@ enum AIRightPanelScenarios {
 enum AIRealRightPanelScenarios {
     static var all: [Scenario] {
         guard let name = ProcessInfo.processInfo.environment["BRK_E2E_REAL_RIGHT_AGENT"], let choice = AIProviderChoice(rawValue: name), choice.kind != nil else { return [] }
-        return [Scenario("AIRealRightPanel-\(name)", "real \(name): two tabs dragged in, one question, the page kept as a tab, the list row's hover lights the two tabs, the page's button opens the conversation",
-                         cefOnly: "real agent, real input") { try route($0, choice) }]
+        return [Scenario("AIRealRightPanel-\(name)", "real \(name): two tabs dragged in, one question, the page kept as a tab, the list row's hover lights the two tabs, the page's button opens the conversation") { try route($0, choice) }]
     }
 
     private typealias T = AIThreadsScenarios

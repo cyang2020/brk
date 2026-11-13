@@ -6,13 +6,11 @@ import BrkBase
 /// The engine is a page factory and an event source. It knows nothing of tabs, spaces, sidebars or commands:
 /// the app tells it which pages should exist (`reconcile`), asks it for a page's view (`surface`), sends one-shot
 /// actions (`perform`), moves keyboard focus (`focus`), and receives events and key presses through its delegate.
-/// Everything Chromium-specific is hidden behind this interface: CEF initialization, the Chrome-runtime host window
-/// per page, moving Chromium's views into our card, keeping host windows from becoming key, renderer crashes, and
-/// the shutdown order.
+/// Everything Chromium-specific is hidden behind this interface: starting Chromium, each page's view in our card,
+/// renderer crashes, and the shutdown order.
 ///
-/// Implementations: `CEFEngine` (BrkCEF; Chrome runtime, views embedded) and `StubEngine` (no Chromium; placeholder
-/// views; used by `BRK_ENGINE=stub` and by UI work without a CEF download). An Alloy-runtime engine can be added as a
-/// third implementation for testing or fallback without touching any caller.
+/// The one implementation the app runs is `CoreEngine` (BrkCoreEngine, on BrkCore.framework, Brk's own Chromium build).
+/// The unit tests use a stub engine with placeholder views (Tests/BrkAppTests/StubEngine.swift).
 ///
 /// Identity rule for reused ids (`PageLedger`): a page id leaves the live set the moment `reconcile` stops listing
 /// it, so the same id can be live again while the old browser is still closing. The old incarnation's events are

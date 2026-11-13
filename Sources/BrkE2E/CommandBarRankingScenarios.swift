@@ -11,7 +11,7 @@ import Foundation
 enum CommandBarRankingScenarios {
     static let all = [
         Scenario("Ranking-CmdT", "real keys: part of an open tab's title puts the search first and the tab second, a whole word puts the tab first, a visited page sits under the search, typed visits and more visits rank a page up, a command run from the bar moves above the search, and the tab on screen is listed as a visited page",
-                 cefOnly: "native command bar, real keys", ranking),
+                 ranking),
     ]
 
     private typealias S = SidebarReviewScenarios

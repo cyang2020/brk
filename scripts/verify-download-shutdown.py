@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Drive this checkout's CEF app through immediate download shutdown, optionally under LLDB."""
+"""Drive this checkout's BrkCore app through immediate download shutdown, optionally under LLDB."""
 import argparse
 import http.server
 import json

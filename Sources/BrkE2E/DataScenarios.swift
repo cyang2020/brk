@@ -6,8 +6,8 @@ import Foundation
 
 enum DataScenarios {
     static let all = [
-        Scenario("DataCookiesRefreshRestart", "cookie refresh: every storage class and two origins/profiles after restart", cefOnly: "CEF storage", cookiesRestart),
-        Scenario("DataPrivateExpiry", "last private window resets every storage class, cancels transport and audits disk/logs", cefOnly: "off-record context", privateExpiry),
+        Scenario("DataCookiesRefreshRestart", "cookie refresh: every storage class and two origins/profiles after restart", cookiesRestart),
+        Scenario("DataPrivateExpiry", "last private window resets every storage class, cancels transport and audits disk/logs", privateExpiry),
     ]
 
     static func row(_ app: AppUnderTest, _ item: ItemID) throws -> TabRow? {

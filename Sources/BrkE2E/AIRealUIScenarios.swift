@@ -15,8 +15,7 @@ import Foundation
 enum AIRealUIScenarios {
     static var all: [Scenario] {
         guard let name = ProcessInfo.processInfo.environment["BRK_E2E_REAL_UI_AGENT"], let choice = AIProviderChoice(rawValue: name), choice.kind != nil else { return [] }
-        return [Scenario("AIRealUI-\(name)", "real \(name), real input: Max pane, Tidy without pinned tabs, Ask, prefixes, page features, previews, titles, downloads, a folder session, restart",
-                         cefOnly: "real agent, real input") { try route($0, choice) }]
+        return [Scenario("AIRealUI-\(name)", "real \(name), real input: Max pane, Tidy without pinned tabs, Ask, prefixes, page features, previews, titles, downloads, a folder session, restart") { try route($0, choice) }]
     }
 
     private final class Log {

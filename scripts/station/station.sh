@@ -40,7 +40,6 @@ cd "$STATION"
 git checkout -q --detach "$REF"
 SHA="$(git rev-parse --short HEAD)"
 echo "[station] $REF at $SHA"
-[ -e .cef ] || ln -s "$HOME/.cache/arc-spike-swift/.cef" .cef
 if [ -d dist/Brk.app ]; then
   # incremental: the station lock already serializes station builds, and a warm incremental build is short,
   # so it does not queue behind the general build lock (cold builds and test runs still do)

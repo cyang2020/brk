@@ -10,9 +10,9 @@ import Foundation
 enum AutofillScenarios {
     static let all = [
         Scenario("Autofill-Pick", "an address saved by submitting a form is offered in the empty field and a real click on the suggestion fills it",
-                 cefOnly: "autofill is Chromium's", pick),
+                 pick),
         Scenario("Password-SaveCard", "a submitted login asks with Arc's centred card, not Chromium's bubble; a real click on Save keeps it and the login page fills it next time",
-                 cefOnly: "the password manager is Chromium's", saveCard),
+                 saveCard),
     ]
     private typealias E = SidebarEvidenceScenarios
     static let address = "casper@example.com"

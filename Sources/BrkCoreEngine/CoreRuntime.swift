@@ -3,8 +3,7 @@ import BrkBase
 import CBrkCore
 import Foundation
 
-/// BrkCore.framework, Brk's own Chromium build (engine/, docs/chromium/ARC-ENGINE.md). Found at run time, so a build without it still
-/// links and runs on CEF. `load` must run before anything touches NSApp: it installs Chromium's NSApplication class.
+/// Loads the bundled BrkCore.framework before anything touches NSApp: Chromium installs its NSApplication class.
 @MainActor
 public final class BrkCoreRuntime {
     public struct Unavailable: Error, CustomStringConvertible {
@@ -53,16 +52,16 @@ public final class BrkCoreRuntime {
     /// Runs Chromium's main, which runs NSApp, until Chromium has shut down. The exit code.
     public func run() -> Int32 { Int32(application.run()) }
 
-    /// Chromium's command line. Test launches get what CEFEngine gives them, with no calls home on top.
+    /// Chromium's command line. Controlled test launches use an isolated keychain and local fixture hosts.
     static func arguments(userData: URL, debugPort: Int?, environment: [String: String]) -> [String] {
         var out = [CommandLine.arguments[0], "--user-data-dir=\(userData.path)", "--profile-directory=Default", "--no-startup-window",
-                   "--no-first-run", "--no-default-browser-check"]
+                   "--no-first-run", "--no-default-browser-check", "--disable-background-networking",
+                   "--disable-component-update", "--disable-sync", "--disable-domain-reliability"]
         if let debugPort { out.append("--remote-debugging-port=\(debugPort)") }
-        if environment["BRK_CONTROL_SOCKET"] != nil {
-            out += ["--use-mock-keychain", "--host-resolver-rules=MAP *.brk.test 127.0.0.1, MAP *.localhost 127.0.0.1",
-                    "--disable-background-networking", "--disable-component-update", "--disable-sync"]
+        if LaunchOptions(environment: environment).controlSocket != nil {
+            out += ["--use-mock-keychain", "--host-resolver-rules=MAP *.brk.test 127.0.0.1, MAP *.localhost 127.0.0.1"]
             if let spki = environment["BRK_TEST_TRUSTED_SPKI"], !spki.isEmpty { out.append("--ignore-certificate-errors-spki-list=\(spki)") }
-            if let log = environment["BRK_TEST_CEF_LOG"], !log.isEmpty { out += ["--enable-logging", "--log-file=\(log)", "--v=0"] }
+            if let log = environment["BRK_TEST_CHROMIUM_LOG"], !log.isEmpty { out += ["--enable-logging", "--log-file=\(log)", "--v=0"] }
         }
         return out
     }

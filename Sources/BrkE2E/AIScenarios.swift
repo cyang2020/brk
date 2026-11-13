@@ -8,9 +8,9 @@ import Foundation
 /// Every AI scenario launches only Tests/Fixtures/ai-provider. Pages and filesystem destinations are owned fixtures.
 enum AIScenarios {
     static let all = [
-        Scenario("AICommand", "Opt+Cmd+G asks with streaming, cancel and actionable failure", cefOnly: "native command bar", command),
-        Scenario("AIOrganize", "Today's divider Tidy groups Today, the undo toast restores order and restart preserves tabs", cefOnly: "native Today groups", organize),
-        Scenario("AITranslateOffer", "a real click on the pill's Translation Available opens Arc's Translate this page popover (P50-g); its Translate translates", cefOnly: "CEF isolated world", translateOffer),
+        Scenario("AICommand", "Opt+Cmd+G asks with streaming, cancel and actionable failure", command),
+        Scenario("AIOrganize", "Today's divider Tidy groups Today, the undo toast restores order and restart preserves tabs", organize),
+        Scenario("AITranslateOffer", "a real click on the pill's Translation Available opens Arc's Translate this page popover (P50-g); its Translate translates", translateOffer),
     ]
     private static func enable(_ app: AppUnderTest, _ features: [AIFeature] = AIFeature.allCases) throws {
         for feature in features { try app.dispatch(.settings(.max(.feature(feature, true)))) }

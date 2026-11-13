@@ -11,9 +11,9 @@ import Foundation
 /// download opens; a running download's disc, ring and ×.
 enum LibraryFlyoutScenarios {
     static let all = [
-        Scenario("LibraryFlyout-Hover", "resting the real pointer on the Library button opens the newest four downloads above it as Arc does; a real click on a finished one previews it", cefOnly: "real downloads and window-server pointer", hover),
-        Scenario("LibraryFlyout-Running", "a running download shows its disc on the button and a ring, progress and × in its row; the real × cancels it", cefOnly: "real downloads and window-server pointer", running),
-        Scenario("LibraryFlyout-Flight", "a real click on a download link throws the download icon from the click into the Library button; with the sidebar hidden it lands in Arc's bin at the corner", cefOnly: "real downloads and window-server pointer", flight),
+        Scenario("LibraryFlyout-Hover", "resting the real pointer on the Library button opens the newest four downloads above it as Arc does; a real click on a finished one previews it", hover),
+        Scenario("LibraryFlyout-Running", "a running download shows its disc on the button and a ring, progress and × in its row; the real × cancels it", running),
+        Scenario("LibraryFlyout-Flight", "a real click on a download link throws the download icon from the click into the Library button; with the sidebar hidden it lands in Arc's bin at the corner", flight),
     ]
 
     /// Arc's pale blue fixture Space (capture-brk-scenes.py's SKY), so the pictures sit beside Arc's.

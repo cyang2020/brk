@@ -10,22 +10,18 @@ import Foundation
 /// Each body follows the steps and assertions listed for its id in docs/design/swift/module-map.md, with expected
 /// values from `Metrics`.
 ///
-/// Engines: `cefOnly` scenarios have nothing the stub can judge and are SKIPPED on it without a launch. Others run on
-/// the stub; checks only Chromium can make either end the scenario as SKIPPED (`requireCEF`) or are noted next to a
-/// PASS (`onCEF`), as the module map's honesty rule says.
+/// Every scenario launches the packaged BrkCore app.
 struct Scenario: Sendable {
     let id: String
     let title: String
-    let cefOnly: String?
     /// The wave-2 worker whose feature this scenario proves; while set, the scenario is SKIPPED without a launch
     /// (its body is the contract the worker makes pass, then removes the tag).
     let pending: String?
     let run: @Sendable (AppUnderTest) throws -> Void
 
-    init(_ id: String, _ title: String, cefOnly: String? = nil, pending: String? = nil, _ run: @escaping @Sendable (AppUnderTest) throws -> Void) {
+    init(_ id: String, _ title: String, pending: String? = nil, _ run: @escaping @Sendable (AppUnderTest) throws -> Void) {
         self.id = id
         self.title = title
-        self.cefOnly = cefOnly
         self.pending = pending
         self.run = run
     }
@@ -33,28 +29,24 @@ struct Scenario: Sendable {
 
 enum Scenarios {
     static let all: [Scenario] = [
-        Scenario("F12", "repeated native Find reclaims the query after a page click", cefOnly: "native find", FindScenarios.repeatedFindFocus),
-        Scenario("F1", "find native keys, remaps, counts and queued steps", cefOnly: "native find", FindScenarios.keysAndCounts),
-        Scenario("F3", "input and textarea Unicode replacements, input events and undo", cefOnly: "renderer editing", FindScenarios.controlsAndUndo),
-        Scenario("F8", "independent windows, Peek, split and private find", cefOnly: "native find", FindScenarios.windowsPeekAndPrivate),
+        Scenario("F12", "repeated native Find reclaims the query after a page click", FindScenarios.repeatedFindFocus),
+        Scenario("F1", "find native keys, remaps, counts and queued steps", FindScenarios.keysAndCounts),
+        Scenario("F3", "input and textarea Unicode replacements, input events and undo", FindScenarios.controlsAndUndo),
+        Scenario("F8", "independent windows, Peek, split and private find", FindScenarios.windowsPeekAndPrivate),
         Scenario("2", "Cmd+T opens the centered command bar; Enter on a URL adds a Today tab that loads it", PlanScenarios.newTab),
         Scenario("4", "clicking a dock space switches space: its rows show and the background changes", PlanScenarios.dockSwitch),
         Scenario("6", "Ctrl+Shift+= makes a split: two cards side by side, gap 10, both pages live", PlanScenarios.split),
         Scenario("7", "past the threshold an idle Today tab is archived, shown in the archive, restorable", PlanScenarios.autoArchive),
         Scenario("8", "Cmd+W closes the page: OnBeforeClose logged and no surface left", PlanScenarios.closeTab),
         Scenario("9", "restart restores spaces, Pinned, Today, current tab, sidebar width; only it loads", PlanScenarios.restart),
-        Scenario("R3", "a Cmd+click link opens a background Today tab that loads", cefOnly: "a click on a link in a page",
-                 RegressionScenarios.cmdClickLink),
-        Scenario("R7a", "a page that calls window.close() loses its row as Cmd+W does and leaves no blank card", cefOnly: "window.close() in a page",
-                 RegressionScenarios.pageCloses),
-        Scenario("R7b", "a crashed renderer is recovered without any other input", cefOnly: "a renderer process to crash",
-                 RegressionScenarios.rendererCrash),
+        Scenario("R3", "a Cmd+click link opens a background Today tab that loads", RegressionScenarios.cmdClickLink),
+        Scenario("R7a", "a page that calls window.close() loses its row as Cmd+W does and leaves no blank card", RegressionScenarios.pageCloses),
+        Scenario("R7b", "a crashed renderer is recovered without any other input", RegressionScenarios.rendererCrash),
         Scenario("R8", "a window saved off every display reopens on screen", RegressionScenarios.offscreenWindow),
         Scenario("R9", "after a space switch only the current space's surface is in the window; screen shows it", RegressionScenarios.onlyCurrentSurface),
-        Scenario("R10", "a GPU process crash leaves the native sidebar working and pages repaint", cefOnly: "a GPU process to crash",
-                 RegressionScenarios.gpuCrash),
+        Scenario("R10", "a GPU process crash leaves the native sidebar working and pages repaint", RegressionScenarios.gpuCrash),
         Scenario("N1", "app-priority keys never reach the page; page-priority keys do; press twice takes Cmd+S",
-                 cefOnly: "page titles written by keys.html's key listener", NativeScenarios.keyPriorities),
+                 NativeScenarios.keyPriorities),
         Scenario("N2", "focus goes to the command bar and back to the page; no CEF host window is ever key", NativeScenarios.focusRoundTrip),
         Scenario("N3R", "the window buttons stay at Arc's spots with the real pointer over them and through resizes", NativeScenarios.lightsStayUnderThePointer),
         Scenario("N4", "quit with three pages and a split exits 0 with no crash report", NativeScenarios.cleanQuit),

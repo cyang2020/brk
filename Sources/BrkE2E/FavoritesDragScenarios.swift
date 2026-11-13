@@ -9,12 +9,12 @@ import Foundation
 /// command; every gesture under test is posted through the window server, so it is the same path a person's mouse takes.
 enum FavoritesDragScenarios {
     static let all = [
-        Scenario("R53-PressOpens", "a real press opens a Today row, a pinned row and a Favorite while the button is still down; Command and Shift clicks only select", cefOnly: "real mouse", pressOpens),
-        Scenario("R53-TabIn", "a Today tab and a pinned tab held over four Favorites reflow them to 3+2 with the empty cell under the pointer, and land there as the current tab; a folder is refused", cefOnly: "real mouse", tabIn),
-        Scenario("R53-Reorder", "a Favorite held inside the grid slides the others live and lands in the cell under the pointer", cefOnly: "real mouse", reorder),
-        Scenario("R53-Out", "a Favorite dragged out leaves its cell empty, shows a row and lands in Today or Pinned as the current tab; the grid rebalances after the release", cefOnly: "real mouse", out),
-        Scenario("R53-SplitSides", "a tab held on another tab's middle shows a slot under the pointer's half and lands on that side, focused; 9.5 pt from the edge reorders, 11.5 pt is a slot; on a split row one band, and the left and right ends make it the first and the last pane", cefOnly: "real mouse", splitSides),
-        Scenario("R54-Halves", "a tab released on the left half and on the right half of the page makes a split with it on that side and focused", cefOnly: "real mouse", halves),
+        Scenario("R53-PressOpens", "a real press opens a Today row, a pinned row and a Favorite while the button is still down; Command and Shift clicks only select", pressOpens),
+        Scenario("R53-TabIn", "a Today tab and a pinned tab held over four Favorites reflow them to 3+2 with the empty cell under the pointer, and land there as the current tab; a folder is refused", tabIn),
+        Scenario("R53-Reorder", "a Favorite held inside the grid slides the others live and lands in the cell under the pointer", reorder),
+        Scenario("R53-Out", "a Favorite dragged out leaves its cell empty, shows a row and lands in Today or Pinned as the current tab; the grid rebalances after the release", out),
+        Scenario("R53-SplitSides", "a tab held on another tab's middle shows a slot under the pointer's half and lands on that side, focused; 9.5 pt from the edge reorders, 11.5 pt is a slot; on a split row one band, and the left and right ends make it the first and the last pane", splitSides),
+        Scenario("R54-Halves", "a tab released on the left half and on the right half of the page makes a split with it on that side and focused", halves),
     ]
 
     private typealias S = SidebarReviewScenarios

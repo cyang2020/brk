@@ -1,6 +1,6 @@
 # Contributing to Brk
 
-Thanks for helping. Brk is a native macOS rebuild of the Arc browser (Swift 6, AppKit, Chromium through CEF) with
+Thanks for helping. Brk is a native macOS rebuild of the Arc browser (Swift 6, AppKit, BrkCore Chromium) with
 upgrades on top. It is a small project with one maintainer, so focused changes with clear evidence get reviewed
 fastest.
 
@@ -25,20 +25,20 @@ the direction. Small fixes for an obvious bug can go straight to a pull request.
 
 ## Build and run
 
-You need a Mac with Apple silicon, macOS 14 or later, and Xcode with Swift 6. The first build downloads CEF
-(about 132 MB) into `.cef/`.
+You need macOS 14 or later and Xcode with Swift 6. Download the pinned engine for your Mac, or build Chromium using `engine/README.md`.
 
 ```sh
-scripts/build.sh                 # release build, unit tests, CEF bundle and ad-hoc signature: dist/Brk.app
+python3 engine/download-artifact.py "$(uname -m)" --out .build/brkcore
+export BRK_CORE_DIR="$PWD/.build/brkcore"
+scripts/build.sh                 # release build, unit tests, BrkCore bundle and ad-hoc signature: dist/Brk.app
 SKIP_TESTS=1 scripts/build.sh    # the same without the unit tests
 open dist/Brk.app
 ```
 
-After the first full build, `scripts/station/refresh-app.sh` rebuilds only the app and helper binaries into the
+After the first full build, `scripts/station/refresh-app.sh` rebuilds only the Swift app binaries into the
 existing `dist/Brk.app`, which is much faster while you iterate.
 
-`BRK_ENGINE=stub swift run Brk` runs the whole interface without Chromium (pages are placeholders). It is handy
-for sidebar, command bar and theme work.
+Every app launch uses BrkCore. Unit tests use an in-process fake; it is not linked into the app.
 
 Where the code lives:
 
@@ -46,7 +46,7 @@ Where the code lives:
   state and effects. Most behaviour fixes belong here and are unit-testable.
 - `Sources/BrkSidebar`, `BrkContent`, `BrkOverlays`, `BrkLibrary`, `BrkSettings`: the interface.
 - `Sources/BrkApp`: the app delegate, menus, windows and the glue to the engine.
-- `Sources/BrkCEF`: the CEF engine. `engine/` is Brk's own Chromium build, experimental.
+- `Sources/BrkCoreEngine`: Chromium integration. `engine/` holds the BrkCore build and patch series.
 - `docs/design/`: design notes. `docs/arc-anatomy/`: facts measured from Arc 1.170.
 
 ## Tests

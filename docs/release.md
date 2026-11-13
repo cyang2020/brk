@@ -29,7 +29,7 @@ A run has two jobs. The `build` job runs on one `macos-26` runner (Apple silicon
 
 1. If all five signing secrets are set (see below), signing is on. Otherwise the apps are signed ad hoc; if only some are set, the run says which are missing.
 2. `scripts/build.sh` runs the unit tests and builds the arm64 app.
-3. `ARCH=x86_64 scripts/build.sh` builds the Intel app. It is cross-compiled on the same machine: the Swift products are built with `--triple x86_64-apple-macosx14.0` and bundled with the `macosx64` CEF, the Intel Dock tile plug-in and llama.cpp's Intel runtime. The unit tests run only once, in step 2.
+3. `ARCH=x86_64 scripts/build.sh` builds the Intel app. It is cross-compiled on the same machine: the Swift products are built with `--triple x86_64-apple-macosx14.0` and bundled with the pinned Intel BrkCore framework, the Intel Dock tile plug-in and llama.cpp's Intel runtime. The unit tests run only once, in step 2.
 4. With signing on, both apps are signed with the Developer ID, notarized and stapled.
 5. The job packs each app into its disk image (signed and notarized too when signing is on), writes the notes (`scripts/release-notes.sh`) and hands them on as a workflow artifact (kept three days).
 
@@ -37,7 +37,7 @@ When GitHub has no Apple-silicon runner free (it happens: a job can wait 15 minu
 
 The `publish` job then runs on a Linux runner. It takes the artifact and puts the disk images and notes on the release with `gh`, and deletes files the build no longer makes (the zips of earlier builds). It moves the `latest` tag through the GitHub API.
 
-Three caches keep later runs fast: SwiftPM's `.build` (saved per commit, restored from the newest one), the CEF downloads (`.cef/dist`, per CEF version) and the llama.cpp archives (`~/.cache/brk-llama`). A fresh checkout gives every file a new modification time, and SwiftPM would rebuild everything because of it. To avoid that, the workflow sets each file's time from its git content hash, so unchanged files look unchanged to the cached build.
+Two caches keep later runs fast: SwiftPM's `.build` (saved per commit, restored from the newest one) and the llama.cpp archives (`~/.cache/brk-llama`). The BrkCore archives are downloaded from the release pinned in `engine/artifacts.json`; the downloader checks SHA-256, architecture, source revision and interface hash before use. A fresh checkout gives every file a new modification time, and SwiftPM would rebuild everything because of it. To avoid that, the workflow sets each file's time from its git content hash, so unchanged files look unchanged to the cached build.
 
 Pushes that only touch `docs/`, `Tests/`, the website (`site/`), Markdown files or `.gitignore` build nothing, because they cannot change the app. A newer push to `main` cancels a run that is still going. Tag runs always finish.
 
@@ -67,12 +67,12 @@ Signing turns on when all five repository secrets are set (Settings > Secrets an
 The team ID comes from the certificate, so it needs no secret. With signing on:
 
 - the .p12 goes into a temporary keychain that is deleted at the end of the job;
-- `scripts/sign-developer-id.sh` signs every piece of code inside-out, with the hardened runtime and a secure timestamp. It starts with the CEF framework's libraries and the llama.cpp runtime, then the framework, the Dock tile plug-in and the five helpers, and ends with the app. Notarization rejects nested code that was signed only through `codesign --deep`;
+- `scripts/sign-developer-id.sh` signs every piece of code inside-out, with the hardened runtime and a secure timestamp. It signs libraries, nested helper apps and frameworks from the deepest path outward, then the Dock tile plug-in and the app. Chromium helpers live inside BrkCore.framework, so they must be signed before the framework. Notarization rejects nested code that was signed only through `codesign --deep`;
 - the entitlements follow Chromium's own Mac build. The renderer, GPU and plugin helpers get `com.apple.security.cs.allow-jit` (`scripts/signing/helper-jit.entitlements`). The app gets camera, microphone, location, Bluetooth, USB, printing and Photos (`scripts/signing/app.entitlements`), because under the hardened runtime macOS refuses those devices to an app signed without them;
 - `scripts/notarize.sh` submits each app with `xcrun notarytool` and the API key, waits for Apple's answer, staples the ticket and checks it with `spctl`. Only then is the app packed into its disk image;
 - `scripts/make-dmg.sh` signs the disk image with the same identity, and `scripts/notarize.sh` notarizes and staples the image as well, so neither opening the image nor the app copied out of it needs a network check.
 
-The hardened runtime's library validation means a signed Brk loads only frameworks signed by the same team. That includes Brk's own Chromium build (`BRK_ENGINE=core`), so that engine only works in local, ad hoc builds.
+The hardened runtime's library validation means a signed Brk loads only frameworks signed by the same team. The release signing step signs BrkCore, its helper apps and Brk with that identity.
 
 ## Security
 

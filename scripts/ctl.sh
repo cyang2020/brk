@@ -3,7 +3,7 @@
 # The wire format is BrkControl/Protocol.swift's Codable: each op is {"<case>": {<labelled values>}}, unlabelled
 # associated values are "_0", optional ones may be left out.
 #
-#   BRK_CONTROL_SOCKET=/tmp/brk.sock BRK_ENGINE=stub swift run Brk &
+#   BRK_CONTROL_SOCKET=/tmp/brk.sock dist/Brk.app/Contents/MacOS/Brk &
 #   scripts/ctl.sh /tmp/brk.sock '{"id":1,"op":{"hello":{}}}'
 #   scripts/ctl.sh /tmp/brk.sock '{"id":2,"op":{"press":{"chord":"cmd+t"}}}'
 #   scripts/ctl.sh /tmp/brk.sock '{"id":3,"op":{"native":{}}}'

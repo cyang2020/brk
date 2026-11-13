@@ -7,7 +7,7 @@
 #   SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" scripts/sign-developer-id.sh dist/Brk.app
 #   SIGN_KEYCHAIN=/path/to/ci.keychain-db ...   # optional: look the identity up in this keychain only
 #
-# Order: loose Mach-O files (the CEF framework's libraries, the llama runtime in Contents/Helpers/llama), then
+# Order: loose Mach-O files (the BrkCore framework's libraries, the llama runtime in Contents/Helpers/llama), then
 # frameworks, the Dock tile plug-in, the five helper apps and last the app itself.
 # Entitlements, as Chromium's own Mac build (chrome/app/*-entitlements.plist) gives them:
 # - the app: scripts/signing/app.entitlements (camera, microphone, location, Bluetooth, USB, printing, Photos);
@@ -46,18 +46,16 @@ find "$APP/Contents" -type f | while IFS= read -r file; do
   if is_macho "$file"; then echo "$file"; fi
 done | by_depth | while IFS= read -r file; do sign "$file"; done
 
-# 2. Frameworks and plug-ins.
-find "$APP/Contents" -type d \( -name '*.framework' -o -name '*.plugin' \) -prune | by_depth \
-  | while IFS= read -r bundle; do sign "$bundle"; done
-
-# 3. Helper apps, with the entitlements their process needs.
-find "$APP/Contents" -mindepth 1 -type d -name '*.app' -prune | by_depth | while IFS= read -r helper; do
-  case "$(basename "$helper")" in
-    "$PRODUCT Helper (Renderer).app"|"$PRODUCT Helper (GPU).app"|"$PRODUCT Helper (Plugin).app")
-      sign --entitlements "$SIGNING/helper-jit.entitlements" "$helper" ;;
-    *) sign "$helper" ;;
-  esac
-done
+# 2. Nested bundles in one depth-ordered pass. Chromium's helpers live inside BrkCore.framework;
+# signing the framework before those helpers would invalidate its seal.
+find "$APP/Contents" -type d \( -name '*.framework' -o -name '*.plugin' -o -name '*.app' \) | by_depth \
+  | while IFS= read -r bundle; do
+    case "$(basename "$bundle")" in
+      *' (Renderer).app'|*' (GPU).app'|*' (Aperitif Renderer).app'|*' (Aperitif GPU).app')
+        sign --entitlements "$SIGNING/helper-jit.entitlements" "$bundle" ;;
+      *) sign "$bundle" ;;
+    esac
+  done
 
 # 4. The app.
 sign --entitlements "$SIGNING/app.entitlements" "$APP"

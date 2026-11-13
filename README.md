@@ -270,7 +270,7 @@ These are the 24 Arc features that Brk has not verified, with the reasons record
 
 **Blocked**
 
-- **Extension buttons and their pop-ups (A097).** CEF 154 has no interface for extensions. Chromium opens an extension's pop-up only from Chrome's own toolbar, and putting the pop-up in a view of Brk's own makes most extensions act on the wrong tab. Brk shows the extension buttons greyed out. Pop-ups do work on Brk's own Chromium build (`engine/`), but that build is not the default, because 19 of 38 sampled scenarios fail on it.
+- **Extension buttons and their pop-ups (A097).** BrkCore hosts Chromium's native extension pop-ups, with the owning tab retained for extension APIs.
 - **Pixel identity on every screen (A148).** The screens that need a signed-in Arc have no reference pictures yet, so the screen-by-screen comparison is not complete.
 
 **Left out on purpose**
@@ -315,11 +315,13 @@ These are the 24 Arc features that Brk has not verified, with the reasons record
 <details>
 <summary><b>Build from source</b></summary>
 
-Needs macOS on Apple silicon and Xcode with Swift 6. The first build downloads CEF (132 MB).
+Needs macOS 14 or later and Xcode with Swift 6. Download the pinned BrkCore framework for your Mac, or build it using `engine/README.md`.
 Ready-built apps for Apple silicon and Intel, from every merge into main, are on the [Releases page](https://github.com/cyang2020/brk/releases); see [docs/release.md](docs/release.md).
 
 ```sh
-scripts/build.sh                 # release build, unit tests, CEF bundle and signature: dist/Brk.app
+python3 engine/download-artifact.py "$(uname -m)" --out .build/brkcore
+export BRK_CORE_DIR="$PWD/.build/brkcore"
+scripts/build.sh                 # release build, unit tests, BrkCore bundle and signature: dist/Brk.app
 SKIP_TESTS=1 scripts/build.sh    # the same without the unit tests
 open dist/Brk.app
 ```
@@ -334,8 +336,8 @@ python3 scripts/run-native.py <name> --set smoke      # native scenarios with re
 
 Which tests a change adds, and what runs before a merge, is in `docs/testing-policy.md`.
 
-- `Sources/`: the SwiftPM targets. `Brk` is the app; `BrkDomain` holds the state and its rules; `BrkSidebar`, `BrkContent`, `BrkOverlays`, `BrkLibrary` and `BrkSettings` are the UI; `BrkCEF` is the CEF engine.
-- `engine/`: Brk's own Chromium build, experimental. CEF is the shipped engine.
+- `Sources/`: the SwiftPM targets. `Brk` is the app; `BrkDomain` holds the state and its rules; `BrkSidebar`, `BrkContent`, `BrkOverlays`, `BrkLibrary` and `BrkSettings` are the UI; `BrkCoreEngine` connects the app to Chromium.
+- `engine/`: BrkCore, Brk's sole browser engine, with its Chromium patch series and pinned release artifacts.
 - `docs/`: the design (`docs/design/`), Arc facts (`docs/arc-anatomy/`), the feature ledger and the testing rules.
 
 The first version (October 2026) was an Electron app, kept at the tag `electron-v1`.

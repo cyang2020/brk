@@ -6,9 +6,9 @@ import PDFKit
 
 enum BrowserBasicScenarios {
     static let all = [
-        Scenario("BB2", "preset zoom changes real DOM scale; clipboard formats and navigation target Peek", cefOnly: "CEF DOM and pasteboard", zoomCopyNavigation),
-        Scenario("BB4", "menu copy/plain paste in HTML editors and frames; native command-bar editing", cefOnly: "native responder actions", editing),
-        Scenario("BB6", "fixture-selected MHTML/PDF bytes, offline resources, and native print cancellation", cefOnly: "real CEF output callbacks", fixtureOutputs),
+        Scenario("BB2", "preset zoom changes real DOM scale; clipboard formats and navigation target Peek", zoomCopyNavigation),
+        Scenario("BB4", "menu copy/plain paste in HTML editors and frames; native command-bar editing", editing),
+        Scenario("BB6", "fixture-selected MHTML/PDF bytes, offline resources, and native print cancellation", fixtureOutputs),
     ]
 
     private static func dispatch(_ app: AppUnderTest, _ window: WindowID, _ command: Command) throws {

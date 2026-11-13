@@ -4,7 +4,7 @@ import BrkDomain
 import Foundation
 
 enum ExtensionScenarios {
-    static let all = [   Scenario("Extension-install", "selected harmless local extension installs, runs, pins and removes", cefOnly: "CEF extensions", install)]
+    static let all = [   Scenario("Extension-install", "selected harmless local extension installs, runs, pins and removes", install)]
     static func selectedFixture(_ app: AppUnderTest) throws -> (ItemID, BrowserExtension) {
         let item = try app.load(app.site.url("site-policy.html")); try waitForTitle(app, item, "Site policy fixture")
         // Explicit fixture selection uses the same production command as the NSOpenPanel completion.

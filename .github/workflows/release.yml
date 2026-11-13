@@ -127,11 +127,12 @@ jobs:
           key: swiftpm-${{ steps.version.outputs.toolchain }}-${{ github.sha }}
           restore-keys: swiftpm-${{ steps.version.outputs.toolchain }}-
 
-      - name: Cache the CEF downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .cef/dist
-          key: cef-${{ hashFiles('Vendor/CefSwift/CEF_VERSION.json') }}-arm64-x86_64
+      - name: Download the pinned BrkCore builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 engine/download-artifact.py arm64 --out "$RUNNER_TEMP/brkcore/arm64"
+          python3 engine/download-artifact.py x86_64 --out "$RUNNER_TEMP/brkcore/x86_64"
 
       - name: Cache the llama.cpp runtime
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -146,7 +147,7 @@ jobs:
           BRK_BUILD_NUMBER: ${{ github.run_number }}
         run: |
           host="$(uname -m)"
-          scripts/build.sh
+          BRK_CORE_DIR="$RUNNER_TEMP/brkcore/$host" scripts/build.sh
           mkdir -p "out/$host" && mv dist/Brk.app "out/$host/"
           if [ "$host" = arm64 ]; then echo "other=x86_64" >> "$GITHUB_OUTPUT"; else echo "other=arm64" >> "$GITHUB_OUTPUT"; fi
 
@@ -156,7 +157,7 @@ jobs:
           BRK_VERSION: ${{ steps.version.outputs.version }}
           BRK_BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          scripts/build.sh
+          BRK_CORE_DIR="$RUNNER_TEMP/brkcore/$ARCH" scripts/build.sh
           mkdir -p "out/$ARCH" && mv dist/Brk.app "out/$ARCH/"
 
       - name: Save the SwiftPM build

@@ -2,7 +2,6 @@ import BrkBase
 import BrkEngine
 import CBrkCore
 import Foundation
-import PageEditorScript
 
 /// BrkCore's side of find: Chrome's FindTabHelper, and FindEditorScript in Chrome's isolated world of each frame. The script's function
 /// lives on that world's global for the document, where the page's own scripts cannot reach it, as CEF keeps it in renderer memory.

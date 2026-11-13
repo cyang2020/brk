@@ -10,8 +10,8 @@ import Foundation
 /// through a real key, pointer or menu path, as the review's standard asks.
 enum SidebarEvidenceScenarios {
     static let all = [
-        Scenario("R49-Rename", "rename from the menu and the context menu: Return keeps, Escape restores, a Favorite and a folder rename, a collapsed folder opens", cefOnly: "native rename field", rename),
-        Scenario("R49-Toasts", "a toast shows in the window that acted, a click dismisses it, it expires after 4 seconds", cefOnly: "two native windows", toasts),
+        Scenario("R49-Rename", "rename from the menu and the context menu: Return keeps, Escape restores, a Favorite and a folder rename, a collapsed folder opens", rename),
+        Scenario("R49-Toasts", "a toast shows in the window that acted, a click dismisses it, it expires after 4 seconds", toasts),
     ]
 
     private typealias S = SidebarReviewScenarios

@@ -6,7 +6,7 @@ import Foundation
 
 enum TabToolsScenarios {
     static let all = [
-        Scenario("TabTools1", "pill, New Tab row, duplicate, linear and numbered native shortcuts", cefOnly: "real document navigation", navigation),
+        Scenario("TabTools1", "pill, New Tab row, duplicate, linear and numbered native shortcuts", navigation),
     ]
     private static func ready(_ app: AppUnderTest, _ id: ItemID, _ url: URL) throws {
         try app.waitForPageInput(PageID(window: app.window!, item: id), at: url)

@@ -72,7 +72,7 @@ for scenario in wanted:
     if scenario.startswith('AIRealLocal-'):
         env['BRK_E2E_REAL_LOCAL'] = '1'
 
-command = [str(runner), '--app', str(app), '--site', str(root / 'Tests/E2ESite'), '--out', str(out), '--engine', 'cef', '--only', ','.join(wanted)]
+command = [str(runner), '--app', str(app), '--site', str(root / 'Tests/E2ESite'), '--out', str(out), '--only', ','.join(wanted)]
 bounded = [sys.executable, str(root / 'scripts/bounded-phase.py'), '--timeout', str(args.run_timeout), '--owned-app', str(app), '--'] + command
 locked = [sys.executable, str(root / 'scripts/with-batch-locks.py'), '--lock', '/tmp/brk-core-native.lock', '--timeout', str(args.wait), '--'] + bounded
 

@@ -31,7 +31,6 @@ import os
 public final class Lifecycle: NSObject, NSApplicationDelegate {
     private let options: LaunchOptions
     private let engine: any WebEngine
-    private let engineKind: String
     private(set) var store: AppStore?
     private var router: KeyRouter?
     private var control: ControlServer?
@@ -50,10 +49,9 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
     private var clock: (any Clock)?
     private let log = Logger(subsystem: "brk", category: "lifecycle")
 
-    public init(options: LaunchOptions, engine: any WebEngine, engineKind: String) {
+    public init(options: LaunchOptions, engine: any WebEngine) {
         self.options = options
         self.engine = engine
-        self.engineKind = engineKind
     }
 
     /// A window's row in the Window menu: its focused tab's title, else its space's (Little Brk for a Little Arc).

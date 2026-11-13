@@ -12,9 +12,9 @@ import Foundation
 enum AIThreadsScenarios {
     static let all: [Scenario] = [
         Scenario("AIAgentThreads-Spaces", "each Space has its own list; switching Space on the left switches the panel's list and brings back the conversation that Space showed; the list's composer starts one there",
-                 cefOnly: "native panel", spaces),
+                 spaces),
         Scenario("AIAgentThreads-Waiting", "an approval in another Space: the strip at the list's top, the ring on its dot, the count on the list icon; the strip's click shows the approval there; Allow clears all three; a notification while Brk is not in front opens the conversation",
-                 cefOnly: "native panel", waiting),
+                 waiting),
     ]
 
     // MARK: Helpers

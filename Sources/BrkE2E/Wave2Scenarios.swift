@@ -11,20 +11,18 @@ import Foundation
 enum Wave2Scenarios {
     static let all: [Scenario] = [
         Scenario("W2-1", "Preferences… opens the settings window on a pane; a Links toggle persists across a restart", settingsWindow),
-        Scenario("W2-2", "a profile has its own cookies: a cookie set in the Work profile is not seen by the default one", cefOnly: "cookies in a page",
-                 profileContexts),
+        Scenario("W2-2", "a profile has its own cookies: a cookie set in the Work profile is not seen by the default one", profileContexts),
         Scenario("W2-3", "an incognito window's tabs browse off the record and are gone after a restart", incognito),
         Scenario("W2-4", "Cmd+N opens a second standard window that shares the sidebar", newWindow),
         Scenario("W2-5", "Cmd+Opt+N opens Little Arc at Arc's default size; Open in moves its tab into the space", littleArc),
-        Scenario("W2-6", "Shift+click opens a Peek over the content; Esc closes it and its page", cefOnly: "a click on a link in a page",
-                 peek),
+        Scenario("W2-6", "Shift+click opens a Peek over the content; Esc closes it and its page", peek),
         Scenario("W2-7", "a link from another app follows Air Traffic Control, else opens a Little Arc", externalLinks),
         Scenario("W2-9", "a remapped shortcut routes and the old chord reaches the page; the Shortcuts pane shows the state",
-                 cefOnly: "page titles written by keys.html's key listener", remap),
-        Scenario("W2-11", "a download lands in the Library's Downloads page and on disk", cefOnly: "a real download", downloads),
+                 remap),
+        Scenario("W2-11", "a download lands in the Library's Downloads page and on disk", downloads),
         Scenario("W2-12", "Cmd+Y opens the History page as a Today tab listing the visits", history),
-        Scenario("W2-11A", "quit with an active download in a restored persistent profile", cefOnly: "download shutdown", LibraryScenarios.activeQuit),
-        Scenario("W2-P1", "Option+Cmd links retain private cookies and leave no persistent metadata", cefOnly: "native private link", PrivateNavigationScenarios.optionLink),
+        Scenario("W2-11A", "quit with an active download in a restored persistent profile", LibraryScenarios.activeQuit),
+        Scenario("W2-P1", "Option+Cmd links retain private cookies and leave no persistent metadata", PrivateNavigationScenarios.optionLink),
     ]
 
     /// W2-1 (F1): `openSettings(.links)` shows the settings window; `settings` reports the pane; a click on the

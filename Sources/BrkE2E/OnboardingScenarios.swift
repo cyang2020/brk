@@ -9,9 +9,9 @@ import Foundation
 enum OnboardingScenarios {
     static let all = [
         Scenario("Onboarding-Import", "first run: every onboarding screen by real input, a Chrome profile's bookmarks, history, cookie and password come over and the password fills after restart",
-                 cefOnly: "cookies, Login Data and autofill are Chromium's", importFlow),
+                 importFlow),
         Scenario("Onboarding-RealArc", "opt-in: this Mac's Arc profile imported through onboarding into a throwaway data folder, every screen captured",
-                 cefOnly: "a real Chromium profile", realArc),
+                 realArc),
     ]
 
     /// The fixture Chrome's "Chrome Safe Storage" password; the encrypted values below were made with it (PBKDF2 and

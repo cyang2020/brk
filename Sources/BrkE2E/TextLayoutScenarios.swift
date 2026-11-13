@@ -10,7 +10,7 @@ import Foundation
 /// one run lists every cut text at once.
 enum TextLayoutScenarios {
     static let all = [
-        Scenario("TextLayout", "no text is cut on the main window at 228 and 164, blank window, Little Arc, Peek, splits, command bar, switcher, Settings and its sheets, Library, theme and Boost editors, site controls, find, menus, toasts and dialogs", cefOnly: "page surfaces and native panels", sweep),
+        Scenario("TextLayout", "no text is cut on the main window at 228 and 164, blank window, Little Arc, Peek, splits, command bar, switcher, Settings and its sheets, Library, theme and Boost editors, site controls, find, menus, toasts and dialogs", sweep),
     ]
 
     private typealias S = SidebarReviewScenarios

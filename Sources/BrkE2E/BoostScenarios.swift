@@ -7,7 +7,7 @@ import Foundation
 
 enum BoostScenarios {
     static let all = [
-        Scenario("Boost-CSS", "intro card, font grid and Code-page preview, reset, save on close, Library disable/remove, local presets and restart", cefOnly: "actual CSS injection", css),
+        Scenario("Boost-CSS", "intro card, font grid and Code-page preview, reset, save on close, Library disable/remove, local presets and restart", css),
     ]
     private static func editor(_ app: AppUnderTest) throws -> BoostEditor {
         guard let value = try app.view().boostEditor else { throw Check(description: "Boost editor missing") }; return value

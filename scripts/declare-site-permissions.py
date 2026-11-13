@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Give Brk and its CEF helpers the usage descriptions for everything a website can make Chromium ask macOS for.
+"""Give Brk and its Chromium helpers the usage descriptions for everything a website can make Chromium ask macOS for.
 
 macOS kills an app outright (TCC_CRASHING_DUE_TO_PRIVACY_VIOLATION) when it touches camera, microphone, Bluetooth,
 system audio or speech recognition without the matching key, and Chromium touches some of these on its own: on a
@@ -31,7 +31,7 @@ descriptions = {
     'NSRemovableVolumesUsageDescription': 'Upload files from external drives and save downloads there when you choose.',
     'NSNetworkVolumesUsageDescription': 'Upload files from network drives and save downloads there when you choose.',
 }
-plists = [app/'Contents/Info.plist', *sorted((app/'Contents/Frameworks').glob('*.app/Contents/Info.plist'))]
+plists = [app/'Contents/Info.plist', *sorted((app/'Contents/Frameworks').rglob('*.app/Contents/Info.plist'))]
 for path in plists:
     with path.open('rb') as stream:
         value = plistlib.load(stream)

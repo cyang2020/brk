@@ -11,13 +11,13 @@ import Foundation
 enum InputScenarios {
     static let all: [Scenario] = [
         Scenario("Input-TabKeys", "real keys with a page focused: ⇧⌘] and ⇧⌘[ step to the next and previous tab (Chrome's reserved tab keys, which Arc honours)",
-                 cefOnly: "real keys through the window server", tabKeys),
+                 tabKeys),
         Scenario("Input-SideButtons", "mouse buttons 4 and 5 and a mouse driver's navigation swipe: over the page back and forward in its history, over the sidebar the previous and next Space",
-                 cefOnly: "real mouse through the window server", sideButtons),
+                 sideButtons),
         Scenario("Input-SwipeIndicator", "a two-finger swipe right on a page with history starts Chromium's back indicator at the page's left edge; over a horizontal scroller it does not",
-                 cefOnly: "real scroll gesture through the window server", swipeIndicator),
+                 swipeIndicator),
         Scenario("Input-MiddleClick", "a middle-click on a link opens it in a background tab; on a sidebar tab row it closes that tab",
-                 cefOnly: "real mouse through the window server", middleClick),
+                 middleClick),
     ]
 
     // MARK: Setup and facts
@@ -109,7 +109,7 @@ enum InputScenarios {
     // MARK: Scenarios
 
     @Sendable static func tabKeys(_ app: AppUnderTest) throws {
-        try app.requireCEF("real keys")
+
         let window = app.window!
         // From the new top row ⇧⌘] goes to the row below, ⇧⌘[ comes back.
         let target = app.site.url("input-audit.html?p=second")
@@ -126,7 +126,7 @@ enum InputScenarios {
     }
 
     @Sendable static func sideButtons(_ app: AppUnderTest) throws {
-        try app.requireCEF("real mouse")
+
         let home = try app.view().space.id
         let second = try createSpace(app, title: "Second")
         let page = try pageWithHistory(app)
@@ -156,7 +156,7 @@ enum InputScenarios {
     }
 
     @Sendable static func swipeIndicator(_ app: AppUnderTest) throws {
-        try app.requireCEF("Chromium's history swiper")
+
         let window = app.window!
         let page = try pageWithHistory(app)
         let frame = try XCTUnwrapValue(try app.native().pages[page]?.surfaceFrame)
@@ -183,7 +183,7 @@ enum InputScenarios {
     }
 
     @Sendable static func middleClick(_ app: AppUnderTest) throws {
-        try app.requireCEF("real mouse")
+
         let window = app.window!
         let url = app.site.url("input-audit.html?p=1")
         let item = try app.load(url)

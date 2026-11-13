@@ -9,7 +9,7 @@ import Foundation
 /// scenario its own crash folder (`BRK_CRASH_REPORTS_DIR`), so nothing is written to ~/Library/Logs.
 enum HelpReportScenarios {
     static let all: [Scenario] = [
-        Scenario("HelpReport", "Help › Report a Bug… opens the prefilled bug form; the launch after a crash offers once to report it", cefOnly: "a page tab for the form", helpReport),
+        Scenario("HelpReport", "Help › Report a Bug… opens the prefilled bug form; the launch after a crash offers once to report it", helpReport),
     ]
 
     /// The crash folder the runner names for this scenario.
@@ -71,7 +71,7 @@ enum HelpReportScenarios {
         let (bugTab, bug) = try waitForForm(app, "Report a Bug… opens the bug form in a tab", except: before)
         try expect(bug["template"] == "bug_report.yml", "template: \(bug)")
         try expect(bug["version"]?.hasPrefix("\(app.productPrefix) ") == true && bug["macos"]?.isEmpty == false
-                   && bug["mac"]?.isEmpty == false && bug["engine"]?.contains(app.engine == .core ? "BrkCore" : "CEF") == true, "bug form fields: \(bug)")
+                   && bug["mac"]?.isEmpty == false && bug["engine"]?.contains("BrkCore") == true, "bug form fields: \(bug)")
         try expect(!bug.values.contains { $0.contains(NSHomeDirectory()) }, "the form names the home folder: \(bug)")
         _ = try app.screenshot("report-a-bug")
 

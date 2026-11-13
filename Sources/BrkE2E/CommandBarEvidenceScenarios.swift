@@ -10,7 +10,7 @@ import Foundation
 /// with Return, as a user would.
 enum CommandBarEvidenceScenarios {
     static let all = [
-        Scenario("R49-Suggestions", "history, bookmark, top-domain, calculator and engine rows are listed and Return runs them", cefOnly: "native command bar", suggestions),
+        Scenario("R49-Suggestions", "history, bookmark, top-domain, calculator and engine rows are listed and Return runs them", suggestions),
     ]
 
     private typealias S = SidebarReviewScenarios

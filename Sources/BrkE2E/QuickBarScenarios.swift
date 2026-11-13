@@ -11,9 +11,9 @@ import Foundation
 /// app only appends a line to a marker file; the rates come from a fixture file with no network.
 enum QuickBarScenarios {
     static let all = [
-        Scenario("QuickBar-Answers", "percent, root, units, CSS, dates and times answer inline, Return copies; bare words sit under the typed row; searches stay searches", cefOnly: "native command bar", answers),
-        Scenario("QuickBar-Files", "file rows from the fixture folder: ranked as commands, hidden and Library left out, Return opens, Cmd+Return reveals, Option+Return copies, the file mode, no stale rows", cefOnly: "native command bar", files),
-        Scenario("QuickBar-Prefix", "a whole word and Tab enters through site search's pill; a real Space never does, so the words can begin a search; Backspace and Esc give it back; an engine of the same name wins; part of a word is offered", cefOnly: "native command bar", prefixKeys),
+        Scenario("QuickBar-Answers", "percent, root, units, CSS, dates and times answer inline, Return copies; bare words sit under the typed row; searches stay searches", answers),
+        Scenario("QuickBar-Files", "file rows from the fixture folder: ranked as commands, hidden and Library left out, Return opens, Cmd+Return reveals, Option+Return copies, the file mode, no stale rows", files),
+        Scenario("QuickBar-Prefix", "a whole word and Tab enters through site search's pill; a real Space never does, so the words can begin a search; Backspace and Esc give it back; an engine of the same name wins; part of a word is offered", prefixKeys),
     ]
 
     // MARK: Fixtures

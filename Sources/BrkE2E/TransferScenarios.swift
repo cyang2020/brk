@@ -5,10 +5,10 @@ import Foundation
 
 enum TransferScenarios {
     static let all: [Scenario] = [
-        Scenario("T1", "simultaneous downloads cancel independently, stop server bytes and preserve collisions", cefOnly: "CEF transfer callbacks", concurrent),
-        Scenario("T2", "accepted POST download survives source-tab close with its original request", cefOnly: "CEF transfer lease", postClose),
-        Scenario("T7", "quit cancels an already retained transfer and drains its native host", cefOnly: "CEF shutdown", retainedQuit),
-        Scenario("T12", "right click opens the native web context menu", cefOnly: "native menu tracking", webContextMenu),
+        Scenario("T1", "simultaneous downloads cancel independently, stop server bytes and preserve collisions", concurrent),
+        Scenario("T2", "accepted POST download survives source-tab close with its original request", postClose),
+        Scenario("T7", "quit cancels an already retained transfer and drains its native host", retainedQuit),
+        Scenario("T12", "right click opens the native web context menu", webContextMenu),
     ]
     static let size = 4_194_304
 

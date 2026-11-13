@@ -8,7 +8,7 @@ import Foundation
 /// Folder states and the command bar's actions. Each launches its own browser with an owned data directory.
 enum TabsLittleBarScenarios {
     static let all = [
-        Scenario("R36-LittleEntry", "system-wide shortcut registered exclusively and fired from another app, conflict and off states, status menu entry", cefOnly: "Carbon hot key and status item", littleEntry),
+        Scenario("R36-LittleEntry", "system-wide shortcut registered exclusively and fired from another app, conflict and off states, status menu entry", littleEntry),
     ]
 
     // MARK: Helpers

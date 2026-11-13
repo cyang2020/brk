@@ -1,8 +1,8 @@
 # Brk's own Chromium build
 
-Brk's second engine: Chromium's `chrome/` layer in one framework, `BrkCore.framework`, the way Arc ships `ArcCore.framework`. The reasoning and the
-evidence from Arc's binary are in `docs/chromium/ARC-ENGINE.md`. CEF stays the default; `BRK_ENGINE=core` picks this one. Nothing in this folder runs
-in `scripts/build.sh` or `swift test`, so `main` builds and passes with no Chromium tree present.
+BrkCore is Brk's only browser engine: Chromium's `chrome/` layer in `BrkCore.framework`. Its WebContents views attach directly to Brk's page cards, without a separate host window per tab. The reasoning is in `docs/chromium/ARC-ENGINE.md`.
+
+App releases use the ARM64 and x86_64 archives pinned in `engine/artifacts.json`. The checksum, source revision and public interface must all match. Swift unit tests need no Chromium tree; running the app requires the packaged framework. There is no CEF fallback or engine selector.
 
 ## Layout
 
@@ -11,17 +11,19 @@ in `scripts/build.sh` or `swift test`, so `main` builds and passes with no Chrom
 | `~/brk-chromium/` (not in the repo) | `depot_tools`, `chromium/src` at tag 156.0.8078.88 (154.0.8037.98 until 2026-11-12, kept on branch `brk/154.0.8037.98`), `logs/`, `STATE.md` |
 | `engine/config.sh` | the pinned tag and commit, the paths |
 | `engine/fetch.sh` | depot_tools and the source. 18 minutes, 30 GB on this machine and connection. Safe to rerun |
-| `engine/patches/` (13 files) | `0001` brk/ itself, `0002` hooks, `0003` the shell owns NSApp, `0004`-`0005` the framework's name and exports, `0006`-`0012` fixes the runs found, `0013` Chromium 156's interface changes in brk/ |
-| `engine/args/brk.gn` | pinned build arguments |
-| `engine/configure.sh` | writes `out/Brk/args.gn`, runs `gn gen` |
+| `engine/artifacts.json` | Release tag, filenames, checksums, source revision and interface hashes for both architectures |
+| `engine/args/brk.gn`, `engine/args/release.gn` | development and official release build arguments |
+| `engine/configure.sh [release arm64\|x64]` | writes build arguments, fetches the matching PGO profiles for release builds, runs `gn gen` |
 | `engine/build.sh <target>` | compiles at low priority, pausing itself (below). `chrome` builds everything |
 | `engine/patches/` | the patch series: Brk's commits over the tag, numbered |
 | `engine/apply-patches.sh` | makes branch `brk/156.0.8078.88` in the tree from the tag and the series (three-way, so a patch whose context moved in a new Chromium still applies) |
 | `engine/export-patches.sh` | writes the branch back to `engine/patches/` |
 | `engine/sync-header.sh` | copies the one interface header `Sources/CBrkCore/include/BrkCore.h` into the tree |
 | `engine/build-demo.sh` | the smallest program on the framework, `engine/demo/main.swift` |
-| `engine/assemble-app.sh` | `dist-core/Brk.app`: `dist/Brk.app` plus the framework |
-| `engine/run-native-core.py` | e2e scenarios on it, under the native lock, the report in `~/brk-evidence/chromium/` |
+| `scripts/build.sh`, `engine/assemble-app.sh` | package the Swift app and BrkCore into `dist/Brk.app` |
+| `engine/run-native-core.py` | standard native runner, under the native lock; reports in `~/brk-evidence/native/` |
+| `engine/package-artifact.py` | archive a completed, clean official engine build and print its checksum record |
+| `engine/download-artifact.py` | verify and extract the pinned release engine |
 | `engine/tools/check-brk.sh` | syntax-only compile of `brk/` files with a neighbouring file's flags |
 | `engine/tools/arc-inspect.sh` | the static inspection of Arc that the notes cite |
 
@@ -32,7 +34,7 @@ in `scripts/build.sh` or `swift test`, so `main` builds and passes with no Chrom
     engine/configure.sh
     nohup engine/build.sh chrome >/dev/null 2>&1 &   # many hours; rerunning continues
     engine/build-demo.sh                             # then run the demo
-    scripts/build.sh && engine/assemble-app.sh       # then BRK_ENGINE=core dist-core/Brk.app/Contents/MacOS/Brk
+    scripts/build.sh                               # dist/Brk.app uses out/Brk by default
 
 ## Measured on this machine (Apple M1, 8 cores, 16 GB)
 
@@ -43,9 +45,9 @@ in `scripts/build.sh` or `swift test`, so `main` builds and passes with no Chrom
 | a change in `brk/` | 1 to 2 min (compile and relink) | |
 | a change in a widely used Chromium file | not measured; avoid it | |
 
-Total under `~/brk-chromium`: 42 GB. `dist-core/Brk.app`: 891 MB, mostly APFS clones of `dist/Brk.app` and the framework.
+Total under `~/brk-chromium`: 42 GB. The development framework is copied into `dist/Brk.app` using APFS clones.
 
-## Build arguments
+## Development build arguments
 
 - **Static, not component.** One framework file, the shape Arc ships and the shape the app will load. A component build relinks faster but loads
   hundreds of dylibs and is a different thing to test. A relink of the static framework takes minutes, which is acceptable.
@@ -60,6 +62,21 @@ Total under `~/brk-chromium`: 42 GB. `dist-core/Brk.app`: 891 MB, mostly APFS cl
   is local and not distributed. **Publishing it would need a licensing check first** (H.264 and AAC are patent-licensed codecs).
 - **Widevine off.** It needs Google's signed component, which a self-built Chromium cannot get. The user's decision.
 - **No Google API keys.** `use_official_google_api_keys = false`, none in the build. Chromium's sign-in and sync do not work without them, which Brk does not use.
+
+## Official release builds
+
+Run the two architectures serially on this machine:
+
+```sh
+engine/configure.sh release arm64
+BRK_OUT=out/BrkRelease-arm64 JOBS=4 engine/build.sh chrome
+engine/configure.sh release x64
+BRK_OUT=out/BrkRelease-x64 JOBS=4 engine/build.sh chrome
+```
+
+`is_official_build` enables Chromium's PGO and ThinLTO. Binaries are stripped; line tables remain in separate dSYMs. Release codecs match the previously distributed app (VP8, VP9, AV1, MP3, Opus and FLAC); H.264/AAC and Widevine are disabled. No Google API keys are embedded. Brk starts Chromium with background networking, component updates, sync and domain reliability disabled.
+
+After committing and exporting source changes, package each completed build with `engine/package-artifact.py`. Upload the two archives to a versioned GitHub release and record the printed metadata in `engine/artifacts.json`. A changed `BrkCore.h` requires new engine archives before app CI can build.
 
 ## How the build behaves
 

@@ -9,7 +9,7 @@ import Foundation
 /// The real pointer matters: the motion hangs on the button's own hover tracking, which an injected hover skips.
 enum LibraryIconScenarios {
     static let all = [
-        Scenario("LibraryIcon-HoverReal", "the real pointer on the Library button turns and lifts the star, triangle and dot above the box; leaving puts them back", cefOnly: "window-server pointer", hover),
+        Scenario("LibraryIcon-HoverReal", "the real pointer on the Library button turns and lifts the star, triangle and dot above the box; leaving puts them back", hover),
     ]
 
     private static func screen(_ app: AppUnderTest, _ point: CGPoint) throws -> CGPoint {

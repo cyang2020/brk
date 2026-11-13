@@ -9,7 +9,7 @@ import XCTest
 final class ReportIssueTests: XCTestCase {
     private let info = BuildInfo(name: "Brk", version: "1.0", build: "7", commit: "1a2b3c4d", repository: URL(string: "https://github.com/cyang2020/brk"),
                                  engine: "154.0.7795.0", system: "Version 26.1 (Build 25B78)", architecture: "arm64",
-                                 dataDirectory: "/Users/someone/Library/Application Support/Brk", engineKind: "cef")
+                                 dataDirectory: "/Users/someone/Library/Application Support/Brk")
 
     private func fields(_ url: URL) throws -> [String: String] {
         let parts = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
@@ -23,7 +23,7 @@ final class ReportIssueTests: XCTestCase {
         XCTAssertEqual(bug.path, "/cyang2020/brk/issues/new")
         XCTAssertEqual(try fields(bug), ["template": "bug_report.yml", "version": "Brk 1.0 (7), commit 1a2b3c4d",
                                          "macos": "Version 26.1 (Build 25B78)", "mac": "Apple silicon (arm64)",
-                                         "engine": "Chromium 154.0.7795.0 (CEF)"])
+                                         "engine": "Chromium 154.0.7795.0 (BrkCore)"])
         XCTAssertFalse(bug.absoluteString.contains("someone"))
         let feedback = try XCTUnwrap(HelpLinks.newIssue(.feedback, info))
         XCTAssertEqual(try fields(feedback), ["template": "feature_request.yml", "version": "Brk 1.0 (7), commit 1a2b3c4d"])

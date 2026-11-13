@@ -13,7 +13,6 @@ final class ImportRulesTests: XCTestCase {
         "BrkDomain": ["BrkBase", "Foundation", "CoreGraphics"],
         "BrkLayout": ["BrkBase", "BrkDomain", "Foundation", "CoreGraphics"],
         "BrkEngine": ["BrkBase", "AppKit", "Foundation", "os"],
-        "BrkCEF": ["AVFoundation", "CoreLocation", "UserNotifications", "PDFKit", "BrkBase", "BrkEngine", "CefKit", "CCef", "CCefAppKit", "AppKit", "Foundation", "ObjectiveC", "os"],
         "BrkTheme": ["BrkBase", "BrkDomain", "AppKit", "Metal", "QuartzCore", "Foundation", "CoreGraphics"],
         "BrkUIKit": ["BrkBase", "BrkDomain", "BrkLayout", "AppKit", "Foundation", "CoreGraphics"],
         "BrkSidebar": ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "AppKit", "Foundation", "CoreGraphics"],
@@ -26,9 +25,9 @@ final class ImportRulesTests: XCTestCase {
         "BrkLocalModels": ["BrkBase", "Foundation", "CryptoKit", "Accelerate"],
         "BrkImport": ["BrkBase", "BrkDomain", "Foundation", "SQLite3", "CommonCrypto"],
         "BrkApp": ["NaturalLanguage", "PDFKit", "Carbon", "CoreServices", "UserNotifications", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "BrkImport", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "LocalAuthentication", "Security", "os"],
-        "Brk": ["BrkApp", "BrkBase", "BrkCEF", "BrkCoreEngine", "BrkEngine", "AppKit", "Foundation"],
-        // OS authorization of a site's camera, microphone, location and notifications (OSSiteAuthorization.swift, shared with BrkCEF).
-        "BrkCoreEngine": ["AVFoundation", "CoreLocation", "UserNotifications", "PDFKit", "BrkBase", "BrkEngine", "CBrkCore", "PageEditorScript", "AppKit", "Foundation", "os"],
+        "Brk": ["BrkApp", "BrkBase", "BrkCoreEngine", "BrkEngine", "AppKit", "Foundation"],
+        // OS authorization of a site's camera, microphone, location and notifications (OSSiteAuthorization.swift).
+        "BrkCoreEngine": ["AVFoundation", "CoreLocation", "UserNotifications", "PDFKit", "BrkBase", "BrkEngine", "CBrkCore", "ObjectiveC", "AppKit", "Foundation", "os"],
         // BrkCore.framework's interface: an Objective-C header, no Swift.
         "CBrkCore": [],
         "BrkE2E": ["PDFKit", "Vision", "ImageIO", "BrkBase", "BrkDomain", "BrkLayout", "BrkControl", "Foundation", "CoreGraphics"],
@@ -39,8 +38,8 @@ final class ImportRulesTests: XCTestCase {
         (#"\bDate\(\)|\bDate\.now\b|CFAbsoluteTimeGetCurrent"#, ["BrkApp/Clock.swift", "BrkE2E/"], "the clock is injected"),
         (#"(?<![A-Za-z.])reduce\("#, ["BrkDomain/", "BrkApp/AppStore.swift"], "AppStore is the only caller of reduce"),
         // BrkCore's extension popup is a child of the browser window, as Arc's BrowserExtensionWindow (docs/chromium/ARC-ENGINE.md).
-        (#"addChildWindow|canBecomeKeyWindow|method_setImplementation"#, ["BrkCEF/", "BrkCoreEngine/CoreEngine.swift"], "host-window tricks stay in BrkCEF"),
-        (#"CefRuntime|CefBrowser|CefChromeBrowser"#, ["BrkCEF/"], "Chromium API stays in BrkCEF"),
+        (#"addChildWindow|canBecomeKeyWindow|method_setImplementation"#, ["BrkCoreEngine/CoreEngine.swift", "BrkCoreEngine/CoreTextServices.swift"], "native page windows and text panels stay in BrkCoreEngine"),
+        (#"CefRuntime|CefBrowser|CefChromeBrowser"#, [], "the retired CEF API must not return"),
         (#"cornerRadius\s*=\s*[1-9]"#, [], "layout numbers live in BrkBase/Metrics.swift"),
         (#"JSONEncoder\(\)|JSONDecoder\(\)"#, ["BrkDomain/Codec.swift", "BrkDomain/BoostCodec.swift", "BrkControl/", "BrkE2E/", "BrkLocalModels/JevWire.swift", "BrkApp/ConversationFiles.swift"], "one state format, one wire format (and the decision services' wire); saved conversations are the domain's Codable records, one file each"),
     ]

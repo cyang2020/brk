@@ -1,6 +1,6 @@
 #!/bin/bash
 # Rebuilds only the app and helper binaries and drops them into the existing dist/<Product>.app, then re-signs.
-# This is the iteration build: it skips the CEF bundle assembly (copying the 132 MB framework and five helper
+# This is the iteration build: it skips the BrkCore bundle assembly (copying the framework and its helper
 # apps) that scripts/build.sh does every time. A no-op rebuild takes a few seconds; a change in one module
 # takes however long that module and its dependents take to compile.
 #
@@ -13,18 +13,11 @@ cd "$(git rev-parse --show-toplevel)"
 CONFIG="${CONFIG:-release}"
 PRODUCT="$(swift package dump-package | /usr/bin/python3 -I -c 'import json,sys; p=json.load(sys.stdin); print(next(x["name"] for x in p["products"] if "executable" in x["type"] and x["name"][0].isupper()))')"
 APP="dist/$PRODUCT.app"
-[ -d "$APP" ] || { echo "[refresh] no $APP yet; run scripts/build.sh once first" >&2; exit 2; }
+[ -f "$APP/Contents/Frameworks/BrkCore.framework/BrkCore" ] || { echo "[refresh] no $APP yet; run scripts/build.sh once first" >&2; exit 2; }
 swift build -c "$CONFIG" --product "$PRODUCT" --explicit-target-dependency-import-check error
-swift build -c "$CONFIG" --product cef-helper
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 cp "$BIN/$PRODUCT" "$APP/Contents/MacOS/$PRODUCT"
-for helper in "$APP/Contents/Frameworks/$PRODUCT Helper"*.app; do
-  name="$(basename "$helper" .app)"
-  cp "$BIN/cef-helper" "$helper/Contents/MacOS/$name"
-done
 cp Sources/BrkBase/Resources/website-rules.json "$APP/Contents/Resources/website-rules.json" 2>/dev/null || true
-# the bundled media observer extension (its scripts are read at run time)
-cp Sources/BrkCEF/AudibilityExtension/* "$APP/Contents/Resources/BrkAudibility/" 2>/dev/null || true
 # the app icon, the same way scripts/build.sh makes it (branches without the icon script keep whatever the bundle has)
 if [ -d Sources/BrkSettings/Resources/AppIcons ]; then
   rm -rf "$APP/Contents/Resources/AppIcons" && cp -R Sources/BrkSettings/Resources/AppIcons "$APP/Contents/Resources/"

@@ -7,7 +7,7 @@ import Foundation
 enum ExtScenarios {
     static let all = [
         Scenario("Ext-shortcut-physical", "window-server key events record the shortcut on its key cap and fire the extension command",
-                 cefOnly: "CEF extension commands", physicalShortcut),
+                 physicalShortcut),
     ]
     static func js(_ text: String) -> String {
         String(decoding: try! JSONSerialization.data(withJSONObject: [text]), as: UTF8.self).dropFirst().dropLast().description

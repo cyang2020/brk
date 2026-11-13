@@ -4,8 +4,8 @@ import XCTest
 /// The native run report's format (scripts/run-native.py reads it): header with machine and counts, one line per scenario with PASS / FAIL / SKIPPED,
 /// failure and skip reasons, notes, shots, and the grouped "Needs" section.
 final class ReportTests: XCTestCase {
-    let machine = E2EMachine(date: "2026-10-30T12:00:00Z", macOS: "macOS 26.6 (25G83)", model: "Macmini9,1", engine: "stub",
-                             cefVersion: "n/a", display: "locked, backing scale 2", app: ".build/release/Brk")
+    let machine = E2EMachine(date: "2026-10-30T12:00:00Z", macOS: "macOS 26.6 (25G83)", model: "Macmini9,1", engine: "core",
+                             chromiumVersion: "n/a", display: "locked, backing scale 2", app: ".build/release/Brk")
 
     func testFormatsPassFailAndSkipped() {
         let results = [
@@ -20,7 +20,7 @@ final class ReportTests: XCTestCase {
         let text = E2EReport.markdown(results, machine: machine, totalSeconds: 7.54)
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         XCTAssertEqual(lines[0], "# Brk e2e report")
-        XCTAssertEqual(lines[2], "2026-10-30T12:00:00Z · macOS 26.6 (25G83) · Macmini9,1 · engine stub (CEF n/a) · display locked, backing scale 2 · "
+        XCTAssertEqual(lines[2], "2026-10-30T12:00:00Z · macOS 26.6 (25G83) · Macmini9,1 · engine core (Chromium n/a) · display locked, backing scale 2 · "
                        + "5 scenarios in 7.5 s · 2 PASS, 2 FAIL, 1 SKIPPED")
         XCTAssertTrue(lines.contains("- PASS 0 launch smoke · 1.2 s · [0-launch-smoke.png](shots/0-launch-smoke.png) · [log](logs/0.log)"))
         XCTAssertTrue(lines.contains("- FAIL 2 Cmd+T opens the bar · 3.3 s — the app exited during press(\"cmd+t\"): signal 5 (SIGTRAP) second line · [log](logs/2.log)"))

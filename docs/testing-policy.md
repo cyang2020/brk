@@ -62,7 +62,7 @@
 | `Sources/BrkLibrary` | library、downloads |
 | `Sources/BrkSettings` | profiles、windows |
 | `Sources/BrkTheme` | spaces |
-| `Sources/BrkCEF`、`Sources/BrkEngine` | core、pages、downloads、sites、find |
+| `Sources/BrkCoreEngine`、`Sources/BrkEngine` | core、pages、downloads、sites、find |
 | `Sources/BrkApp` 里的按键路由和菜单 | keys |
 | `Sources/BrkApp` 里的窗口、Little Arc、Peek、退出 | windows |
 | `Sources/BrkApp` 里的存档和恢复 | core |

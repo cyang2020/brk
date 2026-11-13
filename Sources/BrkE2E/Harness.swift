@@ -121,7 +121,7 @@ enum CrashReports {
 /// socket. Nothing here reads the app's windows; the app's files are read only for the final page log, the crash
 /// reports and the stderr log.
 final class AppUnderTest {
-    enum Engine: String { case cef, stub, core }
+    enum Engine: String { case core }
 
     let executable: URL
     let dataDirectory: URL
@@ -245,8 +245,6 @@ final class AppUnderTest {
         if ProcessInfo.processInfo.environment["BRK_TEST_NO_GLOBAL_SHORTCUT"] == "1", scenarioID != "R36-LittleEntry" {
             environment["BRK_TEST_NO_GLOBAL_SHORTCUT"] = "1"
         }
-        if engine == .stub { environment["BRK_ENGINE"] = "stub" }
-        if engine == .core { environment["BRK_ENGINE"] = "core" }
         let log = dataDirectory.appendingPathComponent("app-\(launches).log")
         logs.append(log)
         let process = AppProcess(executable: executable, environment: environment, log: log)
@@ -603,14 +601,9 @@ final class AppUnderTest {
     private(set) var checkpoints: [String] = []
     func passed(_ what: String) { checkpoints.append(what) }
 
-    /// The rest of the scenario needs Chromium: on the stub engine it ends here as SKIPPED.
-    func requireCEF(_ what: String) throws {
-        if engine == .stub { throw Skipped(description: "needs CEF engine (\(what)); the stub-capable checks before it passed") }
-    }
-
-    /// Runs `body` only on the CEF engine; on the stub records `what` as not checked.
-    func onCEF(_ what: String, _ body: () throws -> Void) throws {
-        if engine != .stub { try body() } else { note("\(what) not checked on the stub engine") }
+    /// Records the purpose of a page check at its call site.
+    func checkPage(_ what: String, _ body: () throws -> Void) throws {
+        try body()
     }
 
     static func describe(_ op: ControlOp) -> String {

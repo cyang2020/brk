@@ -5,7 +5,7 @@
 #
 #   scripts/declare-url-types.sh <path to Info.plist>
 #
-# The CEF plugin writes the Info.plist, so scripts/build.sh runs this after bundling and re-signs. Idempotent: the key
+# The bundler writes the Info.plist, so scripts/build.sh runs this after bundling and re-signs. Idempotent: the key
 # is replaced whole, so a second run leaves the same file.
 set -euo pipefail
 PLIST="${1:?usage: declare-url-types.sh <Info.plist>}"

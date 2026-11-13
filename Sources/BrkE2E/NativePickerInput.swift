@@ -293,6 +293,15 @@ extension AppUnderTest {
 /// in front (so a Carbon hot key fires), the status item's menu through Accessibility, and a hot key this runner
 /// holds to give the app a real conflict.
 enum NativeSystemInput {
+    static func closeFocusedWindow(pid: Int32) throws {
+        let app = AXUIElementCreateApplication(pid)
+        guard let window = NativePickerInput.attribute(app, kAXFocusedWindowAttribute),
+              let close = NativePickerInput.attribute(window as! AXUIElement, kAXCloseButtonAttribute),
+              AXUIElementPerformAction(close as! AXUIElement, kAXPressAction as CFString) == .success else {
+            throw Check(description: "could not close the focused window")
+        }
+    }
+
     /// Posts `chord` the way the keyboard does (window server), so a Carbon hot key fires whatever app is in front.
     static func postSystemWide(_ chord: KeyChord) throws {
         guard let source = CGEventSource(stateID: .hidSystemState),
@@ -342,10 +351,21 @@ enum NativeSystemInput {
 
     /// Chooses a main-menu item the way an accessibility client does (AXPress on the item), which runs the item's action.
     static func chooseMainMenu(pid: Int32, menu title: String, item: String) throws {
-        guard let entry = try mainMenuItems(pid: pid, menu: title).first(where: { NativePickerInput.string($0, kAXTitleAttribute) == item }) else {
-            throw Check(description: "\(title) has no \(item)")
+        var entries = try mainMenuItems(pid: pid, menu: title)
+        let path = item.components(separatedBy: " › ")
+        for (index, name) in path.enumerated() {
+            guard let entry = entries.first(where: { NativePickerInput.string($0, kAXTitleAttribute) == name }) else {
+                throw Check(description: "\(title) has no \(item)")
+            }
+            guard AXUIElementPerformAction(entry, kAXPressAction as CFString) == .success else {
+                throw Check(description: "pressing \(name) failed")
+            }
+            if index < path.count - 1 {
+                usleep(100_000)
+                let children = NativePickerInput.attribute(entry, kAXChildrenAttribute) as? [AXUIElement] ?? []
+                entries = children.flatMap { NativePickerInput.attribute($0, kAXChildrenAttribute) as? [AXUIElement] ?? [] }
+            }
         }
-        guard AXUIElementPerformAction(entry, kAXPressAction as CFString) == .success else { throw Check(description: "pressing \(item) failed") }
     }
 
     private static func mainMenuItems(pid: Int32, menu title: String) throws -> [AXUIElement] {

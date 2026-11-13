@@ -11,11 +11,11 @@ enum AIAgentScenarios {
     static let all: [Scenario] = [AIProviderChoice.claude, .codex].flatMap { choice -> [Scenario] in
         let name = choice.rawValue
         return [
-            Scenario("AIAgentChat-\(name)", "\(name): streaming, follow-up in one process, read-only flags, Stop ends what the turn started", cefOnly: "native panel") { try chat($0, choice) },
-            Scenario("AIAgentTools-\(name)", "\(name): a folder session asks before a tool runs; Deny writes nothing, Allow writes the file", cefOnly: "native panel") { try tools($0, choice) },
+            Scenario("AIAgentChat-\(name)", "\(name): streaming, follow-up in one process, read-only flags, Stop ends what the turn started") { try chat($0, choice) },
+            Scenario("AIAgentTools-\(name)", "\(name): a folder session asks before a tool runs; Deny writes nothing, Allow writes the file") { try tools($0, choice) },
         ]
     } + [
-        Scenario("AIAgentQuit", "quit ends a session with tools on and the command it started", cefOnly: "native shutdown", quit),
+        Scenario("AIAgentQuit", "quit ends a session with tools on and the command it started", quit),
     ]
 
     private static func prepare(_ app: AppUnderTest, _ choice: AIProviderChoice) throws {

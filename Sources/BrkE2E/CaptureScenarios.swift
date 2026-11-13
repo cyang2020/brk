@@ -5,7 +5,7 @@ import Foundation
 
 enum CaptureScenarios {
     static let all = [
-        Scenario("CaptureProduct", "area menu card, full-page clipboard toast, portrait, real library export/restart/remove and private memory", cefOnly: "embedded captures", product),
+        Scenario("CaptureProduct", "area menu card, full-page clipboard toast, portrait, real library export/restart/remove and private memory", product),
         ]
     static func library(_ app: AppUnderTest) throws -> LibrarySnapshot? { if case .library(let value)? = try app.view().overlay { value } else { nil } }
     static func pngSize(_ bytes: Data) -> [Int] { [16,20].map { offset in bytes[offset..<(offset+4)].reduce(0) { $0*256+Int($1) } } }

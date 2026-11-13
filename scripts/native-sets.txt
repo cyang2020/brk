@@ -86,6 +86,9 @@ pages W2-12
 pages Autofill-Pick
 pages Password-SaveCard
 pages Core-dialogs
+pages Core-tools
+pages Core-editor
+media Core-pip
 
 # sites：广告拦截、清站点数据、权限、证书、扩展
 sites SitePolicy-blocking

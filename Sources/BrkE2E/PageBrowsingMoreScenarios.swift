@@ -8,7 +8,7 @@ import Foundation
 /// picture in picture, sound effects on the system output, and DevTools' element picker and input.
 extension PageBrowsingScenarios {
     static let more = [
-        Scenario("PB3", "fullscreen: window-server Ctrl+Cmd+F, Escape and the green button; toggles during the animation, a fullscreen page hidden or closed", cefOnly: "native fullscreen", fullscreen),
+        Scenario("PB3", "fullscreen: window-server Ctrl+Cmd+F, Escape and the green button; toggles during the animation, a fullscreen page hidden or closed", fullscreen),
     ]
 
     /// Runs `script` from a real click on a button the page shows, so the page has user activation.

@@ -136,7 +136,7 @@ enum HelpLinks {
         bundle.url(forResource: "release-notes", withExtension: "html", subdirectory: "Help")
     }
 
-    /// About's "other open source software": the licences of what Brk ships besides Chromium (CEF, CefSwift),
+    /// About's "other open source software": the licences of what Brk ships besides Chromium,
     /// written into the bundle by scripts/declare-scripting.sh.
     static func credits(bundle: Bundle = .main) -> URL? {
         bundle.url(forResource: "credits", withExtension: "html", subdirectory: "Help")
@@ -205,8 +205,6 @@ struct BuildInfo: Equatable {
     var system: String
     var architecture: String
     var dataDirectory: String
-    /// `LaunchOptions.EngineKind`'s raw value: cef, core (Brk's own Chromium) or stub.
-    var engineKind = "cef"
     /// An Intel build running under Rosetta on an Apple silicon Mac.
     var translated = false
 
@@ -218,10 +216,9 @@ struct BuildInfo: Equatable {
         return translated ? "Apple silicon, Intel build under Rosetta (x86_64)" : "Intel (x86_64)"
     }
 
-    /// The engine as the bug form asks for it: Chromium's version and which embedding runs it.
+    /// The engine as the bug form asks for it: Chromium's version in BrkCore, Brk's own build of it.
     var engineLine: String {
-        let kind = ["cef": "CEF", "core": "BrkCore", "stub": "stub engine, no Chromium"][engineKind] ?? engineKind
-        return engine.map { "Chromium \($0) (\(kind))" } ?? kind
+        engine.map { "Chromium \($0) (BrkCore)" } ?? "BrkCore"
     }
 
     var text: String {
@@ -245,7 +242,7 @@ struct BuildInfo: Equatable {
                          build: info["CFBundleVersion"] as? String ?? "1", commit: info["BrkGitCommit"] as? String,
                          repository: (info["BrkRepositoryURL"] as? String).flatMap(URL.init(string:)), engine: engine,
                          system: ProcessInfo.processInfo.operatingSystemVersionString, architecture: architecture,
-                         dataDirectory: Product.dataDirectory().path, engineKind: LaunchOptions().engine.rawValue, translated: runsUnderRosetta)
+                         dataDirectory: Product.dataDirectory().path, translated: runsUnderRosetta)
     }
 
     private static var runsUnderRosetta: Bool {

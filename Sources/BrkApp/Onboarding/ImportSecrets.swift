@@ -4,11 +4,11 @@ import Foundation
 import Security
 
 /// The keys an import needs: the source browser's ("<Browser> Safe Storage", read once per import; macOS asks for the
-/// computer password, which is why the keychain explanation screen comes first) and Brk's own, the one CEF encrypts
+/// computer password, which is why the keychain explanation screen comes first) and Brk's own, the one Chromium encrypts
 /// this profile's passwords and cookies with.
 enum ImportKeys {
     /// Test launches (the control socket) never touch the login keychain: the source key comes from
-    /// BRK_TEST_IMPORT_KEY, and Brk's own is Chromium's mock key, as CEF uses there (`--use-mock-keychain`).
+    /// BRK_TEST_IMPORT_KEY, and Brk's own is Chromium's mock key (`--use-mock-keychain`).
     static var testing: Bool { LaunchOptions().controlSocket != nil }
 
     /// Blocks until macOS answers its prompt; call off the main thread.
@@ -23,15 +23,10 @@ enum ImportKeys {
         return nil
     }
 
-    /// Brk's "Chromium Safe Storage" password (CefKit's `CefSafeStoragePolicy`: the mock key for test launches and debug
-    /// builds, the login keychain item otherwise). Nil when Chromium has not made the item yet.
+    /// Matches BrkCoreRuntime: only controlled test launches use the mock key, regardless of build configuration.
+    /// Nil when Chromium has not made its login keychain item yet.
     static func brk() -> ChromiumKey? {
-        #if DEBUG
-        let mock = true
-        #else
-        let mock = testing
-        #endif
-        if mock { return ChromiumKey(password: "mock_password") }
+        if testing { return ChromiumKey(password: "mock_password") }
         return genericPassword(service: "Chromium Safe Storage", account: "Chromium").map(ChromiumKey.init(password:))
     }
 
@@ -45,8 +40,8 @@ enum ImportKeys {
     }
 }
 
-/// Where a Brk profile's Chromium data lives: `<data>/Chromium/Default`, or `Profile-<id>` (CefSwift's layout; the same
-/// rule as `ProfileDirectories.directoryName` in BrkCEF/CEFProfiles.swift, which BrkApp cannot import).
+/// Where a Brk profile's Chromium data lives: `<data>/Chromium/Default`, or `Profile-<id>` (the same rule as
+/// `ProfileDirectories.directoryName` in BrkCoreEngine, which BrkApp cannot import).
 enum BrkProfileFolders {
     static var chromiumRoot: URL { Product.dataDirectory().appendingPathComponent("Chromium", isDirectory: true) }
     static var staging: URL { Product.dataDirectory().appendingPathComponent("pending-logins", isDirectory: true) }
@@ -60,8 +55,8 @@ enum BrkProfileFolders {
 }
 
 /// Imported passwords go into the profile's own Chromium password store, never Brk's own keychain items (user decision
-/// 3, 2026-11-12): CEF's password manager then fills them like Chrome's. See `LoginDataWriter` for why rows wait in a
-/// staged file while CEF holds the database.
+/// 3, 2026-11-12): Chromium's password manager then fills them. See `LoginDataWriter` for why rows wait in a
+/// staged file while Chromium holds the database.
 enum PasswordImport {
     struct Outcome: Equatable { var written = 0, staged = 0 }
 
@@ -77,7 +72,7 @@ enum PasswordImport {
     }
 }
 
-/// Called by main.swift before CEF starts: staged logins go into their profiles' Login Data while nothing holds it.
+/// Called by main.swift before Chromium starts: staged logins go into their profiles' Login Data while nothing holds it.
 public enum BrowserImportStartup {
     public static func applyPendingLogins() {
         let staging = BrkProfileFolders.staging

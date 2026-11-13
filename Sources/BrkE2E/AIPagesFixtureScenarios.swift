@@ -13,7 +13,7 @@ import Foundation
 enum AIPagesFixtureScenarios {
     static let all: [Scenario] = [
         Scenario("AIPagesFixture", "a saved conversation's page after a relaunch: in the panel, Keep as Tab from the page's menu, the kept page's caption row, a link that asks first",
-                 cefOnly: "native panel and page sandbox", route),
+                 route),
     ]
 
     private static let conversation = AIRequestID("5E0C0A11-0000-4000-8000-00000000C0DE")

@@ -72,12 +72,9 @@ final class Runner {
     }
 
     private func run(_ scenario: Scenario, index: Int, server: FixtureServer, scratch: URL, shots: URL, logs: URL) -> E2EResult {
-        let engine: AppUnderTest.Engine = arguments.engine == .stub ? .stub : (arguments.engine == .core ? .core : .cef)
+        let engine = AppUnderTest.Engine.core
         if let owner = scenario.pending {
             return E2EResult(id: scenario.id, title: scenario.title, outcome: .skipped, seconds: 0, message: "pending \(owner) (wave 2)")
-        }
-        if engine == .stub, let reason = scenario.cefOnly {
-            return E2EResult(id: scenario.id, title: scenario.title, outcome: .skipped, seconds: 0, message: "needs CEF engine (\(reason))")
         }
         let data = scratch.appendingPathComponent("\(index)-\(scenario.id)", isDirectory: true)
         let app = AppUnderTest(executable: arguments.executable, dataDirectory: data, site: server, engine: engine,
@@ -138,18 +135,18 @@ final class Runner {
         var model = [CChar](repeating: 0, count: max(size, 1))
         sysctlbyname("hw.model", &model, &size, nil, 0)
         let modelName = String(decoding: model.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
-        var cef = "n/a"
+        var chromium = "n/a"
         if arguments.app.pathExtension == "app" {
-            let plist = arguments.app.appendingPathComponent("Contents/Frameworks/Chromium Embedded Framework.framework/Resources/Info.plist")
+            let plist = arguments.app.appendingPathComponent("Contents/Frameworks/BrkCore.framework/Resources/Info.plist")
             if let info = NSDictionary(contentsOf: plist) {
-                cef = (info["CFBundleShortVersionString"] as? String) ?? (info["CFBundleVersion"] as? String) ?? "unknown"
+                chromium = (info["CFBundleShortVersionString"] as? String) ?? (info["CFBundleVersion"] as? String) ?? "unknown"
             }
         }
         let display = "\(Self.screenLocked() ? "locked" : "unlocked")\(backingScale.map { ", backing scale \(Int($0))" } ?? "")"
         let cwd = FileManager.default.currentDirectoryPath + "/"
         let app = arguments.app.path.hasPrefix(cwd) ? String(arguments.app.path.dropFirst(cwd.count)) : arguments.app.path
         return E2EMachine(date: ISO8601DateFormatter().string(from: Date()), macOS: os, model: modelName, engine: arguments.engine.rawValue,
-                          cefVersion: cef, display: display, app: app)
+                          chromiumVersion: chromium, display: display, app: app)
     }
 
     /// The console session's lock state (`CGSSessionScreenIsLocked` in the IORegistry root).

@@ -108,7 +108,7 @@ enum RegressionScenarios {
         try app.settle()
         try createSpace(app, title: "Work")
         let red = try openTab(app, app.site.url("red.html"))
-        try app.onCEF("the title \"Red\"") { try waitForTitle(app, red.id, "Red") }
+        try app.checkPage("the title \"Red\"") { try waitForTitle(app, red.id, "Red") }
         try app.click(.dockSpace(first))
         try app.waitUntil("the first space shown") { try app.view().space.id == first }
         app.sleep(0.6)
@@ -119,7 +119,6 @@ enum RegressionScenarios {
         try expect(n.pages[PageID(window: app.window!, item: red.id)] == nil, "red.html's surface is still in the window")
         let mid = try app.pixel(cardProbe(try visible(n, .card(0)).frame))
         try expect(distance(mid, white) <= 3, "card pixel \(mid), expected white (red would mean a detached page is drawn)")
-        if app.engine == .stub { app.note("every stub page is white, so the white-not-red pixel cannot fail on the stub") }
         try app.screenshot("current-space-only")
     }
 

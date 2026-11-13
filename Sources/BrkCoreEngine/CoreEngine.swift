@@ -4,16 +4,15 @@ import BrkEngine
 import CBrkCore
 import os
 
-/// `WebEngine` over BrkCore.framework, Brk's own Chromium build (docs/chromium/ARC-ENGINE.md). Pages are tabs of a Chrome `Browser`, one
-/// `Browser` per native window and browsing context, and each page's view sits directly in its card. Chosen with `BRK_ENGINE=core`; CEF
-/// stays the default. What it does not do yet falls to `WebEngine`'s defaults ("this engine has no ...") and is listed in engine/README.md.
+/// Brk's browser engine. Each native window and browsing context owns a Chromium Browser;
+/// its WebContents views attach directly to Brk's page cards.
 @MainActor
 public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     public weak var delegate: (any WebEngineDelegate)?
     public private(set) var pageLog: [PageLogEntry] = []
     public var engineVersion: String? { runtime.application.version }
 
-    private let runtime: BrkCoreRuntime
+    let runtime: BrkCoreRuntime
     let resources = BrowserResources<CorePage>()
     let transfers = Transfers()
     private var appearanceObservation: NSKeyValueObservation?
@@ -207,8 +206,10 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         case .recover: live.prepareNavigation(); live.contents.reloadBypassingCache(false)
         case .media(let request): live.control(request)
         case .exitFullscreen: live.contents.exitFullscreen()
-        case .toggleDevTools, .cast, .developer, .documentPictureInPicture:
-            log.notice("page action not available on this engine yet")
+        case .toggleDevTools: live.contents.developerOperation("toggle")
+        case .cast: live.contents.showCastDialog()
+        case .developer(let operation): live.developer(operation)
+        case .documentPictureInPicture(let control): live.controlDocumentPiP(control)
         }
     }
 

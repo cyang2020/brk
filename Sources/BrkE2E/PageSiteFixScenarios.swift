@@ -7,7 +7,7 @@ import Foundation
 /// R4-10: the page and site defects the R4-7 review found (A049, A093) and the evidence it was short of.
 enum PageSiteFixScenarios {
     static let all = [
-        Scenario("OpenerTab", "window.open(url) without features opens a tab that keeps window.opener and reports back; noopener and target=_blank tabs have none", cefOnly: "CEF popup browsing contexts", openerTab),
+        Scenario("OpenerTab", "window.open(url) without features opens a tab that keeps window.opener and reports back; noopener and target=_blank tabs have none", openerTab),
         Scenario("HistoryRestore", "the History tab Cmd+Y opened comes back after quitting and relaunching, still the native History page", historyRestore),
     ]
 

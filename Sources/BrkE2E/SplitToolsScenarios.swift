@@ -6,7 +6,7 @@ import Foundation
 
 enum SplitToolsScenarios {
     static let all = [
-        Scenario("SplitTools1", "four native panes edit independently, resize in both orientations, restore and close", cefOnly: "native split pages and pointer dividers", geometry),
+        Scenario("SplitTools1", "four native panes edit independently, resize in both orientations, restore and close", geometry),
     ]
 
     private static func send(_ app: AppUnderTest, _ window: WindowID, _ command: Command) throws {

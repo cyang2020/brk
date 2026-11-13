@@ -25,8 +25,7 @@ import Vision
 enum AIRealLocalScenarios {
     static var all: [Scenario] {
         guard ProcessInfo.processInfo.environment["BRK_E2E_REAL_LOCAL"] == "1" else { return [] }
-        return [Scenario("AIRealLocal-none", "no agent and no key, the local models downloaded: Tidy, Place New Tabs, duplicates, search by meaning in the bar and History",
-                         cefOnly: "local models, real input") { try route($0, agent: nil) }]
+        return [Scenario("AIRealLocal-none", "no agent and no key, the local models downloaded: Tidy, Place New Tabs, duplicates, search by meaning in the bar and History") { try route($0, agent: nil) }]
     }
 
     /// The downloaded models, cloned (APFS: no copy of the gigabytes) into the store layout under the data folder.

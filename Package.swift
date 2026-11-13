@@ -1,10 +1,10 @@
 // swift-tools-version: 6.0
-// Brk: a native macOS Arc-style browser. AppKit shell, Chromium through CEF (Chrome runtime, embedded views).
+// Brk: a native macOS Arc-style browser. AppKit shell, Chromium through BrkCore.framework.
 // Module map and dependency rules: docs/design/swift/module-map.md. Rationale: docs/design/swift/rationale.md.
 import PackageDescription
 
 /// The product name lives here and nowhere else. The executable, the .app bundle and its five helpers
-/// ("Brk Helper (GPU).app", named by the CEF plugin from the executable), the bundle identifier
+/// (the BrkCore helper apps), the bundle identifier
 /// (scripts/build.sh reads it from `swift package dump-package`), the Application Support folder and the
 /// menu titles (BrkBase/Product.swift reads the running bundle or process name) all derive from it.
 let productName = "Brk"
@@ -19,13 +19,7 @@ let package = Package(
         .executable(name: productName, targets: [productName]),
         .executable(name: "brk-e2e", targets: ["BrkE2E"]),
     ],
-    dependencies: [
-        // Vendored CefSwift at ba6ebff, CEF moved to 156.0.28 (C API 14800 still pinned). Its CefKit is the only Chromium API we
-        // call, and only from BrkCEF. Its `cef` command plugin downloads the SHA-1-pinned CEF and assembles
-        // the .app with helpers (scripts/build.sh). Vendored because upstream has had no human commit since June
-        // and we must own CEF bumps; its dlopen loader means `swift build`/`swift test` need no CEF download.
-        .package(path: "Vendor/CefSwift"),
-    ],
+    dependencies: [],
     targets: [
         // Vocabulary shared by every layer: ids, time, keys, the page vocabulary, the constants file.
         .target(name: "BrkBase", resources: [.process("Resources")], swiftSettings: strict),
@@ -33,20 +27,11 @@ let package = Package(
         .target(name: "BrkDomain", dependencies: ["BrkBase"], swiftSettings: strict),
         // Pure geometry: every frame in a window, computed from a snapshot and the constants.
         .target(name: "BrkLayout", dependencies: ["BrkBase", "BrkDomain"], swiftSettings: strict),
-        // The hosting interface for web pages, plus a stub engine that needs no Chromium.
+        // The hosting interface for web pages.
         .target(name: "BrkEngine", dependencies: ["BrkBase"], swiftSettings: strict),
-        // The Chrome-runtime embed engine. The only target that imports CefKit.
-        .target(
-            name: "BrkCEF",
-            dependencies: ["BrkBase", "BrkEngine", .product(name: "CefKit", package: "CefSwift")],
-            exclude: ["AudibilityExtension"],
-            swiftSettings: strict
-        ),
-        // The interface of BrkCore.framework, Brk's own Chromium build (engine/): ObjC protocols only. Nothing to link; the framework is found
-        // at run time, so this package builds and runs on CEF with no Chromium tree present.
+        // BrkCore is loaded at runtime, so compilation and unit tests need no Chromium checkout.
         .target(name: "CBrkCore"),
-        // The engine on BrkCore, picked with BRK_ENGINE=core. Imports no CefKit; find's page script is shared through PageEditorScript.
-        .target(name: "BrkCoreEngine", dependencies: ["BrkBase", "BrkEngine", "CBrkCore", .product(name: "PageEditorScript", package: "CefSwift")],
+        .target(name: "BrkCoreEngine", dependencies: ["BrkBase", "BrkEngine", "CBrkCore"],
                 swiftSettings: strict),
         // Themed window background: Metal gradient, procedural textures, crossfade.
         .target(name: "BrkTheme", dependencies: ["BrkBase", "BrkDomain"], swiftSettings: strict),
@@ -82,10 +67,10 @@ let package = Package(
             exclude: ["SoundAssets", "Scripting/Brk.sdef"],
             swiftSettings: strict
         ),
-        // Composition root: picks the engine, starts CEF before NSApp exists, runs the app.
+        // Composition root: starts BrkCore before NSApp exists, then runs the app.
         .executableTarget(
             name: productName,
-            dependencies: ["BrkBase", "BrkApp", "BrkEngine", "BrkCEF", "BrkCoreEngine"],
+            dependencies: ["BrkBase", "BrkApp", "BrkEngine", "BrkCoreEngine"],
             path: "Sources/Brk",
             swiftSettings: strict
         ),
@@ -105,7 +90,7 @@ let package = Package(
         .testTarget(name: "BrkControlTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkControl"], swiftSettings: strict),
         .testTarget(name: "BrkThemeTests", dependencies: ["BrkDomain", "BrkTheme"], swiftSettings: strict),
         .testTarget(name: "BrkEngineTests", dependencies: ["BrkBase", "BrkEngine"], swiftSettings: strict),
-        .testTarget(name: "BrkCEFTests", dependencies: ["BrkBase", "BrkDomain", "BrkEngine", "BrkCEF", .product(name: "CefKit", package: "CefSwift"), .product(name: "PageEditorScript", package: "CefSwift")], exclude: ["CaptureFixture.png"], swiftSettings: strict),
+        .testTarget(name: "BrkCoreEngineTests", dependencies: ["BrkBase", "BrkDomain", "BrkEngine", "BrkCoreEngine"], exclude: ["CaptureFixture.png"], swiftSettings: strict),
         .testTarget(name: "BrkLocalModelsTests", dependencies: ["BrkBase", "BrkLocalModels"], swiftSettings: strict),
         .testTarget(name: "BrkImportTests", dependencies: ["BrkBase", "BrkDomain", "BrkImport"], swiftSettings: strict, linkerSettings: [.linkedLibrary("sqlite3")]),
         .testTarget(name: "BrkAppTests", dependencies: ["BrkBase", "BrkDomain", "BrkApp", "BrkSettings", "BrkLocalModels"], swiftSettings: strict),

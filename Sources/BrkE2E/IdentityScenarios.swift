@@ -5,8 +5,8 @@ import Foundation
 
 enum IdentityScenarios {
     static let all = [
-        Scenario("I1", "one logical tab has independent native content, input origin and restored URLs in two windows", cefOnly: "two real CEF browsers", sameTab),
-        Scenario("I5", "replacement navigation becomes ready and restores after overlapping slow loads", cefOnly: "real navigation cancellation", overlappingNavigation),
+        Scenario("I1", "one logical tab has independent native content, input origin and restored URLs in two windows", sameTab),
+        Scenario("I5", "replacement navigation becomes ready and restores after overlapping slow loads", overlappingNavigation),
     ]
 
     private static func observations(_ app: AppUnderTest) throws -> [PageID: PageObservation] {

@@ -63,7 +63,7 @@ enum NativeScenarios {
     @Sendable static func focusRoundTrip(_ app: AppUnderTest) throws {
         let keys = try openTab(app, app.site.url("keys.html"))
         try app.settle()
-        try app.onCEF("keys.html's load title") { try waitForTitle(app, keys.id, "keys:loads=1") }
+        try app.checkPage("keys.html's load title") { try waitForTitle(app, keys.id, "keys:loads=1") }
         try app.press("cmd+l")
         try app.waitUntil("Cmd+L to focus the command bar input") {
             let v = try app.view(), n = try app.native()
@@ -73,7 +73,7 @@ enum NativeScenarios {
         }
         try app.type("x")
         app.sleep(0.3)
-        try app.onCEF("that the page did not get \"x\"") {
+        try app.checkPage("that the page did not get \"x\"") {
             let title = tab(keys.id, in: try app.view())?.title ?? ""
             try expect(!title.contains("key:x"), "keys.html saw the x typed into the bar (title \"\(title)\")")
         }
@@ -85,7 +85,7 @@ enum NativeScenarios {
             return true
         }
         try app.type("y")
-        try app.onCEF("that the page got \"y\"") { try waitForTitle(app, keys.id, keyTitle("y")) }
+        try app.checkPage("that the page got \"y\"") { try waitForTitle(app, keys.id, keyTitle("y")) }
         _ = try app.native()
         try expect(app.hostKeyViolations.isEmpty, "a CEF host window was key: \(app.hostKeyViolations)")
     }
@@ -170,6 +170,6 @@ enum NativeScenarios {
         let closed = Set(final.filter { $0.kind == .closed }.map { "\($0.page)#\($0.generation)" })
         let unclosed = created.subtracting(closed)
         try expect(unclosed.isEmpty, "pages never closed (no OnBeforeClose): \(unclosed.sorted())")
-        try app.requireCEF("the ordered CEF shutdown")
+
     }
 }

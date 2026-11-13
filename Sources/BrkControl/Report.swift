@@ -16,7 +16,7 @@ public struct E2EResult: Sendable, Equatable {
     public var seconds: Double
     /// FAIL: the assertion that failed (or how the app died). SKIPPED: why.
     public var message: String?
-    /// Caveats on a PASS, e.g. checks that only the CEF engine can make.
+    /// Caveats on a PASS, such as external hardware that was not exercised.
     public var notes: [String]
     /// Paths relative to the report's directory.
     public var screenshots: [String]
@@ -42,19 +42,19 @@ public struct E2EMachine: Sendable, Equatable {
     public var date: String
     public var macOS: String
     public var model: String
-    /// "stub" or "cef".
+    /// The engine used by the run ("core").
     public var engine: String
-    public var cefVersion: String
+    public var chromiumVersion: String
     /// e.g. "locked, backing scale 2".
     public var display: String
     public var app: String
 
-    public init(date: String, macOS: String, model: String, engine: String, cefVersion: String, display: String, app: String) {
+    public init(date: String, macOS: String, model: String, engine: String, chromiumVersion: String, display: String, app: String) {
         self.date = date
         self.macOS = macOS
         self.model = model
         self.engine = engine
-        self.cefVersion = cefVersion
+        self.chromiumVersion = chromiumVersion
         self.display = display
         self.app = app
     }
@@ -67,7 +67,7 @@ public enum E2EReport {
     public static func markdown(_ results: [E2EResult], machine: E2EMachine, totalSeconds: Double) -> String {
         let counts = E2EOutcome.allCases.map { outcome in "\(results.filter { $0.outcome == outcome }.count) \(outcome.rawValue)" }
         var out = "# Brk e2e report\n\n"
-        out += "\(machine.date) · \(machine.macOS) · \(machine.model) · engine \(machine.engine) (CEF \(machine.cefVersion)) · "
+        out += "\(machine.date) · \(machine.macOS) · \(machine.model) · engine \(machine.engine) (Chromium \(machine.chromiumVersion)) · "
         out += "display \(machine.display) · \(results.count) scenarios in \(seconds(totalSeconds)) · \(counts.joined(separator: ", "))\n\n"
         out += "App: `\(machine.app)`\n\n"
         for r in results {
@@ -98,7 +98,7 @@ public enum E2EReport {
         switch module {
         case "BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit": return fileID.hasPrefix("BrkDomain/SpaceTheme.swift") ? "W5" : "W1"
         case "BrkApp" where controlFiles.contains(String(fileID.dropFirst("BrkApp/".count))): return "W6"
-        case "BrkEngine", "BrkCEF", "BrkApp", "BrkContent", "Brk", "CefKit": return "W2"
+        case "BrkEngine", "BrkCoreEngine", "CBrkCore", "BrkApp", "BrkContent", "Brk": return "W2"
         case "BrkSidebar": return "W3"
         case "BrkOverlays": return "W4"
         case "BrkTheme": return "W5"

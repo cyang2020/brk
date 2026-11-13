@@ -13,7 +13,7 @@ import Foundation
 /// scheme and unregisters it afterwards, so the default browser and the user's other apps are never touched.
 enum RemainingScenarios {
     static let all = [
-        Scenario("R44-ShortcutKeys", "Shortcuts pane: Go Back's second key and Select All recorded with window-server key presses, used by routing and the menu", cefOnly: "window-server key presses into pages", shortcutKeys),
+        Scenario("R44-ShortcutKeys", "Shortcuts pane: Go Back's second key and Select All recorded with window-server key presses, used by routing and the menu", shortcutKeys),
     ]
 
     // MARK: A043

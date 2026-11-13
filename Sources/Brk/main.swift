@@ -1,12 +1,11 @@
-// Composition root. The only file that knows which engine runs.
+// Composition root. Brk runs on BrkCore.framework, its own Chromium build (engine/, docs/chromium/ARC-ENGINE.md), and on
+// nothing else: there is no engine switch.
 //
-// Order matters: CEF must install its NSApplication subclass before anything touches NSApp, so the engine is
-// created first, then the delegate, then the run loop. With BRK_ENGINE=stub nothing loads Chromium and the shell
-// runs from `swift run Brk` without a .app bundle.
+// Order matters: the framework installs Chromium's NSApplication class before anything touches NSApp, so the runtime is
+// created first, then the delegate; Chromium's main then runs NSApp itself.
 import AppKit
 import BrkApp
 import BrkBase
-import BrkCEF
 import BrkCoreEngine
 import BrkEngine
 
@@ -16,48 +15,26 @@ BrkToolBridge.runIfAsked()
 MainActor.assumeIsolated {
     let options = LaunchOptions()
     // Before anything else, while this is the only thread (BrkCoreRuntime.registerAllocatorZone).
-    if options.engine == .core { BrkCoreRuntime.registerAllocatorZone() }
+    BrkCoreRuntime.registerAllocatorZone()
     CrashBacktrace.install()
-    let engine: any WebEngine
-    var coreRuntime: BrkCoreRuntime?
-    // Logins an import staged while Chromium held a profile's Login Data go in now, before Chromium (CEF's or BrkCore) opens it. Both
-    // read the same "Chromium Safe Storage" key and the same profile folders.
-    if options.engine != .stub { BrowserImportStartup.applyPendingLogins() }
-    switch options.engine {
-    case .cef:
-        do {
-            engine = try CEFEngine.bootstrap(.init(
-                cacheDirectory: Product.dataDirectory().appendingPathComponent("Chromium", isDirectory: true),
-                remoteDebuggingPort: options.remoteDebuggingPort
-            ))
-        } catch {
-            FileHandle.standardError.write(Data("""
-            \(Product.name): Chromium could not start (\(error)).
-            Run the bundled app built by scripts/build.sh, or set BRK_ENGINE=stub to run the shell without Chromium.
+    // Logins an import staged while Chromium held a profile's Login Data go in now, before Chromium opens it.
+    BrowserImportStartup.applyPendingLogins()
+    let runtime: BrkCoreRuntime
+    do {
+        runtime = try BrkCoreRuntime(userDataDirectory: Product.dataDirectory().appendingPathComponent("Chromium", isDirectory: true),
+                                     remoteDebuggingPort: options.remoteDebuggingPort)
+    } catch {
+        FileHandle.standardError.write(Data("""
+        \(Product.name): BrkCore could not start (\(error)).
+        Run the bundled app built by scripts/build.sh: it carries BrkCore.framework in Contents/Frameworks.
 
-            """.utf8))
-            exit(1)
-        }
-    case .stub:
-        engine = StubEngine()
-    case .core:
-        do {
-            let runtime = try BrkCoreRuntime(userDataDirectory: Product.dataDirectory().appendingPathComponent("Chromium", isDirectory: true),
-                                             remoteDebuggingPort: options.remoteDebuggingPort)
-            coreRuntime = runtime
-            engine = CoreEngine(runtime: runtime)
-        } catch {
-            FileHandle.standardError.write(Data("\(Product.name): BrkCore could not start (\(error)).\n".utf8))
-            exit(1)
-        }
+        """.utf8))
+        exit(1)
     }
-    let lifecycle = Lifecycle(options: options, engine: engine, engineKind: options.engine.rawValue)
+    let lifecycle = Lifecycle(options: options, engine: CoreEngine(runtime: runtime))
     let app = NSApplication.shared
     app.delegate = lifecycle
     app.setActivationPolicy(.regular)
-    if let coreRuntime {
-        // Chromium's main runs NSApp itself and returns when it has shut down.
-        exit(coreRuntime.run())
-    }
-    app.run()
+    // Chromium's main runs NSApp itself and returns when it has shut down.
+    exit(runtime.run())
 }

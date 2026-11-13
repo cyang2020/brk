@@ -11,7 +11,7 @@ import Foundation
 enum SiteSecurityScenarios {
     static let all = [
         Scenario("SiteSecurity-invalid", "untrusted certificate: Chromium's interstitial, Proceed, then Insecure with the certificate note",
-                 cefOnly: "Chromium certificate verification", invalid),
+                 invalid),
     ]
 
     static let secureNote = "Connection is secure (HTTPS)."

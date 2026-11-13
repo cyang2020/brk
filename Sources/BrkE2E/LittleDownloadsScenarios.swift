@@ -11,7 +11,7 @@ import Foundation
 /// beside the first, no Chromium download card, the × under the real pointer.
 enum LittleDownloadsScenarios {
     static let all = [
-        Scenario("LittleDownloads-Pill", "real clicks on download links in a Little Arc window show Arc's pills at its bottom left with the real file names, progress then the kind; no Chromium card; the real × removes a pill", cefOnly: "real downloads and window-server pointer", pill),
+        Scenario("LittleDownloads-Pill", "real clicks on download links in a Little Arc window show Arc's pills at its bottom left with the real file names, progress then the kind; no Chromium card; the real × removes a pill", pill),
     ]
 
     private static func pill(_ index: Int) -> ViewID { .tabTool("little-download-\(index)") }

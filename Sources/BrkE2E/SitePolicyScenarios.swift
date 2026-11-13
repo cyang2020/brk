@@ -5,8 +5,8 @@ import Foundation
 
 enum SitePolicyScenarios {
     static let all = [
-        Scenario("SitePolicy-clear", "origin cookies and storage clear while another origin and profile survive restart", cefOnly: "CEF storage", clearData),
-        Scenario("SitePolicy-blocking", "network/cosmetic blocking and per-site exceptions", cefOnly: "CEF requests", blocking),
+        Scenario("SitePolicy-clear", "origin cookies and storage clear while another origin and profile survive restart", clearData),
+        Scenario("SitePolicy-blocking", "network/cosmetic blocking and per-site exceptions", blocking),
     ]
 
     static func controls(_ app: AppUnderTest) throws -> SiteControlSnapshot {

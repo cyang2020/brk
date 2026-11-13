@@ -28,6 +28,11 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     var autoDark: (document: DocumentToken, enabled: Bool)?
     var frozen = false
     var pictureInPictureDocument: DocumentToken?
+    var documentPiPWorld: (document: DocumentToken, context: Int)?
+    var documentPiPTask: Task<Void, Never>?
+    var sourceWindow: NSWindow?
+    var sourceRequest: UInt64 = 0
+    var developerResult: String?
     var audible = false
     /// What checkSelection last reported for this document.
     var reportedSelection = false
@@ -145,6 +150,9 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
         facts.loadProgressSamples = progressSamples
         facts.requestedReloads = requestedReloads
         facts.keyReceipts = keyReceipts
+        facts.textServices = surface.textServiceLog
+        facts.developerResult = developerResult
+        facts.hasDevTools = contents.hasDeveloperTools
         facts.inputViewHidden = contents.inputView?.isHiddenOrHasHiddenAncestor
         facts.websitePolicyError = websiteError
         // Chromium's own audible state of this tab: the tab id is the target, there is no separate reader to fail.
@@ -169,6 +177,9 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     func dropFocus() { contents.setPageFocused(false) }
 
     func close() {
+        documentPiPTask?.cancel(); documentPiPTask = nil
+        sourceRequest &+= 1
+        sourceWindow?.close(); sourceWindow = nil
         find.invalidate()
         settlePermissionGrants(keeping: nil)
         captureRevision &+= 1

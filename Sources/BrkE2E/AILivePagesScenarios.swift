@@ -18,7 +18,7 @@ import Foundation
 enum AILivePagesScenarios {
     static var all: [Scenario] {
         let list = [Scenario("AIAgentLivePages", "a live page: schedule from its row, a refresh through Brk's tools, ticks and notes kept, a flagged refresh, weekdays, find, delete",
-                             cefOnly: "native sidebar and page sandbox", fixtureRoute)]
+                             fixtureRoute)]
         return list
     }
 

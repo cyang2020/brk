@@ -51,7 +51,7 @@ enum PlanScenarios {
             let v = try app.view(), n = try app.native()
             return v.overlay == nil && !isShown(n, .commandBar)
         }
-        try app.onCEF("the title \"Fixture Page 2\"") { try waitForTitle(app, row!.id, "Fixture Page 2") }
+        try app.checkPage("the title \"Fixture Page 2\"") { try waitForTitle(app, row!.id, "Fixture Page 2") }
         let log = try app.pageLog()
         try expect(log.contains { $0.page == PageID(window: app.window!, item: row!.id) && $0.kind == .created }, "pageLog has no created entry for \(row!.id)")
         try app.screenshot("new-tab")
@@ -116,7 +116,7 @@ enum PlanScenarios {
             try expect(tab(page.item, in: v)?.url == url, "the second pane's URL is \(tab(page.item, in: v)?.url?.absoluteString ?? "nil")")
             return true
         }
-        try app.onCEF("the second page's title \"Fixture Page 2\"") { try waitForTitle(app, filled!, "Fixture Page 2") }
+        try app.checkPage("the second page's title \"Fixture Page 2\"") { try waitForTitle(app, filled!, "Fixture Page 2") }
         try app.screenshot("split")
     }
 
@@ -177,7 +177,7 @@ enum PlanScenarios {
             try expect(kinds == [.created, .closeRequested, .closed], "pageLog kinds \(kinds)")
             return true
         }
-        try app.requireCEF("OnBeforeClose for the closed browser")
+
     }
 
     /// 9: two spaces, a pinned tab, a failed load, page2 current, width 300; after flush and restart everything is the
@@ -198,7 +198,7 @@ enum PlanScenarios {
         try app.waitUntil("the sidebar width to be 300") { try app.view().sidebar.width == 300 }
         try app.settle()
 
-        let before = RestoreSummary(try app.view(), omitting: app.engine != .stub ? fail.id : nil)
+        let before = RestoreSummary(try app.view(), omitting: fail.id)
         try expect(before.dock.count == 2, "dock \(before.dock), expected two spaces")
         try expect(before.pinned.map(\.id) == [home.id.rawValue], "pinned \(before.pinned), expected only home")
         try expect(try todayIDs(app.view()).contains(fail.id), "Today \(before.today) lacks the /fail tab")
@@ -208,11 +208,11 @@ enum PlanScenarios {
         try app.restart()
 
         try app.waitUntil("the restored window to equal the one before restart") {
-            let after = RestoreSummary(try app.view(), omitting: app.engine != .stub ? fail.id : nil)
+            let after = RestoreSummary(try app.view(), omitting: fail.id)
             try expect(after == before, "after restart \(after), before \(before)")
             return true
         }
-        if app.engine != .stub {
+        do {
             try expect(try todayIDs(app.view()).contains(fail.id), "failed row was not retained")
             try expect(try tab(fail.id, in: app.view())?.url == nil, "failed request was persisted as a document")
         }
@@ -220,7 +220,6 @@ enum PlanScenarios {
         try expect(pages == [PageID(window: app.window!, item: page2.id)], "native().pages after restart is \(pages.map(\.description).sorted()), expected only page2")
         let created = Set(try app.pageLog().filter { $0.kind == .created }.map(\.page))
         try expect(created == [PageID(window: app.window!, item: page2.id)], "pages created after restart: \(created.map(\.description).sorted()), expected only page2 (lazy restore)")
-        if app.engine == .stub { app.note("the stub loads /fail like any URL and titles pages by host, so the failed load is not exercised") }
         try app.screenshot("restored")
     }
 

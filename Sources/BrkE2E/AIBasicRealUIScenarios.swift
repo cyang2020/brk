@@ -16,11 +16,9 @@ import Vision
 enum AIBasicRealUIScenarios {
     static var all: [Scenario] {
         // The API-key path through the settings window on the fixture's Anthropic stand-in: no real key, no quota.
-        let keys = Scenario("AIKeysUI", "an API key typed into Settings → Max, saved, tested, chosen; tab names over the API; never in state.json",
-                            cefOnly: "native settings, real input") { try keyRoute($0) }
+        let keys = Scenario("AIKeysUI", "an API key typed into Settings → Max, saved, tested, chosen; tab names over the API; never in state.json") { try keyRoute($0) }
         guard let name = ProcessInfo.processInfo.environment["BRK_E2E_REAL_BASIC_AGENT"], let choice = AIProviderChoice(rawValue: name), choice.kind != nil else { return [keys] }
-        return [keys, Scenario("AIRealUIBasic-\(name)", "real \(name) on its small model, real input: Max pane, Name Tabs, Tidy names, Name with AI, Place New Tabs, cleanup, translate, preview, usage",
-                         cefOnly: "real agent, real input") { try route($0, choice) }]
+        return [keys, Scenario("AIRealUIBasic-\(name)", "real \(name) on its small model, real input: Max pane, Name Tabs, Tidy names, Name with AI, Place New Tabs, cleanup, translate, preview, usage") { try route($0, choice) }]
     }
 
     private final class Log {

@@ -10,7 +10,7 @@ import Foundation
 /// Actual native controls, loopback fixture pages and this scenario's temporary data only.
 enum LibraryCardScenarios {
     static let all = [
-        Scenario("LibraryDownload-Cancel", "the Library Downloads row's cancel button stops the real transfer at the server", cefOnly: "CEF transfer callbacks", downloadCancel),
+        Scenario("LibraryDownload-Cancel", "the Library Downloads row's cancel button stops the real transfer at the server", downloadCancel),
     ]
 
     static let arcRows = ["Change Space Icon…", "Rename Space…", "Edit Theme Color…", "Set Profile", "New Folder", "Live Folders",

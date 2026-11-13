@@ -242,7 +242,7 @@ final class ControlExecutor {
             }
             return .menuItems(Self.accessibilityTexts(root))
         case .hello:
-            return .hello(Hello(pid: ProcessInfo.processInfo.processIdentifier, engine: LaunchOptions().engine.rawValue,
+            return .hello(Hello(pid: ProcessInfo.processInfo.processIdentifier, engine: "core",
                                 windows: store.snapshot.windows.keys.sorted(), dataDirectory: Product.dataDirectory().path))
 
         case .view(let window):

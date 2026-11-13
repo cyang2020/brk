@@ -8,8 +8,8 @@ import Foundation
 /// Actual native controls, public loopback pages and this scenario's temporary data only.
 enum SpaceToolsScenarios {
     static let all = [
-        Scenario("SpaceTools-2", "Create a Space flow with theme preset and profile, live theme panel, rename dialog, icon popover and manager", cefOnly: "native editor and profile browsing", editor),
-        Scenario("R56-SwipeReal", "two-finger swipes posted to the window server over the tab list switch Spaces (clean, slanted start, wobbly, flick with inertia, slow while moving), one whose fingers stop short of the middle does not, vertical ones scroll the list, and a swipe still works after the list scrolled", cefOnly: "real scroll events through the window server", realSwipes),
+        Scenario("SpaceTools-2", "Create a Space flow with theme preset and profile, live theme panel, rename dialog, icon popover and manager", editor),
+        Scenario("R56-SwipeReal", "two-finger swipes posted to the window server over the tab list switch Spaces (clean, slanted start, wobbly, flick with inertia, slow while moving), one whose fingers stop short of the middle does not, vertical ones scroll the list, and a swipe still works after the list scrolled", realSwipes),
     ]
 
     private static func hover(_ app: AppUnderTest, at point: CGPoint) throws {
