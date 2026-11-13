@@ -1964,7 +1964,8 @@ final class SpaceHeaderView: HoverView {
         self.space = space
         self.palette = palette
         self.interactive = interactive
-        let color = palette.color(palette.tokens.foregroundStrong)
+        // The default Space stays light on a Mac in Dark; its darker surface made the 45% name read below 3:1.
+        let color = palette.color(palette.tokens.foregroundStrong).withAlphaComponent(0.5)
         label.stringValue = space.title
         label.textColor = color
         icon.render(IconContent(space: space.icon, color: RGBA(0, 0, 0, 0)), tint: color)
