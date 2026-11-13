@@ -312,7 +312,9 @@ def held_drag(b, start, end, shoot, hold=30.0, shown=None):
 # swatch selected and the handle at 191.5 pt of the panel), so those scenes switch to it and back.
 FIXTURE_THEME = {'appearance': 'auto', 'colors': [{'red': 0xF2 / 255, 'green': 0xEA / 255, 'blue': 0xE4 / 255, 'alpha': 1}],
                  'intensity': 0.25, 'noise': 0.5, 'texture': 'grain', 'wheel': 'analogous'}
-WHITE_THEME = dict(FIXTURE_THEME, colors=[{'red': 1, 'green': 1, 'blue': 1, 'alpha': 1}], intensity=0.8)
+# Brk's intensity runs opposite to Arc's slider (SpaceTheme.intensity): Arc's 0.8 is 0.2 here. Since the window shows
+# the system material through the theme (docs/checks/2026-11-13-window-translucency.md) the slider matters for white too.
+WHITE_THEME = dict(FIXTURE_THEME, colors=[{'red': 1, 'green': 1, 'blue': 1, 'alpha': 1}], intensity=0.2)
 def set_theme_doc(b, theme):
     b.dispatch({'space': {'_0': {'update': {'_0': b.space_id('对照'), 'theme': theme}}}}); sleep(0.8)
 def load_pinned(b):
