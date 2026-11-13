@@ -54,7 +54,7 @@ public struct SpaceTheme: Hashable, Sendable, Codable {
     public var noise: Double
     /// 0...1: how strong the wash over the color is. Arc's `intensityFactor` (its sine slider's position) runs the
     /// other way, more color to the right, so an imported theme stores 1 - intensityFactor. Texture opacity = intensity x
-    /// the texture's multiplier (Metrics.theme.*Opacity); wash opacity: `themeWash`.
+    /// the texture's multiplier (Metrics.theme.*Opacity); the theme layer's alpha: `themeLayer`.
     public var intensity: Double
     public var appearance: AppearanceChoice
     public var variants: ThemeVariants? = nil
@@ -147,11 +147,31 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
     public var textureOpacity: Double
     /// The stored `noise`, 0...1: the renderer multiplies the tile's deviation from mid grey by it.
     public var textureContrast: Double
-    /// What lies over the gradient (`themeWash`).
+    /// The theme as one solid color layer, for surfaces that cannot show the window's material (previews, the floating
+    /// sidebar, the no-Metal fallback): `underlay` over the material's stand-in color (`ThemeMaterial.standIn`), at
+    /// 1 - `layerAlpha` over the gradient. mix(gradient, wash, wash.alpha) is what the window shows over that backdrop.
     public var wash: RGBA
     public var tokens: SidebarTokens
-    /// Solid color for the NSWindow background, visible only before the first Metal frame.
+    /// Solid color for the NSWindow background, visible only before the first Metal frame: the primary under `wash`.
     public var windowColor: RGBA
+    /// The system material under the theme (Arc: the NSVisualEffectView of `WindowBackgroundTranslucencyViewAppKit`).
+    public var material: ThemeMaterial = .light
+    /// How much of the gradient covers the material and the underlay (Arc's GradientLayer alpha). 1: opaque.
+    public var layerAlpha: Double = 1
+    /// Inside the theme layer, under the gradient (Arc's `underlayColor`): what the material shows through, dimmed.
+    public var underlay: RGBA = RGBA(0, 0, 0, 0)
+}
+
+/// The NSVisualEffectView material under a window's theme. Arc 1.170 draws its saved themes over `.light` in both macOS
+/// modes (docs/checks/2026-11-13-window-translucency.md); `.opaque` is a theme that covers it whole (incognito).
+public enum ThemeMaterial: String, Hashable, Sendable, Codable {
+    case light, opaque
+
+    /// The material's color over a stand-in backdrop, for `ResolvedTheme.wash`: with nothing behind (what a window
+    /// capture shows) in light mode, over black in dark mode (dark-mode users mostly have dark windows behind).
+    public static func standIn(_ systemScheme: Scheme) -> Double {
+        systemScheme == .dark ? Metrics.theme.materialOverBlack.value : Metrics.theme.materialEmpty.value
+    }
 }
 
 /// Pure: stored theme -> paint values.
@@ -163,9 +183,14 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
 ///   complementary = the opposite hue and lighter, then the primary's hue darker. Saturation is kept; lightness
 ///   moves by Metrics.theme.companionLightnessStep. Three base colors leave the wheel nothing to add (Arc's editor places them).
 /// - Texture opacity: intensity x the texture's multiplier; texture contrast: the stored noise.
-/// - Wash: `themeWash`.
+/// - Layer: `themeLayer` (alpha, underlay, material); `wash` is that layer as one solid color.
 /// - Window color: the primary under the wash, so the window's own background matches the first Metal frame.
 public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> ResolvedTheme {
+    resolveTheme(theme, systemScheme: systemScheme, followsSystem: theme.appearance == .auto)
+}
+
+/// `followsSystem`: the theme takes macOS's light or dark mode (a stored `auto`, or a light/dark pair set to follow it).
+private func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme, followsSystem: Bool) -> ResolvedTheme {
     if let variants = theme.variants {
         let scheme: Scheme = variants.selection == .auto ? systemScheme : (variants.selection == .dark ? .dark : .light)
         let style = (scheme == .dark ? variants.dark : variants.light).normalized
@@ -176,7 +201,7 @@ public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> 
             return rgb(hue: h, saturation: clamp01(s * style.saturation),
                        lightness: clamp01((l + style.lightness) * (scheme == .dark ? 1 - style.darkBias * 0.8 : 1)))
         }
-        var result = resolveTheme(legacy, systemScheme: systemScheme)
+        var result = resolveTheme(legacy, systemScheme: systemScheme, followsSystem: variants.selection == .auto)
         result.positions = (0..<3).map { style.colors.indices.contains($0) ? style.colors[$0].position : ThemePoint.anchors[$0] }
         return result
     }
@@ -197,49 +222,57 @@ public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> 
     case .tweed: Metrics.theme.tweedOpacity.value
     }
     let intensity = clamp01(theme.intensity)
-    let wash = themeWash(darkPrimary: darkPrimary, appearance: theme.appearance, systemScheme: systemScheme, intensity: intensity)
-    return ResolvedTheme(scheme: scheme, gradient: gradient, texture: theme.texture, textureOpacity: intensity * multiplier,
-                         textureContrast: clamp01(theme.noise), wash: wash,
-                         tokens: scheme == .light ? .light : .dark, windowColor: mix(primary, wash, wash.alpha))
+    let layer = themeLayer(appearance: theme.appearance, followsDarkSystem: followsSystem && systemScheme == .dark, intensity: intensity)
+    let stops = layer.lift > 0 ? gradient.map { mix($0, RGBA(1, 1, 1), layer.lift) } : gradient
+    let wash = solidWash(alpha: layer.alpha, underlay: layer.underlay, material: .light, systemScheme: systemScheme)
+    var resolved = ResolvedTheme(scheme: scheme, gradient: stops, texture: theme.texture, textureOpacity: intensity * multiplier,
+                                 textureContrast: clamp01(theme.noise), wash: wash,
+                                 tokens: scheme == .light ? .light : .dark, windowColor: mix(stops[0], wash, wash.alpha))
+    resolved.layerAlpha = layer.alpha
+    resolved.underlay = layer.underlay
+    return resolved
 }
 
 extension ResolvedTheme {
     /// An incognito window's chrome: a fixed color under the plain black wash, with its companions; it has no slider, and
-    /// the rules for a space's own dark color (`themeWash`, `gradientStops`) do not apply.
+    /// the rules for a space's own dark color do not apply. Opaque: Arc's incognito window shows nothing of what is
+    /// behind it (#12151B over a black and a white backdrop alike, docs/checks/2026-11-13-window-translucency.md).
     public static let incognito: ResolvedTheme = {
         let primary = RGBA(hex: "#14171E")
         var theme = resolveTheme(SpaceTheme(colors: [primary], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .dark))
-        let alpha = min(Metrics.theme.washBase.value + Metrics.theme.washSlope.value * SpaceTheme.default.intensity, Metrics.theme.washCap.value)
-        theme.wash = RGBA(0, 0, 0, Metrics.theme.darkWashAlpha.value * alpha)
-        theme.gradient = [primary] + companions(of: primary, .analogous)
-        theme.windowColor = mix(primary, theme.wash, theme.wash.alpha)
+        let m = Metrics.theme
+        let veil = m.darkWashAlpha.value * min(m.washBase.value + m.washSlope.value * SpaceTheme.default.intensity, m.washCap.value)
+        theme.gradient = ([primary] + companions(of: primary, .analogous)).map { mix($0, RGBA(0, 0, 0), veil) }
+        theme.material = .opaque
+        theme.layerAlpha = 1
+        theme.underlay = RGBA(0, 0, 0, 0)
+        theme.wash = RGBA(0, 0, 0, 0)
+        theme.windowColor = theme.gradient[0]
         return theme
     }()
 }
 
-/// What lies over the gradient. Arc draws its theme over the system's window material, so the wash follows macOS's
-/// light or dark mode for every theme not set to light (a saved Arc theme always follows it: Arc does not save its sun
-/// button). In dark mode it is a dark grey (`darkModeMaterial`, docs/checks/2026-11-12-space-colour.md); a white
-/// one there turned the user's navy Space pale lavender.
-/// In light mode: Arc's code gives white, or black at 35%, at min(0.2 + 0.55 x intensity, 0.5). A dark color measures
-/// differently on Arc 1.170 (the navy preset across its slider, r5-6/REPORT.md): under the automatic and light buttons a
-/// white wash without that cap, under the dark button a lighter grey one, so navy never goes darker than the preset itself.
-private func themeWash(darkPrimary: Bool, appearance: AppearanceChoice, systemScheme: Scheme, intensity: Double) -> RGBA {
+/// Arc's theme layer over the window's material (bin 0x101530d98 builds it, the WindowThemeUI metallib's
+/// gradientFragment draws it; docs/checks/2026-11-13-window-translucency.md): the gradient at alpha 0.2 + 0.55 x the
+/// slider position (Arc's `intensityFactor` = 1 - Brk's intensity), over an underlay that is white at min(that, 0.5),
+/// or black at 35% of it when the window is dark. Measured on Arc 1.170 over black and white backdrops: the window is
+/// dark only for a theme that follows macOS while macOS is in dark mode; the sun and moon buttons keep the white
+/// underlay in both modes, and the moon lifts the colors towards white (black reads as grey 59 there, white stays white).
+private func themeLayer(appearance: AppearanceChoice, followsDarkSystem: Bool, intensity: Double) -> (alpha: Double, underlay: RGBA, lift: Double) {
     let m = Metrics.theme
-    if systemScheme == .dark, appearance != .light {
-        let grey = m.darkModeMaterial.value
-        return RGBA(grey, grey, grey, m.darkModeMaterialBase.value + m.darkModeMaterialSlope.value * intensity)
-    }
-    let darkAppearance = appearance == .dark
-    if darkPrimary {
-        if darkAppearance {
-            let grey = m.darkColorDarkWash.value
-            return RGBA(grey, grey, grey, m.darkColorDarkWashBase.value + m.darkColorDarkWashSlope.value * intensity)
-        }
-        return RGBA(1, 1, 1, m.washBase.value + m.washSlope.value * intensity)
-    }
-    let alpha = min(m.washBase.value + m.washSlope.value * intensity, m.washCap.value)
-    return darkAppearance ? RGBA(0, 0, 0, m.darkWashAlpha.value * alpha) : RGBA(1, 1, 1, alpha)
+    let alpha = m.washBase.value + m.washSlope.value * (1 - intensity)
+    let cover = min(alpha, m.washCap.value)
+    let underlay = followsDarkSystem ? RGBA(0, 0, 0, m.darkWashAlpha.value * cover) : RGBA(1, 1, 1, cover)
+    let lift = appearance == .dark && !followsDarkSystem ? m.moonLift.value : 0
+    return (alpha, underlay, lift)
+}
+
+/// The theme layer and the material's stand-in color as one wash over the gradient (`ResolvedTheme.wash`).
+func solidWash(alpha: Double, underlay: RGBA, material: ThemeMaterial, systemScheme: Scheme) -> RGBA {
+    guard material != .opaque else { return RGBA(0, 0, 0, 0) }
+    let grey = ThemeMaterial.standIn(systemScheme)
+    let u = underlay.alpha
+    return RGBA(u * underlay.red + (1 - u) * grey, u * underlay.green + (1 - u) * grey, u * underlay.blue + (1 - u) * grey, 1 - alpha)
 }
 
 /// sqrt(1.05 x 0.05) - 0.05 = 0.1791: above it black text has the higher WCAG contrast, so the scheme is light

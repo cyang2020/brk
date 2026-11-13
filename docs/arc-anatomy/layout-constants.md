@@ -85,7 +85,9 @@ Static read of the arm64 slice of `Arc.app/Contents/MacOS/Arc` (slice SHA-256 `7
 | Command bar opening bounce | scale 0.95 to 1 (animation key `arc_commandBarBounce`) | factor | `CommandBarContainer` `0x102203aa4` | close: cra L450-451, L458 see it appear in one frame (a scale bounce, no fade) | medium |
 | Little Arc command bar width | 500 | pt | not traced in code | cra only: cra L507-508 | low |
 | Theme texture opacity, as a multiple of the theme intensity | grain 0.8, sand 0.15, denim 0.6, tweed 0.4; tiled; multiply blend (normal at 0) | factor | `WindowThemeUI` `0x10153258c` | code only | medium |
-| Theme background wash | light: white; dark: black at 35%; wash opacity = min(0.2 + 0.55 × factor, 0.5); final layer 0.25 or 1.0 | factor | `0x1015322b8` | close: cra L136-171 fits in the same range | low |
+| Theme layer alpha | the gradient's alpha over the underlay and the window's material: 0.2 + 0.55 × `intensityFactor` | factor | `0x101530d98` (arm64) | white theme at 0.78 over a black and a white window: 228 and 252, the same as a test window with these layers (docs/checks/2026-11-13-window-translucency.md) | high |
+| Theme layer underlay | under the gradient: white at min(layer alpha, 0.5); black at 35% of that in a dark window (a theme following macOS in dark mode, or websites set to Dark) | factor | `0x101530d98` (arm64) | dark macOS: 193 and 235; P19-b | high |
+| Theme overlay alpha while the window is inactive | the texture's alpha × 0.25 while the window is neither key nor main | factor | `0x101530cdc` (arm64) | code only | high |
 | Metal gradient texture size | factor × 100 | px | `0x10152fbb4` | code only | low |
 | Little Arc default window size | 1185 × 832 when no size is saved; other branches use 800 × 600, 490 × 600 and 490 × 329; new windows cascade by 30 | pt | `LittleBrowserWindow` `0x1002c303c` | code only (cra L492 measured 1688 × 1010, a saved size) | medium |
 | Tooltip quick re-show | if the last tooltip closed less than 0.6 s ago, the next one appears after 0.01 s | s | Tooltip controller `0x100de3c44` | agrees: cra L790 (moving straight to another control swaps at once) | high |
