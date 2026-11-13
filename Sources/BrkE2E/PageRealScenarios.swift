@@ -557,7 +557,7 @@ enum PageRealScenarios {
         try clickButton(app, "Cancel")
         try app.waitUntil("Print cancelled", timeout: 10) { if case .terminal(.cancelled)? = try outputStage(app) { return true }; return false }
         try app.waitUntil("the print sheet gone") { try !sheet(app) }
-        try expect(!isShown(try app.native(), outputStatus), "a status line stays after Print was cancelled")
+        try expect(!isShown(try app.native(), outputStatus) && !cancelNotice(app), "a status line stays after Print was cancelled")
 
         try key(app, [.shift, .command], .s)
         try app.waitUntil("the save sheet after ⇧⌘S", timeout: 10) { try app.native().sheetClass?.contains("SavePanel") == true }
@@ -565,7 +565,7 @@ enum PageRealScenarios {
         try clickButton(app, "Cancel")
         try app.waitUntil("Save Page As cancelled", timeout: 10) { if case .terminal(.cancelled)? = try outputStage(app) { return true }; return false }
         try app.waitUntil("the save sheet gone") { try !sheet(app) }
-        try expect(!isShown(try app.native(), outputStatus), "a status line stays after Save Page As was cancelled")
+        try expect(!isShown(try app.native(), outputStatus) && !cancelNotice(app), "a status line stays after Save Page As was cancelled")
 
         // Setup chooses an owned directory and filename; the key opens the actual panel and the real Save click
         // accepts it. Neither configureSavePanel nor a control-channel answer completes the panel.
@@ -589,6 +589,12 @@ enum PageRealScenarios {
                    "the saved status barely shows in \(appearance): \(ink) pixels stand out from its background \(median(pixels))")
         app.note("\(appearance) saved status: background \(median(pixels)), \(ink) ink pixels")
         app.passed("\(appearance): Print and Save sheets drew \(appearance); Cancel was silent; a real Save wrote the file and its status reads over the active page")
+    }
+
+    /// Also find the old view's words: an older app has no output-status identifier, so absence of that identifier
+    /// alone must not make the before-fix run pass.
+    private static func cancelNotice(_ app: AppUnderTest) throws -> Bool {
+        NativeSystemInput.staticTexts(pid: try pid(app)).contains { $0.text == "Output cancelled" }
     }
 
     /// ⌘= twice, ⌘- and ⌘0 with the page focused.
