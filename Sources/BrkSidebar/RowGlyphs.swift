@@ -137,7 +137,9 @@ final class SpeakerGlyphView: NSView {
         quietly {
             body.contents = painted
             for wave in waves { wave.fillColor = tint.cgColor }
-            slash.fillColor = tint.cgColor
+            slash.strokeColor = tint.cgColor
+            slash.fillColor = nil
+            slash.lineCap = .round
         }
         needsLayout = true
     }
@@ -155,6 +157,14 @@ final class SpeakerGlyphView: NSView {
             }
             let side = Draw.rowSpeakerSlashSide.value
             slash.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+            // The bar as a stroke with round ends, drawn as far as the slash has come (Core Animation keeps the drawn
+            // part between none and all, where a spring's settle would turn a bar's own length negative).
+            let thickness = side * Draw.rowSpeakerSlashWidth.value, inset = thickness / 2 / 2.0.squareRoot()
+            let line = CGMutablePath()
+            line.move(to: CGPoint(x: inset, y: inset))
+            line.addLine(to: CGPoint(x: side - inset, y: side - inset))
+            slash.path = line
+            slash.lineWidth = thickness
             bodyCut.frame = body.bounds
         }
         place(.rest)
@@ -194,18 +204,18 @@ final class SpeakerGlyphView: NSView {
         }
         quietly { slash.position = centre }
         let progress = muted ? 1.0 : 0
-        set(slash, "path", slashPath(progress, cut: false), spring: slashSpring, delay: slashDelay)
+        set(slash, "strokeEnd", progress, spring: slashSpring, delay: slashDelay)
         // The gap, in the speaker's own coordinates: the slash's square is centred on the icon, the speaker sits beside.
         let offset = CGPoint(x: -bodyX + bodySize.width / 2 - slash.bounds.width / 2, y: bodySize.height / 2 - slash.bounds.height / 2)
         set(bodyCut, "path", cutPath(progress, offset: offset), spring: slashSpring, delay: slashDelay)
     }
 
-    /// bin:0x100aedf1c: a bar with round ends from the square's top left corner toward its bottom right, `progress` of the
-    /// diagonal long; the cut is twice as thick and reaches a little past both ends.
-    private func bar(_ progress: Double, cut: Bool) -> CGPath {
+    /// bin:0x100aedf1c: Arc's slash is a bar with round ends from the square's top left corner toward its bottom right,
+    /// `progress` of the diagonal long; its cut out of the speaker twice as thick, reaching a little past both ends.
+    private func cutBar(_ progress: Double) -> CGPath {
         let side = Draw.rowSpeakerSlashSide.value
-        let thickness = side * Draw.rowSpeakerSlashWidth.value * (cut ? 2 : 1)
-        let reach = cut ? thickness / Draw.rowSpeakerCutReach.value : 0
+        let thickness = side * Draw.rowSpeakerSlashWidth.value * 2
+        let reach = thickness / Draw.rowSpeakerCutReach.value
         let length = max(0.01, 2 * reach + progress * 2.0.squareRoot() * side)
         let corner = min(thickness / 2, length / 2)
         var turn = CGAffineTransform(rotationAngle: .pi / 4)
@@ -213,12 +223,10 @@ final class SpeakerGlyphView: NSView {
         return CGPath(roundedRect: rect, cornerWidth: corner, cornerHeight: corner, transform: &turn)
     }
 
-    private func slashPath(_ progress: Double, cut: Bool) -> CGPath { bar(progress, cut: cut) }
-
     private func cutPath(_ progress: Double, offset: CGPoint) -> CGPath {
         let path = CGMutablePath()
         path.addRect(CGRect(x: -50, y: -50, width: 100, height: 100))
-        path.addPath(bar(progress, cut: true), transform: CGAffineTransform(translationX: offset.x, y: offset.y))
+        path.addPath(cutBar(progress), transform: CGAffineTransform(translationX: offset.x, y: offset.y))
         return path
     }
 
