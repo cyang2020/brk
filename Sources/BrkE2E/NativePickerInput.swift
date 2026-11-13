@@ -159,14 +159,16 @@ enum NativePickerInput {
     static func button(_ panel: AXUIElement, title: String) -> AXUIElement? {
         find(panel) { node, role in role == kAXButtonRole && string(node, kAXTitleAttribute) == title }
     }
-    static func waitForOpenPanel(_ app: AppUnderTest) throws {
+    static func waitForOpenPanel(_ app: AppUnderTest, containing fixture: URL) throws {
+        try FilePanelScenarios.requireOwnedFixture(app, fixture)
         try app.waitUntil("the owned folder panel is ready for keyboard input") {
             let native = try app.native()
             guard native.sheetClass == "NSOpenPanel",
                   native.appWindows.contains(where: { $0.className == "NSOpenPanel" && $0.isVisible && $0.isKey }),
-                  let panel = try? sheet(app), let cancel = button(panel, title: "Cancel") else { return false }
-            // The remote panel becomes key before its configured initial directory has finished appearing.
-            return whereMatches(panel, app.dataDirectory) && attribute(cancel, kAXEnabledAttribute) as? Bool == true
+                  let panel = try? sheet(app), let cancel = button(panel, title: "Cancel"),
+                  attribute(cancel, kAXEnabledAttribute) as? Bool == true else { return false }
+            // The Where label can appear while the remote file browser is still loading.
+            return whereMatches(panel, fixture.deletingLastPathComponent()) && findFile(panel, name: fixture.lastPathComponent) != nil
         }
     }
     static func press(_ panel: AXUIElement, title: String) throws {

@@ -289,16 +289,18 @@ enum SitesSettingsRealScenarios {
         }
 
         log.check("the extensions picker: + opens the folder panel, Escape cancels it; Install by a real click; the tile and its Pin") {
+            let panelFixture = app.dataDirectory.appendingPathComponent("Brk Picker Ready", isDirectory: true)
+            try FileManager.default.createDirectory(at: panelFixture, withIntermediateDirectories: true)
             try app.dispatch(.tab(.focus(policy)))
             try app.waitForPageInput(PageID(window: owner, item: policy), at: app.site.url("site-policy.html"))
             try openControls(app)
             try pressLocated(app, "siteAddExtension")
-            try NativePickerInput.waitForOpenPanel(app)
+            try NativePickerInput.waitForOpenPanel(app, containing: panelFixture)
             try Real.key(app, [], .escape)
             try app.waitUntil("Escape cancels the panel") { try app.native().sheetClass != "NSOpenPanel" }
             let directory = app.site.root.deletingLastPathComponent().appendingPathComponent("Fixtures/SiteExtension")
             try pressLocated(app, "siteAddExtension")
-            try NativePickerInput.waitForOpenPanel(app)
+            try NativePickerInput.waitForOpenPanel(app, containing: panelFixture)
             try Real.key(app, [.command, .shift], .g)
             try Real.paste(app, directory.path)
             try Real.key(app, [], .returnKey)
