@@ -36,6 +36,7 @@ keys Input-TabKeys
 keys Input-SideButtons
 keys Input-SwipeIndicator
 keys Input-MiddleClick
+keys Keys-RealFocus
 
 # find：页内查找
 find F1

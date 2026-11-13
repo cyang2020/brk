@@ -11,7 +11,7 @@ import Foundation
 /// facts it checked to `<id>.txt` beside its pictures.
 enum AIThreadsScenarios {
     static let all: [Scenario] = [
-        Scenario("AIAgentThreads-Spaces", "each Space has its own list; switching Space on the left switches the panel's list and brings back the conversation that Space showed; the list's composer starts one there",
+        Scenario("AIAgentThreads-Spaces", "each Space has its own list; switching Space on the left switches the panel's list and brings back the conversation that Space showed; the list's composer starts one there and keeps ⌘A, while ⌘T and Esc open and close the command bar",
                  cefOnly: "native panel", spaces),
         Scenario("AIAgentThreads-Waiting", "an approval in another Space: the strip at the list's top, the ring on its dot, the count on the list icon; the strip's click shows the approval there; Allow clears all three; a notification while Brk is not in front opens the conversation",
                  cefOnly: "native panel", waiting),
@@ -209,6 +209,26 @@ enum AIThreadsScenarios {
             try expect(try app.view().ai == nil, "the other Space's conversation is still in the panel")
             shot(app, "1-empty-list")
             return "empty list, no conversation"
+        }
+        log.check("real keys in the list's composer: ⌘A selects its text, ⌘T opens the command bar over it, Esc closes the bar") {
+            try click(app, .aiControl("list-input"))
+            try type("draft")
+            try app.waitUntil("the composer has the keyboard and the typing") { try app.native().editorText == "draft" }
+            try WindowServerKeys.ensureFrontmost(app, app.window!)
+            try key(.command, .a)
+            try type("x")
+            try app.waitUntil("⌘A selected the composer's text, which the typing replaced") { try app.native().editorText == "x" }
+            try expect(try app.view().overlay == nil && panel(app)?.page == .list, "⌘A in the composer opened or closed something")
+            try key(.command, .t)
+            try app.waitUntil("⌘T in the composer opens the command bar") { isCommandBar(try app.view().overlay) }
+            try key([], .escape)
+            try app.waitUntil("Esc closes the bar, the panel stays on the list") { try app.view().overlay == nil && panel(app)?.page == .list }
+            // Empty again for the next check.
+            try click(app, .aiControl("list-input"))
+            try key(.command, .a)
+            post(51, true, []); post(51, false, [])
+            try app.waitUntil("the composer emptied") { try app.native().editorText == "" }
+            return "⌘A kept the composer's, ⌘T opened the bar, Esc closed it"
         }
         log.check("the list's composer starts a conversation in this Space") {
             try click(app, .aiControl("list-input"))
