@@ -3,6 +3,7 @@ import BrkBase
 @testable import BrkContent
 @testable import BrkDomain
 import BrkLayout
+import BrkUIKit
 @testable import BrkOverlays
 @testable import BrkSidebar
 import XCTest
@@ -27,7 +28,7 @@ final class PointerSweepTests: XCTestCase {
     /// cards of a folder, a calendar, a site and mail.
     func testTheSidebarAndItsCardsTakeThePointerAndRead() throws {
         var problems: [String] = []
-        for look in SurfaceChecks.looks {
+        for look in SurfaceChecks.macLooks {
             try SurfaceChecks.appearing(look.mac) {
                 let rig = try SweepRig(look)
                 defer { rig.close() }
@@ -64,11 +65,20 @@ final class PointerSweepTests: XCTestCase {
                 calendar.setHovered(false)
                 extra.forEach { $0.close() }
                 // NEW-hover-cards: the folder's card goes when the folder opens.
+                folderRow.setHovered(true)
+                XCTAssertTrue(SurfaceChecks.wait {
+                    root.subviews.contains { card in
+                        card is FolderPreviewView && card.subviews.contains { ($0 as? NSTextField)?.placeholderString == "Search Reading…" }
+                    }
+                })
+                let folderCard = try XCTUnwrap(root.subviews.first { card in
+                    card is FolderPreviewView && card.subviews.contains { ($0 as? NSTextField)?.placeholderString == "Search Reading…" }
+                })
+                XCTAssertNotNil(folderCard.superview, "the card must still be open before its folder opens")
                 rig.run(.item(.toggleFolder(sidebar.collapsed)))
                 rig.render { rig.decorate(&$0, sidebar) }
-                let folderCard = cards.first { $0.subviews.contains { ($0 as? NSTextField)?.placeholderString == "Search Reading…" } }
-                XCTAssertNotNil(folderCard)
-                XCTAssertNil(folderCard?.superview, "\(look): the folder's card stayed after the folder opened")
+                XCTAssertNil(folderCard.superview, "\(look): the folder's card stayed after the folder opened")
+                folderRow.setHovered(false)
                 rig.run(.item(.toggleFolder(sidebar.collapsed)))
 
                 // A006: the toolbar. A005: the sidebar hidden and floating over the page while the pointer is at the edge.
@@ -110,7 +120,11 @@ final class PointerSweepTests: XCTestCase {
                 }
                 // The age in grey on the grey toolbar is Arc's (docs/arc-anatomy/library-flyout.md, The preview).
                 problems += rig.check("item preview", [rig.overlay(LibraryItemPreviewView.self)].compactMap { $0 },
-                                      exempt: { ($0.textColor?.alphaComponent ?? 1) < 0.5 })
+                                      exempt: { $0.accessibilityIdentifier() == ViewID.tabTool("library-item-preview-age").identifier })
+                let preview = try XCTUnwrap(rig.overlay(LibraryItemPreviewView.self))
+                rig.sent = []
+                SurfaceChecks.click(preview, at: CGPoint(x: 2, y: preview.bounds.midY))
+                XCTAssertEqual(rig.sent, [.library(.flyout(.preview(nil)))], "clicking the dimmed window closes its preview")
             }
         }
         XCTAssertEqual(problems, [], problems.joined(separator: "\n"))
@@ -169,6 +183,23 @@ final class PointerSweepTests: XCTestCase {
             let button = try XCTUnwrap(titleRow.subviews.first { $0.toolTip == tip && !$0.isHidden }, tip)
             XCTAssertEqual(sends { SurfaceChecks.click(button) }, [command], tip)
         }
+        // A split puts reload in each pane's header; the standalone title row exposes all reload variants.
+        let navigation = TitleRowView(dispatch: { rig.sent.append($0) })
+        let navigationWindow = SurfaceChecks.window(CGSize(width: 480, height: 48))
+        defer { navigationWindow.close() }
+        navigationWindow.contentView = navigation
+        var pillState = rig.snapshot().urlPill
+        var navigationFrames = try XCTUnwrap(WindowLayout.compute(rig.snapshot(), contentSize: SweepRig.size).sidebar)
+        navigationFrames.titleRow.size.width = 480
+        for loading in [false, true] {
+            pillState.loading = loading
+            navigation.render(pillState, frames: navigationFrames, toolbar: false, palette: Palette(rig.snapshot().theme))
+            let button = try XCTUnwrap(navigation.subviews.first { $0.toolTip == (loading ? SidebarCopy.stop : SidebarCopy.reload) && !$0.isHidden })
+            for flags in [NSEvent.ModifierFlags(), .option] {
+                XCTAssertEqual(sends { SurfaceChecks.click(button, flags: flags) },
+                               [loading ? .page(.stop(.focused)) : .page(.reload(.focused, ignoringCache: flags.contains(.option)))])
+            }
+        }
         // A003: a double-click on the sidebar's edge puts its width back.
         let handle = try view(.resizeHandle)
         let middle = try XCTUnwrap(root.superview).convert(CGPoint(x: handle.bounds.midX, y: handle.bounds.midY), from: handle)
@@ -190,9 +221,21 @@ final class PointerSweepTests: XCTestCase {
             XCTAssertEqual(try sends { SurfaceChecks.click(try view(.rowClose(sidebar.group))) }, [.tabTools(.closeGroup(sidebar.group))])
         }
         // A013: a Cmd-click on a Favorite opens it on the release, not the press.
-        XCTAssertEqual(try sends { SurfaceChecks.click(try view(.favorite(sidebar.favorites[0])), flags: .command) }, [.tab(.focus(sidebar.favorites[0]))])
+        let favorite = try view(.favorite(sidebar.favorites[0]))
+        for flags in [NSEvent.ModifierFlags.command, .shift] {
+            let point = favorite.convert(CGPoint(x: favorite.bounds.midX, y: favorite.bounds.midY), to: nil)
+            rig.sent = []
+            favorite.mouseDown(with: NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: flags, timestamp: 0,
+                                                       windowNumber: rig.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
+            XCTAssertEqual(rig.sent, [], "a modified press waits for the release")
+            favorite.mouseUp(with: NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: flags, timestamp: 0,
+                                                     windowNumber: rig.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 0)!)
+            XCTAssertEqual(rig.sent, [.tab(.focus(sidebar.favorites[0]))])
+        }
         // NEW-mini-player, A029: the card's icon goes back to the playing tab; its speaker unmutes a muted tab.
         XCTAssertEqual(try sends { SurfaceChecks.click(try view(.tabTool("mini-player-icon-\(sidebar.playing)"))) }, [.tab(.focus(sidebar.playing))])
+        let player = try view(.tabTool("mini-player-\(sidebar.playing)"))
+        XCTAssertEqual(sends { SurfaceChecks.click(player, at: CGPoint(x: player.bounds.midX, y: 5)) }, [.tab(.focus(sidebar.playing))])
         rig.render { rig.decorate(&$0, sidebar); $0.miniPlayers[0].muted = true }
         XCTAssertEqual(try sends { SurfaceChecks.click(try view(.tabTool("mini-player-speaker-\(sidebar.playing)"))) }, [.tabTools(.mute(.item(sidebar.playing)))])
         // A008, A012, A007: + New Tab; the Space name collapses Pinned; its right-click is the Space's menu, as is one on
@@ -228,6 +271,20 @@ final class PointerSweepTests: XCTestCase {
         rig.render { rig.decorate(&$0, sidebar); $0.renaming = sidebar.open }
         XCTAssertTrue(root.focus(.renameField(sidebar.open)), "the rename field took the keyboard")
         XCTAssertTrue(try sends { SurfaceChecks.click(try view(.row(today[2])), throughApp: true) }.contains(.item(.rename(sidebar.open, title: "Projects"))))
+        rig.render { rig.decorate(&$0, sidebar) }
+
+        // A025: a pointer click still selects the row after keyboard focus moves to the list.
+        XCTAssertTrue(root.focus(.sidebar))
+        let focusedClick = try sends { SurfaceChecks.click(try view(.row(today[2]))) }
+        XCTAssertTrue(focusedClick.contains(.tab(.focus(today[2]))))
+        let workSpace = try XCTUnwrap(rig.snapshot().dock.first { $0.title == "Work" }?.id)
+        rig.render { value in
+            rig.decorate(&value, sidebar)
+            value.tabTools.toast = ToastSnapshot(text: "Tab moved! Click to go there.", expiresAt: rig.now.advanced(by: .seconds(4)),
+                                                click: .space(.focus(workSpace)))
+        }
+        XCTAssertEqual(try sends { SurfaceChecks.click(try view(.tabTool("toast"))) },
+                       [.space(.focus(workSpace)), .tabTools(.dismissToast)])
         rig.render { rig.decorate(&$0, sidebar) }
 
         // NEW-hover-cards: a supported Pinned tab's card and a calendar Favorite's open from their rows; a card row's click
@@ -356,11 +413,16 @@ final class PointerSweepTests: XCTestCase {
                 show("peek", { [root.peek as NSView?] + root.subviews.filter { $0 is PeekRoundButton || $0 is PeekBackdropView }.map { $0 as NSView? } })
                 rig.run(.peek(.close))
 
+                let editor = BoostEditorView(dispatch: { _ in })
+                let panel = SurfaceChecks.window(BoostEditorView.size(for: .intro))
+                defer { panel.close() }
+                panel.appearance = NSAppearance(named: .aqua) // Boost's panel follows Arc's fixed light palette.
+                panel.contentView = editor
                 for boostPage in [BoostEditorPage.intro, .style, .css, .javascript] {
-                    show("boost editor \(boostPage)", reach: 0, { [] }) { value in
-                        value.boostEditor = BoostEditor(id: "boost", profile: .default, target: nil,
-                                                        draft: Boost(id: "draft", name: "My Boost", scope: .allSites, css: "body { color: red }"), page: boostPage)
-                    }
+                    panel.setContentSize(BoostEditorView.size(for: boostPage))
+                    editor.render(BoostEditor(id: "boost", profile: .default, target: nil,
+                                              draft: Boost(id: "draft", name: "My Boost", scope: .allSites, css: "body { color: red }"), page: boostPage))
+                    problems += rig.check("boost editor \(boostPage)", [editor], base: .windowBackgroundColor, reach: 0)
                 }
                 rig.render()
             }
@@ -372,7 +434,7 @@ final class PointerSweepTests: XCTestCase {
     /// the History card.
     func testLibraryPagesTakeThePointerAndRead() throws {
         var problems: [String] = []
-        for look in SurfaceChecks.looks {
+        for look in SurfaceChecks.macLooks {
             try SurfaceChecks.appearing(look.mac) {
                 let rig = try SweepRig(look)
                 defer { rig.close() }
@@ -491,10 +553,9 @@ final class PointerSweepTests: XCTestCase {
     }
 
     /// A window as an Arc import leaves it (the user's had hundreds of tabs: 5 Spaces, Pinned folders of 24, a Today of 60):
-    /// projecting, drawing, the pointer over everything and a walk through the Spaces cost about what they cost with a tenth
-    /// of the tabs. Build 32 made a view for every row, and a fix measured on 60 tabs barely helped the user.
-    func testAWindowFromABigImportCostsAboutWhatASmallOneDoes() throws {
-        func pass(tabsPerFolder: Int, today: Int) throws -> (seconds: Double, reached: Int, tabs: Int) {
+    /// only the visible rows and their neighbours have views, including after scrolling and switching Spaces. Counting
+    /// those views catches the old cost per row directly, without timing other agents' work on this Mac.
+    func testABigImportKeepsRowViewsNearTheVisiblePart() throws {
             let rig = try SweepRig()
             defer { rig.close() }
             var serial = 0
@@ -505,29 +566,33 @@ final class PointerSweepTests: XCTestCase {
             let spaces = (0..<5).map { index in
                 ImportedSpace(key: "arc:\(index)", title: "Space \(index)",
                               theme: SpaceTheme(colors: [ThemePresets.drab[index]], texture: .grain, intensity: 0.25, appearance: .auto),
-                              pinned: [.folder(title: "Docs", children: (0..<tabsPerFolder).map { _ in tab("docs") }),
-                                       .folder(title: "Work", children: (0..<tabsPerFolder).map { _ in tab("work") })] + (0..<4).map { _ in tab("pin") },
-                              today: [.split(orientation: .horizontal, panes: [tab("left"), tab("right")])] + (0..<today).map { _ in tab("today") })
+                              pinned: [.folder(title: "Docs", children: (0..<24).map { _ in tab("docs") }),
+                                       .folder(title: "Work", children: (0..<24).map { _ in tab("work") })] + (0..<4).map { _ in tab("pin") },
+                              today: [.split(orientation: .horizontal, panes: [tab("left"), tab("right")])] + (0..<60).map { _ in tab("today") })
             }
             let result = BrowserImportResult(source: "Arc", spaces: spaces, profiles: [ImportedProfileData(favorites: (0..<8).map { _ in tab("fav") })])
             rig.system(.sidebarData(.browserImported(rig.id, target: try XCTUnwrap(rig.state.sidebarImportTarget(in: rig.id)), result)))
             let dock = rig.snapshot().dock.map(\.id)
             XCTAssertEqual(dock.count, 6, "the import made its 5 Spaces")
-            let start = Date()
-            rig.render()
-            var reached = SurfaceChecks.sweep(rig.root, in: rig.window)
-            for space in dock.suffix(3) {   // three imported Spaces
+            XCTAssertGreaterThanOrEqual(serial, 560)
+            func rowViews(_ view: NSView) -> [RowView] {
+                (view as? RowView).map { [$0] } ?? view.subviews.flatMap(rowViews)
+            }
+            for space in dock.suffix(5) {
                 rig.run(.space(.focus(space)))
                 rig.render()
-                reached = max(reached, SurfaceChecks.sweep(rig.root, in: rig.window))
+                let list = rig.root.sidebar.tablist
+                let height = list.contentView.bounds.height
+                let bottom = max(0, (list.documentView?.bounds.height ?? 0) - height)
+                let limit = Int(ceil(3 * height / Metrics.tablist.rowHeight.value)) + 4
+                for y in [0, bottom / 2, bottom] {
+                    list.contentView.scroll(to: CGPoint(x: 0, y: y))
+                    list.reflectScrolledClipView(list.contentView)
+                    let rows = rowViews(list)
+                    XCTAssertGreaterThan(rows.count, 10, "the imported rows must actually be drawn")
+                    XCTAssertLessThanOrEqual(rows.count, limit, "\(serial) tabs: \(rows.count) row views for a \(height)-point viewport")
+                }
+                XCTAssertGreaterThan(SurfaceChecks.sweep(list, in: rig.window), 10)
             }
-            return (Date().timeIntervalSince(start), reached, serial)
-        }
-        let small = try pass(tabsPerFolder: 2, today: 5)
-        let big = try pass(tabsPerFolder: 24, today: 60)
-        XCTAssertGreaterThanOrEqual(big.tabs, 560)
-        print("pointer sweep: \(small.tabs) tabs \(small.seconds) s, \(small.reached) areas; \(big.tabs) tabs \(big.seconds) s, \(big.reached) areas")
-        XCTAssertLessThan(big.seconds, 3 * small.seconds + 0.5, "\(big.tabs) tabs took \(big.seconds) s, \(small.tabs) took \(small.seconds) s: a cost per row")
-        XCTAssertLessThan(big.reached, 3 * small.reached, "views were made for rows far out of sight")
     }
 }

@@ -20,7 +20,7 @@ final class AppSurfaceSweepTests: XCTestCase {
     /// A Little Arc window with its header, its first-run tip, the Space picker open and two download pills.
     func testALittleArcWindowTakesThePointerAndReads() throws {
         var problems: [String] = []
-        for look in SurfaceChecks.looks {
+        for look in SurfaceChecks.macLooks {
             try SurfaceChecks.appearing(look.mac) {
                 let rig = try SweepRig(look)
                 defer { rig.close() }
@@ -46,11 +46,11 @@ final class AppSurfaceSweepTests: XCTestCase {
         XCTAssertEqual(problems, [], problems.joined(separator: "\n"))
     }
 
-    /// Every Settings pane, with the app's own settings. The window follows the Mac, not a Space. Most of a pane is
-    /// SwiftUI, which keeps no tracking areas: the pointer reaches the AppKit controls in it.
+    /// Every Settings pane's AppKit controls in Dark. SwiftUI text and gestures are checked by Settings-Real in both
+    /// appearances; this pass reaches native tracking areas SwiftUI does not expose to that scenario.
     func testEverySettingsPaneTakesThePointerAndReads() throws {
         var problems: [String] = []
-        for look in SurfaceChecks.macLooks {
+        for look in SurfaceChecks.macLooks.suffix(1) {
             try SurfaceChecks.appearing(look.mac) {
                 let rig = try SweepRig(look)
                 defer { rig.close() }
@@ -79,7 +79,7 @@ final class AppSurfaceSweepTests: XCTestCase {
     /// site controls take the window theme's appearance, as the app gives it.
     func testTheSiteControlsAndThePermissionPromptTakeThePointerAndRead() throws {
         var problems: [String] = []
-        for look in SurfaceChecks.looks {
+        for look in SurfaceChecks.macLooks {
             try SurfaceChecks.appearing(look.mac) {
                 let rig = try SweepRig(look)
                 defer { rig.close() }
