@@ -157,7 +157,8 @@ final class EmbeddedSurface: PageSurfaceView {
             observedWindow = window
         } else {
             chrome?.browser.wasHidden(true)
-            if let host { host.parent?.removeChildWindow(host) }
+            // The host stays on screen, empty, wherever it is; it must not be listed as a window of its own.
+            if let host { host.parent?.removeChildWindow(host); HostWindows.leaveOutOfWindowLists(host) }
         }
     }
 

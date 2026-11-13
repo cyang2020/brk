@@ -431,7 +431,7 @@ public final class PeekCardView: NSView {
         layer?.shadowOpacity = 0.18
         layer?.shadowRadius = Metrics.peek.shadowRadius.value
         layer?.shadowOffset = CGSize(width: 0, height: -Metrics.peek.shadowRadius.value / 4)
-        card.layer?.cornerRadius = Metrics.peek.cornerRadius.value
+        card.shape(radius: Metrics.peek.cornerRadius.value, corners: CardView.allCorners)
         addSubview(card)
         backdrop.onClick = { dispatch(.peek(.close)) }
         backdrop.isHidden = true

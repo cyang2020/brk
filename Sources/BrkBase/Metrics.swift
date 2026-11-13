@@ -245,6 +245,10 @@ public struct ContentMetrics: MetricGroup {
     public let statusBubbleMaxHeight = Metric(40.0, .guess("Chromium's status bubble widget is a short child of the page's host window; its other widgets are taller or are not at its bottom edge"))
     public let fullScreenCornerRadius = Metric(0.0, .arc("Content card corner radius", note: "0 in one state"))
     public let showsShadow = Metric(true, .arc("Content card shadow", .medium))
+    /// How far inside the card's edge, in device pixels, its own fill and its shadow's body stop while something else
+    /// draws the card's face. A rounded edge pixel is only partly covered; a fill reaching it showed through around a
+    /// dark page as a light rim (user report 2026-11-13). One pixel for the card's soft edge, one for the fill's own.
+    public let edgeFillInsetPixels = Metric(2.0, .derived(rule: "two antialiased edges must not overlap", from: ["Content card corner radius"]))
     /// Measured round Arc's card (2a96a9d7f0:verify/visual-pairs/run-20261103 P01-a, P23-a): 12% black just under it fading out
     /// within 9 pt, 7% just above it within 5. A split's focused pane casts a wider one (BrkContent's SplitDropDraw).
     public let shadowRadius = Metric(2.9, .anatomy("7399886bfd:verify/visual-pairs/run-20261103/REPORT.md, Arc captures P01-a: the edges fade like a 2.9 pt Gaussian"))

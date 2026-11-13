@@ -12,14 +12,15 @@ import ObjectiveC
 @MainActor
 enum HostWindows {
     private static let hosts = NSHashTable<NSWindow>.weakObjects()
+    private static var fullscreenExitObserver: NSObjectProtocol?
     private static var guardedClasses: Set<ObjectIdentifier> = []
     private typealias BoolIMP = @convention(c) (AnyObject, Selector) -> Bool
 
     /// No-op until the first host window exists; the class is only known then (`adopt`).
     static func installKeyGuard() {}
 
-    /// Makes `host` a borderless, transparent, shadowless, click-through, never-key window and a child of `parent`
-    /// (re-parenting when it already had one; `nil` detaches it). Idempotent.
+    /// Makes `host` a borderless, transparent, shadowless, click-through, never-key window, left out of Mission
+    /// Control, and a child of `parent` (re-parenting when it already had one; `nil` detaches it). Idempotent.
     static func adopt(_ host: NSWindow, parent: NSWindow?) {
         if ProcessInfo.processInfo.environment["BRK_CONTROL_SOCKET"] != nil {
             print("[page-host] adopt window=\(host.windowNumber) new=\(!hosts.contains(host)) key=\(host.isKeyWindow) parent=\(parent?.windowNumber ?? -1)")
@@ -36,6 +37,7 @@ enum HostWindows {
             host.ignoresMouseEvents = true
             hosts.add(host)
         }
+        leaveOutOfWindowLists(host)
         if host.parent !== parent {
             host.parent?.removeChildWindow(host)
             guard let parent else { return }
@@ -51,10 +53,34 @@ enum HostWindows {
     /// Release parenting while CEF finishes closing. The never-key policy has native-window lifetime.
     static func release(_ host: NSWindow) {
         host.parent?.removeChildWindow(host)
+        // The host can stay on screen a while after its page closed (through a fullscreen exit, PB3).
+        leaveOutOfWindowLists(host)
         // CEF still owns the closing window. The weak entry expires at native destruction.
     }
 
     static func isHost(_ window: NSWindow) -> Bool { hosts.contains(window) }
+
+    /// Mission Control lists every normal window of the app, an empty transparent one too, and shows it only under
+    /// the pointer: the host of each page that had left the window (another tab, another Space, a page fullscreen and
+    /// a tab switch) stayed there as an empty "Brk" window (user report 2026-11-13). A transient window is not listed
+    /// and is skipped by the Cmd-` cycle, and it still enters native fullscreen. A host in native fullscreen is left
+    /// alone: Chromium sets its own behavior there and puts back the one it found when it leaves, and a page that
+    /// leaves fullscreen while hidden may never report the exit, so the window's own state decides, and every exit
+    /// from fullscreen applies the rule again. Other bits (fullScreenPrimary) stay Chromium's.
+    static func leaveOutOfWindowLists(_ window: NSWindow) {
+        if fullscreenExitObserver == nil {
+            fullscreenExitObserver = NotificationCenter.default.addObserver(forName: NSWindow.didExitFullScreenNotification, object: nil, queue: nil) { note in
+                guard let exited = (note.object as? NSWindow).map(ObjectIdentifier.init) else { return }
+                MainActor.assumeIsolated {
+                    guard let window = hosts.allObjects.first(where: { ObjectIdentifier($0) == exited }) else { return }
+                    leaveOutOfWindowLists(window)
+                }
+            }
+        }
+        guard !window.styleMask.contains(.fullScreen) else { return }
+        let behavior = window.collectionBehavior.subtracting([.managed, .stationary]).union([.transient, .ignoresCycle])
+        if window.collectionBehavior != behavior { window.collectionBehavior = behavior }
+    }
 
     /// Chromium's status bubble is a small child widget of the host window that it fades in by itself after each status
     /// message; Brk draws its own capsule (`LinkStatusCapsule`). Its content stays hidden whatever opacity Chromium sets.
@@ -64,6 +90,7 @@ enum HostWindows {
             for child in host.childWindows ?? [] where NSStringFromClass(type(of: child)) == "NativeWidgetMacNSWindow" && child.frame.height <= Metrics.content.statusBubbleMaxHeight.value
                 && abs(child.frame.minY - host.frame.minY) < 40 {
                 child.contentView?.isHidden = true
+                leaveOutOfWindowLists(child)
             }
         }
         hide()

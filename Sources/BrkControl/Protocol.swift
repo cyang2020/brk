@@ -392,6 +392,8 @@ public struct AppWindowFact: Codable, Sendable, Equatable {
     public var isPageHost: Bool?
     /// `NSWindow.level` (0 normal, 3 floating).
     public var level: Int? = nil
+    /// macOS lists the window in Mission Control and the Cmd-` cycle: shown, not transient, not in native fullscreen.
+    public var listedInMissionControl: Bool? = nil
     public init(number: Int, className: String, isKey: Bool, isVisible: Bool, isPageHost: Bool? = nil) {
         self.number = number
         self.className = className
