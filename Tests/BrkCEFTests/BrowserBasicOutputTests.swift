@@ -125,7 +125,9 @@ import XCTest
         let request = OutputRequest(id: OutputID("print"), document: f.request.document, intent: .print, suggestedName: "Fixture")
         f.outputs.start(request, context: f.context)
         let staging = try XCTUnwrap(f.renderings.first?.0)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        // Until the time limit has fired, not a fixed time: GitHub's runners fire timers late; a fixed wait failed there (builds 35 to 37).
+        let timed = Date().addingTimeInterval(3)
+        while f.terminals.isEmpty, Date() < timed { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
         guard case .failed(_, let named)? = f.terminals.first else { return XCTFail("the rendering was not timed") }
         XCTAssertEqual(named, .absent, "the failure named a recovery folder that is deleted once the renderer answers")
         try Data("%PDF-1.4".utf8).write(to: staging)

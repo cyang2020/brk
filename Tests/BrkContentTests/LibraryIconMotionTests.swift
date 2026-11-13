@@ -17,12 +17,16 @@ final class LibraryIconMotionTests: XCTestCase {
         icon.setHovered(true)
         XCTAssertTrue(icon.twinkle1)
         XCTAssertFalse(icon.twinkle2)
-        wait(0.22)
+        // Step until the 0.15 s change, not a fixed time: GitHub's runners fire timers late (build 37). When the run
+        // loop came back so late that the 0.3 s change ran in the same pass, the middle state cannot be seen.
+        let start = Date()
+        while icon.twinkle1, Date().timeIntervalSince(start) < 3 { wait(0.01) }
         XCTAssertFalse(icon.twinkle1, "0.15 s in the triangle is back")
-        XCTAssertTrue(icon.twinkle2, "0.15 s in the dot has shrunk")
+        if Date().timeIntervalSince(start) < 0.28 { XCTAssertTrue(icon.twinkle2, "0.15 s in the dot has shrunk") }
         // Leaving before the first sequence is over starts a second one; both still end off.
         icon.setHovered(false)
-        wait(0.6)
+        let leave = Date()
+        while icon.twinkle1 || icon.twinkle2 || Date().timeIntervalSince(leave) < 0.6, Date().timeIntervalSince(leave) < 3 { wait(0.02) }
         XCTAssertFalse(icon.isHovered)
         XCTAssertFalse(icon.twinkle1)
         XCTAssertFalse(icon.twinkle2)

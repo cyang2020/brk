@@ -57,7 +57,9 @@ final class HoverCardEscapeTests: XCTestCase {
                                                             windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
         let row = try XCTUnwrap(find(ViewID.row(made.id).identifier, in: controller.root))
         row.mouseEntered(with: entered)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.8))
+        // Until the card is up, not a fixed time: GitHub's runners fire timers late; a fixed wait failed there (builds 35 to 37).
+        let opens = Date().addingTimeInterval(3.5)
+        while find("sidebar-hover-card", in: controller.root) == nil, Date() < opens { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
         let card = try XCTUnwrap(find("sidebar-hover-card", in: controller.root), "the folder's card did not open")
         card.mouseEntered(with: entered)
         let search = try XCTUnwrap(card.subviews.compactMap { $0 as? NSTextField }.first { $0.isEditable })

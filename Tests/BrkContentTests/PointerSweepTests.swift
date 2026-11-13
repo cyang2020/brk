@@ -58,7 +58,9 @@ final class PointerSweepTests: XCTestCase {
         // The collapsed folder's own hover opens its card after the delay; then the card's rows.
         let row = try XCTUnwrap(ViewTreeSearch.find(ViewID.row(folder).identifier, in: root) as? HoverView)
         row.setHovered(true)
-        RunLoop.main.run(until: Date().addingTimeInterval(PreviewDraw.delay.value + 0.3))
+        // Until the card is up, not a fixed time: GitHub's runners fire timers late; a fixed wait failed there (builds 35 to 37).
+        let opens = Date().addingTimeInterval(PreviewDraw.delay.value + 3)
+        while ViewTreeSearch.find("sidebar-hover-card", in: root) == nil, Date() < opens { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
         let card = try XCTUnwrap(ViewTreeSearch.find("sidebar-hover-card", in: root), "the folder card opened")
         XCTAssertGreaterThanOrEqual(sweep(card, in: window), 2, "the card's rows were reached")
         row.setHovered(false)

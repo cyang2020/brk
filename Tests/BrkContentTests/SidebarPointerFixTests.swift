@@ -175,8 +175,9 @@ final class SidebarPointerFixTests: XCTestCase {
         row.setHovered(true)
         let start = Date()
         var progress = 0.0
-        // A redraw every tenth of a second, for twice the wait.
-        while card(in: rig) == nil, Date().timeIntervalSince(start) < 2 * PreviewDraw.delay.value {
+        // A redraw every tenth of a second until the card opens. A wait restarted by each redraw would never end; the
+        // limit only has room for a runner that fires timers late.
+        while card(in: rig) == nil, Date().timeIntervalSince(start) < PreviewDraw.delay.value + 3 {
             wait(0.1)
             guard card(in: rig) == nil else { break }
             progress += 0.05
