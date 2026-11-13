@@ -45,6 +45,10 @@ final class ImportRulesTests: XCTestCase {
         (#"JSONEncoder\(\)|JSONDecoder\(\)"#, ["BrkDomain/Codec.swift", "BrkDomain/BoostCodec.swift", "BrkControl/", "BrkE2E/", "BrkLocalModels/JevWire.swift", "BrkApp/ConversationFiles.swift"], "one state format, one wire format (and the decision services' wire); saved conversations are the domain's Codable records, one file each"),
     ]
 
+    static let singleWriterChecks = singleWriters.map { rule in
+        (rule: rule, expression: try! NSRegularExpression(pattern: rule.pattern))
+    }
+
     func testEveryTargetImportsOnlyWhatTheModuleMapAllows() throws {
         var problems: [String] = []
         for (target, files) in try sources() {
@@ -134,9 +138,10 @@ final class ImportRulesTests: XCTestCase {
 
     static func patternViolations(path: String, text: String) -> [String] {
         let code = stripComments(text)
+        let range = NSRange(code.startIndex..., in: code)
         var out: [String] = []
-        for rule in singleWriters where !rule.allowed.contains(where: { path.hasPrefix($0) || path == $0 }) {
-            if code.range(of: rule.pattern, options: .regularExpression) != nil {
+        for (rule, expression) in singleWriterChecks where !rule.allowed.contains(where: { path.hasPrefix($0) || path == $0 }) {
+            if expression.firstMatch(in: code, range: range) != nil {
                 out.append("\(path): matches /\(rule.pattern)/ - \(rule.why)")
             }
         }
