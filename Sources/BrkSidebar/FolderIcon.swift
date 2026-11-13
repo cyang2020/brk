@@ -58,8 +58,11 @@ final class FolderIconView: NSView {
 
     /// Shows `state` in the space's hue. `animated`: the folder just opened or closed under the user's hand, so the halves
     /// turn over `Draw.folderIconTurn` from wherever they are; otherwise they are put there at once.
-    func render(_ state: State, ink: HueInk, animated: Bool) {
-        let colors = (ink.outline.cgColor, ink.back.cgColor, ink.front.cgColor)
+    /// `light`: a light theme. The space's back ink was measured on Arc's shaded back panel; under Arc's own shading here
+    /// its fill is lifted to what Arc's corner reads where the shading starts (`Draw.folderIconBackLift`).
+    func render(_ state: State, ink: HueInk, light: Bool, animated: Bool) {
+        let backFill = light ? (ink.back.blended(withFraction: Draw.folderIconBackLift.value, of: .white) ?? ink.back) : ink.back
+        let colors = (ink.outline.cgColor, backFill.cgColor, ink.front.cgColor)
         if self.colors.map({ $0.outline != colors.0 || $0.back != colors.1 || $0.front != colors.2 }) ?? true {
             self.colors = colors
             quietly {

@@ -63,7 +63,7 @@ final class TablistView: NSScrollView {
     /// Arc's row motions (`TablistMotion`, `TablistAnimator`): rows on their way out, by item, with their top in document
     /// points, so a row that comes back half-way keeps its view and its motion.
     private let animator = TablistAnimator()
-    private var departing: [ItemID: (view: RowView, top: Double)] = [:]
+    private var departing: [ItemID: (view: DepartingRowView, top: Double)] = [:]
 
     init(dispatch: @escaping Dispatch, drag: DragController) {
         self.dispatch = dispatch
@@ -272,22 +272,22 @@ final class TablistView: NSScrollView {
         var keep = Set([last.renaming, drag.heldItem, splitJoinTarget, dropFolder].compactMap { $0 })
         for (id, view) in rowViews where view.isEditingName { keep.insert(id) }
         var placed: Set<ItemID> = []
-        var shown: [(id: ItemID, view: RowView, made: Bool, revived: Double?, rect: CGRect)] = []
+        var shown: [(id: ItemID, view: RowView, made: Bool, back: (top: Double, opacity: Float)?, rect: CGRect)] = []
         for frame in f.rows {
             guard case .item(let id) = frame.kind, let (row, section) = renderedRows[id] else { continue }
             guard keep.contains(id) || (frame.rect.maxY >= near.minY && frame.rect.minY <= near.maxY) else { continue }
             placed.insert(id)
             let container = section == .pinned ? pinnedSection : todaySection
             let existing = rowViews[id]
-            // A row on its way out that is back (a folder opened again half-way) keeps its view and the motion it has.
-            var revived: Double?
+            // A row back while its picture is still on the way out (a folder opened again half-way) starts where the
+            // picture is drawn.
+            var back: (top: Double, opacity: Float)?
             if existing == nil, let entry = departing.removeValue(forKey: id), entry.view.superview != nil {
-                animator.revive(entry.view)
-                entry.view.departing = false
-                rowViews[id] = entry.view
-                revived = entry.top
+                back = (entry.top + animator.presentedOffset(entry.view), entry.view.layer?.presentation()?.opacity ?? 1)
+                animator.forget(entry.view)
+                entry.view.removeFromSuperview()
             }
-            let view = rowViews[id] ?? makeRow(id)
+            let view = existing ?? makeRow(id)
             if view.superview !== container { container.addSubview(view) }
             view.frame = frame.rect.offsetBy(dx: -container.frame.minX, dy: -container.frame.minY)
             if refresh || existing == nil {
@@ -297,47 +297,45 @@ final class TablistView: NSScrollView {
                 view.dropInto = dropFolder == id
                 view.joinLeading = splitJoinTarget == id ? splitJoinLeading : nil
             }
-            shown.append((id, view, existing == nil && revived == nil, revived, frame.rect))
+            shown.append((id, view, existing == nil, back, frame.rect))
         }
         let oldRects = plan.map { plan in plan.departures.isEmpty ? [:] : Dictionary((before?.rows ?? []).map { ($0.kind, $0.rect) }, uniquingKeysWith: { a, _ in a }) } ?? [:]
         for (id, view) in rowViews where !placed.contains(id) {
             view.retire()
             rowViews[id] = nil
-            guard let departure = plan?.departures[.item(id)], let old = oldRects[.item(id)], let container = view.superview else {
-                view.removeFromSuperview()
-                continue
-            }
-            // Arc's way out: drawn from its old place, under the rows that move over it.
+            defer { view.removeFromSuperview() }
+            guard let departure = plan?.departures[.item(id)], let old = oldRects[.item(id)], let container = view.superview else { continue }
+            // Arc's way out, drawn from the old place under the rows that move over it. The row itself goes now, with
+            // whatever hangs on it (a popover, the pointer's hover); a picture of it makes the way out, as the table views
+            // Arc's list is built on animate pictures of the rows they remove.
             var top = Double(old.minY), clipLine: Double?
             if case .slideUp(let by, let clip, _, _) = departure {
                 top -= by
                 clipLine = clip - top
             }
-            view.frame = CGRect(x: old.minX - container.frame.minX, y: top - container.frame.minY, width: old.width, height: old.height)
-            view.departing = true
-            view.hideForDeparture(titles: clipLine != nil)
-            departing[id] = (view, top)
-            animator.depart(view, departure: departure, clipLine: clipLine, now: now)
+            let picture = DepartingRowView(picture: view.departurePicture(titles: clipLine == nil),
+                                           frame: CGRect(x: old.minX - container.frame.minX, y: top - container.frame.minY, width: old.width, height: old.height))
+            container.addSubview(picture, positioned: .below, relativeTo: nil)
+            departing[id] = (picture, top)
+            animator.depart(picture, departure: departure, clipLine: clipLine, now: now)
         }
         for entry in shown {
             let kind = RowFrame.Kind.item(entry.id)
+            // A row back from its way out moves from where its picture was drawn: the plan's slides, plus what is missing.
+            let missing = entry.back.map { $0.top - entry.rect.minY - (plan?.slides[kind] ?? []).reduce(0) { $0 + $1.dy } } ?? 0
             switch plan?.arrivals[kind] {
             case .fade?:
-                if entry.made { animator.fadeIn(entry.view, now: now) }
+                if entry.made { animator.fadeIn(entry.view, from: entry.back?.opacity ?? 0, now: now) }
                 animator.slide(entry.view, kind: kind, fresh: false, now: now)
+                if abs(missing) > 0.5 { animator.extraSlide(entry.view, kind: kind, dy: missing, timing: .list, now: now) }
             case .underFolder(let clip)?:
                 animator.slide(entry.view, kind: kind, fresh: false, now: now)
-                let opening = plan?.slides[kind]?.first { $0.timing == .folderOpen }?.dy ?? 0
+                if abs(missing) > 0.5 { animator.extraSlide(entry.view, kind: kind, dy: missing, timing: .folderOpen, now: now) }
+                let opening = (plan?.slides[kind]?.first { $0.timing == .folderOpen }?.dy ?? 0) + missing
                 animator.clip(entry.view, below: clip - entry.rect.minY, slide: opening, timing: .folderOpen, now: now)
             case nil:
-                animator.slide(entry.view, kind: kind, fresh: entry.made, now: now)
-            }
-            // Back from its way out somewhere the plan did not expect (several rows cleared, then restored): it moves from
-            // where it is drawn.
-            if let top = entry.revived {
-                let planned = (plan?.slides[kind] ?? []).reduce(0) { $0 + $1.dy }
-                let missing = top - entry.rect.minY - planned
-                if abs(missing) > 0.5 { animator.extraSlide(entry.view, kind: kind, dy: missing, now: now) }
+                animator.slide(entry.view, kind: kind, fresh: entry.made && entry.back == nil, now: now)
+                if abs(missing) > 0.5 { animator.extraSlide(entry.view, kind: kind, dy: missing, timing: .list, now: now) }
             }
             if plan?.moved.contains(kind) == true { animator.raise(entry.view, now: now) }
         }
@@ -713,8 +711,6 @@ final class RowView: HoverView {
     /// The AI list row or chip under the pointer used this row's tab (docs/design/ai-right-panel.md, 悬停高亮).
     var lit = false { didSet { if lit != oldValue { showLit() } } }
     var dropInto = false { didSet { if dropInto != oldValue { stateChanged() } } }
-    /// The row left the list and is drawn only for its way out (`TablistAnimator`): it takes no pointer and keeps its look.
-    var departing = false
     var dragSource = false { didSet { alphaValue = dragSource ? Draw.dragSourceAlpha.value : 1 } }
     /// The row a tab drag left while the pointer is over the content: Arc keeps it in place on the selected-row card
     /// with its × showing (P23-d), and the white drag card follows the pointer instead.
@@ -845,7 +841,7 @@ final class RowView: HoverView {
             } else {
                 icon.render(.none, tint: palette.ink.secondary)
                 folderIcon.isHidden = false
-                folderIcon.render(folder.collapsed ? .collapsed : .expanded, ink: HueInk(palette), animated: animated)
+                folderIcon.render(folder.collapsed ? .collapsed : .expanded, ink: HueInk(palette), light: palette.scheme == .light, animated: animated)
                 folderIcon.identify(.tabTool("folder-glyph-" + (folder.collapsed ? "closed-" : "open-") + folder.id.rawValue))
             }
             // A Live Folder's hover button refreshes it (none while it is already refreshing).
@@ -1014,21 +1010,8 @@ final class RowView: HoverView {
         litMark.layer?.backgroundColor = palette.focusColor.withAlphaComponent(Metrics.ai.litTint.value).cgColor
     }
 
-    override func hitTest(_ point: NSPoint) -> NSView? { departing ? nil : super.hitTest(point) }
-
-    /// On its way out: Arc's sliding rows lose their titles at once and keep their icons (collapse, Clear's slide-up).
-    func hideForDeparture(titles: Bool) {
-        button.alphaValue = 0
-        // The harness and accessibility no longer find it: the row it stood for is gone.
-        for view in [self, button, folderIcon, audio] as [NSView] { view.setAccessibilityIdentifier(nil) }
-        guard titles else { return }
-        for label in [title, renameHint] as [NSView] { label.isHidden = true }
-        suggestion.isHidden = true
-        for segment in segments { segment.showsTitle = false }
-    }
-
     override func stateChanged() {
-        guard let palette, let row, !departing else { return }
+        guard let palette, let row else { return }
         if lit { showLit() }
         let hovered = isHovered && !isEditingName && !isPressed
         if hovered != reportedHover { reportedHover = hovered; onHover?(self, hovered) }
@@ -1065,6 +1048,27 @@ final class RowView: HoverView {
         let shown = (isHovered || dragLifted) && !isEditingName
         if (button.alphaValue > 0) != shown { needsLayout = true }
         button.alphaValue = shown ? 1 : 0
+    }
+
+    /// The row as it looks, for its way out of the list (`DepartingRowView`): without its hover button, and without its
+    /// titles when it slides up (Arc's sliding rows keep only their icons). The row is not shown again afterwards.
+    func departurePicture(titles: Bool) -> NSImage? {
+        button.alphaValue = 0
+        if !titles {
+            for label in [title, renameHint] as [NSView] { label.isHidden = true }
+            suggestion.isHidden = true
+            for segment in segments { segment.showsTitle = false }
+        }
+        if !folderIcon.isHidden, let palette {
+            folderIcon.isHidden = true
+            icon.render(.folder(open: folderIcon.state == .expanded), tint: palette.ink.secondary, palette: palette)
+        }
+        layoutSubtreeIfNeeded()
+        guard let rep = bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
+        cacheDisplay(in: bounds, to: rep)
+        let image = NSImage(size: bounds.size)
+        image.addRepresentation(rep)
+        return image
     }
 
     /// The row's icon, title and button for the drag image: no card and no shadow, the image has its own.
@@ -1200,6 +1204,24 @@ final class RowView: HoverView {
         renameField = nil
         title.isHidden = !segments.isEmpty
     }
+}
+
+/// A row that left the list, drawn as a picture for its way out (`TablistAnimator.depart`). It takes no pointer and has
+/// no identifier: for the harness and accessibility the row is gone.
+@MainActor
+final class DepartingRowView: NSView {
+    init(picture: NSImage?, frame: CGRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.contents = picture
+        layer?.contentsGravity = .resize
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// One pane inside a split row (Arc 1.170): a TabCellBackgroundChild box with the pane's favicon and title (the
@@ -1860,10 +1882,15 @@ final class SpaceHeaderView: HoverView {
     private let background = NSView()
     private let icon = IconView()
     private let label = NSTextField(labelWithString: "")
-    private let chevron = NSImageView()
+    /// Arc's chevron turns between down (Pinned open) and right (closed) rather than changing picture
+    /// (`SidebarSectionHeaderView`'s chevron, bin:0x1001cace0): one glyph on its own layer, turned 90°.
+    private let chevron = CALayer()
+    private var chevronTint: NSColor?
     private let more = GlyphButton()
     private var space: SpaceSnapshot?
     private var palette: Palette?
+    /// What the strip showed last, so a change of it moves instead of jumping.
+    private var shownExpanded: Bool?, shownPill: Bool?, shownCollapsed: Bool?
     /// A drag is over the strip: the whole of it turns dark grey (Arc, Q13-g).
     var dropHighlighted = false {
         didSet {
@@ -1883,7 +1910,9 @@ final class SpaceHeaderView: HoverView {
         label.isSelectable = false
         more.action = { [weak self] _ in self?.showMenu() }
         more.toolTip = SidebarCopy.spaceOptions
-        for view in [background, icon, label, chevron, more] as [NSView] { addSubview(view) }
+        for view in [background, icon, label, more] as [NSView] { addSubview(view) }
+        chevron.opacity = 0
+        layer?.addSublayer(chevron)
     }
 
     /// False for a blank window's "This Window" header: no Pinned to collapse, no space menu.
@@ -1891,6 +1920,8 @@ final class SpaceHeaderView: HoverView {
 
     func render(_ space: SpaceSnapshot, palette: Palette, interactive: Bool = true) {
         if space == self.space, palette == self.palette, interactive == self.interactive { return }
+        // Another Space's strip (the column switched Spaces): Arc's belongs to its page, so nothing of it moves.
+        if space.id != self.space?.id { shownExpanded = nil; shownPill = nil; shownCollapsed = nil }
         self.space = space
         self.palette = palette
         self.interactive = interactive
@@ -1898,8 +1929,8 @@ final class SpaceHeaderView: HoverView {
         label.stringValue = space.title
         label.textColor = color
         icon.render(IconContent(space: space.icon, color: RGBA(0, 0, 0, 0)), tint: color)
-        chevron.image = (space.pinned.collapsed ? Glyph.chevronRight : Glyph.chevronDown).image(size: Draw.spaceChevron.value, weight: .semibold)
-        chevron.contentTintColor = palette.ink.secondary
+        paintChevron(palette.ink.secondary)
+        turnChevron(collapsed: space.pinned.collapsed)
         more.render(.more, size: Draw.navGlyph.value, palette: palette, radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
         toolTip = space.pinned.collapsed ? SidebarCopy.expandPinned : SidebarCopy.collapsePinned
         stateChanged()
@@ -1917,7 +1948,12 @@ final class SpaceHeaderView: HoverView {
         background.frame = CGRect(x: g.selection.minX, y: 0, width: g.selection.width, height: bounds.height)
         icon.frame = g.icon
         let size = Draw.spaceChevron.value + 2
-        chevron.frame = CGRect(x: g.icon.midX - size / 2, y: (bounds.height - size) / 2, width: size, height: size)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        chevron.bounds = CGRect(x: 0, y: 0, width: size, height: size)
+        chevron.position = CGPoint(x: g.icon.midX, y: bounds.midY)
+        chevron.contentsScale = window?.backingScaleFactor ?? 2
+        CATransaction.commit()
         more.frame = g.button
         let hasIcon = space?.icon != SpaceIcon.none
         let start = expanded || hasIcon ? g.titleX : g.selection.minX + Draw.spaceHeaderLeading.value
@@ -1927,12 +1963,91 @@ final class SpaceHeaderView: HoverView {
 
     override func stateChanged() {
         guard let palette else { return }
-        let shown = expanded
-        background.layer?.backgroundColor = pillShown ? palette.color(isPressed ? palette.tokens.tabPressed : palette.tokens.itemBackground).cgColor : nil
-        chevron.isHidden = !shown
-        more.isHidden = !pillShown
-        icon.isHidden = shown || space?.icon == SpaceIcon.none
+        let shown = expanded, pill = pillShown
+        background.layer?.backgroundColor = palette.color(isPressed ? palette.tokens.tabPressed : palette.tokens.itemBackground).cgColor
+        let live = window != nil
+        // Arc (bin:0x1001c66c4, 0x1001c7910): the chevron fades in as its slot opens and pushes the name over, 0.1 s
+        // ease-out; the pill and "…" fade over 0.07 s.
+        let ease = CAMediaTimingFunction(name: .easeOut)
+        if shown != shownExpanded {
+            let animate = live && shownExpanded != nil
+            shownExpanded = shown
+            fade(chevron, to: shown ? 1 : 0, over: animate ? Draw.spaceHeaderSlide.value : 0)
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = animate ? Draw.spaceHeaderSlide.value : 0
+                context.timingFunction = ease
+                context.allowsImplicitAnimation = animate
+                icon.animator().alphaValue = shown || space?.icon == SpaceIcon.none ? 0 : 1
+                needsLayout = true
+                layoutSubtreeIfNeeded()
+            }
+        }
+        if pill != shownPill {
+            let animate = live && shownPill != nil
+            shownPill = pill
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = animate ? Draw.spaceHeaderPillFade.value : 0
+                context.timingFunction = ease
+                background.animator().alphaValue = pill ? 1 : 0
+                more.animator().alphaValue = pill ? 1 : 0
+            }
+        }
         needsLayout = true
+    }
+
+    private func fade(_ target: CALayer, to opacity: Float, over duration: Double) {
+        let from = (target.presentation() ?? target).opacity
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        target.opacity = opacity
+        CATransaction.commit()
+        guard duration > 0 else { target.removeAnimation(forKey: "brk.fade"); return }
+        let animation = CABasicAnimation(keyPath: "opacity")
+        animation.fromValue = from
+        animation.toValue = opacity
+        animation.duration = duration
+        animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        target.add(animation, forKey: "brk.fade")
+    }
+
+    private func paintChevron(_ tint: NSColor) {
+        guard tint != chevronTint, let glyph = Glyph.chevronDown.image(size: Draw.spaceChevron.value, weight: .semibold) else { return }
+        chevronTint = tint
+        let size = Draw.spaceChevron.value + 2
+        let painted = NSImage(size: CGSize(width: size, height: size), flipped: false) { rect in
+            let box = CGRect(x: (rect.width - glyph.size.width) / 2, y: (rect.height - glyph.size.height) / 2, width: glyph.size.width, height: glyph.size.height)
+            glyph.draw(in: box)
+            tint.set()
+            box.fill(using: .sourceAtop)
+            return true
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        chevron.contents = painted
+        CATransaction.commit()
+    }
+
+    /// Down while Pinned is open, turned a quarter to the right while it is closed; a change turns it over
+    /// `Draw.spaceHeaderSlide`, ease-out, from wherever it is.
+    private func turnChevron(collapsed: Bool) {
+        guard collapsed != shownCollapsed else { return }
+        let animate = window != nil && shownCollapsed != nil
+        shownCollapsed = collapsed
+        // A quarter turn counterclockwise on screen: in a flipped layer that is a negative angle.
+        let flipped = chevron.superlayer?.contentsAreFlipped() ?? true
+        let angle = collapsed ? (flipped ? -1.0 : 1.0) * .pi / 2 : 0
+        let from = (chevron.presentation() ?? chevron).value(forKeyPath: "transform")
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        chevron.transform = CATransform3DMakeRotation(angle, 0, 0, 1)
+        CATransaction.commit()
+        guard animate else { chevron.removeAnimation(forKey: "brk.turn"); return }
+        let animation = CABasicAnimation(keyPath: "transform")
+        animation.fromValue = from
+        animation.toValue = chevron.transform
+        animation.duration = Draw.spaceHeaderSlide.value
+        animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        chevron.add(animation, forKey: "brk.turn")
     }
 
     /// Control-click is the right-click, as on the rows.

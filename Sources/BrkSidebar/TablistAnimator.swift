@@ -72,12 +72,12 @@ final class TablistAnimator {
         }
     }
 
-    /// One more slide of `dy` for `kind`, on the list's timing, starting now (a row back from its way out to a place the
-    /// plan did not expect).
-    func extraSlide(_ view: NSView, kind: RowFrame.Kind, dy: Double, now: CFTimeInterval) {
+    /// One more slide of `dy` for `kind` on `timing`, starting now (a row back from its way out, from where its picture
+    /// was drawn).
+    func extraSlide(_ view: NSView, kind: RowFrame.Kind, dy: Double, timing: TablistMotionTiming, now: CFTimeInterval) {
         guard let layer = view.layer else { return }
         serial += 1
-        let item = Running(timing: .list, dy: dy, start: now, key: "brk.tablist.slide.\(serial)")
+        let item = Running(timing: timing, dy: dy, start: now, key: "brk.tablist.slide.\(serial)")
         running[kind, default: []].append(item)
         add(slide: item, to: layer)
     }
@@ -102,11 +102,11 @@ final class TablistAnimator {
     /// +1 where a layer's sublayers count y downward (a flipped view's layer), -1 where upward.
     private static func down(_ layer: CALayer?) -> Double { layer?.contentsAreFlipped() ?? true ? 1 : -1 }
 
-    /// An added row fades in where it is.
-    func fadeIn(_ view: NSView, now: CFTimeInterval) {
+    /// An added row fades in where it is (from `from`: a row back from its way out, from its picture's opacity).
+    func fadeIn(_ view: NSView, from: Float = 0, now: CFTimeInterval) {
         guard let layer = view.layer else { return }
         let animation = CABasicAnimation(keyPath: "opacity")
-        animation.fromValue = 0
+        animation.fromValue = from
         animation.toValue = layer.opacity
         animation.duration = Self.duration(.list)
         animation.timingFunction = Self.function(.list)
@@ -179,12 +179,16 @@ final class TablistAnimator {
         layer.add(animation, forKey: "brk.tablist.fade")
     }
 
-    /// A row that left comes back while it is still on its way out (a folder opened again half-way): it stays, keeping the
-    /// motion it has, and stops fading.
-    func revive(_ view: NSView) {
+    /// How far `view` is drawn from its frame now (document points, positive below), by its layer's presented position.
+    func presentedOffset(_ view: NSView) -> Double {
+        guard let layer = view.layer, let shown = layer.presentation() else { return 0 }
+        return Double(shown.position.y - layer.position.y) * Self.down(layer.superlayer)
+    }
+
+    /// A picture on its way out is taken away early (its row came back).
+    func forget(_ view: NSView) {
         ghosts.removeAll { $0.view === view }
-        view.layer?.removeAnimation(forKey: "brk.tablist.fade")
-        view.layer?.zPosition = 0
+        clipped.removeAll { $0.view === view }
     }
 
     /// Ends everything at once (the Space changed, the list went away, a drag began).

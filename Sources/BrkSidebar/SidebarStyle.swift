@@ -136,6 +136,10 @@ struct SidebarDrawMetrics: MetricGroup {
     let dividerFadeCurve = Metric([0.0, 0.0, 0.58, 1.0], .anatomy("bin:0x1001ac9e4: functionWithName kCAMediaTimingFunctionEaseOut"))
     let clearArrowPress = Metric(3.0, .anatomy("bin:0x10030f764: the ↓'s centre constraint goes to 3 while Clear is pressed, back to 0 on release (bin:0x10030f924)"))
     let clearArrowPressDuration = Metric(0.175, .anatomy("bin:0x10030f734: setDuration 0.175 with implicit animation allowed"))
+    /// The Space name strip (Arc's `SidebarSectionHeaderView`): hovered, its chevron fades in as its slot opens and pushes
+    /// the name right; a click turns the chevron a quarter.
+    let spaceHeaderSlide = Metric(0.1, .anatomy("bin:0x1001c673c, bin:0x1001c77fc: setDuration 0.1, kCAMediaTimingFunctionEaseOut, for the chevron's width constraint and alpha; recorded, the chevron turns in 6 frames"))
+    let spaceHeaderPillFade = Metric(0.07, .anatomy("bin:0x1001c7980, bin:0x1001c7adc: setDuration 0.07, ease-out, for the hover's alpha"))
     let folderIconSide = Metric(17.0, .anatomy("bin:0x1003eef90: the sidebar's folder cell makes its FolderIconView 17 x 17 (the SwiftUI representable's 16 x 16 at bin:0x10166e1c4 is used elsewhere); recorded, Arc's closed glyph is 38 px across at 2x, as 17 + the 1.5 outline"))
     let folderIconRadiusDivisor = Metric(7.0, .anatomy("bin:0x10166cc78: corner radius = (width / 7) rounded"))
     let folderIconLine = Metric(1.25, .anatomy("bin:0x10166cc84: the outline is 1.25 rounded to whole device pixels (1.5 at 2x)"))
@@ -151,6 +155,7 @@ struct SidebarDrawMetrics: MetricGroup {
     let folderIconFrontShadeAxis = Metric([0.1, 0.0, 0.9, 1.0], .anatomy("bin:0x10166b838 to bin:0x10166b864: start (0.1, 0), end (0.9, 1)"))
     let folderIconBackShade = Metric(0.36, .anatomy("bin:0x10166bb0c: the back's shading is black from 0 to 0.36, masked by the back's path"))
     let folderIconBackShadeAxis = Metric([0.0, 0.0, 0.6, 1.0], .anatomy("bin:0x10166bb90 to bin:0x10166bbac: start (0, 0), end (0.6, 1)"))
+    let folderIconBackLift = Metric(0.16, .anatomy("~/brk-arc-reference/P01/P01-a-arc.png: the open back panel reads 167 at its unshaded corner falling to 145, Brk's with the back ink under the same shading 152 to 132; the ink lifted this far toward white closes it (light themes; no Arc picture of an open folder in a dark theme to measure)"))
     let folderIconClosedBackShading = Metric(0.2, .anatomy("bin:0x10166c6a8: the back's shading at 0.2 while closed, 1 open"))
     let folderIconTurn = Metric(0.25, .anatomy("an implicit Core Animation transition: CATransaction's default 0.25 s; recorded, the glyph turns with the rows of a closing folder"))
     let folderIconTurnCurve = Metric([0.25, 0.1, 0.25, 1.0], .anatomy("an implicit transition's default curve; the recorded glyph frames fit it"))
