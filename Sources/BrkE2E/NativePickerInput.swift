@@ -439,6 +439,22 @@ enum NativeSystemInput {
         return out
     }
 
+    /// The identifiers of the elements Accessibility reports as disabled in the app's window at that screen rectangle
+    /// (a greyed-out button, which a contrast check leaves out as WCAG does).
+    static func disabledIdentifiers(pid: Int32, window: CGRect) -> Set<String> {
+        var queue = (NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? []).filter {
+            frame(of: $0).map { abs($0.minX - window.minX) + abs($0.minY - window.minY) + abs($0.width - window.width) < 6 } ?? false
+        }
+        var out: Set<String> = [], seen = 0
+        while !queue.isEmpty, seen < 4000 {
+            let node = queue.removeFirst(); seen += 1
+            let identifier = NativePickerInput.string(node, kAXIdentifierAttribute)
+            if !identifier.isEmpty, NativePickerInput.attribute(node, kAXEnabledAttribute) as? Bool == false { out.insert(identifier) }
+            queue += NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
+        }
+        return out
+    }
+
     /// The red button of the app's window titled `title`, for a real click on it.
     static func closeButtonFrame(pid: Int32, window title: String) -> CGRect? {
         let windows = NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? []

@@ -92,6 +92,9 @@ private enum Ink {
     static func card(_ dark: Bool) -> Color { dark ? Color(white: 0.16) : .white }
     static func stroke(_ dark: Bool) -> Color { primary(dark).opacity(0.12) }
     static let accent = Color(red: 0.36, green: 0.31, blue: 0.95)
+    /// The accent as text. On the dark card the accent itself is too dark to read (the ad blocker's "Recommended" tag
+    /// measured 2.4:1), so dark mode lifts it toward white (5.7:1 there); light mode keeps the accent (4.6:1).
+    static func accentText(_ dark: Bool) -> Color { dark ? Color(red: 0.66, green: 0.62, blue: 1) : accent }
 }
 
 private struct ControlFrame: ViewModifier {
@@ -159,7 +162,7 @@ private struct ChoiceRow: View {
                 (Text(lead).fontWeight(.bold) + Text(rest)).font(.system(size: 15)).foregroundStyle(Ink.primary(scheme == .dark))
                 Spacer(minLength: 8)
                 if let tag {
-                    Text(tag).font(.system(size: 11, weight: .semibold)).foregroundStyle(Ink.accent)
+                    Text(tag).font(.system(size: 11, weight: .semibold)).foregroundStyle(Ink.accentText(scheme == .dark))
                         .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(Ink.accent.opacity(0.12)))
                 }
             }
