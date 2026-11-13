@@ -743,6 +743,7 @@ final class ControlExecutor {
             var fact = AppWindowFact(number: window.windowNumber, className: NSStringFromClass(type(of: window)), isKey: window.isKeyWindow,
                                      isVisible: window.isVisible, isPageHost: engine.isPageHostWindow(window))
             fact.level = window.level.rawValue
+            fact.listedInMissionControl = window.isVisible && !window.collectionBehavior.contains(.transient) && !window.styleMask.contains(.fullScreen)
             return fact
         }
         var facts = NativeFacts(window: c.id, windowFrame: window.frame, contentSize: c.root.bounds.size,

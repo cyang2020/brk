@@ -166,26 +166,6 @@ final class WindowRootViewTests: XCTestCase {
         XCTAssertEqual(found.count, 1, "\(found)")
         XCTAssertTrue(found.first?.contains("misplaced-card") == true, "\(found)")
     }
-
-    /// A window's root view watches the app turn active and inactive (the veil over an inactive window). Once the window
-    /// and its root are gone nothing of it runs on an app switch; its observers used to stay for the life of the app.
-    func testAClosedWindowsRootStopsWatchingTheApp() throws {
-        weak var released: WindowRootView?
-        var veil: InactiveVeilView?
-        autoreleasepool {
-            let root = WindowRootView(dispatch: { _ in })
-            veil = root.subviews.compactMap { $0 as? InactiveVeilView }.first
-            released = root
-        }
-        XCTAssertNil(released, "the root view itself is released")
-        let kept = try XCTUnwrap(veil)
-        kept.darkWebsites = true   // a veil that shows whether or not the app is active, so a run of update() is seen
-        kept.isHidden = true
-        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApp)
-        NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: NSApp)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        XCTAssertTrue(kept.isHidden, "an observer of the closed window's root ran")
-    }
 }
 
 final class IDs: @unchecked Sendable {

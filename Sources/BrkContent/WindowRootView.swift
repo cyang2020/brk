@@ -16,9 +16,9 @@ import BrkUIKit
 @MainActor
 public final class WindowRootView: NSView {
     private let dispatch: Dispatch
+    /// The system material and the theme over it: lighter while the window is not active and darker while websites are
+    /// set to Dark come from there (Arc, P01-d, P19-b; docs/checks/2026-11-13-window-translucency.md).
     public let background = ThemeBackgroundView(frame: .zero)
-    /// Over the background: lighter while the app is not frontmost, darker while websites are set to Dark (Arc, P01-d, P19-b).
-    private let inactiveVeil = InactiveVeilView(frame: .zero)
     public let toolbar: AddressToolbarView
     public let sidebar: SidebarView
     public let content: ContentAreaView
@@ -60,8 +60,6 @@ public final class WindowRootView: NSView {
     private var last: (snapshot: WindowSnapshot, frames: WindowFrames)?
     private let thumbnails = PageThumbnails()
     private var switcherShown = false
-    /// The app turning active and inactive, for the veil. Block observers stay registered until removed: `deinit` removes them.
-    nonisolated(unsafe) private var activationObservers: [NSObjectProtocol] = []
     /// Takes the window's image as the window server shows it (BrkApp's `WindowCapture`), for the Ctrl+Tab
     /// switcher's page images. Nil (tests): the switcher shows white cards.
     public var captureWindow: (() -> CGImage?)? {
@@ -95,15 +93,9 @@ public final class WindowRootView: NSView {
         spaceDialog = SpaceDialogHost(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [background, inactiveVeil, sidebar, content, history, easel, toolbar, loadingBar, library, libraryConversation, peek, findBar, aiAnswer, panelHandle, edgeDrop, linkPrompt, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay, itemPreview, downloadFlight] as [NSView] { addSubview(view) }
+        for view in [background, sidebar, content, history, easel, toolbar, loadingBar, library, libraryConversation, peek, findBar, aiAnswer, panelHandle, edgeDrop, linkPrompt, linkStatus, aiPreview, commandBar, spaceDialog, tabTools, zapOverlay, captureOverlay, itemPreview, downloadFlight] as [NSView] { addSubview(view) }
         pageCards.parent = self
         pageCards.below = toolbar
-        activationObservers = [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification].map { name in
-            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak veil = inactiveVeil] _ in
-                guard let veil else { return }
-                MainActor.assumeIsolated { veil.update() }
-            }
-        }
         background.identify(.themeBackground)
         sidebar.edgeViewsAbove = loadingBar   // the resize handle over the cards and the toolbar
         sidebar.contentDrop = { [weak content] item, point in content?.dropCommand(item, at: point) }
@@ -160,8 +152,6 @@ public final class WindowRootView: NSView {
 
     @available(*, unavailable)
     public required init?(coder: NSCoder) { fatalError("not used") }
-
-    deinit { activationObservers.forEach(NotificationCenter.default.removeObserver) }
 
     public override var isFlipped: Bool { true }
     public func cancelDrag() -> Bool { sidebar.cancelDrag() }
@@ -256,7 +246,7 @@ public final class WindowRootView: NSView {
             sidebarFloats = frames.sidebarFloats
             sidebar.removeFromSuperview()
             if sidebarFloats { addSubview(sidebar, positioned: .above, relativeTo: peek) }
-            else { addSubview(sidebar, positioned: .above, relativeTo: inactiveVeil) }
+            else { addSubview(sidebar, positioned: .above, relativeTo: background) }
         }
         renderChrome(snapshot, frames: frames)
         defer { placeForLibrary() }
@@ -350,9 +340,6 @@ public final class WindowRootView: NSView {
         }
         background.frame = bounds
         let themeChanged = lastTheme != nil && lastTheme != shown.theme
-        inactiveVeil.frame = bounds
-        inactiveVeil.scheme = shown.theme.scheme
-        inactiveVeil.darkWebsites = shown.websiteAppearance == .dark
         lastTheme = shown.theme
         sidebar.render(shown, frames: shownFrames, palette: Palette(shown.theme))   // hidden, it keeps its reveal strip and slide-in
         // A Space change moves the column, and the colors follow its position; another theme change crossfades.
@@ -431,7 +418,7 @@ public final class PeekCardView: NSView {
         layer?.shadowOpacity = 0.18
         layer?.shadowRadius = Metrics.peek.shadowRadius.value
         layer?.shadowOffset = CGSize(width: 0, height: -Metrics.peek.shadowRadius.value / 4)
-        card.layer?.cornerRadius = Metrics.peek.cornerRadius.value
+        card.shape(radius: Metrics.peek.cornerRadius.value, corners: CardView.allCorners)
         addSubview(card)
         backdrop.onClick = { dispatch(.peek(.close)) }
         backdrop.isHidden = true
@@ -638,35 +625,4 @@ public enum PeekCopy {
 @MainActor
 public enum EaselExport {
     public static func png(_ card: EaselCard) -> Data? { EaselDrawing.png(card) }
-}
-
-/// Arc's window background changes with two states while the sidebar's text and the cards do not: the background,
-/// and with it the sidebar's translucent rows, tiles and the margins round the cards, turns lighter while the app is
-/// not frontmost and darker while View > Appearance sets websites to Dark. Measured on Arc 1.170 with the #F2EAE4
-/// theme (2a96a9d7f0:verify/visual-pairs/run-20261103): P01-d against P01-a, #F0EAE6 reads #F7F2EE and the favorites' tile
-/// #E6E1DF reads #EDE8E5 (white at 40% lands within 2 of each channel); P19-b against P19-c, #F0EBE7 reads #DCD6D3
-/// and the tile #E5E0DE reads #D2CDCA (black at 8.6%). Dark themes keep their look (no Arc capture of one).
-@MainActor
-final class InactiveVeilView: NSView {
-    var scheme: Scheme = .light { didSet { if scheme != oldValue { update() } } }
-    var darkWebsites = false { didSet { if darkWebsites != oldValue { update() } } }
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        update()
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    func update() {
-        let veil: NSColor? = scheme == .dark ? nil
-            : darkWebsites ? NSColor(white: 0, alpha: 0.086)
-            : NSApplication.shared.isActive ? nil : NSColor(white: 1, alpha: 0.4)
-        isHidden = veil == nil
-        layer?.backgroundColor = veil?.cgColor
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

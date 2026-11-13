@@ -13,7 +13,11 @@ final class DockView: NSView {
     private let dispatch: Dispatch
     private var cells: [SpaceID: DockCellView] = [:]
     private let library = GlyphButton()
+    /// The Library button's picture, which moves when the pointer comes onto the button and when it leaves.
+    private let libraryIcon = LibraryIconView()
     private let plus = GlyphButton()
+    /// The + drawn as Arc's two crossed bars, so it can turn into the × while its menu is open.
+    private let plusIcon = PlusIconView()
     var hapticsEnabled = true
     private var last: ([DockItem], SidebarFrames, Palette, Bool)?
     private var draggingSpace: SpaceID?
@@ -39,7 +43,12 @@ final class DockView: NSView {
         }
         library.toolTip = SidebarCopy.library
         library.identify(.dockLibrary)
+        libraryIcon.autoresizingMask = [.width, .height]
+        library.addSubview(libraryIcon)
+        library.hoverChanged = { [weak self] hovered in self?.libraryIcon.setHovered(hovered) }
         plus.identify(.dockPlus)
+        plusIcon.autoresizingMask = [.width, .height]
+        plus.addSubview(plusIcon)
         addSubview(library)
         addSubview(plus)
         capsule.isHidden = true
@@ -68,7 +77,10 @@ final class DockView: NSView {
         library.render(.library, size: Draw.dockButtonGlyph.value, palette: palette, tint: tint,
                        radius: Metrics.dock.cellRadius.value, hoverFill: palette.tokens.itemBackground)
         renderPlus()
-        library.image = LibraryGlyph.image(tint: palette.scheme == .light ? NSColor.black.withAlphaComponent(Draw.dockActiveInk.value) : NSColor.white.withAlphaComponent(Draw.dockGlyphInkDark.value))
+        library.image = nil
+        libraryIcon.frame = library.bounds
+        libraryIcon.render(tint: palette.scheme == .light ? NSColor.black.withAlphaComponent(Draw.dockActiveInk.value) : NSColor.white.withAlphaComponent(Draw.dockGlyphInkDark.value),
+                           dark: palette.scheme == .dark)
         let shown = Set(items.map(\.id))
         for (id, cell) in cells where !shown.contains(id) { cell.removeFromSuperview(); cells[id] = nil }
         for item in items {
@@ -168,9 +180,12 @@ final class DockView: NSView {
     private func renderPlus() {
         guard let palette = last?.2 else { return }
         plus.latchedFill = plusMenu.isOpen ? palette.tokens.itemBackground : nil
-        plus.render(plusMenu.isOpen ? .close : .plus, size: plusMenu.isOpen ? Draw.dockButtonGlyph.value : Draw.dockPlusGlyph.value, palette: palette,
-                    tint: palette.scheme == .light ? NSColor.black.withAlphaComponent(Draw.dockPlusInk.value) : NSColor.white.withAlphaComponent(Draw.dockGlyphInkDark.value),
-                    radius: Metrics.dock.cellRadius.value, hoverFill: palette.tokens.itemBackground)
+        let tint = palette.scheme == .light ? NSColor.black.withAlphaComponent(Draw.dockPlusInk.value) : NSColor.white.withAlphaComponent(Draw.dockGlyphInkDark.value)
+        plus.render(.plus, size: Draw.dockPlusGlyph.value, palette: palette, tint: tint, radius: Metrics.dock.cellRadius.value, hoverFill: palette.tokens.itemBackground)
+        plus.image = nil
+        plusIcon.frame = plus.bounds
+        plusIcon.render(tint: tint)
+        plusIcon.setOpen(plusMenu.isOpen)
     }
 }
 
@@ -344,5 +359,74 @@ final class DockCapsuleView: NSView {
         super.layout()
         let side = min(showsDot ? Draw.dockDot.value : Draw.dockGlyph.value, bounds.width)
         icon.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+    }
+}
+
+/// Arc's + (ARCUI `PlusMenuIcon`, bin:0x100af2384): two bars crossed, and while its menu is open the cross turns 45°
+/// into an × on `spring(response: 0.2, dampingFraction: 0.5)` (bin:0x100af267c), so it overshoots a little and settles.
+@MainActor
+final class PlusIconView: NSView {
+    private let bars = CAShapeLayer()
+    private(set) var isOpen = false
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        let length = Draw.dockPlusBars.value[0], thickness = Draw.dockPlusBars.value[1]
+        let path = CGMutablePath()
+        path.addRoundedRect(in: CGRect(x: -length / 2, y: -thickness / 2, width: length, height: thickness), cornerWidth: thickness / 2, cornerHeight: thickness / 2)
+        path.addRoundedRect(in: CGRect(x: -thickness / 2, y: -length / 2, width: thickness, height: length), cornerWidth: thickness / 2, cornerHeight: thickness / 2)
+        bars.path = path
+        bars.bounds = .zero
+        layer?.addSublayer(bars)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        bars.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        CATransaction.commit()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        bars.contentsScale = window?.backingScaleFactor ?? 2
+    }
+
+    func render(tint: NSColor) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        bars.fillColor = tint.cgColor
+        CATransaction.commit()
+    }
+
+    func setOpen(_ open: Bool) {
+        guard open != isOpen else { return }
+        isOpen = open
+        let angle = open ? CGFloat.pi / 4 : 0
+        let old = bars.value(forKeyPath: "transform.rotation.z") as? CGFloat ?? 0
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        bars.transform = CATransform3DMakeRotation(angle, 0, 0, 1)
+        CATransaction.commit()
+        guard window != nil, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        let k = Draw.dockPlusSpring.value
+        let motion = MotionSpring(response: k[0], dampingRatio: k[1])
+        let spring = CASpringAnimation(keyPath: "transform.rotation.z")
+        spring.mass = 1
+        spring.stiffness = motion.stiffness
+        spring.damping = motion.damping
+        spring.isAdditive = true
+        spring.fromValue = old - angle
+        spring.toValue = 0
+        spring.duration = spring.settlingDuration
+        bars.add(spring, forKey: nil)
     }
 }

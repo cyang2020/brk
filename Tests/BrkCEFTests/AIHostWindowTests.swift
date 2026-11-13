@@ -55,6 +55,20 @@ final class AIHostWindowTests: XCTestCase {
         XCTAssertEqual(order(), ["host", "parent", "other"], "the browser window went behind the other window")
         XCTAssertTrue(host.parent === parent)
     }
+    /// 2026-11-13: every page's empty host window on screen was listed in Mission Control as a blank "Brk" window.
+    /// Hosts are transient and keep Chromium's fullscreen bit. Chromium sets its own behavior while a host is in
+    /// fullscreen (fullScreenPrimary alone, PB3's log); leaving fullscreen applies the rule again, also for a hidden
+    /// page that never reports the exit.
+    func testHostsStayOutOfMissionControl() {
+        let host = window()
+        defer { host.close() }
+        host.collectionBehavior = [.managed, .fullScreenPrimary]
+        HostWindows.adopt(host, parent: nil)
+        XCTAssertEqual(host.collectionBehavior, [.transient, .ignoresCycle, .fullScreenPrimary])
+        host.collectionBehavior = [.fullScreenPrimary]
+        NotificationCenter.default.post(name: NSWindow.didExitFullScreenNotification, object: host)
+        XCTAssertEqual(host.collectionBehavior, [.transient, .ignoresCycle, .fullScreenPrimary])
+    }
 }
 
 @MainActor
