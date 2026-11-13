@@ -15,6 +15,11 @@ export BRK_BRANCH="brk/156.0.8078.88"
 # Outputs: Vanilla proves the toolchain on unmodified source; Brk is the branch with the patch series applied.
 export BRK_OUT_VANILLA="out/Vanilla"
 export BRK_OUT_BRK="out/Brk"
+# Release builds, one per architecture (engine/args/release.gn).
+export BRK_OUT_RELEASE_ARM64="out/BrkRelease-arm64"
+export BRK_OUT_RELEASE_X64="out/BrkRelease-x64"
+# The out directory a script works on: BRK_OUT=out/BrkRelease-arm64 engine/build.sh chrome. Default: the development build.
+export BRK_OUT="${BRK_OUT:-$BRK_OUT_BRK}"
 
 export PATH="$BRK_DEPOT_TOOLS:$PATH"
 # No usage reports from depot_tools or gclient.

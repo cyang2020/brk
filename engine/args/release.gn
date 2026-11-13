@@ -1,0 +1,32 @@
+# GN arguments for the BrkCore that ships to users. engine/configure.sh release <arm64|x64> writes out/BrkRelease-<cpu>/args.gn from
+# this file plus target_cpu. engine/README.md has the reasons and what each build cost on this machine.
+
+is_debug = false
+is_component_build = false
+
+# Chromium's official configuration: full optimisation, thin LTO at the final link, and PGO with the profile Google publishes for this
+# branch (tools/update_pgo_profiles.py fetches chrome/build/pgo_profiles/*.profdata; chrome/build/mac-arm.pgo.txt and mac.pgo.txt name
+# the file). is_official_build turns both on (use_thin_lto, chrome_pgo_phase = 2).
+is_official_build = true
+dcheck_always_on = false
+
+# Stripped binaries, with the symbols kept aside: line tables (symbol_level 1) go into a .dSYM next to each binary.
+symbol_level = 1
+enable_dsyms = true
+enable_stripping = true
+
+# Thin LTO sets its own link concurrency (one link at a time, each using every core); Chromium refuses an explicit concurrent_links.
+use_remoteexec = false
+use_siso = false
+
+# Codecs as the CEF build Brk shipped before: VP8, VP9, AV1, Opus, FLAC, MP3, no H.264 or AAC. H.264 and AAC are patent-licensed;
+# publishing them is the user's decision (engine/README.md). No Widevine: it needs Google's signed component.
+proprietary_codecs = false
+ffmpeg_branding = "Chromium"
+enable_widevine = false
+
+# No Google API keys of any kind. What still calls Google without keys is turned off in brk/ (engine/README.md, "Calls home").
+use_official_google_api_keys = false
+
+# Not Chromium's experiment list for its test bots (see brk.gn).
+disable_fieldtrial_testing_config = true

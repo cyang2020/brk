@@ -6,7 +6,7 @@ source "$(dirname "$0")/../config.sh"
 ENGINE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 "$ENGINE_DIR/sync-header.sh"
 cd "$BRK_SRC/$BRK_OUT_BRK"
-template="$(../../third_party/ninja/ninja -t commands -s obj/chrome/browser/ui/ui/browser_native_widget_mac.o)"
+template="$(../../third_party/ninja/ninja -t commands -s obj/brk/browser/brk_application.o)"
 files=("$@")
 if [ "${#files[@]}" -eq 0 ]; then
   files=($(cd ../../brk && ls browser/*.mm browser/*.cc embedding/*.cc))
