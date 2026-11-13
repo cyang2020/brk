@@ -342,7 +342,11 @@ final class SettingsHostTests: XCTestCase {
             XCTAssertEqual(control.accessibilityRole(), .button, field)
             XCTAssertEqual(control.accessibilityLabel(), label, field)
         }
-        guard case .settings(.links(.addRoute(let added)))? = sent({ (find("route-new") as NSControl?)?.performClick(nil) }).first else {
+        let addRoute = try XCTUnwrap(find("route-new") as NSControl?)
+        addRoute.isEnabled = false
+        XCTAssertEqual(sent { _ = addRoute.accessibilityPerformPress() }, [], "a disabled button cannot add a route through Accessibility")
+        addRoute.isEnabled = true
+        guard case .settings(.links(.addRoute(let added)))? = sent({ XCTAssertTrue(addRoute.accessibilityPerformPress()) }).first else {
             return XCTFail("New Route did not add a route")
         }
         XCTAssertEqual(added.pattern, "")
