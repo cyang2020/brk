@@ -550,7 +550,23 @@ final class PointerSweepTests: XCTestCase {
                     panel.waiting = 3
                     value.aiPanel = panel
                 }
-                problems += rig.check("AI list", [rig.overlay(AIPanelView.self)].compactMap { $0 }, reach: 5)
+                // Check the list at rest: the panel's page transition can leave its labels outside the clipped area.
+                let panel = try XCTUnwrap(rig.shown?.aiPanel)
+                let size = try XCTUnwrap(rig.overlay(AIPanelView.self)).bounds.size
+                let listWindow = SurfaceChecks.window(size)
+                defer { listWindow.close() }
+                listWindow.backgroundColor = rig.base
+                let list = AIThreadListView(dispatch: { _ in })
+                listWindow.contentView = list
+                list.render(panel, style: AIPanelStyle(rig.snapshot().theme))
+                list.layoutSubtreeIfNeeded()
+                func rows(_ view: NSView) -> [AIThreadRowView] {
+                    (view as? AIThreadRowView).map { [$0] } ?? view.subviews.flatMap(rows)
+                }
+                let current = try XCTUnwrap(rows(list).first { $0.row.current })
+                XCTAssertFalse(current.isHiddenOrHasHiddenAncestor)
+                XCTAssertGreaterThan(current.visibleRect.width, 2, "the selected row's labels must be in the visible list")
+                problems += rig.check("AI list", [list], base: rig.base, reach: 5)
             }
         }
         XCTAssertEqual(problems, [], problems.joined(separator: "\n"))
