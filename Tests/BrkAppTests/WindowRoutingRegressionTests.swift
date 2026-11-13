@@ -117,6 +117,9 @@ final class WindowRoutingRegressionTests: XCTestCase {
     func test_theIconPickerIsNotOpenOnceItsPopoverHasGone() throws {
         let h = Harness()
         defer { TabIconPicker.close(); h.cleanUp() }
+        let appearance = NSApp.appearance
+        NSApp.appearance = NSAppearance(named: .aqua)
+        defer { NSApp.appearance = appearance }
         h.store.start()
         let controller = try XCTUnwrap(h.store.windowController(h.window))
         TabIconPicker.present(for: h.page.item, in: controller.window, scheme: .dark) { _ in }

@@ -300,7 +300,7 @@ enum SitesSettingsRealScenarios {
             try pressLocated(app, "siteAddExtension")
             try app.waitUntil("the folder panel again") { try app.native().sheetClass == "NSOpenPanel" }
             try Real.key(app, [.command, .shift], .g)
-            try Real.type(app, directory.path)
+            try Real.paste(app, directory.path)
             try Real.key(app, [], .returnKey)
             try app.waitUntil("the panel reached the fixture folder") { try NativePickerInput.whereMatches(NativePickerInput.sheet(app), directory) }
             try Real.key(app, [], .returnKey)
@@ -561,9 +561,17 @@ enum SitesSettingsRealScenarios {
             try Real.move(app, to: CGPoint(x: title.midX, y: title.midY))
             try pressInPane(app, in: .window("Shortcuts"), identifier: field("shortcut-menu-\(action)"), "the row's … menu")
             app.sleep(0.5)
+            if let rect = NativeSystemInput.placeFrame(pid: pid, .window("Shortcuts")) {
+                let capture = Process()
+                capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                capture.arguments = ["-x", "-R", "\(Int(rect.minX)),\(Int(rect.minY)),\(Int(rect.width)),\(Int(rect.height))",
+                                     app.shotsDirectory.appendingPathComponent("\(app.scenarioID)-shortcut-menu.png").path]
+                try capture.run(); capture.waitUntilExit()
+            }
             try Real.type(app, "remove")
             try Real.key(app, [], .returnKey)
-            try app.waitUntil("Reload has no shortcut") { try settings(app).shortcuts.first { $0.action.rawValue == action }?.state == .unset }
+            do { try app.waitUntil("Reload has no shortcut") { try settings(app).shortcuts.first { $0.action.rawValue == action }?.state == .unset } }
+            catch { throw Check(description: "\(error); current Reload shortcut: \(String(describing: try settings(app).shortcuts.first { $0.action.rawValue == action }))") }
             try pressInPane(app, in: .window("Shortcuts"), identifier: field("shortcut-reset-all"), "Reset All Shortcuts")
             try app.waitUntil("Reload's shortcut back") { try settings(app).shortcuts.first { $0.action.rawValue == action }?.state == row.state }
             return "typing in the filter showed the Reload row; its hover … menu removed the shortcut; Reset All Shortcuts restored it"
@@ -634,8 +642,8 @@ enum SitesSettingsRealScenarios {
                 try Real.click(app, in: .sheet("Links"), identifier: field("routes-close"), "the sheet's ×")
                 try app.waitUntil("the routes sheet closed") { NativeSystemInput.control(pid: pid, in: .sheet("Links"), identifier: field("route-new")) == nil }
                 try pressInPane(app, in: .window("Links"), identifier: field("airTrafficControlInfo"), "the routes' info button")
-                try app.waitUntil("the info popover") { NativeSystemInput.shows(pid: pid, in: .popover, text: "Routes let you choose") }
-                try textContrast(app, in: .popover, name: "\(pass)-routes-info-labels", required: "Routes let you choose")
+                try app.waitUntil("the info popover") { NativeSystemInput.shows(pid: pid, in: .anywhere, text: "Routes let you choose") }
+                try textContrast(app, in: .anywhere, name: "\(pass)-routes-info-labels", required: "Routes let you choose")
                 try Real.key(app, [], .escape)
                 try app.waitUntil("Escape closes only the info popover") {
                     try settings(app).pane == .links && !NativeSystemInput.shows(pid: pid, in: .anywhere, text: "Routes let you choose")
@@ -762,10 +770,21 @@ enum SitesSettingsRealScenarios {
     /// sheet or popover pixels; the Previews sheet stays light even while the Settings window behind it is dark.
     static func textContrast(_ app: AppUnderTest, in place: AXPlace, name: String, required: String) throws {
         let pid = try Real.pid(app)
-        guard let panel = NativeSystemInput.placeFrame(pid: pid, place) else {
-            throw Check(description: "no \(place): \(NativeSystemInput.outline(pid: pid, in: place))")
+        let all = NativeSystemInput.textFrames(pid: pid, in: place)
+        let panel: CGRect, labels: [(text: String, frame: CGRect)]
+        if place == .anywhere {
+            // SwiftUI publishes its info popover as an AXWindow on some macOS versions, rather than AXPopover.
+            // Its one explanation paragraph supplies the exact screen rectangle without guessing the window role.
+            guard let explanation = all.first(where: { $0.text.contains(required) }) else { throw Check(description: "no \(required) explanation") }
+            panel = explanation.frame.insetBy(dx: -4, dy: -4)
+            labels = [explanation]
+        } else {
+            guard let frame = NativeSystemInput.placeFrame(pid: pid, place) else {
+                throw Check(description: "no \(place): \(NativeSystemInput.outline(pid: pid, in: place))")
+            }
+            panel = frame
+            labels = all.filter { panel.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }
         }
-        let labels = NativeSystemInput.textFrames(pid: pid, in: place).filter { panel.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }
         try expect(labels.contains { $0.text.contains(required) }, "\(required) is absent from \(place)")
         let url = app.shotsDirectory.appendingPathComponent("\(app.scenarioID)-\(name).png")
         let capture = Process()
@@ -898,6 +917,10 @@ enum Real {
     static func type(_ app: AppUnderTest, _ text: String) throws {
         guard active(app) else { throw Check(description: "Brk is not the active app; nothing typed") }
         try AIThreadsScenarios.type(text)
+    }
+    static func paste(_ app: AppUnderTest, _ text: String) throws {
+        guard active(app) else { throw Check(description: "Brk is not the active app; nothing pasted") }
+        try AIThreadsScenarios.paste(text)
     }
     /// Waits for a control through Accessibility; the failure lists what Accessibility saw there.
     static func control(_ app: AppUnderTest, in place: AXPlace, identifier: String? = nil, title: String? = nil, roles: [String] = [], _ what: String, timeout: Double = 8) throws -> CGRect {
