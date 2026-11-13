@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Fri, 13 Nov 2026 16:08:42 +0800
+Subject: [PATCH] Select developer panels after the frontend finishes loading
+
+---
+ brk/browser/brk_web_contents.mm | 20 +++++++-------------
+ 1 file changed, 7 insertions(+), 13 deletions(-)
+
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index bd4d989fce42a414731ee720fa93204acd50e12b..8e7bfce177b704cbcb233f397090c6e99dfc4e8e 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -72,23 +72,15 @@ NSURL* NSURLFromGURL(const GURL& url) {
+ }
+ 
+ content::WebContents* ToolsFrontend(content::WebContents* inspected) {
+-  for (const auto& host : content::DevToolsAgentHost::GetOrCreateAll()) {
+-    auto* front = host->GetWebContents();
+-    auto* window = front ? DevToolsWindow::AsDevToolsWindow(front) : nullptr;
+-    if (window && window->GetInspectedWebContents() == inspected) return front;
+-  }
+-  return nullptr;
++  auto* window = DevToolsWindow::GetInstanceForInspectedWebContents(inspected);
++  return window ? window->GetDevToolsWebContents().get() : nullptr;
+ }
+ 
+-void SelectToolsPanel(base::WeakPtr<content::WebContents> inspected, std::string panel, int tries) {
++void SelectToolsPanel(base::WeakPtr<content::WebContents> inspected, std::string panel) {
+   if (!inspected) return;
+   auto* front = ToolsFrontend(inspected.get());
+-  auto* bindings = front ? DevToolsUIBindings::ForWebContents(front) : nullptr;
+-  if (bindings && !front->IsLoading()) {
++  if (auto* bindings = front ? DevToolsUIBindings::ForWebContents(front) : nullptr) {
+     bindings->CallClientMethod("DevToolsAPI", "showPanel", base::Value(panel));
+-  } else if (tries > 0) {
+-    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(FROM_HERE,
+-        base::BindOnce(&SelectToolsPanel, inspected, panel, tries - 1), base::Milliseconds(100));
+   }
+ }
+ 
+@@ -803,7 +795,9 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+     std::string panel = [operation isEqualToString:@"network"] ? "network" : "console";
+     DevToolsWindow::OpenDevToolsWindow(_contents, profile, DevToolsOpenedByAction::kUnknown,
+         content::DevToolsManagerDelegate::DevToolsOptions(panel));
+-    SelectToolsPanel(_contents->GetWeakPtr(), panel, 100);
++    if (auto* window = DevToolsWindow::GetInstanceForInspectedWebContents(_contents)) {
++      window->SetLoadCompletedCallback(base::BindOnce(&SelectToolsPanel, _contents->GetWeakPtr(), panel));
++    }
+   }
+ }
+ 
