@@ -49,25 +49,14 @@ enum RemainingScenarios {
 
     // MARK: A116
 
-    /// Window-server key presses (R3-7's `WindowServerKeys`) into whichever Brk window is key, posted only while Brk
+    /// Window-server key presses into whichever Brk window is key, posted only while Brk
     /// is the active app and `window` (an app window number) is its key window, checked right before each press.
     static func pressSystem(_ app: AppUnderTest, _ chord: KeyChord, keyWindow number: Int) throws {
         try app.waitUntil("Brk active with window \(number) key", timeout: 4) {
             let facts = try app.native()
             return facts.appActive == true && facts.keyWindowNumber == number
         }
-        let source = CGEventSource(stateID: .hidSystemState)
-        var flags = CGEventFlags()
-        if chord.modifiers.contains(.command) { flags.insert(.maskCommand) }
-        if chord.modifiers.contains(.shift) { flags.insert(.maskShift) }
-        if chord.modifiers.contains(.option) { flags.insert(.maskAlternate) }
-        if chord.modifiers.contains(.control) { flags.insert(.maskControl) }
-        for down in [true, false] {
-            guard let event = CGEvent(keyboardEventSource: source, virtualKey: chord.key.code, keyDown: down) else { throw Check(description: "CGEvent for \(chord)") }
-            event.flags = flags
-            event.post(tap: .cghidEventTap)
-            usleep(40_000)
-        }
+        try NativeSystemInput.postSystemWide(chord)
     }
 
     static func shortcut(_ app: AppUnderTest, _ action: ActionID) throws -> ShortcutRow {
