@@ -229,13 +229,17 @@ final class LibraryNavCell: NSButton {
     private let inside = NSImageView()
     private let label: NSTextField
     private let fill = CALayer()
+    /// Arc's own picture for the page, which plays when the page opens; nil for Brk's own page (a symbol).
+    let art: LibraryPageIconView?
     private var selected = false
+    private var rendered = false
     private var hovered = false
     private var colors = LibraryColors.of(.light)
 
     init(page: LibraryPage) {
         self.page = page
         label = NSTextField(labelWithString: LibraryCopy.title(page))
+        art = LibraryPageArt.icon(page).map(LibraryPageIconView.init(icon:))
         super.init(frame: .zero)
         title = ""
         isBordered = false
@@ -255,6 +259,10 @@ final class LibraryNavCell: NSButton {
         label.lineBreakMode = .byClipping
         addSubview(inside)
         addSubview(glyph)
+        if let art {
+            glyph.isHidden = true
+            addSubview(art)
+        }
         addSubview(label)
     }
 
@@ -281,6 +289,7 @@ final class LibraryNavCell: NSButton {
     var isSelected: Bool { selected }
 
     func render(selected: Bool, colors: LibraryColors, accent: NSColor) {
+        let wasSelected = self.selected
         self.selected = selected
         self.colors = colors
         let ink = selected ? colors.navInkSelected : colors.navGlyph
@@ -288,7 +297,12 @@ final class LibraryNavCell: NSButton {
         label.textColor = selected ? colors.foregroundStrong : colors.navLabel
         glyph.contentTintColor = ink
         inside.contentTintColor = accent
-        inside.isHidden = !selected
+        inside.isHidden = !selected || art != nil
+        art?.render(outline: ink, inside: selected ? accent : nil)
+        // Arc plays the picture when its page becomes the open one; not when the Library opens on it (bin:0x10270a854
+        // plays only once the view is in a window, which it is not yet when it is made).
+        if selected, !wasSelected, rendered { art?.play() }
+        rendered = true
         setAccessibilityValue(selected ? "selected" : nil)
         paintFill()
         needsLayout = true
@@ -311,6 +325,8 @@ final class LibraryNavCell: NSButton {
         CATransaction.commit()
         glyph.frame = CGRect(x: ((bounds.width - g) / 2).rounded(), y: (l.navGlyphCenter.value - g / 2).rounded(), width: g, height: g)
         inside.frame = glyph.frame
+        let side = LibraryDraw.nav.artSide.value
+        art?.frame = CGRect(x: ((bounds.width - side) / 2).rounded(), y: (l.navGlyphCenter.value - side / 2).rounded(), width: side, height: side)
         let h = label.fittingSize.height
         label.frame = CGRect(x: 0, y: (l.navLabelCenter.value - h / 2).rounded(), width: bounds.width, height: h)
     }

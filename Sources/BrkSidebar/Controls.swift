@@ -145,9 +145,14 @@ final class GlyphButton: HoverView {
         stateChanged()
     }
 
+    /// The pointer came onto the button or left it (the Library button's picture plays its motion on both).
+    var hoverChanged: ((Bool) -> Void)?
+
     override func setHovered(_ hovered: Bool) {
+        let was = isHovered
         super.setHovered(hovered)
         if tip != nil { ArcTooltip.pointer(on: self, text: hovered && isEnabled ? tip : nil) }
+        if isHovered != was { hoverChanged?(isHovered) }
     }
 
     override func layout() {
