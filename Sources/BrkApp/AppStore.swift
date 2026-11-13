@@ -730,14 +730,7 @@ public final class AppStore {
                 NotificationCenter.default.post(name:ContextMenuCapture.willPresent,object:menu)
                 // A context menu, not a positioned popup: it opens below and right of the pointer with no row
                 // highlighted, as Arc's sidebar menus do (P12). `at` is in the root view's coordinates.
-                let point = controller.root.convert(at, to: nil)
-                if let event = NSEvent.mouseEvent(with: .rightMouseDown, location: point, modifierFlags: [],
-                                                  timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: controller.window.windowNumber,
-                                                  context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
-                    NSMenu.popUpContextMenu(menu, with: event, for: controller.root)
-                } else {
-                    menu.popUp(positioning: nil, at: at, in: controller.root)
-                }
+                menu.popUpAsContextMenu(at: at, in: controller.root)
                 popupTarget.clear()
             case .export(let document, let owner):
                 guard let window = windows[owner]?.window else { continue }

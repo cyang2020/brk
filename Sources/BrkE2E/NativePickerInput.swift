@@ -521,6 +521,34 @@ enum NativeSystemInput {
         return rows
     }
 
+    /// The screen frame (top-left origin) of the pop-up menu window the app shows (window level 101), if any. Read from
+    /// the window server, so it can be asked while the menu tracks and the app answers nothing else.
+    static func openMenuFrame(pid: Int32) -> CGRect? {
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        let level = Int(CGWindowLevelForKey(.popUpMenuWindow))
+        for info in list where info[kCGWindowOwnerPID as String] as? Int32 == pid && info[kCGWindowLayer as String] as? Int == level {
+            guard let b = info[kCGWindowBounds as String] as? [String: Double] else { continue }
+            let rect = CGRect(x: b["X"] ?? 0, y: b["Y"] ?? 0, width: b["Width"] ?? 0, height: b["Height"] ?? 0)
+            if rect.width > 20, rect.height > 20 { return rect }
+        }
+        return nil
+    }
+
+    /// The owner of the frontmost window at a screen point (top-left origin), open menus included and the system's
+    /// own layers (Dock, menu bar) left out: (pid, app name).
+    static func frontOwner(at point: CGPoint) -> (pid: Int32, name: String)? {
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        let menus = Int(CGWindowLevelForKey(.popUpMenuWindow))
+        for info in list {
+            guard let layer = info[kCGWindowLayer as String] as? Int, layer < 20 || layer == menus, let b = info[kCGWindowBounds as String] as? [String: Double],
+                  let pid = info[kCGWindowOwnerPID as String] as? Int32, (info[kCGWindowAlpha as String] as? Double ?? 1) > 0 else { continue }
+            if CGRect(x: b["X"] ?? 0, y: b["Y"] ?? 0, width: b["Width"] ?? 0, height: b["Height"] ?? 0).contains(point) {
+                return (pid, info[kCGWindowOwnerName as String] as? String ?? "?")
+            }
+        }
+        return nil
+    }
+
     /// The screen frame (top-left origin) of the sheet on one of the app's windows, if one is open.
     static func sheetFrame(pid: Int32) -> CGRect? {
         let windows = NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? []

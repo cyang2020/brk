@@ -6,14 +6,15 @@ import CoreGraphics
 import Foundation
 
 /// What a person does on a web page, with real input only: clicks and right clicks posted to the window server, keys
-/// at the HID tap. The control socket sets up (loads the fixture, sets the appearance, has the page call a dialog) and
-/// reads state; it never makes the step being tested. Menus, sheets and the find bar run in light and in dark: the
-/// user's Mac is dark and this one light, and three dark-only bugs reached the user on 2026-11-12.
+/// at the HID tap. The control socket sets up (loads the fixture, sets the theme and the appearance, has the page call
+/// a dialog) and reads state; it never makes the step being tested. Every step runs once in light; in dark each menu,
+/// sheet and the find bar is opened again, checked to be drawn dark and closed: the user's Mac is dark and this one
+/// light, and three dark-only bugs reached the user on 2026-11-12.
 enum PageRealScenarios {
     static let all = [
-        Scenario("PageReal-Menus", "real right clicks on a page, a link and an image pick rows of their menus (Back, Open Link in New Tab, Open Image in New Tab, Translate); alert, confirm, prompt and beforeunload answered with real keys and clicks; light and dark",
+        Scenario("PageReal-Menus", "real right clicks on a page, a link and an image pick rows of their menus (Back, Open Link in New Tab, Open Image in New Tab, Translate); alert, confirm, prompt and beforeunload answered with real keys and clicks; the menus and sheets drawn light and dark",
                  cefOnly: "Chromium's context menus and page dialogs", menus),
-        Scenario("PageReal-Keys", "real keys and clicks on a page: the find bar (typing, Return, Shift-Return, its arrows, Escape, ×), zoom keys, Print and Save Page As opened and cancelled, a download from a link; light and dark",
+        Scenario("PageReal-Keys", "real keys and clicks on a page: the find bar (typing, Return, Shift-Return, its arrows, Escape, ×), zoom keys, Print and Save Page As opened and cancelled, a download from a link; the find bar and sheets drawn light and dark",
                  cefOnly: "Chromium's find, zoom, outputs and downloads", keys),
     ]
 
@@ -36,28 +37,14 @@ enum PageRealScenarios {
         }
     }
 
-    private static func mouse(_ type: CGEventType, at point: CGPoint, button: CGMouseButton = .left) throws {
-        guard let event = CGEvent(mouseEventSource: CGEventSource(stateID: .hidSystemState), mouseType: type, mouseCursorPosition: point, mouseButton: button) else {
-            throw Check(description: "mouse event")
-        }
-        if type != .mouseMoved { event.setIntegerValueField(.mouseEventClickState, value: 1) }
-        event.post(tap: .cghidEventTap)
-    }
-
-    private static func press(at point: CGPoint, right: Bool = false) throws {
-        try mouse(.mouseMoved, at: point); usleep(150_000)
-        try mouse(right ? .rightMouseDown : .leftMouseDown, at: point, button: right ? .right : .left); usleep(70_000)
-        try mouse(right ? .rightMouseUp : .leftMouseUp, at: point, button: right ? .right : .left); usleep(200_000)
-    }
-
-    /// A real click (or right click) at a screen point, posted only while one of this Brk's windows is the frontmost
-    /// window there.
+    /// A real click (or right click) at a screen point, posted only while one of this Brk's windows (or its sheet) is
+    /// the frontmost window there.
     private static func click(_ app: AppUnderTest, screen at: CGPoint, right: Bool = false) throws {
         try front(app)
         guard PhysicalPointer.frontmost(at: at)?.pid == (try pid(app)) else {
             throw Check(description: "another window is in front of Brk at \(at) (\(String(describing: PhysicalPointer.frontmost(at: at)))); nothing posted")
         }
-        try press(at: at, right: right)
+        try PhysicalPointer.post(clickAt: at, right: right)
     }
 
     private static func click(_ app: AppUnderTest, _ point: CGPoint, right: Bool = false) throws {
@@ -71,36 +58,20 @@ enum PageRealScenarios {
         usleep(150_000)
     }
 
-    private static let letters: [Character: CGKeyCode] = Dictionary(uniqueKeysWithValues: zip("asdfhgzxcvbqwerytuiopnmljk",
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 32, 34, 31, 35, 45, 46, 37, 38, 40] as [CGKeyCode]))
-
-    /// Letters typed as a keyboard types them (key codes at the HID tap, Shift held for a capital), into whatever has
-    /// Brk's focus. Key events carrying only a character do not reach AppKit's text fields.
+    /// Text typed as a keyboard types it, into whatever has Brk's focus (a sheet's field or the find bar).
     private static func type(_ app: AppUnderTest, _ text: String) throws {
         try front(app)
-        let source = CGEventSource(stateID: .hidSystemState)
-        func post(_ code: CGKeyCode, _ down: Bool, _ flags: CGEventFlags) {
-            guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { return }
-            event.flags = flags
-            event.post(tap: .cghidEventTap)
-            usleep(15_000)
-        }
-        for character in text {
-            let lower = Character(character.lowercased())
-            guard let code = letters[lower] else { throw Check(description: "no key for \(character)") }
-            let shift = character != lower
-            if shift { post(56, true, .maskShift) }
-            post(code, true, shift ? .maskShift : []); post(code, false, shift ? .maskShift : [])
-            if shift { post(56, false, []) }
-        }
+        try PhysicalKeys.strike(text)
         usleep(150_000)
     }
 
     // MARK: Pictures
 
     /// RGBA bytes of a screen rect (top-left origin) from a fresh capture saved as `<scenario>-<name>.png`: menus are
-    /// windows of their own that the control socket's screenshots leave out.
+    /// windows of their own that the control socket's screenshots leave out. Refused while another app's window covers
+    /// part of the rect: the picture is whatever the shared screen shows there.
     private static func capture(_ app: AppUnderTest, _ rect: CGRect, _ name: String) throws -> (bytes: [UInt8], width: Int) {
+        try expectUncovered(app, rect, name)
         let url = app.shotsDirectory.appendingPathComponent("\(app.scenarioID)-\(name).png")
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
@@ -133,24 +104,34 @@ enum PageRealScenarios {
         return values.isEmpty ? 0 : values[values.count / 2]
     }
 
-    /// Light things are light and dark things dark: the background of a menu or sheet drawn in `scheme`.
+    /// Light things are light and dark things dark: the background of a menu, sheet or the find bar drawn in `scheme`.
     private static func expectDrawn(_ what: String, brightness: Int, in scheme: Scheme) throws {
         try expect(scheme == .dark ? brightness < 110 : brightness > 150, "\(what) is drawn with brightness \(brightness) in \(scheme)")
     }
 
-    // MARK: Menus
-
-    /// The screen frame (top-left origin) of the pop-up menu window the app shows (window level 101), if any.
-    private static func menuFrame(pid: Int32) -> CGRect? {
-        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
-        let level = Int(CGWindowLevelForKey(.popUpMenuWindow))
-        for info in list where info[kCGWindowOwnerPID as String] as? Int32 == pid && info[kCGWindowLayer as String] as? Int == level {
-            guard let b = info[kCGWindowBounds as String] as? [String: Double] else { continue }
-            let rect = CGRect(x: b["X"] ?? 0, y: b["Y"] ?? 0, width: b["Width"] ?? 0, height: b["Height"] ?? 0)
-            if rect.width > 20, rect.height > 20 { return rect }
-        }
-        return nil
+    /// How many pixels of RGBA bytes stand more than 90 levels from `background`: a word's glyphs, which a caret alone
+    /// (about 2 by 36 pixels at 2x) never reaches.
+    private static func inked(_ bytes: [UInt8], from background: Int) -> Int {
+        var count = 0
+        for i in stride(from: 0, to: bytes.count - 3, by: 4) where abs((Int(bytes[i]) + Int(bytes[i + 1]) + Int(bytes[i + 2])) / 3 - background) > 90 { count += 1 }
+        return count
     }
+
+    /// Throws unless this run's Brk owns the frontmost window (its menus included) at the middle and near each corner of
+    /// a screen rect (top-left origin).
+    private static func expectUncovered(_ app: AppUnderTest, _ rect: CGRect, _ what: String) throws {
+        let pid = try pid(app)
+        let inner = rect.insetBy(dx: min(12, rect.width / 4), dy: min(12, rect.height / 4))
+        for point in [CGPoint(x: inner.midX, y: inner.midY), CGPoint(x: inner.minX, y: inner.minY), CGPoint(x: inner.maxX, y: inner.minY),
+                      CGPoint(x: inner.minX, y: inner.maxY), CGPoint(x: inner.maxX, y: inner.maxY)] {
+            let owner = NativeSystemInput.frontOwner(at: point)
+            guard owner?.pid == pid else {
+                throw Check(description: "another window (\(owner?.name ?? "none")) is in front of Brk's \(what) at \(point): no picture taken")
+            }
+        }
+    }
+
+    // MARK: Menus
 
     /// After a real right click: waits for the menu, checks it is drawn in `scheme`, then picks its row `row` with a real
     /// click (`nil`: a real Escape). Returns the menu's rows and its height on screen. Nothing here asks the app anything
@@ -161,12 +142,15 @@ enum PageRealScenarios {
         var frame: CGRect?, rows: [(title: String, frame: CGRect, enabled: Bool)] = []
         let deadline = uptime() + 6
         while uptime() < deadline {
-            frame = menuFrame(pid: pid)
+            frame = NativeSystemInput.openMenuFrame(pid: pid)
             rows = frame.map { NativeSystemInput.openMenuRows(pid: pid, in: $0) } ?? []
             if frame != nil, !rows.isEmpty { break }
             usleep(100_000)
         }
         guard let frame else { throw Check(description: "no menu opened for \(shot)") }
+        defer {
+            if NativeSystemInput.openMenuFrame(pid: pid) != nil { PhysicalKeys.press(KeyChord([], .escape), pid: pid) }
+        }
         guard !rows.isEmpty else {
             try NativeSystemInput.postSystemWide(KeyChord([], .escape))
             throw Check(description: "the \(shot) menu is on screen at \(frame) but Accessibility lists no rows")
@@ -181,15 +165,13 @@ enum PageRealScenarios {
             }
             let point = CGPoint(x: target.frame.midX, y: target.frame.midY)
             guard frame.contains(point) else { throw Check(description: "\(row) at \(point) is outside its menu \(frame)") }
-            try mouse(.mouseMoved, at: point); usleep(250_000)
-            try mouse(.leftMouseDown, at: point); usleep(70_000)
-            try mouse(.leftMouseUp, at: point)
+            try PhysicalPointer.post(clickAt: point)
         } else {
             try NativeSystemInput.postSystemWide(KeyChord([], .escape))
         }
         let closed = uptime() + 4
-        while menuFrame(pid: pid) != nil, uptime() < closed { usleep(100_000) }
-        try expect(menuFrame(pid: pid) == nil, "the \(shot) menu stayed open after \(row ?? "Escape")")
+        while NativeSystemInput.openMenuFrame(pid: pid) != nil, uptime() < closed { usleep(100_000) }
+        try expect(NativeSystemInput.openMenuFrame(pid: pid) == nil, "the \(shot) menu stayed open after \(row ?? "Escape")")
         try expectDrawn("the \(shot) menu", brightness: median(picture.bytes), in: scheme)
         return (titles, frame.height)
     }
@@ -230,9 +212,23 @@ enum PageRealScenarios {
         try app.waitUntil(what, timeout: timeout) { try current(app).url == url }
     }
 
+    /// The current Space on a theme that follows macOS's light or dark mode, as every theme made in the theme editor or
+    /// imported from Arc with a light and a dark style does (the user's). A fresh profile's default theme resolves a
+    /// light palette even when macOS is dark, so using it for both passes never exercised the bar's dark colors.
+    private static func followSystemTheme(_ app: AppUnderTest) throws {
+        var theme = SpaceTheme.default
+        var pair = ThemeVariants(legacy: theme)
+        pair.selection = .auto
+        theme.variants = pair
+        try app.dispatch(.space(.update(try app.view().space.id, title: nil, icon: nil, theme: theme)))
+    }
+
     private static func scheme(_ app: AppUnderTest, _ scheme: Scheme) throws {
         try app.perform(.simulateSystemAppearance(scheme))
-        try app.waitUntil("the app drawn \(scheme)") { try app.native().effectiveAppearance == scheme.rawValue }
+        try app.waitUntil("the app and the Space's theme drawn \(scheme)") {
+            let appearance = try app.native().effectiveAppearance, theme = try app.view().theme.scheme
+            return appearance == scheme.rawValue && theme == scheme
+        }
     }
 
     // MARK: PageReal-Menus
@@ -240,19 +236,20 @@ enum PageRealScenarios {
     @Sendable static func menus(_ app: AppUnderTest) throws {
         try app.requireCEF("real menus")
         defer { try? app.perform(.simulateSystemAppearance(nil)) }
+        try followSystemTheme(app)
         let start = app.site.url("page-real.html")
         let item = try app.load(start)
         let page = PageID(window: try XCTUnwrapValue(app.window), item: item)
         try app.waitForPageInput(page, at: start)
-        for appearance in [Scheme.light, .dark] {
-            try scheme(app, appearance)
-            try contextMenus(app, page, start, appearance)
-            try dialogs(app, page, appearance)
-            try beforeUnload(app, page, appearance)
-        }
+        try scheme(app, .light)
+        try contextMenus(app, page, start)
+        try dialogs(app, page)
+        try beforeUnload(app, page)
+        try scheme(app, .dark)
+        try drawnDark(app, page, start)
         try translate(app)
-        // A guarded page the person has used goes with its tab on a real ⌘W, Brk does not ask (by design), and its
-        // browser closes; one more is left open for the quit after the scenario, which must not wait on it either.
+        // The current tab-close path does not ask a guarded page (the two-phase close is tracked separately). Its
+        // browser must still close; another is left for the quit after this scenario, which must not wait on it either.
         let closing = try guardedTab(app, "close=1")
         try key(app, .command, .w)
         try app.waitUntil("the guarded tab gone") { !allTabs(try app.view()).contains { $0.id == closing.item } }
@@ -270,12 +267,17 @@ enum PageRealScenarios {
         return page
     }
 
+    /// The page back on `url` (setup between steps).
+    private static func go(_ app: AppUnderTest, _ page: PageID, _ url: URL) throws {
+        guard try current(app).url != url else { return }
+        try app.evaluate(page, "location.href=\(String(decoding: try JSONEncoder().encode(url.absoluteString), as: UTF8.self))")
+        try app.waitForPageInput(page, at: url)
+    }
+
     /// The page, link and image menus, each from a real right click, a row picked with a real click; Escape closes one.
-    private static func contextMenus(_ app: AppUnderTest, _ page: PageID, _ start: URL, _ appearance: Scheme) throws {
-        if try current(app).url != start {
-            try app.evaluate(page, "location.href=\(String(decoding: try JSONEncoder().encode(start.absoluteString), as: UTF8.self))")
-            try app.waitForPageInput(page, at: start)
-        }
+    private static func contextMenus(_ app: AppUnderTest, _ page: PageID, _ start: URL) throws {
+        let appearance = Scheme.light
+        try go(app, page, start)
         // A real click on the link gives the tab a page to go back to.
         let linked = app.site.url("page2.html?from=link")
         try click(app, try element(app, page, "#link"))
@@ -296,7 +298,7 @@ enum PageRealScenarios {
                    "the page menu opened low is cut off: \(low.height) pt tall against \(high.height) pt opened high")
         try waitURL(app, start, "Back from the page menu")
         try app.waitForPageInput(page, at: start)
-        app.passed("\(appearance): Escape closed the page menu; opened low it showed whole and its Back went back")
+        app.passed("Escape closed the page menu; opened low it showed whole and its Back went back")
 
         // Open Link in New Tab: a new tab with the link, the page stays.
         try click(app, try element(app, page, "#link"), right: true)
@@ -311,8 +313,8 @@ enum PageRealScenarios {
         let imageRows = try choose(app, "Open Image in New Tab", in: appearance, shot: "image-menu")
         try app.waitUntil("a tab for the image") { allTabs(try app.view()).contains { $0.url == image } }
         try closeOthers(app, keeping: page)
-        app.note("\(appearance) page menu: \(high.rows.joined(separator: ", ")); link menu: \(linkRows.rows.joined(separator: ", ")); image menu: \(imageRows.rows.joined(separator: ", "))")
-        app.passed("\(appearance): link and image menu rows opened tabs")
+        app.note("page menu: \(high.rows.joined(separator: ", ")); link menu: \(linkRows.rows.joined(separator: ", ")); image menu: \(imageRows.rows.joined(separator: ", "))")
+        app.passed("link and image menu rows opened tabs")
     }
 
     /// Closes every tab of Today but `page`'s (setup between steps, not a step).
@@ -344,6 +346,7 @@ enum PageRealScenarios {
     /// in `scheme` and kept as a picture.
     private static func sheetDrawn(_ app: AppUnderTest, _ name: String, _ appearance: Scheme) throws {
         app.sleep(0.5)   // the sheet's slide-in
+        try front(app)
         let pid = try pid(app)
         var frame: CGRect?
         try app.waitUntil("the \(name) sheet's place on screen") { frame = NativeSystemInput.sheetFrame(pid: pid); return frame != nil }
@@ -352,7 +355,8 @@ enum PageRealScenarios {
     }
 
     /// alert, confirm and prompt from the page, answered with real Return, clicks, typing and Escape.
-    private static func dialogs(_ app: AppUnderTest, _ page: PageID, _ appearance: Scheme) throws {
+    private static func dialogs(_ app: AppUnderTest, _ page: PageID) throws {
+        let appearance = Scheme.light
         try app.evaluate(page, "setTimeout(()=>{alert('Hello from the page');document.title='alert:closed'},0)")
         try app.waitUntil("the alert's sheet") { try sheet(app) }
         try sheetDrawn(app, "alert", appearance)
@@ -386,21 +390,25 @@ enum PageRealScenarios {
         try app.waitUntil("the second prompt's sheet") { try sheet(app) }
         try key(app, [], .escape)
         try app.waitUntil("Escape answers null") { try current(app).title == "prompt:null" }
-        app.passed("\(appearance): alert, confirm and prompt answered with real keys and clicks")
+        app.passed("alert, confirm and prompt answered with real keys and clicks")
+    }
+
+    /// The fixture again with ?guard=1, used with a real click: Chromium asks only on a page the person has used.
+    private static func openGuarded(_ app: AppUnderTest, _ page: PageID) throws -> URL {
+        let guarded = app.site.url("page-real.html?guard=1")
+        try go(app, page, guarded)
+        try click(app, try blank(app, page))
+        return guarded
     }
 
     /// A page that asks before it goes: Reload with a real ⌘R, Stay keeps it, Reload reloads; a real click on a link
     /// asks Leave this page?, Leave goes.
-    private static func beforeUnload(_ app: AppUnderTest, _ page: PageID, _ appearance: Scheme) throws {
-        let guarded = app.site.url("page-real.html?guard=1")
-        try app.evaluate(page, "location.href=\(String(decoding: try JSONEncoder().encode(guarded.absoluteString), as: UTF8.self))")
-        try app.waitForPageInput(page, at: guarded)
-        // Chromium asks only on a page the person has used: a real click in it.
-        try click(app, try blank(app, page))
+    private static func beforeUnload(_ app: AppUnderTest, _ page: PageID) throws {
+        let guarded = try openGuarded(app, page)
         try app.evaluate(page, "marker='kept'")
         try key(app, .command, .r)
         try app.waitUntil("Reload this page? after ⌘R") { try sheet(app) }
-        try sheetDrawn(app, "reload-asks", appearance)
+        try sheetDrawn(app, "reload-asks", .light)
         let words = try sheetTexts(app)
         try expect(words.contains("Reload this page?") && words.contains("Changes you made may not be saved."), "the reload sheet says \(words)")
         try clickButton(app, "Stay")
@@ -413,7 +421,7 @@ enum PageRealScenarios {
         try app.waitUntil("Reload reloads the page") { try !sheet(app) }
         try app.waitForPageInput(page, at: guarded)
         try app.waitUntil("a fresh document") { try read(app, page, "marker") == "fresh" }
-        app.passed("\(appearance): ⌘R on a guarded page asked; Stay kept it, Reload reloaded")
+        app.passed("⌘R on a guarded page asked; Stay kept it, Reload reloaded")
 
         let away = app.site.url("page2.html?from=away")
         try click(app, try element(app, page, "#away"))
@@ -421,7 +429,38 @@ enum PageRealScenarios {
         try key(app, [], .returnKey)
         try waitURL(app, away, "Leave goes to the link")
         try app.waitForPageInput(page, at: away)
-        app.passed("\(appearance): a link on a guarded page asked; Return left")
+        app.passed("a link on a guarded page asked; Return left")
+    }
+
+    /// In dark: the page, link and image menus each opened with a real right click and closed with Escape; the alert,
+    /// the prompt and Reload this page? each opened and answered. Each must be drawn dark.
+    private static func drawnDark(_ app: AppUnderTest, _ page: PageID, _ start: URL) throws {
+        try go(app, page, start)
+        try click(app, try blank(app, page), right: true)
+        try choose(app, nil, in: .dark, shot: "page-menu")
+        try click(app, try element(app, page, "#link"), right: true)
+        try choose(app, nil, in: .dark, shot: "link-menu")
+        try click(app, try element(app, page, "#img"), right: true)
+        try choose(app, nil, in: .dark, shot: "image-menu")
+
+        try app.evaluate(page, "setTimeout(()=>{alert('Hello from the page');document.title='alert:closed'},0)")
+        try app.waitUntil("the alert's sheet") { try sheet(app) }
+        try sheetDrawn(app, "alert", .dark)
+        try key(app, [], .returnKey)
+        try app.waitUntil("Return answers the alert") { try current(app).title == "alert:closed" }
+        try app.evaluate(page, "setTimeout(()=>{document.title='prompt:'+prompt('Your name?','Brk')},0)")
+        try app.waitUntil("the prompt's sheet") { try sheet(app) }
+        try sheetDrawn(app, "prompt", .dark)
+        try key(app, [], .escape)
+        try app.waitUntil("Escape answers null") { try current(app).title == "prompt:null" }
+
+        _ = try openGuarded(app, page)
+        try key(app, .command, .r)
+        try app.waitUntil("Reload this page? after ⌘R") { try sheet(app) }
+        try sheetDrawn(app, "reload-asks", .dark)
+        try clickButton(app, "Stay")
+        try app.waitUntil("Stay closes the sheet") { try !sheet(app) }
+        app.passed("dark: the page, link and image menus, the alert, the prompt and Reload this page? are drawn dark")
     }
 
     /// Translate to English from the page menu of a French page, with the fixture agent, in dark.
@@ -445,6 +484,7 @@ enum PageRealScenarios {
     @Sendable static func keys(_ app: AppUnderTest) throws {
         try app.requireCEF("real keys")
         defer { try? app.perform(.simulateSystemAppearance(nil)) }
+        try followSystemTheme(app)
         let start = app.site.url("page-real.html")
         let item = try app.load(start)
         let page = PageID(window: try XCTUnwrapValue(app.window), item: item)
@@ -465,31 +505,34 @@ enum PageRealScenarios {
         try app.waitUntil(what) { let f = try find(app); return f?.count == 3 && f?.searching == false && f?.ordinal == ordinal }
     }
 
-    /// The find bar with real typing, Return, Shift-Return, its arrows and Escape (light) or × (dark); its query must
-    /// read against its background in either appearance.
+    /// The find bar with real typing. In light: Return, Shift-Return, its arrows and Escape; in dark only the bar drawn
+    /// and ×. The bar must be drawn in the appearance and its query must stand out from it.
     private static func find(_ app: AppUnderTest, _ page: PageID, _ appearance: Scheme) throws {
         try key(app, .command, .f)
         try app.waitUntil("the find bar's field focused") { try app.native().firstResponder.hasSuffix(":" + ViewID.findQuery.identifier) }
         try type(app, "needle")
         try matches(app, ordinal: 1, "three matches typed")
-        try key(app, [], .returnKey)
-        try matches(app, ordinal: 2, "Return steps to the next match")
-        try key(app, .shift, .returnKey)
-        try matches(app, ordinal: 1, "Shift-Return steps back")
+        if appearance == .light {
+            try key(app, [], .returnKey)
+            try matches(app, ordinal: 2, "Return steps to the next match")
+            try key(app, .shift, .returnKey)
+            try matches(app, ordinal: 1, "Shift-Return steps back")
+            let facts = try app.native()
+            let next = try visible(facts, .findNext).frame, previous = try visible(facts, .findPrevious).frame
+            try click(app, CGPoint(x: next.midX, y: next.midY))
+            try matches(app, ordinal: 2, "the down arrow steps on")
+            try click(app, CGPoint(x: previous.midX, y: previous.midY))
+            try matches(app, ordinal: 1, "the up arrow steps back")
+        }
         let facts = try app.native()
-        let next = try visible(facts, .findNext).frame, previous = try visible(facts, .findPrevious).frame
-        try click(app, CGPoint(x: next.midX, y: next.midY))
-        try matches(app, ordinal: 2, "the down arrow steps on")
-        try click(app, CGPoint(x: previous.midX, y: previous.midY))
-        try matches(app, ordinal: 1, "the up arrow steps back")
-        let bar = try visible(try app.native(), .findBar).frame, query = try visible(try app.native(), .findQuery).frame
-        let pixels = try SidebarReviewScenarios.pixels(app, "\(appearance)-find-bar", bar.insetBy(dx: 4, dy: 4))
-        let background = median(pixels)
-        let text = try SidebarReviewScenarios.pixels(app, "\(appearance)-find-bar", query.intersection(bar))
-        var contrast = 0
-        for i in stride(from: 0, to: text.count - 3, by: 4) { contrast = max(contrast, abs((Int(text[i]) + Int(text[i + 1]) + Int(text[i + 2])) / 3 - background)) }
-        try expect(contrast > 90, "the find query barely shows in \(appearance): \(contrast) levels from the bar's \(background)")
-        app.note("\(appearance) find bar: background \(background), query \(contrast) levels from it")
+        let bar = try visible(facts, .findBar).frame, query = try visible(facts, .findQuery).frame
+        let background = median(try SidebarReviewScenarios.pixels(app, "\(appearance)-find-bar", bar.insetBy(dx: 4, dy: 4)))
+        try expectDrawn("the find bar", brightness: background, in: appearance)
+        // "needle" at 2x stands out by several hundred pixels; the caret after it by under a hundred.
+        let ink = inked(try SidebarReviewScenarios.pixels(app, "\(appearance)-find-query", query.intersection(bar)), from: background)
+        try expect(Double(ink) > 62.5 * facts.backingScale * facts.backingScale,
+                   "the find query barely shows in \(appearance): \(ink) pixels stand out from the bar's \(background)")
+        app.note("\(appearance) find bar: background \(background), \(ink) pixels of the query stand out from it")
         if appearance == .light {
             try key(app, [], .escape)
         } else {
@@ -498,19 +541,30 @@ enum PageRealScenarios {
         }
         try app.waitUntil("the find bar closed") { try find(app) == nil }
         try app.waitUntil("the page has the keys back") { try app.native().focusedPage == page }
-        app.passed("\(appearance): find with real typing, Return, Shift-Return, arrows and \(appearance == .light ? "Escape" : "×")")
+        app.passed(appearance == .light ? "light: find with real typing, Return, Shift-Return, arrows and Escape" : "dark: the find bar drawn dark, its query readable, × closed it")
     }
 
     private static func outputStage(_ app: AppUnderTest) throws -> OutputStage? { try app.view().output?.stage }
 
-    /// ⌘P and ⇧⌘S open their sheets; a real click on Cancel closes each with nothing written.
+    private static let outputStatus = ViewID.tabTool("output-status")
+
+    /// ⌘P and ⇧⌘S open their sheets; a real click on Cancel closes each with nothing written and nothing said (Arc
+    /// shows nothing after a cancel). The status line while the print sheet is open must read over the page.
     private static func outputs(_ app: AppUnderTest, _ page: PageID, _ appearance: Scheme) throws {
         try key(app, .command, .p)
         try app.waitUntil("the print sheet after ⌘P", timeout: 20) { try sheet(app) }
         try sheetDrawn(app, "print", appearance)
+        try app.waitUntil("the status line while printing") { isShown(try app.native(), outputStatus) }
+        let facts = try app.native()
+        let line = try visible(facts, outputStatus).frame
+        let pixels = try SidebarReviewScenarios.pixels(app, "\(appearance)-print-status", line.insetBy(dx: 2, dy: 2))
+        let ink = inked(pixels, from: median(pixels))
+        try expect(Double(ink) > 37.5 * facts.backingScale * facts.backingScale,
+                   "the status line's words barely show in \(appearance): \(ink) pixels stand out from its background \(median(pixels))")
         try clickButton(app, "Cancel")
         try app.waitUntil("Print cancelled", timeout: 10) { if case .terminal(.cancelled)? = try outputStage(app) { return true }; return false }
         try app.waitUntil("the print sheet gone") { try !sheet(app) }
+        try expect(!isShown(try app.native(), outputStatus), "a status line stays after Print was cancelled")
 
         try key(app, [.shift, .command], .s)
         try app.waitUntil("the save sheet after ⇧⌘S", timeout: 10) { try app.native().sheetClass?.contains("SavePanel") == true }
@@ -518,7 +572,8 @@ enum PageRealScenarios {
         try clickButton(app, "Cancel")
         try app.waitUntil("Save Page As cancelled", timeout: 10) { if case .terminal(.cancelled)? = try outputStage(app) { return true }; return false }
         try app.waitUntil("the save sheet gone") { try !sheet(app) }
-        app.passed("\(appearance): ⌘P and ⇧⌘S opened their sheets; Cancel closed them")
+        try expect(!isShown(try app.native(), outputStatus), "a status line stays after Save Page As was cancelled")
+        app.passed("\(appearance): ⌘P and ⇧⌘S opened their sheets drawn \(appearance); Cancel closed them and nothing was said")
     }
 
     /// ⌘= twice, ⌘- and ⌘0 with the page focused.

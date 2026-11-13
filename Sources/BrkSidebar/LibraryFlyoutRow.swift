@@ -145,7 +145,7 @@ final class LibraryFlyoutRowView: HoverView, NSDraggingSource {
         ArcTooltip.pointer(on: self, text: nil)
         isPressed = true
         let menu = LibraryFlyoutMenu.menu(for: item, dispatch: dispatch)
-        menu.popUp(positioning: nil, at: local(event), in: self)
+        NSMenu.popUpContextMenu(menu, with: event, for: self)
         isPressed = false
     }
 }
