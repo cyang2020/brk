@@ -227,6 +227,15 @@ Open it and drag **Brk** into Applications. Builds are signed with a Developer I
 
 **2026-11-13**
 
+- **Site controls reopened after closing, or Command-W closed the tab behind them.** Clicking outside now closes the site controls. Command-W closes the popover while keeping the tab open. Escape closes a Settings explanation and leaves Settings open. Build 40.
+- **Some text became unreadable in dark mode.** Little Arc addresses, headings in site controls, dialog fields and keycaps, Library labels, AI conversation details, and Space names now stay readable against their backgrounds. Build 40.
+- **Onboarding tiles and badges were hard to read.** Favorites letter tiles keep enough contrast with white letters. The Recommended badge uses a lighter accent in dark mode. Build 40.
+- **Settings and menu commands did nothing after the last browser window closed.** Those commands now reopen a browser window and show their page or panel. Build 40.
+- **Reload stopped working after choosing Stay.** Refusing a reload now clears the pending reload, so the next Command-R works. Page dialogs identify the site instead of displaying the full address. Build 40.
+- **Context menus lost actions near the bottom of the screen.** Page menus and Library download menus now open above the pointer when there is not enough room below it. Build 40.
+- **Canceling Print or Save left a status notice on the page.** A cancellation that leaves no file now clears the notice. Successful saves show readable, centered text. Warnings about files that remain on disk stay visible. Build 40.
+- **Some Settings controls had no accessible button names.** Profile, app icon, and Air Traffic Control controls now expose named buttons. Disabled controls stay inactive. Build 40.
+
 - **Empty Brk windows appeared in Mission Control.** Chromium’s transparent page hosts were listed as separate windows. Brk now keeps them out of Mission Control and window cycling, including after leaving full screen. Build 38.
 - **Dark pages had a pale, rough rim around their rounded corners.** The white card fill and shadow backing showed through the edge pixels. They now stop inside the page edge, so the corner blends with the page and Space. Build 38.
 
