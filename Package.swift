@@ -86,7 +86,9 @@ let package = Package(
         .testTarget(name: "BrkOverlaysTests", dependencies: ["BrkBase", "BrkDomain", "BrkOverlays"], swiftSettings: strict),
         .testTarget(name: "BrkLibraryTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "BrkLibrary"], swiftSettings: strict),
         .testTarget(name: "BrkSettingsTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "BrkSettings"], swiftSettings: strict),
-        .testTarget(name: "BrkContentTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "BrkContent", "BrkSidebar"], swiftSettings: strict),
+        // BrkApp, BrkSettings and BrkEngine for the pointer sweep over the surfaces the app hosts in their own windows.
+        .testTarget(name: "BrkContentTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkUIKit", "BrkContent", "BrkSidebar", "BrkOverlays",
+                                                            "BrkSettings", "BrkEngine", "BrkApp", "BrkTheme"], swiftSettings: strict),
         .testTarget(name: "BrkControlTests", dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkControl"], swiftSettings: strict),
         .testTarget(name: "BrkThemeTests", dependencies: ["BrkDomain", "BrkTheme"], swiftSettings: strict),
         .testTarget(name: "BrkEngineTests", dependencies: ["BrkBase", "BrkEngine"], swiftSettings: strict),

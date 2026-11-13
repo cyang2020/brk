@@ -1,8 +1,7 @@
 import Foundation
 
 /// The page side of find's selection capture, scoped search and replacement: one expression whose value is a function taking a JSON request
-/// and answering JSON. CEF's renderer evaluates it as each document's context is created and keeps the function, never on window; BrkCore
-/// keeps it on the global of Chrome's isolated world for the document. Shared by both engines, so it lives outside CefKit.
+/// and answering JSON. BrkCore keeps the function on the global of Chromium's isolated world for each document.
 public enum FindEditorScript {
     public static let source = #"""
 (() => {

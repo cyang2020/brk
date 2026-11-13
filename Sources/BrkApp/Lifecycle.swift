@@ -8,7 +8,7 @@ import os
 
 /// Launch and quit order. The app delegate.
 ///
-/// Launch (main.swift has already created the engine, which for CEF installed CEFApplication as NSApp):
+/// Launch (main.swift has already prepared BrkCore and its NSApplication class):
 /// 1. data directory; `StateFile.read()`; `StateCodec.restore` (quarantine on `.rejected` or an unreadable file).
 /// 2. `AppStore`, `KeyRouter` as the engine's delegate, `MainMenu`.
 /// 3. `store.start()`: windows from the restored snapshot, `engine.reconcile(snapshot.pages)` (only visible tabs are
@@ -17,12 +17,12 @@ import os
 /// 5. control server, when LaunchOptions.controlSocket is set; SIGTERM -> the same ordered quit as Cmd+Q.
 ///
 /// Quit (Cmd+Q through the reducer as `AppEffect.quit`, the Dock menu, logout, SIGTERM - every path reaches
-/// `applicationShouldTerminate`, because CEFEngine removed CefSwift's terminate handler):
+/// `applicationShouldTerminate`):
 /// 1. `.terminateLater`; stop the sweep timer and the control server's accept loop (the in-flight `quit` reply is
 ///    already written).
 /// 2. `store.flush()` - state is saved before anything risky happens.
-/// 3. `await engine.shutdown()` - views back, browsers closed (awaiting OnBeforeClose), CEF shut down.
-/// 4. `.clean` -> `NSApp.reply(toApplicationShouldTerminate: true)`, exit status 0.
+/// 3. `await engine.shutdown()` - page views detached and Chromium browsers closed.
+/// 4. `.clean` -> `NSApp.reply(toApplicationShouldTerminate: true)`, then Chromium finishes runtime teardown.
 ///    `.timedOut(unclosed)` -> the controlled failure: log every unclosed page, write `shutdown-incomplete.log` in
 ///    the data directory (what the next launch and the e2e report can read), and `exit(Lifecycle.shutdownTimedOutStatus)`.
 ///    The runtime is left un-shut-down on purpose; the OS reclaims the helpers. N4 and the per-scenario quit check

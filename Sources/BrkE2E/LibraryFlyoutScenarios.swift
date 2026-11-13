@@ -11,7 +11,7 @@ import Foundation
 /// download opens; a running download's disc, ring and ×.
 enum LibraryFlyoutScenarios {
     static let all = [
-        Scenario("LibraryFlyout-Hover", "resting the real pointer on the Library button opens the newest four downloads above it as Arc does; a real click on a finished one previews it", hover),
+        Scenario("LibraryFlyout-Hover", "resting the real pointer on the Library button opens the newest four downloads above it as Arc does; a real click on a finished one previews it; a real right click on the lowest row opens its whole menu", hover),
         Scenario("LibraryFlyout-Running", "a running download shows its disc on the button and a ring, progress and × in its row; the real × cancels it", running),
         Scenario("LibraryFlyout-Flight", "a real click on a download link throws the download icon from the click into the Library button; with the sidebar hidden it lands in Arc's bin at the corner", flight),
     ]
@@ -168,6 +168,32 @@ enum LibraryFlyoutScenarios {
         try PhysicalPointer.click(app, at: try screen(app, centre(close)), window: app.window!)
         try app.waitUntil("the preview closed", timeout: 3) { !isShown(try app.native(), .tabTool("library-item-preview")) }
         app.passed("a real click on a finished download previews the downloaded file; its × closes the preview")
+
+        // A real right click low on the newest row, at the bottom of the sidebar: its menu shows whole, down to Move to
+        // Trash. One that kept its top at the pointer ran off the screen behind a scroll arrow.
+        try openList(app)
+        let lowest = try visible(app.native(), row(3)).frame
+        let pid = try XCTUnwrapValue(app.hello?.pid)
+        try PhysicalPointer.rightClick(app, at: try screen(app, CGPoint(x: lowest.minX + 90, y: lowest.maxY - 8)), window: app.window!)
+        // Nothing asks the app while the menu tracks: it answers the control socket only once the menu has closed.
+        var menu: CGRect?, rows: [(title: String, frame: CGRect, enabled: Bool)] = []
+        let deadline = ProcessInfo.processInfo.systemUptime + 6
+        while ProcessInfo.processInfo.systemUptime < deadline {
+            menu = NativeSystemInput.openMenuFrame(pid: pid)
+            rows = menu.map { NativeSystemInput.openMenuRows(pid: pid, in: $0) } ?? []
+            if menu != nil, !rows.isEmpty { break }
+            usleep(100_000)
+        }
+        try NativeSystemInput.postSystemWide(KeyChord([], .escape))
+        let closing = ProcessInfo.processInfo.systemUptime + 4
+        while NativeSystemInput.openMenuFrame(pid: pid) != nil, ProcessInfo.processInfo.systemUptime < closing { usleep(100_000) }
+        let shown = try XCTUnwrapValue(menu)
+        let trash = rows.first { $0.title == "Move to Trash" }
+        let screenHeight = CGDisplayBounds(CGMainDisplayID()).height
+        try expect(trash.map { shown.insetBy(dx: -1, dy: -1).contains($0.frame) } ?? false && shown.maxY <= screenHeight,
+                   "the row's menu is cut off: menu \(shown) on a screen \(screenHeight) tall, rows \(rows.map { "\($0.title) \($0.frame)" })")
+        app.note("the newest row's menu at \(shown): \(rows.map(\.title).joined(separator: ", "))")
+        app.passed("a real right click on the lowest row opens its whole menu")
     }
 
     // MARK: The download flight (Arc's DownloadToLibrary)

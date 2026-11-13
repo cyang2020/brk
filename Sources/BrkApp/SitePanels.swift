@@ -66,7 +66,10 @@ final class SitePanels: NSObject, NSPopoverDelegate {
             frame.addSubview(background, positioned: .below, relativeTo: host)
         }
         entry.monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]) { [weak self] event in
-            self?.handle(event, for: id) ?? event
+            // `handle` answers nil to keep the event (the site button's press, Escape, Cmd+W); `self?.handle(…) ?? event`
+            // turned that nil back into the event, so the press reopened the popover and the keys went on to the page.
+            guard let self else { return event }
+            return self.handle(event, for: id)
         }
         return entry
     }
@@ -105,7 +108,9 @@ final class SitePanels: NSObject, NSPopoverDelegate {
             guard event.window === popoverWindow || event.window === parent, !ShortcutRecording.isActive else { return event }
             let modifiers = event.modifierFlags.intersection([.command, .shift, .control, .option])
             let escape = event.keyCode == 53 && modifiers.isEmpty
-            let closeKey = modifiers == .command && event.charactersIgnoringModifiers?.lowercased() == "w" && event.window === popoverWindow
+            // Cmd+W is the popover's while it is the key window (a click in it made it so). Its key events still name the
+            // browser window, so testing `event.window` let Cmd+W close the tab under the popover instead.
+            let closeKey = modifiers == .command && event.charactersIgnoringModifiers?.lowercased() == "w" && popoverWindow?.isKeyWindow == true
             guard escape || closeKey else { return event }
             close(id); return nil
         }
@@ -175,7 +180,8 @@ final class SiteDialogs: NSObject, NSPopoverDelegate {
     }
     /// Brk's own prompt (`SitePermissionPromptView`) in a popover under the address, attached to the page's window.
     /// Escape or a click elsewhere in the window closes it unanswered; a newer document dismisses it (`validate`).
-    func permission(_ prompt: SitePermissionPrompt, in window: NSWindow?, answer: @escaping (SitePermission, Bool) -> Void) {
+    /// `scheme` is the window theme's, as for the site controls: the prompt draws with the sidebar, not with the system.
+    func permission(_ prompt: SitePermissionPrompt, in window: NSWindow?, scheme: Scheme?, answer: @escaping (SitePermission, Bool) -> Void) {
         guard let window, window.isVisible, let content = window.contentView else { answer(.ask, false); return }
         let view = SitePermissionPromptView(prompt: prompt)
         let controller = NSViewController()
@@ -183,6 +189,7 @@ final class SiteDialogs: NSObject, NSPopoverDelegate {
         let popover = NSPopover()
         popover.behavior = .applicationDefined
         popover.animates = false
+        popover.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         popover.contentViewController = controller
         popover.contentSize = view.preferredSize
         popover.delegate = self

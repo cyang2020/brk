@@ -225,6 +225,11 @@ Open it and drag **Brk** into Applications. Builds are signed with a Developer I
 
 ## Bug fixes
 
+**2026-11-13**
+
+- **Empty Brk windows appeared in Mission Control.** Chromium’s transparent page hosts were listed as separate windows. Brk now keeps them out of Mission Control and window cycling, including after leaving full screen. Build 38.
+- **Dark pages had a pale, rough rim around their rounded corners.** The white card fill and shadow backing showed through the edge pixels. They now stop inside the page edge, so the corner blends with the page and Space. Build 38.
+
 Every fix, newest first, with the first build that has it (Brk › About Brk shows yours). The same list is on GitHub as [Bug fixes](https://github.com/cyang2020/brk/issues/2): click **Subscribe** there to get a notification for each new fix.
 
 **2026-11-12**

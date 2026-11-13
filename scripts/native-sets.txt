@@ -36,6 +36,7 @@ keys Input-TabKeys
 keys Input-SideButtons
 keys Input-SwipeIndicator
 keys Input-MiddleClick
+keys Keys-RealFocus
 
 # find：页内查找
 find F1
@@ -60,6 +61,7 @@ profiles W2-3
 profiles W2-P1
 profiles DataPrivateExpiry
 profiles DataCookiesRefreshRestart
+profiles Settings-Real
 
 # downloads：下载
 downloads W2-11
@@ -74,7 +76,6 @@ downloads LibraryFlyout-Flight
 downloads LittleDownloads-Pill
 
 # pages：页面右键菜单、页面身份、缩放、复制粘贴、存储打印、弹窗、历史
-pages T12
 pages I1
 pages I5
 pages BB2
@@ -89,14 +90,16 @@ pages Core-dialogs
 pages Core-tools
 pages Core-editor
 media Core-pip
+pages PageReal-Menus
+pages PageReal-Keys
 
 # sites：广告拦截、清站点数据、权限、证书、扩展
 sites SitePolicy-blocking
 sites SitePolicy-clear
-sites SitePermission-prompt
 sites SiteSecurity-invalid
 sites Extension-install
 sites Core-popup
+sites SiteControls-Real
 
 # sidebar：侧栏拖拽、Favorites、重命名、Toast、标签工具、分屏工具、文字截断
 sidebar R53-TabIn
@@ -109,6 +112,7 @@ sidebar TabTools1
 sidebar SplitTools1
 sidebar TextLayout
 sidebar LibraryIcon-HoverReal
+sidebar R57-FolderMotion
 
 # spaces：新建 Space
 spaces SpaceTools-2
@@ -125,13 +129,14 @@ media R55-Row
 media R55-Card
 media CaptureProduct
 
-# library：Easel、Boost、文件面板导入导出、首次启动、所有画面没有文字被截断
+# library：Easel、Boost、文件面板导入导出、首次启动（浅色深色各走一遍）、从别的浏览器导入、检查更新、所有画面没有文字被截断
 library EaselDraw
 library EaselReopen
 library Boost-CSS
 library FP-OpenGesture
 library FP-SaveGesture
 library Onboarding-Import
+library Onboarding-Paths
 library TextLayout
 
 # ai：夹具 agent 的 AI 功能（不花额度）

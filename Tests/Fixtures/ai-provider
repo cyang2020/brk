@@ -21,6 +21,17 @@ def lines():
 def put(obj):
     sys.stdout.write(json.dumps(obj) + '\n'); sys.stdout.flush()
 
+def stream_pause():
+    release = os.environ.get('BRK_AI_FIXTURE_STREAM_RELEASE')
+    if not release:
+        time.sleep(2)
+        return
+    end = time.monotonic() + 15
+    while not os.path.exists(release):
+        if time.monotonic() > end:
+            raise RuntimeError('streaming test did not release the second chunk')
+        time.sleep(.01)
+
 def answer_text(prompt):
     """What the plain branch below would print, for the protocols' turns."""
     if prompt.startswith('BRK_PAGE_QUESTION'):
@@ -272,7 +283,7 @@ def claude():
                 result()
             return
         if prompt == 'fixture:stream':
-            text('first\n'); time.sleep(2); text('second\n'); result('first\nsecond\n')
+            text('first\n'); stream_pause(); text('second\n'); result('first\nsecond\n')
         elif prompt == 'fixture:hang': hang_ignoring_term()
         elif prompt == 'fixture:slowstop':
             # A command runs once the model has answered, never as the turn begins.
@@ -340,7 +351,7 @@ def codex():
             note('item/completed', threadId=thread, turnId=turn_id, item={'type': 'agentMessage', 'id': 'm', 'text': text, 'phase': 'final_answer'})
             done(); return
         if prompt == 'fixture:stream':
-            delta('first\n'); time.sleep(2); delta('second\n'); done()
+            delta('first\n'); stream_pause(); delta('second\n'); done()
         elif prompt == 'fixture:hang': hang_ignoring_term()
         elif prompt == 'fixture:slowstop':
             delta('working'); background_child()
@@ -400,7 +411,7 @@ def acp():
     def turn(prompt):
         log(prompt)
         if prompt == 'fixture:stream':
-            text('first\n'); time.sleep(2); text('second\n'); stop()
+            text('first\n'); stream_pause(); text('second\n'); stop()
         elif prompt == 'fixture:hang': hang_ignoring_term()
         elif prompt == 'fixture:slowstop':
             text('working'); background_child()
@@ -488,7 +499,8 @@ elif prompt == 'large':
         os.write(2, b'e' * 4096)
 elif prompt in ('stream', 'fixture:stream'):
     print('first', flush=True)
-    time.sleep(.4 if prompt == 'stream' else 2)
+    if prompt == 'stream': time.sleep(.4)
+    else: stream_pause()
     print('second', flush=True)
 elif prompt in ('empty', 'fixture:empty'):
     pass

@@ -2,7 +2,7 @@ import AppKit
 import BrkBase
 import CBrkCore
 
-/// A page's JavaScript dialog on BrkCore: a sheet on the window the page is in, with the words CefKit's presenter uses on CEF. A page that is
+/// A page's JavaScript dialog on BrkCore: a sheet on the window the page is in. A page that is
 /// not on screen gets none (Chromium then treats the dialog as dismissed), as Chrome does not raise a background tab's dialog over another.
 extension CorePage {
     func runDialog(_ dialog: any BrkCoreDialog) -> Bool {
@@ -40,6 +40,7 @@ extension CorePage {
             let accepted = response == .alertFirstButtonReturn
             self?.trace("[page-dialog] answered page=\(self?.id.description ?? "-") accepted=\(accepted)")
             if self?.openDialog?.alert === alert { self?.openDialog = nil }
+            if dialog.kind == .beforeUnload, !accepted { self?.reloadRefused() }
             dialog.answer(accepted, text: accepted ? field?.stringValue : nil)
         }
         if let field { window.makeFirstResponder(field) }

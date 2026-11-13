@@ -230,6 +230,10 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
         if let request = reloadSequence.request(ignoringCache: ignoringCache, after: mainDocument.lastSequence) { issueReload(request) }
     }
 
+    /// The page stayed (Stay on Reload this page?): Chromium drops that reload, so no document comes to finish the
+    /// sequence, which would otherwise hold every later reload of the page (⌘R did nothing after Stay).
+    func reloadRefused() { reloadSequence.cancel() }
+
     private func issueReload(_ request: ReloadSequence.Request) {
         guard engine.isLive(self), reloadSequence.current == request else { return }
         guard mainDocument.lastSequence == request.afterDocumentSequence else { reloadSequence.cancel(); return }

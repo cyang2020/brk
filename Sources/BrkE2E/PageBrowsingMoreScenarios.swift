@@ -175,8 +175,23 @@ enum PhysicalPointer {
         }
     }
 
-    private static func post(_ type: CGEventType, at point: CGPoint, clickCount: Int64 = 1) throws {
-        guard let event = CGEvent(mouseEventSource: CGEventSource(stateID: .hidSystemState), mouseType: type, mouseCursorPosition: point, mouseButton: .left) else {
+    /// A right click at a screen point (top-left origin), refused like `click` unless this run's Brk is in front there.
+    /// It does not wait for the menu: while one tracks, the app answers the control socket only once it has closed.
+    static func rightClick(_ app: AppUnderTest, at point: CGPoint, window: WindowID) throws {
+        try checkFront(app, at: point, window: window)
+        try post(clickAt: point, right: true)
+    }
+
+    /// The pointer moved to a screen point, then a click or right click there, with nothing checked: the caller has
+    /// made sure this run's Brk (or its sheet or open menu) is in front at that point.
+    static func post(clickAt point: CGPoint, right: Bool = false) throws {
+        try post(.mouseMoved, at: point); usleep(150_000)
+        try post(right ? .rightMouseDown : .leftMouseDown, at: point, button: right ? .right : .left); usleep(70_000)
+        try post(right ? .rightMouseUp : .leftMouseUp, at: point, button: right ? .right : .left); usleep(200_000)
+    }
+
+    private static func post(_ type: CGEventType, at point: CGPoint, clickCount: Int64 = 1, button: CGMouseButton = .left) throws {
+        guard let event = CGEvent(mouseEventSource: CGEventSource(stateID: .hidSystemState), mouseType: type, mouseCursorPosition: point, mouseButton: button) else {
             throw Check(description: "mouse event")
         }
         event.setIntegerValueField(.mouseEventClickState, value: clickCount)

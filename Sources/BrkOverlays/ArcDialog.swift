@@ -272,15 +272,22 @@ final class AlertField: NSTextField {
         font = .systemFont(ofSize: fontSize)
         placeholderString = placeholder
         wantsLayer = true
-        layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
         layer?.borderColor = NSColor.black.withAlphaComponent(0.14).cgColor
         layer?.borderWidth = 1
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = ArcDialog.fieldRadius.value
+        viewDidChangeEffectiveAppearance()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// The fill is the text background of the dialog's appearance (the window theme's), as the typed text's colour is: made
+    /// once while the Mac's appearance was current, a light dialog on a Mac in Dark drew black text on a near-black field.
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        effectiveAppearance.performAsCurrentDrawingAppearance { layer?.backgroundColor = NSColor.textBackgroundColor.cgColor }
+    }
 }
 
 /// Centres the single line vertically and insets it 8.5 pt, as P26 a.
@@ -353,7 +360,7 @@ final class AlertButton: NSView {
             layer?.borderWidth = 1
             capBox.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.08).cgColor
             label.textColor = isEnabled ? ink : ink.withAlphaComponent(0.4)
-            cap.textColor = NSColor.black.withAlphaComponent(0.55)
+            cap.textColor = (scheme == .light ? NSColor.black : NSColor.white).withAlphaComponent(0.55)
         case .primary, .destructive:
             let fill = (style == .primary ? ArcDialog.primary.value : ArcDialog.destructive.value).color
             layer?.backgroundColor = (isEnabled ? fill : fill.withAlphaComponent(0.18)).cgColor

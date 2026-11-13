@@ -41,7 +41,7 @@ final class CoreContextMenu: NSObject, NSMenuDelegate {
         let menu = makeMenu(items, target: choice)
         open = menu
         defer { open = nil }
-        _ = menu.popUp(positioning: nil, at: point, in: surface)
+        menu.popUpAsContextMenu(at: point, in: surface)
         guard let command = choice.selected else { return -1 }
         switch command {
         case Self.translateCommand: onTranslate(); return -1

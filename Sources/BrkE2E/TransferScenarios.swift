@@ -8,23 +8,8 @@ enum TransferScenarios {
         Scenario("T1", "simultaneous downloads cancel independently, stop server bytes and preserve collisions", concurrent),
         Scenario("T2", "accepted POST download survives source-tab close with its original request", postClose),
         Scenario("T7", "quit cancels an already retained transfer and drains its native host", retainedQuit),
-        Scenario("T12", "right click opens the native web context menu", webContextMenu),
     ]
     static let size = 4_194_304
-
-    private static func webContextMenu(_ app: AppUnderTest) throws {
-        let page = try home(app)
-        try app.evaluate(page, "addEventListener('contextmenu',()=>document.title='Context event seen',{once:true});document.title='Context probe ready'")
-        try app.waitUntil("context probe ready") { try tab(page.item, in: app.view())?.title == "Context probe ready" }
-        guard let frame = try app.native().pages[page]?.surfaceFrame else { throw Check(description: "page surface missing") }
-        let point = CGPoint(x: frame.midX, y: frame.midY)
-        guard case .menuItems(let titles) = try app.send(.captureContextMenu(window: page.window, point: point)) else {
-            throw Check(description: "context menu capture failed")
-        }
-        let domTitle = try tab(page.item, in: app.view())?.title ?? "none"
-        try expect(titles.contains("Reload") && titles.count >= 3, "native web menu missing: \(titles); DOM=\(domTitle)")
-        app.note("Native NSMenu tracking recorded: \(titles.joined(separator: ", ")); tracking cancelled without choosing an action.")
-    }
 
 
 

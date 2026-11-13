@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Page real</title>
+<style>
+body { font: 18px -apple-system, sans-serif; margin: 24px; background: #fff; color: #111; }
+a { display: inline-block; margin: 8px 16px 8px 0; padding: 6px 10px; font-size: 20px; }
+#img { display: block; width: 120px; height: 120px; margin: 12px 0; }
+#blank { height: 260px; }
+</style></head>
+<body>
+<p id="words">The needle is in the hay. A second needle hides here. The last needle ends the line.</p>
+<a id="link" href="page2.html?from=link">Linked page</a>
+<a id="away" href="page2.html?from=away">Leave this page</a>
+<a id="dl" href="download">Download the file</a>
+<img id="img" src="rim-red.png" alt="red square">
+<div id="blank"></div>
+<script>
+// PageReal-Menus and PageReal-Keys. `marker` tells a page that stayed from one that reloaded; ?guard=1 asks before
+// leaving or reloading, as a page with unsaved work does.
+var marker = 'fresh';
+if (new URLSearchParams(location.search).get('guard') === '1') {
+  window.addEventListener('beforeunload', function (e) { e.preventDefault(); e.returnValue = ''; });
+}
+</script>
+</body></html>

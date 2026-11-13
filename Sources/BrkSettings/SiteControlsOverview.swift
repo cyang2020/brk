@@ -99,7 +99,13 @@ final class SiteControlsOverview: NSView {
         extensionsTitle.frame = f.extensionsTitle; settingsTitle.frame = f.settingsTitle; developer.frame = f.developer
         pictureInPicture.frame = f.pictureInPicture
         divider.frame = f.divider; security.frame = f.security; more.frame = f.more
-        divider.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.1).cgColor
+        // In the popover's appearance (the window theme's), which need not be the one current while laying out.
+        effectiveAppearance.performAsCurrentDrawingAppearance { divider.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.1).cgColor }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsLayout = true
     }
 
     private struct Frames {
@@ -306,8 +312,15 @@ final class SectionTitle: NSButton {
     }
     override func mouseEntered(with event: NSEvent) { hovering = true; render() }
     override func mouseExited(with event: NSEvent) { hovering = false; render() }
+    /// labelColor at 0.9, worked out where it is drawn: `withAlphaComponent` on a system colour fixes it to the appearance
+    /// current when it is made, and the popover takes the window theme's appearance. A Space in the other appearance than
+    /// the Mac drew the title white on the light popover, or black on the dark one.
+    private static let ink = NSColor(name: nil) { appearance in
+        NSColor(white: appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? 1 : 0, alpha: 0.9)
+    }
+
     private func render() {
-        let ink = NSColor.labelColor.withAlphaComponent(0.9)
+        let ink = Self.ink
         let title = NSMutableAttributedString(string: text, attributes: [.font: Self.font, .foregroundColor: ink])
         if hovering {
             title.append(NSAttributedString(string: "  Show All ›", attributes: [

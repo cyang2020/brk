@@ -185,7 +185,11 @@ final class AppUnderTest {
         environment["BRK_TEST_CLOCK"] = "1"
         environment["BRK_TEST_FILE_PANEL_DIRECTORY"] = dataDirectory.path
         if let remoteDebuggingPort { environment["BRK_REMOTE_DEBUGGING_PORT"] = String(remoteDebuggingPort) }
-        if !["Onboarding-Import", "Onboarding-RealArc"].contains(scenarioID) { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
+        if !["Onboarding-Import", "Onboarding-RealArc", "Onboarding-Paths"].contains(scenarioID) { environment["BRK_START_URL"] = site.url("index.html").absoluteString }
+        if scenarioID == "Onboarding-Paths" {
+            // A made-up Arc folder under this run's folder; passwords are turned off on the keychain step.
+            environment["BRK_TEST_IMPORT_ROOT"] = try OnboardingScenarios.makeArcFixture(in: dataDirectory, site: site).path
+        }
         if scenarioID == "Onboarding-Import" {
             // A made-up Chrome profile under this run's folder; the source key is a fixture password, never the keychain.
             environment["BRK_TEST_IMPORT_ROOT"] = try OnboardingScenarios.makeChromeFixture(in: dataDirectory, site: site).path
@@ -202,7 +206,7 @@ final class AppUnderTest {
             if scenarioID == "QuickBar-Spotlight" { environment["BRK_LOCAL_SEARCH_SPOTLIGHT"] = "1" }
             if scenarioID != "QuickBar-NoRates" { environment["BRK_CURRENCY_RATES_FILE"] = QuickBarScenarios.ratesFile(self).path }
         }
-        if (scenarioID.hasPrefix("AI") && !scenarioID.hasPrefix("AIReal")) || scenarioID == "QuickBar-Prefix" {
+        if (scenarioID.hasPrefix("AI") && !scenarioID.hasPrefix("AIReal")) || scenarioID == "QuickBar-Prefix" || scenarioID == "PageReal-Menus" {
             environment["BRK_AI_FIXTURE_EXECUTABLE"] = site.root.deletingLastPathComponent().appendingPathComponent("Fixtures/ai-provider").path
             environment["BRK_AI_FIXTURE_LOG"] = dataDirectory.appendingPathComponent("ai-fixture.jsonl").path
         }
@@ -239,7 +243,7 @@ final class AppUnderTest {
             // Port 9 (discard) refuses connections: the offline scenario's downloads find no server.
             environment["BRK_TEST_FILTER_BASE"] = scenarioID == "SiteFilters-offline" ? "http://127.0.0.1:9/filter-lists" : site.url("filter-lists").absoluteString
         }
-        if scenarioID.hasPrefix("SiteSecurity"), let spki = HTTPSFixture.trustedSPKI(siteRoot: site.root) { environment["BRK_TEST_TRUSTED_SPKI"] = spki }
+        if scenarioID.hasPrefix("SiteSecurity") || scenarioID == "SiteControls-Real", let spki = HTTPSFixture.trustedSPKI(siteRoot: site.root) { environment["BRK_TEST_TRUSTED_SPKI"] = spki }
         // run-native.py asks for no system-wide shortcut, so its instances leave ⌥⌘N to the other apps; the Little Arc
         // entry scenario is about that registration and keeps it.
         if ProcessInfo.processInfo.environment["BRK_TEST_NO_GLOBAL_SHORTCUT"] == "1", scenarioID != "R36-LittleEntry" {

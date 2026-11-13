@@ -82,6 +82,7 @@ final class LibraryItemPreviewView: NSView {
         name.textColor = NSColor(white: 0, alpha: 0.85)
         age.font = .systemFont(ofSize: Metrics.libraryFlyout.titleFont.value)
         age.textColor = NSColor(white: 0, alpha: 0.45)
+        age.identify(.tabTool("library-item-preview-age"))
         for label in [name, age] { label.lineBreakMode = .byTruncatingTail; toolbar.addSubview(label) }
         openIn.isBordered = false
         openIn.wantsLayer = true

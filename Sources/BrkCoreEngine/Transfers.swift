@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor protocol TransferDecision: AnyObject { func resolve(_ destination: URL?) }
 @MainActor protocol TransferControl: AnyObject { func cancel(); func release() }
-/// One download as the engine reports it at one moment: CefKit's snapshot on CEF, BrkCoreDownload on BrkCore.
+/// One download as BrkCore reports it at one moment.
 protocol TransferItem {
     var id: UInt32 { get }
     var url: URL? { get }

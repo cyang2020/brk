@@ -3,6 +3,7 @@
 
     python3 scripts/run-native.py <name> --set smoke,ai          # the groups in scripts/native-sets.txt
     python3 scripts/run-native.py <name> --only N1,PB1R          # chosen scenario ids
+    python3 scripts/run-native.py <name> --only PageReal-Keys --app /path/to/Brk.app  # a before-fix bundle
     python3 scripts/run-native.py <name> --set real --agent claude   # real agents: spends the user's quota
 
 Needs dist/Brk.app (scripts/build.sh, or a station's bundle refreshed with scripts/station/refresh-app.sh) and
@@ -36,6 +37,7 @@ parser.add_argument('--set', help='comma-separated groups from scripts/native-se
 parser.add_argument('--only', help='comma-separated scenario ids')
 parser.add_argument('--agent', default='claude', help='real agent for the real group (claude or codex)')
 parser.add_argument('--out', help='evidence folder; default ~/brk-evidence/native/<name>')
+parser.add_argument('--app', help='app bundle to test; default: this checkout\'s dist/Brk.app')
 parser.add_argument('--wait', type=float, default=float('inf'), help='ceiling in seconds for the lock wait; default: wait as long as it takes')
 parser.add_argument('--run-timeout', type=float, default=1800)
 args = parser.parse_args()
@@ -56,11 +58,11 @@ out = pathlib.Path(args.out).expanduser() if args.out else pathlib.Path.home() /
 if out.exists():
     parser.error(f'{out} already exists; pick a new name')
 out.mkdir(parents=True)
-app = root / 'dist/Brk.app'
+app = pathlib.Path(args.app).expanduser().resolve() if args.app else root / 'dist/Brk.app'
 runner = root / '.build/release/brk-e2e'
 for needed in (app, runner):
     if not needed.exists():
-        sys.exit(f'missing {needed.relative_to(root)}; see the top of this script')
+        sys.exit(f'missing {needed}; see the top of this script')
 
 env = os.environ.copy()
 env['BRK_E2E_DATA_ROOT'] = tempfile.mkdtemp(prefix='brk-rn-', dir='/tmp')   # short: the control socket path has a length limit
@@ -85,7 +87,7 @@ def sha(path):
 head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
 dirty = subprocess.check_output(['git', 'status', '--porcelain', '--', 'Sources', 'Tests', 'Package.swift'], cwd=root, text=True).strip()
 manifest = dict(head=head, uncommittedSourceChanges=bool(dirty), scenarios=wanted, command=locked,
-                app=sha(app / 'Contents/MacOS/Brk'), runner=sha(runner))
+                appPath=str(app), app=sha(app / 'Contents/MacOS/Brk'), runner=sha(runner))
 (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
 with (out / 'run.log').open('x') as log:
     result = subprocess.run(locked, cwd=root, env=env, stdout=log, stderr=subprocess.STDOUT)

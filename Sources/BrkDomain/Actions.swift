@@ -605,6 +605,15 @@ public enum KeyBindings {
     public static let defaultOwners: [KeyChord: ActionID] = [KeyChord([.shift, .command], .n): .newIncognitoWindow]
 
     public static func resolve(overrides: [ActionID: KeyOverride], actions: [ActionID] = ActionID.allCases) -> [ActionID: ResolvedBinding] {
+        // Every projection asks for the whole table's bindings (the Settings window's list, the command bar's rows); with
+        // no shortcut remapped they are always the same.
+        if overrides.isEmpty, actions == ActionID.allCases { return tableBindings }
+        return bindings(overrides: overrides, actions: actions)
+    }
+
+    private static let tableBindings = bindings(overrides: [:], actions: ActionID.allCases)
+
+    private static func bindings(overrides: [ActionID: KeyOverride], actions: [ActionID]) -> [ActionID: ResolvedBinding] {
         var chords: [ActionID: KeyChord] = [:]
         for action in actions {
             if let override = overrides[action] {

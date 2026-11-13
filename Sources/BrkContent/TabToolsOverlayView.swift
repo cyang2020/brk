@@ -14,7 +14,8 @@ final class TabToolsOverlayView: NSView {
     private var toastClick: Command?
     private var toastActionCloses = false
     private let banner = NoticeBanner()
-    private let outputStatus = NSTextField(labelWithString: "")
+    private let outputStatus = NSView()
+    private let outputMessage = NSTextField(labelWithString: "")
     private var outputTask: Task<Void, Never>?
     private var lastOutput: OutputUpdate?
     private var lastExport: ExportOutcome?
@@ -31,8 +32,11 @@ final class TabToolsOverlayView: NSView {
             self?.dispatch(command)
         }
         outputStatus.isHidden = true
-        outputStatus.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        outputStatus.lineBreakMode = .byTruncatingMiddle
+        outputStatus.identify(.tabTool("output-status"))
+        outputMessage.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        outputMessage.lineBreakMode = .byTruncatingMiddle
+        outputMessage.alignment = .center
+        outputStatus.addSubview(outputMessage)
         outputStatus.wantsLayer = true
         outputStatus.layer?.cornerRadius = Metrics.content.cornerRadius.value
         recent.identify(.tabTool("switcher"))
@@ -51,7 +55,7 @@ final class TabToolsOverlayView: NSView {
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? {
         let hit = super.hitTest(point)
-        return hit === self || hit === outputStatus ? nil : hit
+        return hit === self || hit === outputStatus || hit?.isDescendant(of: outputStatus) == true ? nil : hit
     }
     func render(_ tools: TabToolsSnapshot, sidebarWidth: Double, palette: Palette,
                 output: OutputUpdate? = nil, exported: ExportOutcome? = nil, contentArea: CGRect? = nil, thumbnails: [ItemID: NSImage] = [:]) {
@@ -59,9 +63,19 @@ final class TabToolsOverlayView: NSView {
         if output != lastOutput || exported != lastExport {
             outputTask?.cancel()
             lastOutput = output; lastExport = exported
-            outputStatus.stringValue = exported?.message ?? output?.message ?? ""
-            outputStatus.toolTip = outputStatus.stringValue
-            outputStatus.isHidden = outputStatus.stringValue.isEmpty
+            let message: String
+            switch exported {
+            case .cancelled?: message = ""
+            case .some(let outcome): message = outcome.message
+            case nil:
+                switch output?.stage {
+                case .terminal(.cancelled(.absent))?, .terminal(.cancelled(.removed))?: message = ""
+                default: message = output?.message ?? ""
+                }
+            }
+            outputMessage.stringValue = message
+            outputStatus.toolTip = message
+            outputStatus.isHidden = message.isEmpty
             if !active {
                 outputTask = Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .seconds(4))
@@ -70,10 +84,14 @@ final class TabToolsOverlayView: NSView {
                 }
             }
         }
-        outputStatus.textColor = palette.color(palette.tokens.foregroundStrong)
-        outputStatus.layer?.backgroundColor = palette.color(palette.tokens.itemBackground).cgColor
+        // This sits over the page: translucent sidebar tokens can leave white words over a white site in dark mode.
+        outputMessage.textColor = (palette.scheme == .dark ? NSColor.white : .black).withAlphaComponent(0.85)
+        outputStatus.layer?.backgroundColor = NSColor(white: palette.scheme == .dark ? 0.12 : 0.98, alpha: 1).cgColor
         let statusWidth = min(440.0, max(0, bounds.width - 48))
         outputStatus.frame = NSRect(x: (bounds.width - statusWidth) / 2, y: bounds.height - (tools.toast == nil ? 54 : 94), width: statusWidth, height: 28)
+        let messageHeight = outputMessage.intrinsicContentSize.height
+        outputMessage.frame = NSRect(x: 8, y: (outputStatus.bounds.height - messageHeight) / 2,
+                                     width: max(0, statusWidth - 16), height: messageHeight)
         recent.isHidden = tools.recent == nil
         if let switcher = tools.recent { recent.render(switcher, in: bounds, palette: palette, thumbnails: thumbnails) }
         if toastExpiry != tools.toast?.expiresAt {

@@ -315,6 +315,10 @@ final class LittleHostPill: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { !isHidden && frame.contains(point) ? self : nil }
 
     func render(host: String?, palette: Palette) {
+        // The pill is the theme's colour, so its system-coloured words take the theme's appearance, not the Mac's: on a
+        // Mac in Dark under a light Space the host was white on the light pill.
+        let name: NSAppearance.Name = palette.scheme == .dark ? .darkAqua : .aqua
+        if appearance?.name != name { appearance = NSAppearance(named: name) }
         layer?.backgroundColor = palette.color(palette.tokens.itemBackground).cgColor
         label.stringValue = host ?? Copy.urlPlaceholder
         label.textColor = host == nil ? NSColor.secondaryLabelColor : NSColor.labelColor

@@ -240,13 +240,16 @@ struct LibraryColors {
         let ink = NSColor.black
         let control = ink.withAlphaComponent(0.072)
         let primary = p3(0x0E0F10, alpha: 0.9), secondary = ink.withAlphaComponent(0.5), tertiary = ink.withAlphaComponent(0.3)
+        // The greys measured on the #FCFCFC panel, as black at the strength that gives them there: an opaque grey kept its
+        // value on a darker theme (the default Space in Dark puts the panel on #B6B2AE), where #737373 read at 2.3:1.
+        func grey(_ measured: Double) -> NSColor { ink.withAlphaComponent(1 - measured / 0xFC) }
         return LibraryColors(
             panel: srgb(0xFCFCFC), control: control, search: control, filter: control,
             edge: ink.withAlphaComponent(0.075), shade: ink.withAlphaComponent(0.04), shadeWidth: LibraryDraw.nav.shadowWidth.value,
-            navInk: srgb(0x8F8F8F), navInkSelected: srgb(0x5B5B5B), navGlyph: srgb(0x6A6A6A), navLabel: srgb(0x737373), navFooter: srgb(0x7A7878),
+            navInk: grey(0x8F), navInkSelected: grey(0x5B), navGlyph: grey(0x6A), navLabel: grey(0x73), navFooter: grey(0x79),
             page: .white,
             foregroundPrimary: primary, foregroundSecondary: secondary, foregroundTertiary: tertiary, foregroundStrong: primary,
-            searchPlaceholder: tertiary.blended(withFraction: 0.35, of: secondary) ?? secondary, searchGlyph: secondary, filterInk: srgb(0x5B5B5B),
+            searchPlaceholder: tertiary.blended(withFraction: 0.35, of: secondary) ?? secondary, searchGlyph: secondary, filterInk: grey(0x5B),
             rowHighlight: ink.withAlphaComponent(0.05), itemOutline: ink.withAlphaComponent(0.03), placeholder: ink.withAlphaComponent(0.045),
             progressTrack: srgb(0xCED7E7), accent: p3(0x458AFF)
         )

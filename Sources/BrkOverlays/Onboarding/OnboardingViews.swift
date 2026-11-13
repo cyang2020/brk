@@ -92,6 +92,9 @@ private enum Ink {
     static func card(_ dark: Bool) -> Color { dark ? Color(white: 0.16) : .white }
     static func stroke(_ dark: Bool) -> Color { primary(dark).opacity(0.12) }
     static let accent = Color(red: 0.36, green: 0.31, blue: 0.95)
+    /// The accent as text. On the dark card the accent itself is too dark to read (the ad blocker's "Recommended" tag
+    /// measured 2.4:1), so dark mode lifts it toward white (5.7:1 there); light mode keeps the accent (4.6:1).
+    static func accentText(_ dark: Bool) -> Color { dark ? Color(red: 0.66, green: 0.62, blue: 1) : accent }
 }
 
 private struct ControlFrame: ViewModifier {
@@ -159,7 +162,7 @@ private struct ChoiceRow: View {
                 (Text(lead).fontWeight(.bold) + Text(rest)).font(.system(size: 15)).foregroundStyle(Ink.primary(scheme == .dark))
                 Spacer(minLength: 8)
                 if let tag {
-                    Text(tag).font(.system(size: 11, weight: .semibold)).foregroundStyle(Ink.accent)
+                    Text(tag).font(.system(size: 11, weight: .semibold)).foregroundStyle(Ink.accentText(scheme == .dark))
                         .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(Ink.accent.opacity(0.12)))
                 }
             }
@@ -742,7 +745,16 @@ private struct SiteMark: View {
         let name = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
         let hue = Double(name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xffff } % 360) / 360
         Text(String(name.prefix(1)).uppercased()).font(.system(size: side * 0.5, weight: .bold)).foregroundStyle(.white)
-            .frame(width: side, height: side).background(RoundedRectangle(cornerRadius: side * 0.26, style: .continuous).fill(Color(hue: hue, saturation: 0.55, brightness: 0.78)))
+            .frame(width: side, height: side).background(RoundedRectangle(cornerRadius: side * 0.26, style: .continuous).fill(Self.tile(hue: hue)))
+    }
+
+    /// The tile behind the white letter. Yellows and greens at this saturation and brightness are so light that the
+    /// letter measured 2.2:1 on GitHub's gold: those are darkened to a luminance where white keeps 3.5:1.
+    static func tile(hue: Double) -> Color {
+        let raw = NSColor(hue: hue, saturation: 0.55, brightness: 0.78, alpha: 1).usingColorSpace(.sRGB) ?? .gray
+        var color = RGBA(Double(raw.redComponent), Double(raw.greenComponent), Double(raw.blueComponent))
+        if relativeLuminance(color) > 0.25 { color = themeShade(color, luminance: 0.25) }
+        return Color(red: color.red, green: color.green, blue: color.blue)
     }
 }
 
