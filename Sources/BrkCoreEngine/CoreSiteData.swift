@@ -3,8 +3,7 @@ import BrkEngine
 import CBrkCore
 import Foundation
 
-/// Website data on BrkCore, as `CEFEngine`'s (BrkCEF/SiteData.swift): one site through the page's DevTools session (the same commands), a
-/// whole profile through its network context.
+/// Clears one site's data through its DevTools session, or a whole profile through its network context.
 extension CoreEngine {
     func hasProtectedDataOperation(_ context: BrowsingContext, except clear: String? = nil) -> Bool {
         transfers.contains(context: context) || resources.entries.values.contains { entry in

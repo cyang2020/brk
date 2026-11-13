@@ -10,8 +10,7 @@ struct CorePermissionRequest {
     let request: any BrkCorePermissionRequest
 }
 
-/// Website policy and permissions on BrkCore: the same DevTools commands and the same remembered-choice bookkeeping as `ChromePage`'s
-/// (BrkCEF/WebsitePolicy.swift), over the framework's DevTools session and Chromium's own PermissionRequestManager.
+/// Applies website policy through DevTools and answers Chromium's permission requests with remembered site choices.
 extension CorePage {
     var protocolSession: CoreProtocolSession { CoreProtocolSession(contents: contents) }
 

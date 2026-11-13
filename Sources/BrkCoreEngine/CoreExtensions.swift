@@ -3,8 +3,8 @@ import BrkEngine
 import CBrkCore
 import Foundation
 
-/// Extension management on BrkCore through Chrome's own extensions page, as CEFEngine does it (BrkCEF/Extensions.swift): the page's
-/// `chrome.developerPrivate` and `chrome.management` calls, over its DevTools session. The domain opens that page when it needs it.
+/// Manages extensions through the extensions page's `chrome.developerPrivate` and `chrome.management` APIs.
+/// The domain opens that page when it needs it.
 extension CoreEngine {
     struct ManagedExtension {
         let incognitoAllowed: Bool?

@@ -368,7 +368,7 @@ public enum AppCommand: Hashable, Sendable, Codable {
 
 /// Edit > Undo, Redo, Cut, Copy, Paste, Paste and Match Style, Delete and Select All (Arc rows 41 to 51): AppKit
 /// first-responder items. Native fields get them from the menu; a page gets the same selector through its surface's
-/// responder (BrkCEF's `EmbeddedSurface` runs the focused frame's edit command).
+/// responder (CoreSurface runs the focused frame's edit command).
 public enum StandardEdit: String, Hashable, Sendable, Codable, CaseIterable {
     case undo, redo, cut, copy, paste, pasteAndMatchStyle, delete, selectAll
 

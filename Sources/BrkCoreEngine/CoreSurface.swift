@@ -69,7 +69,7 @@ final class CoreSurface: PageSurfaceView, NSMenuItemValidation {
         contents?.setHidden(window == nil)
     }
 
-    // The Edit menu, as `EmbeddedSurface+Editing` on CEF. The page's input view takes the keys; these are the menu's commands.
+    // The page's input view takes the keys; these are the Edit menu's commands.
     var editingBrowser: (any BrkCoreWebContents)? {
         guard !retired, window?.isVisible == true, containsFirstResponder, !isHiddenOrHasHiddenAncestor else { return nil }
         return contents

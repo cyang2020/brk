@@ -4,7 +4,7 @@ import BrkContent
 import BrkDomain
 
 /// Arc's save cards (password, address, card) over the whole window showing the page, while Chromium's own bubble
-/// waits invisible for the answer (BrkCEF/SavePrompts.swift). The card itself lives in the window's root view
+/// waits for the answer through CoreSavePrompts. The card itself lives in the window's root view
 /// (`WindowRootView.showSavePrompt`); this keeps the replies. One card per window: a newer prompt answers the older one
 /// No, as Chromium has closed that bubble by then. The card keeps the keyboard while it is up, so Return saves and Esc
 /// declines even after the window became key again (which hands focus back to the page); the window hands both keys to

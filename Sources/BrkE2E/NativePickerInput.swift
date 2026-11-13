@@ -351,11 +351,17 @@ enum NativeSystemInput {
 
     /// Chooses a main-menu item the way an accessibility client does (AXPress on the item), which runs the item's action.
     static func chooseMainMenu(pid: Int32, menu title: String, item: String) throws {
-        var entries = try mainMenuItems(pid: pid, menu: title)
+        var entries = try mainMenuItems(pid: pid, menu: title, open: true)
         let path = item.components(separatedBy: " › ")
         for (index, name) in path.enumerated() {
             guard let entry = entries.first(where: { NativePickerInput.string($0, kAXTitleAttribute) == name }) else {
-                throw Check(description: "\(title) has no \(item)")
+                let shown = entries.map { NativePickerInput.string($0, kAXTitleAttribute) }
+                throw Check(description: "\(title) has no \(name) in \(item); found \(shown)")
+            }
+            let deadline = Date().addingTimeInterval(2)
+            while NativePickerInput.attribute(entry, kAXEnabledAttribute) as? Bool != true, Date() < deadline { usleep(20_000) }
+            guard NativePickerInput.attribute(entry, kAXEnabledAttribute) as? Bool == true else {
+                throw Check(description: "\(title) > \(item) is disabled")
             }
             guard AXUIElementPerformAction(entry, kAXPressAction as CFString) == .success else {
                 throw Check(description: "pressing \(name) failed")
@@ -368,11 +374,15 @@ enum NativeSystemInput {
         }
     }
 
-    private static func mainMenuItems(pid: Int32, menu title: String) throws -> [AXUIElement] {
+    private static func mainMenuItems(pid: Int32, menu title: String, open: Bool = false) throws -> [AXUIElement] {
         guard let bar = NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXMenuBarAttribute) else { throw Check(description: "no menu bar through Accessibility") }
         let titles = NativePickerInput.attribute(bar as! AXUIElement, kAXChildrenAttribute) as? [AXUIElement] ?? []
-        guard let holder = titles.first(where: { NativePickerInput.string($0, kAXTitleAttribute) == title }),
-              let menu = (NativePickerInput.attribute(holder, kAXChildrenAttribute) as? [AXUIElement])?.first else { throw Check(description: "no \(title) menu") }
+        guard let holder = titles.first(where: { NativePickerInput.string($0, kAXTitleAttribute) == title }) else { throw Check(description: "no \(title) menu") }
+        if open {
+            guard AXUIElementPerformAction(holder, kAXPressAction as CFString) == .success else { throw Check(description: "opening \(title) failed") }
+            usleep(100_000)
+        }
+        guard let menu = (NativePickerInput.attribute(holder, kAXChildrenAttribute) as? [AXUIElement])?.first else { throw Check(description: "no \(title) menu contents") }
         return NativePickerInput.attribute(menu, kAXChildrenAttribute) as? [AXUIElement] ?? []
     }
 

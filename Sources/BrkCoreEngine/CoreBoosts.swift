@@ -2,7 +2,7 @@ import BrkBase
 import CBrkCore
 import Foundation
 
-/// Boosts on BrkCore: the same isolated-world CSS and scripts as CEF's BrkCEF/BoostInjection.swift, over the framework's DevTools session.
+/// Applies Boost CSS and scripts in an isolated world through the page's DevTools session.
 extension CorePage {
     func applyBoostPolicy(_ policy: BoostPolicy) {
         guard boostPolicy != policy else { return }

@@ -3,8 +3,7 @@ import BrkBase
 import BrkEngine
 import CBrkCore
 
-/// A page's context menu on BrkCore: Chrome's own rows, trimmed and extended with Arc's as CEF's Brk does (BrkCEF/PageContextMenu.swift: the
-/// same rows removed, "Translate to <language>" after Cast…, the Split View and Little Arc link rows), shown as an NSMenu on the page's view.
+/// Adapts Chrome's context menu with translation, Split View and Little Arc actions, shown as an NSMenu on the page's view.
 /// The framework waits for the answer, as Chrome's own menu does, and runs a Chrome row's command itself.
 @MainActor
 final class CoreContextMenu: NSObject, NSMenuDelegate {

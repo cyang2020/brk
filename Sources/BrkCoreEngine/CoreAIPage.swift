@@ -4,8 +4,7 @@ import BrkEngine
 import CBrkCore
 import Foundation
 
-/// AI page reading, translation and the page's language on BrkCore: the same isolated-world scripts as CEF's (BrkCEF/AIPageAdapter.swift,
-/// copied below while that file is being changed on another branch; they should become one file), over the page's DevTools session.
+/// Reads and translates page text in an isolated world through the page's DevTools session.
 extension CoreEngine {
     public func readAIPage(_ document: DocumentToken) async throws -> AIPageContent {
         guard let value = try await aiEvaluate(document, CoreAIPageScripts.capture) as? [String: Any],

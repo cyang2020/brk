@@ -4,8 +4,7 @@ import BrkEngine
 import CBrkCore
 import Foundation
 
-/// Page capture on BrkCore: CEFEngine's sizes and checks (BrkCEF/PageCaptures.swift, CaptureProbe.swift), the same DevTools commands over the
-/// page's own session.
+/// Captures the document through its DevTools session, rejecting navigation or viewport changes during capture.
 extension CoreEngine {
     public func capture(_ request: CaptureRequest) async throws -> CaptureImage {
         let id = request.document.browser.page

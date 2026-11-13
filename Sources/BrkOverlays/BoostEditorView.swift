@@ -13,8 +13,8 @@ public final class BoostPanel {
     private var window: BoostPanelWindow?
     private var shown: String?
     private weak var parent: NSWindow?
-    /// Where the browser window was at the last render: the panel moves with it (it is not a child window;
-    /// host-window plumbing stays in BrkCEF), and keeps any offset the user dragged it to.
+    /// Where the browser window was at the last render: the independent panel moves with it
+    /// and keeps any offset the user dragged it to.
     private var parentFrame: CGRect?
     private var closing: NSObjectProtocol?
 
