@@ -173,8 +173,9 @@ final class FavoritesDragTests: XCTestCase {
         tile.mouseUp(with: mouse(.leftMouseUp, centre(tile), in: w))
     }
 
-    /// A Favorite let go outside the grid has no cell to glide to: the image goes at the release.
-    func testADropOutsideTheGridKeepsNoImage() throws {
+    /// A Favorite let go in the tab list glides on to the row it became, as Arc's drop does (recorded 2026-11-13): the row
+    /// shows when the image arrives, and no tile waits for it.
+    func testADropInTheListGlidesOntoItsRow() throws {
         let (w, live) = try rig()
         defer { w.close() }
         let tile = try tile(3, live)
@@ -182,8 +183,14 @@ final class FavoritesDragTests: XCTestCase {
         let line = CGPoint(x: 86, y: inbox.convert(CGPoint(x: 0, y: inbox.bounds.maxY - 1), to: nil).y)
         hold(tile, from: centre(tile), at: line, in: w)
         tile.mouseUp(with: mouse(.leftMouseUp, line, in: w))
-        XCTAssertNil(image(live))
         XCTAssertNil(live.root.sidebar.favorites.arriving)
+        let dropped = try XCTUnwrap(live.root.sidebar.tablist.arriving, "the image did not glide on to a row")
+        XCTAssertNotNil(image(live))
+        XCTAssertEqual(live.root.sidebar.tablist.rowView(dropped)?.alphaValue, 0, "the row showed before the image arrived")
+        waitForLanding(live)
+        XCTAssertNil(image(live))
+        XCTAssertNil(live.root.sidebar.tablist.arriving)
+        XCTAssertEqual(live.root.sidebar.tablist.rowView(dropped)?.alphaValue, 1)
     }
 
     /// Lets the landing's animation run out.

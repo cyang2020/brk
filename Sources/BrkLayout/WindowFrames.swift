@@ -132,7 +132,7 @@ public struct MiniPlayerFrame: Sendable, Equatable, Codable {
 
 /// One line of the tab list, after flattening folders.
 public struct RowFrame: Sendable, Equatable, Codable {
-    public enum Kind: Sendable, Equatable, Codable {
+    public enum Kind: Sendable, Hashable, Codable {
         case topSpacer
         case item(ItemID)
         /// The Pinned/Today divider (Arc: `exploreSectionDivider`), with Today's Clear button.
