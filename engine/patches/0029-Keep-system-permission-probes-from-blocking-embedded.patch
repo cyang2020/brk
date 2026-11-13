@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Fri, 13 Nov 2026 17:20:53 +0800
+Subject: [PATCH] Keep system permission probes from blocking embedded browser
+ shutdown
+
+---
+ chrome/browser/permissions/system/BUILD.gn                | 5 ++++-
+ .../permissions/system/system_media_permission_cache.cc   | 8 +++++++-
+ 2 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/chrome/browser/permissions/system/BUILD.gn b/chrome/browser/permissions/system/BUILD.gn
+index 8402f9ddc681c5e4433217075da62e99c6931ff1..cd19d9b109828c8713e967f63913201d42aea526 100644
+--- a/chrome/browser/permissions/system/BUILD.gn
++++ b/chrome/browser/permissions/system/BUILD.gn
+@@ -41,7 +41,10 @@ source_set("system") {
+       "system_media_permission_cache.cc",
+       "system_media_permission_cache.h",
+     ]
+-    deps += [ "//chrome/browser:browser_public_dependencies" ]
++    deps += [
++      "//brk:embedding",
++      "//chrome/browser:browser_public_dependencies",
++    ]
+   }
+ 
+   if (is_mac) {
+diff --git a/chrome/browser/permissions/system/system_media_permission_cache.cc b/chrome/browser/permissions/system/system_media_permission_cache.cc
+index 7cc31c179d0b3f4fb1d94a85a02e05cd6879e049..3376a9163d3d351d1d83c026c59f5eccc06057c6 100644
+--- a/chrome/browser/permissions/system/system_media_permission_cache.cc
++++ b/chrome/browser/permissions/system/system_media_permission_cache.cc
+@@ -12,6 +12,7 @@
+ #include "base/notreached.h"
+ #include "base/task/sequenced_task_runner.h"
+ #include "base/task/thread_pool.h"
++#include "brk/embedding/embedding.h"
+ #include "chrome/browser/after_startup_task_utils.h"
+ #include "content/public/browser/browser_thread.h"
+ 
+@@ -111,7 +112,12 @@ base::SequencedTaskRunner* SystemMediaPermissionCache::GetTaskRunner() {
+   if (!task_runner_) {
+     task_runner_ =
+         std::move(create_task_runner_cb_)
+-            .Run({base::MayBlock(), base::TaskPriority::BEST_EFFORT});
++            .Run({base::MayBlock(), base::TaskPriority::BEST_EFFORT,
++                  // A read-only TCC query can wait indefinitely for macOS. It
++                  // must not hold Brk's shutdown open after its cache is gone.
++                  brkcore::IsEmbedded()
++                      ? base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN
++                      : base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN});
+   }
+   return task_runner_.get();
+ }
