@@ -83,6 +83,13 @@ final class SidebarPointerFixTests: XCTestCase {
 
     private func wait(_ seconds: Double) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
 
+    /// Waits until `condition` holds or `timeout` passes. GitHub's runners fire the card's timers late: a fixed wait of
+    /// the delay plus 0.2 s failed there twice (builds 35 and 36) while the card opened fine.
+    private func wait(until condition: () -> Bool, timeout: Double) {
+        let end = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < end { wait(0.02) }
+    }
+
     private func card(in rig: Rig) -> FolderPreviewView? { ViewTreeSearch.find("sidebar-hover-card", in: rig.root) as? FolderPreviewView }
 
     private func enterExit(_ type: NSEvent.EventType, in window: NSWindow, at location: CGPoint = .zero) -> NSEvent {
@@ -100,7 +107,7 @@ final class SidebarPointerFixTests: XCTestCase {
         let folder = try XCTUnwrap(rig.folder)
         let row = try XCTUnwrap(ViewTreeSearch.find(ViewID.row(folder.id).identifier, in: rig.root) as? RowView)
         row.setHovered(true)
-        wait(PreviewDraw.delay.value + 0.2)
+        wait(until: { self.card(in: rig) != nil }, timeout: PreviewDraw.delay.value + 3)
         let card = try XCTUnwrap(card(in: rig), "the folder's card did not open")
         card.mouseEntered(with: enterExit(.mouseEntered, in: rig.window))
         row.setHovered(false)
@@ -195,7 +202,7 @@ final class SidebarPointerFixTests: XCTestCase {
         let page = NSTextView(frame: CGRect(x: 600, y: 300, width: 100, height: 50))
         rig.root.addSubview(page)
         XCTAssertTrue(rig.window.makeFirstResponder(page))
-        wait(PreviewDraw.hideDelay.value + 0.15)
+        wait(until: { self.card(in: rig) == nil }, timeout: PreviewDraw.hideDelay.value + 3)
         XCTAssertNil(self.card(in: rig), "the card stayed over the page after its field lost the keyboard")
     }
 
