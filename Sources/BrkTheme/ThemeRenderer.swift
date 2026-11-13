@@ -277,7 +277,7 @@ final class ThemeRenderer {
     }
 
     // Arc's layerColor: the first two colors along the 45 degree ramp (the corner values interpolated over the quad's two
-    // triangles, full at three quarters), a third from clear at the top (full at three quarters of the height), mixed in
+    // triangles, full at three quarters), a third from clear at the top to full strength at the bottom, mixed in
     // OKLab, each at the layer alpha, the third laid over the first in linear light. Premultiplied sRGB out.
     fragment float4 gradientFragment(Varyings in [[stage_in]], constant GradientUniforms& u [[buffer(0)]],
                                      texture2d<float> from [[texture(0)]]) {
@@ -288,7 +288,7 @@ final class ThemeRenderer {
         float3 rgb = oklabToLinear(base);
         float a = u.alpha;
         if (u.count > 2.5) {
-            float ao = clamp(p.y * 4.0 / 3.0, 0.0, 1.0) * u.alpha;
+            float ao = clamp(p.y, 0.0, 1.0) * u.alpha;
             float aOut = (1 - ao) * a + ao;
             rgb = (oklabToLinear(u.colors[2].xyz) * ao + rgb * a * (1 - ao)) / max(aOut, 1e-6);
             a = aOut;

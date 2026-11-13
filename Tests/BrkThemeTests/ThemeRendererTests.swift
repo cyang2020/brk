@@ -57,16 +57,18 @@ final class ThemeRendererTests: XCTestCase {
     func testPreviewMatchesTheRenderedGradientOverMaterial() throws {
         let renderer = try XCTUnwrap(ThemeRenderer(device: MTLCreateSystemDefaultDevice()))
         let colors = [RGBA(0.2, 0.4, 0.6), RGBA(0.8, 0.2, 0.1), RGBA(0.1, 0.7, 0.3)]
-        for count in 1...3 {
-            var theme = a
-            theme.gradient = Array(colors.prefix(count))
-            renderer.transition(to: theme, duration: 0, at: 0)
-            for point in [(2, 2), (7, 8), (13, 14)] {
-                let frame = try draw(renderer, at: 0, pixelAt: point)
-                let preview = themeSample(theme, at: ThemePoint(x: (Double(point.0) + 0.5) / 16,
-                                                               y: (Double(point.1) + 0.5) / 16), aspect: 1)
-                let backdrop = theme.materialBackdrop * (255 - frame.coverage)
-                assertPixel(frame.pixel.map { $0 + backdrop }, preview.red * 255, preview.green * 255, preview.blue * 255)
+        for (width, height) in [(16, 16), (32, 16), (16, 32)] {
+            for count in 1...3 {
+                var theme = a
+                theme.gradient = Array(colors.prefix(count))
+                renderer.transition(to: theme, duration: 0, at: 0)
+                for point in [(2, 2), (width / 2, height / 2), (width - 3, height - 2)] {
+                    let frame = try draw(renderer, at: 0, size: (width, height), pixelAt: point)
+                    let preview = themeSample(theme, at: ThemePoint(x: (Double(point.0) + 0.5) / Double(width),
+                                                                   y: (Double(point.1) + 0.5) / Double(height)), aspect: Double(width) / Double(height))
+                    let backdrop = theme.materialBackdrop * (255 - frame.coverage)
+                    assertPixel(frame.pixel.map { $0 + backdrop }, preview.red * 255, preview.green * 255, preview.blue * 255)
+                }
             }
         }
     }
@@ -79,11 +81,12 @@ final class ThemeRendererTests: XCTestCase {
         return theme
     }
 
-    /// Draws a 16 x 16 px frame at `time` and returns the mean BGRA -> RGB (premultiplied) and alpha of all its pixels.
+    /// Draws a frame at `time` and returns the mean BGRA -> RGB (premultiplied) and alpha of all its pixels.
     @discardableResult
     private func draw(_ renderer: ThemeRenderer, at time: CFTimeInterval,
-                      pixelAt: (Int, Int)? = nil) throws -> (pixel: [Double], coverage: Double, animating: Bool) {
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: ThemeRenderer.drawableFormat, width: 16, height: 16,
+                      size: (Int, Int) = (16, 16), pixelAt: (Int, Int)? = nil) throws -> (pixel: [Double], coverage: Double, animating: Bool) {
+        let (width, height) = size
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: ThemeRenderer.drawableFormat, width: width, height: height,
                                                                   mipmapped: false)
         descriptor.usage = [.renderTarget, .shaderRead]
         descriptor.storageMode = .shared
@@ -92,17 +95,17 @@ final class ThemeRendererTests: XCTestCase {
         let animating = renderer.encode(into: texture, scale: 1, at: time, commandBuffer: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
-        var bytes = [UInt8](repeating: 0, count: 16 * 16 * 4)
-        texture.getBytes(&bytes, bytesPerRow: 16 * 4, from: MTLRegionMake2D(0, 0, 16, 16), mipmapLevel: 0)
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        texture.getBytes(&bytes, bytesPerRow: width * 4, from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
         if let (x, y) = pixelAt {
-            let i = (y * 16 + x) * 4
+            let i = (y * width + x) * 4
             return ([Double(bytes[i + 2]), Double(bytes[i + 1]), Double(bytes[i])], Double(bytes[i + 3]), animating)
         }
         var sum = [0.0, 0.0, 0.0, 0.0]
         for i in stride(from: 0, to: bytes.count, by: 4) {
             sum[0] += Double(bytes[i + 2]); sum[1] += Double(bytes[i + 1]); sum[2] += Double(bytes[i]); sum[3] += Double(bytes[i + 3])
         }
-        return (Array(sum.prefix(3)).map { $0 / 256 }, sum[3] / 256, animating)
+        return (Array(sum.prefix(3)).map { $0 / Double(width * height) }, sum[3] / Double(width * height), animating)
     }
 
     private func assertPixel(_ pixel: [Double], _ r: Double, _ g: Double, _ b: Double, file: StaticString = #filePath, line: UInt = #line) {

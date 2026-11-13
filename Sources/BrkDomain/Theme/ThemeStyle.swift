@@ -80,13 +80,13 @@ private func unit(_ value: Double) -> Double { finite(value, fallback: 0, range:
 
 /// Where Arc's diagonal ramp (from the first base color to the second) stands at the window's four corners, for a window
 /// `aspect` = width / height (WindowThemeUI renderVertex and gradientVertex): the ramp runs at 45 degrees through the
-/// middle across the shorter side, and the shader interpolates the clamped corner values over the two triangles of the
+/// middle across the longer side, and the shader interpolates the clamped corner values over the two triangles of the
 /// quad (top-left, top-right, bottom-left, bottom-right).
 public func themeRampCorners(aspect: Double) -> [Double] {
     let a = max(aspect, 1e-6)
     let (start, end): ((Double, Double), (Double, Double)) = a >= 1
-        ? ((0.5 - 0.5 / a, 0), (0.5 + 0.5 / a, 1))
-        : ((0, 0.5 - 0.5 * a), (1, 0.5 + 0.5 * a))
+        ? ((0, 0.5 - 0.5 / a), (1, 0.5 + 0.5 / a))
+        : ((0.5 - 0.5 * a, 0), (0.5 + 0.5 * a, 1))
     let dx = end.0 - start.0, dy = end.1 - start.1, length2 = dx * dx + dy * dy
     return [(0.0, 0.0), (1, 0), (0, 1), (1, 1)].map { p in min(max(((p.0 - start.0) * dx + (p.1 - start.1) * dy) / length2, 0), 1) }
 }
@@ -99,8 +99,8 @@ public func themeRamp(_ corners: [Double], at point: ThemePoint) -> Double {
 }
 
 /// Arc's theme color at `point` before the underlay (WindowThemeUI gradientFragment): the base colors mixed in OKLab along
-/// the diagonal ramp, full at three quarters of it; a third color mixed in from clear at the top, full at three quarters
-/// of the height, laid over the base in linear light. Both layers use the theme's alpha.
+/// the diagonal ramp, full at three quarters of it; a third color mixed in from clear at the top to full strength at the
+/// bottom, laid over the base in linear light. Both layers use the theme's alpha.
 public func themeGradientColor(_ theme: ResolvedTheme, at point: ThemePoint, aspect: Double = 1280.0 / 776) -> RGBA {
     let colors = theme.gradient.isEmpty ? [RGBA(1, 1, 1)] : theme.gradient
     let s1 = min(max(themeRamp(themeRampCorners(aspect: aspect), at: point) * 4 / 3, 0), 1)
@@ -111,7 +111,7 @@ public func themeGradientColor(_ theme: ResolvedTheme, at point: ThemePoint, asp
         color.alpha = alpha
         return color
     }
-    let a = min(max(point.y * 4 / 3, 0), 1) * alpha
+    let a = min(max(point.y, 0), 1) * alpha
     let coverage = a + alpha * (1 - a)
     let over = OKLabColor(colors[2]).linear
     var color = OKLabColor.encode((0..<3).map { (base[$0] * alpha * (1 - a) + over[$0] * a) / max(coverage, 1e-6) })
