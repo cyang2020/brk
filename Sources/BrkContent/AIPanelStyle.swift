@@ -30,7 +30,9 @@ struct AIPanelStyle: Equatable {
         self.onCard = onCard
         let ink = sidebarInk(palette.accent)
         text = scheme == .light ? NSColor(srgbRed: ink.red, green: ink.green, blue: ink.blue, alpha: 1) : NSColor(white: 1, alpha: 0.9)
-        secondary = palette.color(tokens.foregroundStrong)
+        // The Today header's ink, a little stronger: the panel lies on the window's colour, which the default Space in Dark
+        // makes #B6B2AE, where the header's 45% read at 2.8:1.
+        secondary = palette.color(tokens.foregroundStrong).withAlphaComponent(scheme == .light ? 0.55 : 0.6)
         accent = palette.focusColor
         onAccent = scheme == .light ? .white : NSColor(srgbRed: 0x1F / 255, green: 0x1E / 255, blue: 0x24 / 255, alpha: 1)
         card = Self.cardColor(scheme)

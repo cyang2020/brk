@@ -366,7 +366,8 @@ final class AIThreadRowView: AIControl {
         pressFill = style.itemHover
         title.textColor = style.text
         detail.stringValue = row.snippet ?? row.detail
-        detail.textColor = style.secondary
+        // On the current row's lighter fill a dark Space's grey second line read at 2.1:1: it takes the title's ink, fainter.
+        detail.textColor = row.current && kind == .row ? style.text.withAlphaComponent(0.75) : style.secondary
         toolTip = row.title + "\n" + (row.snippet ?? row.detail)
         setAccessibilityLabel(row.title)
         pillBack.wantsLayer = true
