@@ -105,6 +105,7 @@ sidebar R49-Toasts
 sidebar TabTools1
 sidebar SplitTools1
 sidebar TextLayout
+sidebar R57-FolderMotion
 
 # spaces：新建 Space
 spaces SpaceTools-2
