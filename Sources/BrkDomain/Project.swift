@@ -367,6 +367,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         let developer = t.url.flatMap(SiteOrigin.init).map { state.sitePreferences(state.browsingContext(of: focusedPane)).rule(for: $0).developerMode == true } ?? false
         pill.host = awaitingFirstDocument(focusedPane, t) ? "about:blank" : t.url.map { developer ? $0.absoluteString : displayHost($0) }
         pill.developerMode = developer
+        if let url = t.url {
+            pill.hasActiveBoost = state.boostPolicy(for: PageID(window: id, item: focusedPane)).boosts.contains { $0.scope.matches(url) }
+        }
         // The toolbar shows the host like the pill (Arc P01-b), or the whole address with "Show full URL in toolbar".
         pill.toolbarText = doc.toolbarVisible ? t.url.map { state.doc.settings.advanced.showFullURLInToolbar ? $0.absoluteString : pill.host ?? displayHost($0) } : nil
         if let live = state.session.live[PageID(window: id, item: focusedPane)] {

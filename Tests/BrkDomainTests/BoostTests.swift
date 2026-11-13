@@ -28,6 +28,18 @@ final class BoostTests: XCTestCase {
             XCTAssertFalse(BoostScope.allSites.matches(URL(string: value)!))
         }
     }
+
+    func testPillIndicatesOnlyAnEnabledBoostMatchingItsSite() {
+        let d = readyDriver()
+        XCTAssertFalse(d.view.urlPill.hasActiveBoost)
+        d.system(.boost(.loaded(.default, BoostCatalog(boosts: [boost()]), error: nil)))
+        XCTAssertTrue(d.view.urlPill.hasActiveBoost)
+        var disabled = boost(); disabled.enabled = false
+        d.system(.boost(.loaded(.default, BoostCatalog(boosts: [disabled]), error: nil)))
+        XCTAssertFalse(d.view.urlPill.hasActiveBoost)
+        d.system(.boost(.loaded(.default, BoostCatalog(boosts: [boost(.host("other.example"))]), error: nil)))
+        XCTAssertFalse(d.view.urlPill.hasActiveBoost)
+    }
     /// Review F8 and #21: a typed internationalised host or IPv6 address is stored as committed URLs report it, so the
     /// scope matches and the file validates.
     func testTypedHostsAreStoredAsCommittedURLsReportThem() throws {

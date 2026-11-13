@@ -411,14 +411,86 @@ struct KeyCapArt: View {
         case .command:
             Image(systemName: "command").font(.system(size: A.keyGlyph.value, weight: .bold)).foregroundStyle(ArtColor.keyBlue)
         case .smile:
+            AnimatedSmileMark()
+        }
+    }
+}
+
+/// Replays the two blinks, wink and mouth movement of Arc's preferences smile (30 fps, 150 frames).
+private struct AnimatedSmileMark: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var replay = 0
+
+    private struct Pose {
+        var leftEye = 1.0
+        var rightEye = 1.0
+        var turn = 0.0
+        var x = 0.0
+        var y = 0.0
+    }
+
+    var body: some View {
+        KeyframeAnimator(initialValue: Pose(), trigger: replay) { pose in
             ZStack {
                 HStack(spacing: 8.5) {
-                    ForEach(0..<2, id: \.self) { _ in Capsule().fill(ArtColor.keyBlue).frame(width: 3, height: 10) }
+                    Capsule().fill(ArtColor.keyBlue).frame(width: 3, height: 10).scaleEffect(x: 1, y: pose.leftEye)
+                    Capsule().fill(ArtColor.keyBlue).frame(width: 3, height: 10).scaleEffect(x: 1, y: pose.rightEye)
                 }
                 .offset(y: -6.5)
-                SmileCurve().stroke(ArtColor.keyBlue, style: StrokeStyle(lineWidth: 3, lineCap: .round)).frame(width: 25, height: 6).offset(y: 9)
+                SmileCurve().stroke(ArtColor.keyBlue, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .frame(width: 25, height: 6).rotationEffect(.degrees(pose.turn))
+                    .offset(x: pose.x, y: 9 + pose.y)
+            }
+            .frame(width: 32, height: 32)
+            .contentShape(Rectangle())
+        } keyframes: { _ in
+            KeyframeTrack(\.leftEye) {
+                LinearKeyframe(1, duration: 28 / 30)
+                CubicKeyframe(0.25, duration: 2 / 30)
+                CubicKeyframe(1, duration: 6 / 30)
+                LinearKeyframe(1, duration: 20 / 30)
+                CubicKeyframe(0.25, duration: 2 / 30)
+                CubicKeyframe(1, duration: 6 / 30)
+            }
+            KeyframeTrack(\.rightEye) {
+                LinearKeyframe(1, duration: 28 / 30)
+                CubicKeyframe(0.25, duration: 2 / 30)
+                CubicKeyframe(1, duration: 6 / 30)
+                LinearKeyframe(1, duration: 20 / 30)
+                CubicKeyframe(0.25, duration: 2 / 30)
+                CubicKeyframe(1, duration: 6 / 30)
+                LinearKeyframe(1, duration: 22 / 30)
+                CubicKeyframe(0.25, duration: 3 / 30)
+                CubicKeyframe(1, duration: 7 / 30)
+            }
+            KeyframeTrack(\.turn) {
+                LinearKeyframe(0, duration: 27 / 30)
+                CubicKeyframe(5, duration: 27 / 30)
+                CubicKeyframe(-5, duration: 28 / 30)
+                CubicKeyframe(11.094, duration: 9 / 30)
+                CubicKeyframe(-1.646, duration: 11 / 30)
+                CubicKeyframe(0, duration: 17 / 30)
+            }
+            KeyframeTrack(\.x) {
+                LinearKeyframe(0, duration: 27 / 30)
+                CubicKeyframe(-1.2, duration: 17 / 30)
+                LinearKeyframe(-1.2, duration: 10 / 30)
+                CubicKeyframe(1.9, duration: 14 / 30)
+                LinearKeyframe(1.9, duration: 19 / 30)
+                CubicKeyframe(0, duration: 13 / 30)
+            }
+            KeyframeTrack(\.y) {
+                LinearKeyframe(0, duration: 27 / 30)
+                CubicKeyframe(1.5, duration: 5 / 30)
+                CubicKeyframe(-1.5, duration: 7 / 30)
+                CubicKeyframe(-0.13, duration: 21 / 30)
+                CubicKeyframe(-1.5, duration: 24 / 30)
+                CubicKeyframe(0, duration: 11 / 30)
             }
         }
+        .onAppear { if !reduceMotion { replay += 1 } }
+        .onHover { if $0 && !reduceMotion { replay += 1 } }
+        .accessibilityHidden(true)
     }
 }
 

@@ -333,10 +333,10 @@ struct ThemeEditorView: View {
 
     private var appearanceButtons: some View {
         HStack(spacing: m.appearancePitch.value - m.appearanceSide.value) {
-            ForEach([(AppearanceChoice.auto, "sparkles"), (.light, "sun.max.fill"), (.dark, "moon.stars.fill")], id: \.0) { choice, symbol in
+            ForEach([AppearanceChoice.auto, .light, .dark], id: \.self) { choice in
                 let on = model.draft.appearance == choice
                 Button { model.update { $0.setAppearance(choice) } } label: {
-                    Image(systemName: symbol).font(.system(size: 15, weight: .semibold))
+                    ThemeAppearanceIcon(choice: choice, selected: on).font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(ink.opacity(0.6))
                         .frame(width: m.appearanceSide.value, height: m.appearanceSide.value)
                         .background(RoundedRectangle(cornerRadius: m.appearanceSide.value / 4, style: .continuous).fill(ink.opacity(on ? 0.08 : 0)))

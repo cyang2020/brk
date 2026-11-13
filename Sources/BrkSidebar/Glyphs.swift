@@ -10,7 +10,7 @@ import BrkUIKit
 /// A control glyph by purpose (visual-and-copy.md, "Icons grouped by purpose").
 enum Glyph {
     case back, forward, reload, stop, sidebarToggle
-    case plus, library, archiveTab, closeKeepPinned, clearDown, copyLink
+    case plus, library, archiveTab, closeKeepPinned, clearDown, copyLink, copiedLink
     case siteControls, search, globe, chevronDown, chevronRight, more, close, warning
     /// A tab row's outlined speaker (Arc draws its own `SpeakerIcon`; these are the nearest symbols) and the mini player's.
     case rowSpeaker, rowSpeakerMuted, mediaPrevious, mediaPlay, mediaPause, mediaNext, currentRowUp, currentRowDown
@@ -28,6 +28,7 @@ enum Glyph {
         case .closeKeepPinned: "minus"
         case .clearDown: "arrow.down"
         case .copyLink: "link"
+        case .copiedLink: "checkmark"
         case .siteControls: "slider.horizontal.2.square"
         case .search: "magnifyingglass"
         case .globe: "globe"
