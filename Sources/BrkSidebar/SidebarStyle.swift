@@ -218,6 +218,13 @@ struct SidebarDrawMetrics: MetricGroup {
     let dockGlyphInkDark = Metric(0.62, .anatomy("~/brk-arc-reference/Q18/Q18-navy-row-hover-arc.png: the Library glyph and the + read white at this strength over the theme"))
     let dockButtonGlyph = Metric(15.0, .guess("Library and + glyph size in their 32 pt buttons"))
     let dockPlusBars = Metric([14.0, 2.0], .anatomy("bin:0x100af2384: PlusMenuIcon is two RoundedRectangles, the size wide and 2 high, one turned 90°; 2a96a9d7f0:verify/visual-pairs/run-20261103 Q11-b-arc: the + spans 28 px at 2x"))
+    let copyFeedbackDuration = Metric(1.0, .anatomy("~/brk-evidence/hover-animations-2/scratch/copy-link.mov: click collapses the link, the check appears and holds for about one second before the link returns"))
+    let toolbarPressSpring = Metric([0.2, 0.6], .anatomy("~/brk-evidence/hover-animations-2: real Arc's sidebar toggle held down reaches its pressed look in 0.13 s with an 8% overshoot, settled by 0.27 s, a spring of response 0.2 and damping 0.6 (the same numbers ReloadIcon's wrapper names, bin:0x100af27d4)"))
+    let toolbarPressedInk = Metric(0.94, .anatomy("~/brk-evidence/hover-animations-2: the held sidebar toggle's ink reads 13 on the 236 hover fill (0.6 at rest, 89)"))
+    let toolbarToggleScale = Metric(0.95, .anatomy("bin:0x100af2054: SidebarIcon scaleEffect(isArcButtonPressed ? 0.95 : 1) about its centre"))
+    let toolbarArrowShift = Metric(3.0, .anatomy("bin:0x100af21d8: ArrowIcon offset x isArcButtonPressed ? -3 (left) or 3 (right) : 0"))
+    let toolbarReloadTurn = Metric(90.0, .anatomy("bin:0x100af2aa0: ReloadIcon's arrow rotationEffect(isArcButtonPressed ? π/2 : 0)"))
+    let toolbarGlyphSwap = Metric([0.7, 0.1, 0.2], .anatomy("bin:0x100af2aa0, bin:0x100af27d4: reload ↔ stop: the leaving glyph scales to 0.7 and fades, the coming one from 0.7, on spring(0.2, 0.6) delayed 0.1 s (to stop) or 0.2 s (back to reload)"))
     let dockPlusSpring = Metric([0.2, 0.5], .anatomy("bin:0x100af267c: rotationEffect(isOpen ? 45° : 0) with .spring(response: 0.2, dampingFraction: 0.5)"))
 
     // The Library button's picture and its hover motion (Arc 1.170: ARCUI `BoxOfThingsIcon`, body bin:0x100ae93b4,

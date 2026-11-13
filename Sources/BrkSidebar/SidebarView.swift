@@ -622,6 +622,12 @@ final class TitleRowView: NSView {
         forward.action = { _ in dispatch(.page(.forward(.focused))) }
         reload.action = { [weak self] modifiers in self?.reloadOrStop(modifiers) }
         more.action = { [weak self] _ in self?.showMore() }
+        // Arc's toolbar glyphs move while held (SidebarIcon, ArrowIcon, ReloadIcon).
+        toggle.pressMotion = .scale(Draw.toolbarToggleScale.value)
+        back.pressMotion = .shift(-Draw.toolbarArrowShift.value)
+        forward.pressMotion = .shift(Draw.toolbarArrowShift.value)
+        reload.pressMotion = .turn(Draw.toolbarReloadTurn.value)
+        reload.springsGlyphChange = true
         toggle.toolTip = SidebarCopy.showHideSidebar
         back.toolTip = SidebarCopy.goBack
         forward.toolTip = SidebarCopy.goForward
@@ -752,6 +758,8 @@ final class TitleRowView: NSView {
             item.state = state.open ? .on : .off
             menu.items.append(item)
         }
+        more.menuOpen = true
+        defer { more.menuOpen = false }
         menu.popUp(positioning: nil, at: CGPoint(x: more.frame.minX, y: more.frame.maxY), in: self)
     }
 
@@ -808,7 +816,10 @@ final class URLPillView: HoverView {
     private let lock = NSImageView()
     private let badge = ProfileBadgeView()
     private let copyLink = GlyphButton()
+    private var copied = false
+    private var copyFeedback: Task<Void, Never>?
     private let siteInfo = GlyphButton()
+    private let siteSparkles = SiteSparklesLayer()
     /// Arc's second line: Translation Available / Translated (P01-a, P50-b).
     private let translationLine: PillTranslationLine
     private var pill: URLPillSnapshot?
@@ -838,10 +849,16 @@ final class URLPillView: HoverView {
         lock.contentTintColor = NSColor(srgbRed: 0x9B / 255.0, green: 0x9A / 255.0, blue: 0x9A / 255.0, alpha: 1)   // Q09 a: #9B9A9A
         lock.isHidden = true
         addSubview(lock)
-        copyLink.action = { _ in dispatch(.page(.copyURL(.plain))) }
+        copyLink.pressMotion = .scale(1)
+        copyLink.springsGlyphChange = true
+        copyLink.action = { [weak self] _ in
+            dispatch(.page(.copyURL(.plain)))
+            self?.showCopyFeedback()
+        }
         copyLink.toolTip = SidebarCopy.copyLink
         addSubview(copyLink)
         addSubview(siteInfo)
+        layer?.addSublayer(siteSparkles.layer)
         addSubview(translationLine)
         identify(.urlPill)
     }
@@ -853,6 +870,7 @@ final class URLPillView: HoverView {
     func render(_ pill: URLPillSnapshot, palette: Palette, searchField: Bool = false) {
         let search = searchField && pill.text == nil
         if pill == self.pill, palette == self.palette, search == self.searchField { needsLayout = true; return }
+        if self.pill?.text != pill.text { copyFeedback?.cancel(); copied = false }
         self.pill = pill
         self.palette = palette
         self.searchField = search
@@ -864,7 +882,7 @@ final class URLPillView: HoverView {
         // Q13-c is 79 pt, SF 13 regular.
         label.font = .systemFont(ofSize: Draw.urlFont.value, weight: text == nil ? .medium : .regular)
         let radius = Metrics.urlPill.accessoryRadius.value
-        copyLink.render(.copyLink, size: Draw.pillAccessoryGlyph.value, palette: palette, radius: radius, hoverFill: palette.tokens.itemHover)
+        renderCopyLink(palette)
         if search {
             siteInfo.render(.search, size: Draw.pillSearchGlyph.value, palette: palette, tint: palette.ink.searchGlyph, radius: radius, hoverFill: palette.tokens.itemHover)
         } else {
@@ -882,6 +900,24 @@ final class URLPillView: HoverView {
         needsLayout = true
     }
 
+    private func renderCopyLink(_ palette: Palette) {
+        copyLink.render(copied ? .copiedLink : .copyLink, size: Draw.pillAccessoryGlyph.value, palette: palette,
+                        radius: Metrics.urlPill.accessoryRadius.value, hoverFill: palette.tokens.itemHover)
+    }
+
+    private func showCopyFeedback() {
+        guard let palette else { return }
+        copyFeedback?.cancel()
+        copied = true
+        renderCopyLink(palette)
+        copyFeedback = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(Draw.copyFeedbackDuration.value)) } catch { return }
+            guard let self, let palette = self.palette else { return }
+            self.copied = false
+            self.renderCopyLink(palette)
+        }
+    }
+
     override func layout() {
         super.layout()
         let size = Metrics.urlPill.accessorySize.value, inset = Draw.pillAccessoryInset.value
@@ -889,6 +925,10 @@ final class URLPillView: HoverView {
         // end with copy link before them.
         siteInfo.frame = searchField ? CGRect(x: inset, y: (bounds.height - size) / 2, width: size, height: size)
             : CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        siteSparkles.layer.position = CGPoint(x: siteInfo.frame.midX, y: siteInfo.frame.midY)
+        CATransaction.commit()
         copyLink.frame = CGRect(x: bounds.width - inset - size, y: (bounds.height - size) / 2, width: size, height: size)
             .offsetBy(dx: searchField ? 0 : -(size + Draw.pillAccessoryGap.value), dy: 0)
         var leading = searchField ? inset + size + Draw.pillSearchTextLeading.value : Draw.pillTextLeading.value
@@ -922,6 +962,16 @@ final class URLPillView: HoverView {
     /// Copy link and the site controls, shown while the pointer is over the sidebar and the tab has an address.
     private var accessoriesShown: Bool { (sidebarHovered || isHovered) && pill?.text != nil && pill?.share == nil }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        stateChanged()
+    }
+
+    override func viewDidHide() {
+        super.viewDidHide()
+        stateChanged()
+    }
+
     override func stateChanged() {
         guard let palette else { return }
         let fill = isPressed ? palette.tokens.tabPressed : isHovered ? palette.tokens.itemHover : palette.tokens.itemBackground
@@ -929,6 +979,8 @@ final class URLPillView: HoverView {
             ? ProfileBadgeView.incognitoPillBackground.cgColor : palette.color(fill).cgColor
         copyLink.alphaValue = accessoriesShown ? 1 : 0
         siteInfo.alphaValue = searchField || accessoriesShown ? 1 : 0
+        siteSparkles.show(active: accessoriesShown && pill?.hasActiveBoost == true && window != nil && !isHiddenOrHasHiddenAncestor,
+                          tint: palette.ink.secondary, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         needsLayout = true
     }
 

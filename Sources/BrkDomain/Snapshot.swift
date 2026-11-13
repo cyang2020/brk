@@ -177,6 +177,7 @@ public struct URLPillSnapshot: Sendable, Equatable, Codable {
     public var host: String? = nil
     /// The focused page's site has Developer Mode on (View > Developer's row then reads "Turn off …").
     public var developerMode = false
+    public var hasActiveBoost = false
     /// The focused card shows an Easel: the pill reads "Share" after a lock (Q09 a) and a click shares the board.
     public var share: EaselID? = nil
     /// The second line under the host: Translation Available, Translating…, Translated (P01-a, P50-b); Share Quote
