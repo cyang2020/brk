@@ -109,12 +109,18 @@ enum SplitToolsScenarios {
         // picked in the sidebar, closes from the keyboard.
         try app.click(.splitSegment(panes[0]))
         try app.press("ctrl+shift+-")
-        try expect(try app.view().content.panes.count == 3, "Close this Split Pane did not remove the pane picked in the sidebar")
+        try app.waitUntil("Close this Split Pane removes the pane picked in the sidebar") {
+            let remaining = try app.view().content.panes
+            return remaining.count == 3 && !remaining.contains { $0.tab == panes[0] }
+        }
         for pane in panes.dropFirst() {
             try expect(try app.native().pages[PageID(window: app.window!, item: pane)]?.surfaceFrame != nil, "closing first pane detached a surviving page")
         }
-        try app.press("ctrl+shift+-"); try app.press("ctrl+shift+-")
-        try expect(try app.view().content.split == nil && app.view().content.panes.count == 1, "one-pane split did not dissolve")
+        for count in [2, 1] {
+            try app.press("ctrl+shift+-")
+            try app.waitUntil("the close leaves \(count) split panes") { try app.view().content.panes.count == count }
+        }
+        try expect(try app.view().content.split == nil, "one-pane split did not dissolve")
         try app.recordWindows("after-close")
     }
 

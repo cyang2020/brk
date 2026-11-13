@@ -293,12 +293,12 @@ enum SitesSettingsRealScenarios {
             try app.waitForPageInput(PageID(window: owner, item: policy), at: app.site.url("site-policy.html"))
             try openControls(app)
             try pressLocated(app, "siteAddExtension")
-            try app.waitUntil("the folder panel") { try app.native().sheetClass == "NSOpenPanel" }
+            try NativePickerInput.waitForOpenPanel(app)
             try Real.key(app, [], .escape)
             try app.waitUntil("Escape cancels the panel") { try app.native().sheetClass != "NSOpenPanel" }
             let directory = app.site.root.deletingLastPathComponent().appendingPathComponent("Fixtures/SiteExtension")
             try pressLocated(app, "siteAddExtension")
-            try app.waitUntil("the folder panel again") { try app.native().sheetClass == "NSOpenPanel" }
+            try NativePickerInput.waitForOpenPanel(app)
             try Real.key(app, [.command, .shift], .g)
             try Real.paste(app, directory.path)
             try Real.key(app, [], .returnKey)

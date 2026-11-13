@@ -22,7 +22,8 @@ enum FindScenarios {
     static func setup(_ app: AppUnderTest) throws -> PageID {
         let tab = try openTab(app, app.site.url("find.html"))
         let page = PageID(window: app.window!, item: tab.id)
-        try focus(app,page); try waitForTitle(app, tab.id, "Find Fixture")
+        try app.waitForPageInput(page, at: app.site.url("find.html"))
+        try waitForTitle(app, tab.id, "Find Fixture")
         return page
     }
     static func check(_ app: AppUnderTest, _ page: PageID, _ expression: String, _ expected: String) throws {
@@ -52,10 +53,10 @@ enum FindScenarios {
     }
     static func keysAndCounts(_ app: AppUnderTest) throws {
         let page=try setup(app)
-        try app.evaluate(page,"swallow=true")
+        try check(app, page, "window.swallow=true", "true")
         try app.press("cmd+f"); try title(app,page,"swallowed:f")
         try expect(try app.view().find == nil,"renderer-prevented Cmd+F opened find")
-        try app.evaluate(page,"swallow=false")
+        try check(app, page, "window.swallow=false", "false")
         try app.press("cmd+f")
         try app.waitUntil("native find input") { try app.native().firstResponder.hasSuffix(":"+ViewID.findQuery.identifier) }
         try typeQuery(app,"needle"); try matches(app,3,ordinal:1)
@@ -83,7 +84,7 @@ enum FindScenarios {
         try app.press("cmd+option+e")
         try app.waitUntil("remapped native find") {try app.view().find != nil}
         try app.press("escape"); try focus(app,page)
-        try app.evaluate(page,"swallow=true")
+        try check(app, page, "window.swallow=true", "true")
         try app.press("cmd+option+e");try title(app,page,"swallowed:e")
         try expect(try app.view().find == nil,"remap lost page-first priority")
         try app.recordWindows("find-shortcuts")

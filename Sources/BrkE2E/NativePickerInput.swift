@@ -159,6 +159,15 @@ enum NativePickerInput {
     static func button(_ panel: AXUIElement, title: String) -> AXUIElement? {
         find(panel) { node, role in role == kAXButtonRole && string(node, kAXTitleAttribute) == title }
     }
+    static func waitForOpenPanel(_ app: AppUnderTest) throws {
+        try app.waitUntil("the owned folder panel is ready for keyboard input") {
+            let native = try app.native()
+            guard native.sheetClass == "NSOpenPanel",
+                  native.appWindows.contains(where: { $0.className == "NSOpenPanel" && $0.isVisible && $0.isKey }),
+                  let panel = try? sheet(app), let cancel = button(panel, title: "Cancel") else { return false }
+            return attribute(cancel, kAXEnabledAttribute) as? Bool == true
+        }
+    }
     static func press(_ panel: AXUIElement, title: String) throws {
         guard let button = button(panel, title: title), attribute(button, kAXEnabledAttribute) as? Bool == true else {
             throw Check(description: "Owned AX button absent or disabled: \(title)")
