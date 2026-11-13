@@ -165,19 +165,8 @@ enum NativePickerInput {
             guard native.sheetClass == "NSOpenPanel",
                   native.appWindows.contains(where: { $0.className == "NSOpenPanel" && $0.isVisible && $0.isKey }),
                   let panel = try? sheet(app), let cancel = button(panel, title: "Cancel") else { return false }
-            guard attribute(cancel, kAXEnabledAttribute) as? Bool == true, let pid = app.hello?.pid else { return false }
-            let root = AXUIElementCreateApplication(pid)
-            guard let window = attribute(root, kAXFocusedWindowAttribute), CFEqual(window, panel),
-                  let focused = attribute(root, kAXFocusedUIElementAttribute),
-                  CFGetTypeID(focused) == AXUIElementGetTypeID() else { return false }
-            // The remote picker can be visible before WindowServer has handed keyboard focus to its controls.
-            var node = focused as! AXUIElement
-            for _ in 0..<16 {
-                if CFEqual(node, panel) { return true }
-                guard let next = parent(node) else { return false }
-                node = next
-            }
-            return false
+            // The remote panel becomes key before its configured initial directory has finished appearing.
+            return whereMatches(panel, app.dataDirectory) && attribute(cancel, kAXEnabledAttribute) as? Bool == true
         }
     }
     static func press(_ panel: AXUIElement, title: String) throws {
