@@ -108,8 +108,8 @@ public enum ArcSidebar {
     }
 
     /// Arc's window theme (`WindowTheme`). Its background is `single` (one style) or `appearanceBased` (a light and a
-    /// dark style, shown by macOS's mode), each style holding base colors (one for `blendedSingleColor`, up to three
-    /// for `blendedGradient`), intensity, noise, texture and translucency. A pair becomes a light/dark pair that follows
+    /// dark style, shown by macOS's mode), each style holding its colors (one for `blendedSingleColor`; base and overlay
+    /// colors for `blendedGradient`), intensity, noise, texture and translucency. A pair becomes a light/dark pair that follows
     /// the system. A style without colors to read (Arc's old named `basicColor`s) takes the theme's own palette color
     /// instead of Brk's default beige. Nil when there is no background at all.
     static func theme(_ value: Any?) -> SpaceTheme? {
@@ -139,7 +139,13 @@ public enum ArcSidebar {
             return paletteColor.map { SpaceTheme(colors: [$0], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .auto) }
         }
         var colors: [RGBA] = []
-        if let base = style["baseColors"] as? [Any] { colors = base.compactMap(color) }
+        // A gradient is up to two base colors (the diagonal ramp) and the overlay's visible color (the ramp from the top),
+        // which Brk keeps as the third color; the overlay's first stop is Arc's clear.
+        if let base = style["baseColors"] as? [Any] { colors = Array(base.compactMap(color).prefix(2)) }
+        if !colors.isEmpty, let overlay = (style["overlayColors"] as? [Any])?.compactMap(color).last(where: { $0.alpha > 0 }) {
+            if colors.count == 1 { colors.append(colors[0]) }
+            colors.append(RGBA(overlay.red, overlay.green, overlay.blue, 1))
+        }
         if colors.isEmpty, let single = color(style["color"]) { colors = [single] }
         if colors.isEmpty, let paletteColor { colors = [paletteColor] }
         guard !colors.isEmpty else { return nil }

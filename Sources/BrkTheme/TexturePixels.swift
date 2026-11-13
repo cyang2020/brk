@@ -5,11 +5,12 @@ import Foundation
 /// The overlay textures, generated procedurally (Arc's asset files are not copied). Pure and seeded, so the same
 /// kind, size and seed give the same bytes on every run and machine.
 ///
-/// Every feature is laid out in points of Arc's tile (`tileSize`): lattice counts and stripe frequencies are whole
-/// numbers per tile, so the pattern wraps at the edges. `size` is the pixel size; `tileSize x backing scale` draws
-/// the same pattern sharper on a 2x display, like Arc's @2x assets.
+/// Arc's Metal renderer draws `grain_metal`, `sand_metal`, `denim_metal` and `tweed_metal` one texel per device pixel
+/// (docs/checks/2026-11-13-window-translucency.md, round 2), so the tiles are made at those pixel sizes (`tileSize`) and
+/// then scaled to the grey mean and spread of Arc's tiles (`textureTone`): a texture at a given noise darkens a color
+/// by as much as Arc's. Lattice counts and stripe frequencies are whole numbers per tile, so the pattern wraps.
 public enum TexturePixels {
-    /// Arc's tile size for `kind`, in px at 1x (visual-and-copy.md, "Gradient and grain assets").
+    /// The tile's size in device pixels (Metrics.theme.*Tile).
     public static func tileSize(_ kind: Texture) -> Int {
         switch kind {
         case .grain: Metrics.theme.grainTile.value
@@ -19,60 +20,64 @@ public enum TexturePixels {
         }
     }
 
-    /// `size x size` pixels, two bytes each (luminance, alpha), rows from the top. Grain varies its alpha (Arc's
-    /// grain is ARGB with transparency); sand, denim and tweed are opaque grayscale like Arc's.
-    /// - grain: fine monochrome noise, one grain per point.
-    /// - sand: soft speckle: 3 pt blobs with fine noise and scattered dark and light grains.
-    /// - denim: steep right-hand twill (wales along 2x + y) over soft vertical warp streaks.
+    /// `size x size` pixels, two bytes each (grey, alpha), rows from the top. Grain is grey noise at Arc's constant alpha;
+    /// sand, denim and tweed are opaque like Arc's.
+    /// - grain: fine noise, a grain about 1.5 px across (Arc's neighbouring pixels correlate 0.39).
+    /// - sand: soft 3 px speckle with fine noise and scattered dark and light grains.
+    /// - denim: right-hand twill 2 px apart along a row (Arc's neighbours alternate, -0.56) over soft vertical streaks.
     /// - tweed: coarse fibres crossed at +-45 degrees, in two yarn tones, with flecks.
     public static func generate(_ kind: Texture, size: Int, seed: UInt64) -> [UInt8] {
         precondition(size > 0, "texture size must be positive")
         let tile = tileSize(kind)
-        let pixel: (Double, Double) -> (luminance: Double, alpha: Double)
+        let pixel: (Double, Double) -> Double
         switch kind {
         case .grain:
-            let tone = Lattice(tile, tile, seed: seed, salt: 1), cover = Lattice(tile, tile, seed: seed, salt: 2)
-            pixel = { u, v in (tone.sample(u, v), 0.15 + 0.4 * cover.sample(u, v)) }
+            let tone = Lattice(tile * 2 / 3, tile * 2 / 3, seed: seed, salt: 1)
+            pixel = { u, v in tone.sample(u, v) }
         case .sand:
             let blobs = Lattice(tile / 3, tile / 3, seed: seed, salt: 1), fine = Lattice(tile, tile, seed: seed, salt: 2)
             let grains = Lattice(tile, tile, seed: seed, salt: 3)
             pixel = { u, v in
-                var l = 0.55 + 1.1 * (0.6 * (blobs.sample(u, v) - 0.5) + 0.4 * (fine.sample(u, v) - 0.5))
+                var l = 0.6 * (blobs.sample(u, v) - 0.5) + 0.4 * (fine.sample(u, v) - 0.5)
                 let g = grains.sample(u, v)
                 if g < 0.08 { l -= 0.3 } else if g > 0.94 { l += 0.2 }
-                return (l, 1)
+                return l
             }
         case .denim:
-            let wales = Double(tile / 6)   // 50 per 300 pt tile: 3 pt apart along a row
+            let wales = Double(tile / 4)   // 25 per 100 px tile: 2 px apart along a row
             let streaks = Lattice(tile / 2, 10, seed: seed, salt: 1), fine = Lattice(tile, tile, seed: seed, salt: 2)
             pixel = { u, v in
                 let ridge = pow(0.5 + 0.5 * sin(2 * Double.pi * (2 * u + v) * wales), 1.5)
-                return (0.34 + 0.42 * ridge + 0.12 * streaks.sample(u, v) + 0.1 * fine.sample(u, v), 1)
+                return 0.42 * ridge + 0.12 * streaks.sample(u, v) + 0.1 * fine.sample(u, v)
             }
         case .tweed:
             // Fibres along both diagonals: lattices in a = u + v and b = u - v, which wrap whenever u or v does.
-            // 16 cells per unit of a is about 6 pt along a fibre, 64 per unit of b about 1.4 pt across it.
             let rising = Lattice(16, 64, seed: seed, salt: 1), falling = Lattice(64, 16, seed: seed, salt: 2)
             let flecks = Lattice(tile, tile, seed: seed, salt: 3)
             pixel = { u, v in
                 let a = u + v, b = u - v
                 let fibre = max(rising.sample(a, b), falling.sample(a, b))
-                // Two yarn tones with a short blend between them.
                 let t = min(max((fibre - 0.55) / 0.12, 0), 1)
-                var l = 0.42 + 0.4 * t * t * (3 - 2 * t)
+                var l = 0.4 * t * t * (3 - 2 * t)
                 let f = flecks.sample(u, v)
                 if f > 0.95 { l += 0.15 } else if f < 0.04 { l -= 0.15 }
-                return (l, 1)
+                return l
             }
         }
-        var out = [UInt8](repeating: 0, count: size * size * 2)
+        var raw = [Double](repeating: 0, count: size * size)
         for y in 0..<size {
             let v = (Double(y) + 0.5) / Double(size)
-            for x in 0..<size {
-                let p = pixel((Double(x) + 0.5) / Double(size), v)
-                out[(y * size + x) * 2] = byte(p.luminance)
-                out[(y * size + x) * 2 + 1] = byte(p.alpha)
-            }
+            for x in 0..<size { raw[y * size + x] = pixel((Double(x) + 0.5) / Double(size), v) }
+        }
+        // Scaled to Arc's tile: the same grey mean and spread.
+        let tone = textureTone(kind)
+        let mean = raw.reduce(0, +) / Double(raw.count)
+        let spread = (raw.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(raw.count)).squareRoot()
+        let gain = spread > 0 ? tone.spread / spread : 0
+        var out = [UInt8](repeating: 0, count: size * size * 2)
+        for i in 0..<raw.count {
+            out[i * 2] = byte(tone.mean + (raw[i] - mean) * gain)
+            out[i * 2 + 1] = byte(tone.alpha)
         }
         return out
     }

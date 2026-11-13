@@ -89,7 +89,7 @@ final class PolicySpecTests: XCTestCase {
 
     /// gives the default pink-beige (Arc's first Brand swatch) the light scheme (black text has the higher contrast)
     func test_givesTheDefaultPinkBeigeTheLightSchemeBlackTextHasTheHigherContrast() throws {
-        XCTAssertEqual(SpaceTheme.default.colors, [RGBA(hex: "#F2EAE4")])
+        XCTAssertEqual(SpaceTheme.default.colors, [ThemePresets.brand[0]])
         XCTAssertEqual(resolveTheme(SpaceTheme.default).scheme, .light)
         // The cutoff is 0.1791: #767676 (0.1812) is light, #757575 (0.1779) is dark.
         let grey = { (hex: String) in resolveTheme(SpaceTheme(colors: [RGBA(hex: hex)], texture: .grain, intensity: 0, appearance: .auto)).scheme }
@@ -120,12 +120,13 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertEqual(shown(dark, material: 95.0 / 255), 193, accuracy: 5)
         XCTAssertEqual(shown(dark, material: 241.0 / 255), 235, accuracy: 1.5)
 
-        // The sun keeps the white underlay in dark mode; the moon too, and lifts the colors (black reads as grey 59).
+        // The sun keeps the white underlay in dark mode; the moon too, and draws the colors as they are (Arc's moon
+        // changes the colors its editor saves, not how they are drawn).
         var sun = white; sun.appearance = .light
         XCTAssertEqual(resolveTheme(sun, systemScheme: .dark).underlay, RGBA(1, 1, 1, 0.5))
         let moon = resolveTheme(SpaceTheme(colors: [RGBA(0, 0, 0)], texture: .grain, intensity: 0.5, appearance: .dark), systemScheme: .dark)
         XCTAssertEqual(moon.underlay.red, 1)
-        XCTAssertEqual(moon.gradient[0].red * 255, 58.65, accuracy: 0.01)
+        XCTAssertEqual(moon.gradient, [RGBA(0, 0, 0)])
         // The slider's ends: the underlay's cap holds at the right end only.
         let left = resolveTheme(SpaceTheme(colors: [RGBA(1, 1, 1)], texture: .grain, intensity: 1, appearance: .auto))
         XCTAssertEqual([left.layerAlpha, left.underlay.alpha], [0.2, 0.2])
@@ -155,21 +156,34 @@ final class PolicySpecTests: XCTestCase {
         XCTAssertEqual(black.tokens.foreground, RGBA(1, 1, 1, 0.45))
     }
 
-    /// noise and intensity resolve separately: noise sets the texture contrast, intensity the texture opacity and wash (W5)
+    /// noise sets the texture's alpha (x the texture's multiplier, Arc's rule), intensity the layer alpha (W5)
     func test_noiseAndIntensityResolveSeparately() throws {
         func resolve(_ texture: Texture, noise: Double, intensity: Double, _ appearance: AppearanceChoice = .light) -> ResolvedTheme {
             resolveTheme(SpaceTheme(colors: [RGBA(hex: "#7EB8D6")], texture: texture, noise: noise, intensity: intensity, appearance: appearance))
         }
-        let low = resolve(.grain, noise: 0.3, intensity: 0.5), high = resolve(.grain, noise: 0.9, intensity: 0.5)
-        XCTAssertEqual(low.textureContrast, 0.3)
-        XCTAssertEqual(high.textureContrast, 0.9)
-        XCTAssertEqual(low.textureOpacity, high.textureOpacity)
-        XCTAssertEqual(low.wash, high.wash)
-        XCTAssertEqual(resolve(.tweed, noise: 0.3, intensity: 0).textureOpacity, 0)
-        XCTAssertEqual(resolve(.tweed, noise: 0.3, intensity: 0).textureContrast, 0.3)
+        XCTAssertEqual(resolve(.grain, noise: 0.5, intensity: 0.2).textureOpacity, 0.4, accuracy: 1e-9)
+        XCTAssertEqual(resolve(.grain, noise: 0.5, intensity: 0.9).textureOpacity, 0.4, accuracy: 1e-9)
+        XCTAssertEqual(resolve(.tweed, noise: 0, intensity: 0.5).textureOpacity, 0)
+        XCTAssertNotEqual(resolve(.grain, noise: 0.5, intensity: 0.2).layerAlpha, resolve(.grain, noise: 0.5, intensity: 0.9).layerAlpha)
         // Out-of-range stored values are clamped.
         let clamped = resolve(.denim, noise: 3, intensity: -1)
-        XCTAssertEqual([clamped.textureContrast, clamped.textureOpacity, clamped.layerAlpha], [1, 0, 0.75])
+        XCTAssertEqual(clamped.textureOpacity, 0.6, accuracy: 1e-9)
+        XCTAssertEqual(clamped.layerAlpha, 0.75, accuracy: 1e-9)
+    }
+
+    func testTheWheelAddsColorsWithoutChangingThePrimary() {
+        let primary = ThemePresets.brand[7]
+        for wheel in [ColorWheel.analogous, .complementary] {
+            let pair = themeWheelColors(primary, count: 2, wheel: wheel)
+            let trio = themeWheelColors(primary, count: 3, wheel: wheel)
+            XCTAssertEqual(pair.count, 2)
+            XCTAssertEqual(trio.count, 3)
+            XCTAssertEqual(pair.first, primary)
+            XCTAssertEqual(trio.first, primary)
+            XCTAssertNotEqual(pair[0], pair[1])
+        }
+        let single = SpaceTheme(colors: [primary], texture: .grain, intensity: 0.2, appearance: .auto)
+        XCTAssertEqual(resolveTheme(single).gradient, [primary], "rendering never adds colors that the user did not choose")
     }
 
     // MARK: themeFromPrimary (a new space's theme is one primary; resolveTheme adds its companions)
@@ -179,7 +193,8 @@ final class PolicySpecTests: XCTestCase {
         let sets = [ThemePresets.brand, ThemePresets.drab, ThemePresets.greyscale, ThemePresets.pastel]
         for preset in sets.joined() {
             for wheel in ColorWheel.allCases {
-                let resolved = resolveTheme(SpaceTheme(colors: [preset], wheel: wheel, texture: .sand, intensity: 1, appearance: .auto))
+                let colors = themeWheelColors(preset, count: 3, wheel: wheel)
+                let resolved = resolveTheme(SpaceTheme(colors: colors, wheel: wheel, texture: .sand, intensity: 1, appearance: .auto))
                 XCTAssertEqual(resolved.gradient.count, 3)
                 XCTAssertEqual(resolved.gradient[0], preset)
                 for stop in resolved.gradient {

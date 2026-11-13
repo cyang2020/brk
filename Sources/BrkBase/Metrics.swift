@@ -380,20 +380,23 @@ public struct ThemeMetrics: MetricGroup {
     /// window (a window capture) and over a black window, sRGB; measured 2026-11-13 with a test window.
     public let materialEmpty = Metric(218.0 / 255, .anatomy("docs/checks/2026-11-13-window-translucency.md: .light material, window capture"))
     public let materialOverBlack = Metric(95.0 / 255, .anatomy("docs/checks/2026-11-13-window-translucency.md: .light material over a black window"))
-    /// How far the moon button lifts a theme's colors towards white: Arc's black theme reads as grey 59 under it and
-    /// its white theme stays white, with the same backdrop share as under the sun button (2026-11-12 probes).
-    public let moonLift = Metric(0.23, .anatomy("docs/checks/2026-11-13-window-translucency.md: black reads 59 under the moon"))
     public let gradientTexturePerFactor = Metric(100.0, .arc("Metal gradient texture size", .low))
-    /// Tile sizes of Arc's own textures (px @1x). Ours are generated procedurally at these sizes.
-    public let grainTile = Metric(155, .anatomy("visual-and-copy.md, Gradient and grain assets"))
-    public let sandTile = Metric(96, .anatomy("visual-and-copy.md, Gradient and grain assets"))
-    public let denimTile = Metric(300, .anatomy("visual-and-copy.md, Gradient and grain assets"))
-    public let tweedTile = Metric(128, .anatomy("visual-and-copy.md, Gradient and grain assets"))
-    /// Wheel rules for the companion colors derived from the primary (Arc: `wheel` analogous | complimentary).
-    public let analogousHueOffset = Metric(30.0, .guess("analogous companions at +-30 degrees; Arc's exact offset was not recovered"))
-    public let complementaryHueOffset = Metric(180.0, .anatomy("model-and-shortcuts.md 1.13: wheel `complimentary` is the opposite hue"))
-    /// Lightness moved by each wheel companion: the first lighter, the second darker.
-    public let companionLightnessStep = Metric(0.06, .guess("electron-v1 theme.ts themeFromPrimary: companions 6% lighter and 6% darker; Arc's lightnessRange was not recovered"))
+    /// Tile sizes of the textures Arc's Metal renderer draws (`grain_metal`, `sand_metal`, `denim_metal`, `tweed_metal`, bin
+    /// 0x101530a30), in device pixels: one texel per pixel (texture repeat = drawable / texture size, bin 0x10152f254).
+    /// Ours are generated procedurally at these sizes (Arc's files are not copied).
+    public let grainTile = Metric(200, .anatomy("docs/checks/2026-11-13-window-translucency.md: grain_metal, 200 px"))
+    public let sandTile = Metric(100, .anatomy("docs/checks/2026-11-13-window-translucency.md: sand_metal, 100 px"))
+    public let denimTile = Metric(100, .anatomy("docs/checks/2026-11-13-window-translucency.md: denim_metal, 100 px"))
+    public let tweedTile = Metric(100, .anatomy("docs/checks/2026-11-13-window-translucency.md: tweed_metal, 100 px"))
+    /// Grey mean and spread of those tiles and the grain's alpha (read from Arc's asset catalog in memory): our generated
+    /// tiles are scaled to them, so each texture darkens a color by as much as Arc's.
+    public let grainTone = Metric([0.732, 0.213, 0.259], .anatomy("docs/checks/2026-11-13-window-translucency.md: grain_metal mean, spread, alpha"))
+    public let sandTone = Metric([0.656, 0.162, 1], .anatomy("docs/checks/2026-11-13-window-translucency.md: sand_metal mean, spread"))
+    public let denimTone = Metric([0.842, 0.034, 1], .anatomy("docs/checks/2026-11-13-window-translucency.md: denim_metal mean, spread"))
+    public let tweedTone = Metric([0.706, 0.036, 1], .anatomy("docs/checks/2026-11-13-window-translucency.md: tweed_metal mean, spread"))
+    /// Arc's color wheel (bin 0x100d807dc): hue turns in Display P3 for the colors added after the primary.
+    public let analogousTurn = Metric(40.0, .anatomy("docs/checks/2026-11-13-window-translucency.md: analogous +40, then -40"))
+    public let complementaryTurns = Metric([180.0, 150.0, 210.0], .anatomy("docs/checks/2026-11-13-window-translucency.md: complementary 180 for two colors, 150 and 210 for three"))
 }
 
 public struct LittleArcMetrics: MetricGroup {

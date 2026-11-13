@@ -783,7 +783,7 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(v.space.today.rows.count, 0)
         XCTAssertEqual(v.dock.map(\.title), ["Space 1", "Space 2"])
         XCTAssertEqual(v.dock.map(\.active), [false, true])
-        XCTAssertEqual(v.dock[1].color, RGBA(hex: "#ECD2EA"))
+        XCTAssertEqual(v.dock[1].color, ThemePresets.pastel[2])
         XCTAssertEqual(v.content.panes, [])
         XCTAssertNil(v.dialog)
         let stored = d.savedDoc["spaces"] as? [String: [String: Any]]
@@ -799,7 +799,7 @@ final class ReduceSpecTests: XCTestCase {
         let work = d.newSpace("Work")
         let w1 = d.open("127.0.0.1:9/page2.html")
         XCTAssertNotEqual(d.view.theme, firstTheme)
-        XCTAssertEqual(d.view.dock.map(\.color), [ThemePresets.brand[0], RGBA(hex: "#2D4468")])
+        XCTAssertEqual(d.view.dock.map(\.color), [ThemePresets.brand[0], ThemePresets.drab[8]])
         d.user(.space(.focus(first)))
         XCTAssertEqual(d.view.space.id, first)
         XCTAssertEqual(d.todayIDs, [a])

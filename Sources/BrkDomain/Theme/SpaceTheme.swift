@@ -48,13 +48,11 @@ public struct SpaceTheme: Hashable, Sendable, Codable {
     public var colors: [RGBA]
     public var wheel: ColorWheel
     public var texture: Texture
-    /// 0...1 (Arc: `noiseFactor`, the editor's dial). How much of the texture's own variation shows: the renderer
-    /// scales the tile's contrast by it. Its exact role in Arc's shader was not recovered (layout-constants.md,
-    /// "Not recovered"); this is our reading of the two separate controls.
+    /// 0...1 (Arc: `noiseFactor`, the editor's dial). Scales the texture overlay's opacity.
     public var noise: Double
     /// 0...1: how strong the wash over the color is. Arc's `intensityFactor` (its sine slider's position) runs the
-    /// other way, more color to the right, so an imported theme stores 1 - intensityFactor. Texture opacity = intensity x
-    /// the texture's multiplier (Metrics.theme.*Opacity); the theme layer's alpha: `themeLayer`.
+    /// other way, more color to the right, so an imported theme stores 1 - intensityFactor. Controls the theme layer's
+    /// alpha (`themeLayer`); the texture has its own noise control.
     public var intensity: Double
     public var appearance: AppearanceChoice
     public var variants: ThemeVariants? = nil
@@ -76,13 +74,30 @@ public struct SpaceTheme: Hashable, Sendable, Codable {
 
 /// Arc's four 9-color picker sets (visual-and-copy.md, "Space theme preset palette"). Brand5 uses the rendered value
 /// #FF8558. `pages` is Arc 1.170's page order in the theme panel (captured 2026-11-03, P28 c): Brand, Pastel, Drab,
-/// Greyscale.
+/// Greyscale. The hex values are Display P3 (Arc's editor builds colors in that space, bin 0x100d80814; its saved blue
+/// Brand preset is #7EB8D6 in P3 to the last digit), so each is converted to sRGB here.
 public enum ThemePresets {
     public static let pages: [(name: String, colors: [RGBA])] = [("Brand", brand), ("Pastel", pastel), ("Drab", drab), ("Greyscale", greyscale)]
-    public static let brand = ["#F2EAE4", "#F29BBB", "#A6729D", "#F25E6B", "#FF8558", "#F2D66D", "#73E59C", "#7EB8D6", "#666786"].map { RGBA(hex: $0) }
-    public static let drab = ["#4B3B58", "#623856", "#854444", "#A77048", "#D1B46A", "#CDCCA8", "#84A885", "#34604B", "#2D4468"].map { RGBA(hex: $0) }
-    public static let greyscale = ["#FFFFFF", "#E5E5E5", "#CCCCCC", "#B2B2B2", "#808080", "#666666", "#333333", "#1A1A1A", "#000000"].map { RGBA(hex: $0) }
-    public static let pastel = ["#FDFBFA", "#FBEAF3", "#ECD2EA", "#F7CDD2", "#FAE1D5", "#FEF9E7", "#E4FCEC", "#E0F2FB", "#C5C6E2"].map { RGBA(hex: $0) }
+    public static let brand: [RGBA] = {
+        var colors = p3(["#F2EAE4", "#F29BBB", "#A6729D", "#F25E6B", "#FF8558", "#F2D66D", "#73E59C", "#7EB8D6", "#666786"])
+        // Arc's default beige is stored directly as extended sRGB, unlike the picker hex colors.
+        colors[0] = RGBA(0.95, 0.918, 0.894)
+        colors[7] = RGBA(0.4236151278, 0.7285773754, 0.8512415886)
+        return colors
+    }()
+    public static let drab = p3(["#4B3B58", "#623856", "#854444", "#A77048", "#D1B46A", "#CDCCA8", "#84A885", "#34604B", "#2D4468"])
+    public static let greyscale = p3(["#FFFFFF", "#E5E5E5", "#CCCCCC", "#B2B2B2", "#808080", "#666666", "#333333", "#1A1A1A", "#000000"])
+    public static let pastel = p3(["#FDFBFA", "#FBEAF3", "#ECD2EA", "#F7CDD2", "#FAE1D5", "#FEF9E7", "#E4FCEC", "#E0F2FB", "#C5C6E2"])
+
+    /// The theme colors a swatch gives: Arc's Brand swatches are three-color themes on the analogous wheel (its saved beige
+    /// and blue: the swatch, +40 and -40 in Display P3); the other pages give the one color.
+    public static func colors(page: Int, index: Int) -> [RGBA] {
+        guard pages.indices.contains(page), pages[page].colors.indices.contains(index) else { return [] }
+        let color = pages[page].colors[index]
+        return page == 0 ? themeWheelColors(color, count: 3, wheel: .analogous) : [color]
+    }
+
+    private static func p3(_ hex: [String]) -> [RGBA] { hex.map { sRGB(fromDisplayP3: RGBA(hex: $0)) } }
 }
 
 /// Arc's sidebar tokens (visual-and-copy.md, "Sidebar and tab colors"): translucent black or white over the theme,
@@ -143,10 +158,9 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
     /// Gradient stops for the Metal background, primary first (derived from the base colors; 1 to 3 + blends).
     public var gradient: [RGBA]
     public var texture: Texture
-    /// intensity x the texture's multiplier (Metrics.theme.*Opacity).
+    /// The texture's alpha: the stored noise x the texture's multiplier (Metrics.theme.*Opacity; Arc bin 0x101530cdc), times
+    /// the tile's own alpha.
     public var textureOpacity: Double
-    /// The stored `noise`, 0...1: the renderer multiplies the tile's deviation from mid grey by it.
-    public var textureContrast: Double
     /// The theme as one solid color layer, for surfaces that cannot show the window's material (previews, the floating
     /// sidebar, the no-Metal fallback): `underlay` over the material's stand-in color (`ThemeMaterial.standIn`), at
     /// 1 - `layerAlpha` over the gradient. mix(gradient, wash, wash.alpha) is what the window shows over that backdrop.
@@ -156,6 +170,8 @@ public struct ResolvedTheme: Hashable, Sendable, Codable {
     public var windowColor: RGBA
     /// The system material under the theme (Arc: the NSVisualEffectView of `WindowBackgroundTranslucencyViewAppKit`).
     public var material: ThemeMaterial = .light
+    /// Material grey used by previews and the no-Metal fallback, where the desktop cannot be sampled.
+    public var materialBackdrop: Double = ThemeMaterial.standIn(.light)
     /// How much of the gradient covers the material and the underlay (Arc's GradientLayer alpha). 1: opaque.
     public var layerAlpha: Double = 1
     /// Inside the theme layer, under the gradient (Arc's `underlayColor`): what the material shows through, dimmed.
@@ -178,11 +194,9 @@ public enum ThemeMaterial: String, Hashable, Sendable, Codable {
 ///
 /// - Scheme: dark for the dark `appearance` or a primary whose relative luminance is under `lightSchemeMinLuminance`
 ///   (the luminance at which black and white text have equal WCAG contrast), else light.
-/// - Gradient: always three stops, primary first (`gradientStops`). The stored base colors come first (at most 3); the
-///   rest are the primary's companions by the wheel rule: analogous = hue + offset and lighter, hue - offset and darker;
-///   complementary = the opposite hue and lighter, then the primary's hue darker. Saturation is kept; lightness
-///   moves by Metrics.theme.companionLightnessStep. Three base colors leave the wheel nothing to add (Arc's editor places them).
-/// - Texture opacity: intensity x the texture's multiplier; texture contrast: the stored noise.
+/// - Gradient: the stored base colors, 1 to 3 (`gradientStops`); no companions are added at draw time (Arc's editor adds
+///   them when colors are added, `themeWheelColors`).
+/// - Texture opacity: the stored noise x the texture's multiplier (Arc's `noiseFactor`).
 /// - Layer: `themeLayer` (alpha, underlay, material); `wash` is that layer as one solid color.
 /// - Window color: the primary under the wash, so the window's own background matches the first Metal frame.
 public func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme = .light) -> ResolvedTheme {
@@ -196,7 +210,8 @@ private func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme, followsSyst
         let style = (scheme == .dark ? variants.dark : variants.light).normalized
         var legacy = SpaceTheme(colors: style.colors.map(\.color), wheel: style.wheel, texture: style.texture,
                                 noise: style.noise, intensity: style.intensity, appearance: scheme == .dark ? .dark : .light)
-        legacy.colors = gradientStops(legacy.colors.map(opaque), style.wheel).map { color in
+        legacy.colors = gradientStops(legacy.colors.map(opaque)).map { color in
+            if style.saturation == 1, style.lightness == 0, scheme == .light || style.darkBias == 0 { return color }
             let (h, s, l) = hsl(color)
             return rgb(hue: h, saturation: clamp01(s * style.saturation),
                        lightness: clamp01((l + style.lightness) * (scheme == .dark ? 1 - style.darkBias * 0.8 : 1)))
@@ -214,7 +229,7 @@ private func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme, followsSyst
     case .light, .auto: darkPrimary ? .dark : .light
     case .dark: .dark
     }
-    let gradient = gradientStops(base, theme.wheel)
+    let gradient = gradientStops(base)
     let multiplier: Double = switch theme.texture {
     case .grain: Metrics.theme.grainOpacity.value
     case .sand: Metrics.theme.sandOpacity.value
@@ -222,19 +237,18 @@ private func resolveTheme(_ theme: SpaceTheme, systemScheme: Scheme, followsSyst
     case .tweed: Metrics.theme.tweedOpacity.value
     }
     let intensity = clamp01(theme.intensity)
-    let layer = themeLayer(appearance: theme.appearance, followsDarkSystem: followsSystem && systemScheme == .dark, intensity: intensity)
-    let stops = layer.lift > 0 ? gradient.map { mix($0, RGBA(1, 1, 1), layer.lift) } : gradient
+    let layer = themeLayer(followsDarkSystem: followsSystem && systemScheme == .dark, intensity: intensity)
     let wash = solidWash(alpha: layer.alpha, underlay: layer.underlay, systemScheme: systemScheme)
-    var resolved = ResolvedTheme(scheme: scheme, gradient: stops, texture: theme.texture, textureOpacity: intensity * multiplier,
-                                 textureContrast: clamp01(theme.noise), wash: wash,
-                                 tokens: scheme == .light ? .light : .dark, windowColor: mix(stops[0], wash, wash.alpha))
+    var resolved = ResolvedTheme(scheme: scheme, gradient: gradient, texture: theme.texture, textureOpacity: clamp01(theme.noise) * multiplier,
+                                 wash: wash, tokens: scheme == .light ? .light : .dark, windowColor: mix(gradient[0], wash, wash.alpha))
     resolved.layerAlpha = layer.alpha
     resolved.underlay = layer.underlay
+    resolved.materialBackdrop = ThemeMaterial.standIn(systemScheme)
     return resolved
 }
 
 extension ResolvedTheme {
-    /// An incognito window's chrome: a fixed color under the plain black wash, with its companions; it has no slider, and
+    /// An incognito window's chrome: a fixed color under the plain black wash; it has no slider, and
     /// the rules for a space's own dark color do not apply. Opaque: Arc's incognito window shows nothing of what is
     /// behind it (#12151B over a black and a white backdrop alike, docs/checks/2026-11-13-window-translucency.md).
     public static let incognito: ResolvedTheme = {
@@ -242,7 +256,7 @@ extension ResolvedTheme {
         var theme = resolveTheme(SpaceTheme(colors: [primary], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .dark))
         let m = Metrics.theme
         let veil = m.darkWashAlpha.value * min(m.washBase.value + m.washSlope.value * SpaceTheme.default.intensity, m.washCap.value)
-        theme.gradient = ([primary] + companions(of: primary, .analogous)).map { mix($0, RGBA(0, 0, 0), veil) }
+        theme.gradient = [mix(primary, RGBA(0, 0, 0), veil)]
         theme.material = .opaque
         theme.layerAlpha = 1
         theme.underlay = RGBA(0, 0, 0, 0)
@@ -255,16 +269,15 @@ extension ResolvedTheme {
 /// Arc's theme layer over the window's material (bin 0x101530d98 builds it, the WindowThemeUI metallib's
 /// gradientFragment draws it; docs/checks/2026-11-13-window-translucency.md): the gradient at alpha 0.2 + 0.55 x the
 /// slider position (Arc's `intensityFactor` = 1 - Brk's intensity), over an underlay that is white at min(that, 0.5),
-/// or black at 35% of it when the window is dark. Measured on Arc 1.170 over black and white backdrops: the window is
-/// dark only for a theme that follows macOS while macOS is in dark mode; the sun and moon buttons keep the white
-/// underlay in both modes, and the moon lifts the colors towards white (black reads as grey 59 there, white stays white).
-private func themeLayer(appearance: AppearanceChoice, followsDarkSystem: Bool, intensity: Double) -> (alpha: Double, underlay: RGBA, lift: Double) {
+/// or black at 35% of it when the window is dark: measured on Arc 1.170, a theme that follows macOS while macOS is in
+/// dark mode, or websites set to Dark. The sun and moon buttons do not change the layer: the moon changes the colors
+/// the editor saves (SpaceStyleEditor.State.darkModeBiasSetting), not how they are drawn.
+private func themeLayer(followsDarkSystem: Bool, intensity: Double) -> (alpha: Double, underlay: RGBA) {
     let m = Metrics.theme
     let alpha = m.washBase.value + m.washSlope.value * (1 - intensity)
     let cover = min(alpha, m.washCap.value)
     let underlay = followsDarkSystem ? RGBA(0, 0, 0, m.darkWashAlpha.value * cover) : RGBA(1, 1, 1, cover)
-    let lift = appearance == .dark && !followsDarkSystem ? m.moonLift.value : 0
-    return (alpha, underlay, lift)
+    return (alpha, underlay)
 }
 
 /// The theme layer and the `.light` material's stand-in color as one wash over the gradient (`ResolvedTheme.wash`).
@@ -278,24 +291,44 @@ private func solidWash(alpha: Double, underlay: RGBA, systemScheme: Scheme) -> R
 /// (electron-v1 theme.ts `LIGHT_SCHEME_MIN_LUMINANCE`). The default Brand 8 blue (0.43) is light; #757575 is dark.
 let lightSchemeMinLuminance = (1.05 * 0.05).squareRoot() - 0.05
 
-/// The three stops for the base colors. A dark color alone is one flat color in Arc: the sidebar reads the same at every
-/// corner of the window, for the dark presets #4B3B58, #854444, #34604B and #2D4468 (r5-6/REPORT.md).
-private func gradientStops(_ base: [RGBA], _ wheel: ColorWheel) -> [RGBA] {
-    if base.count == 1, relativeLuminance(base[0]) < lightSchemeMinLuminance { return [base[0], base[0], base[0]] }
-    return Array((base + companions(of: base[0], wheel)).prefix(3))
+/// Arc's renderer draws a theme's stored colors and nothing else (bin 0x101530d98; docs/checks/2026-11-13-window-translucency.md,
+/// round 2): one color is one flat color, two are the diagonal ramp, a third is the overlay ramp from the top. Extra
+/// colors come from the editor's wheel when they are added (`themeWheelColors`), not at draw time.
+private func gradientStops(_ base: [RGBA]) -> [RGBA] { Array(base.prefix(3)) }
+
+/// Arc's color wheel (bin 0x100d807dc): the primary and `count - 1` more colors at hue turns in Display P3 that keep its
+/// HSL saturation and lightness. Analogous: +40, then -40. Complementary: +180 for two colors, +150 and +210 for three.
+/// More than three: evenly spread. Checked against what Arc saved for its beige and blue Brand presets.
+public func themeWheelColors(_ primary: RGBA, count: Int, wheel: ColorWheel) -> [RGBA] {
+    guard count > 1 else { return [primary] }
+    let a = Metrics.theme.analogousTurn.value, c = Metrics.theme.complementaryTurns.value
+    let turns: [Double] = switch (count, wheel) {
+    case (2, .analogous): [a]
+    case (2, .complementary): [c[0]]
+    case (3, .analogous): [a, -a]
+    case (3, .complementary): [c[1], c[2]]
+    default: (1..<count).map { Double($0) * 360 / Double(count) }
+    }
+    let (h, sat, l) = hsl(displayP3(fromSRGB: opaque(primary)))
+    return [primary] + turns.map { sRGB(fromDisplayP3: rgb(hue: h + $0, saturation: sat, lightness: l)) }
 }
 
-/// The two companions of `primary` under `wheel`, opaque sRGB.
-private func companions(of primary: RGBA, _ wheel: ColorWheel) -> [RGBA] {
-    let (h, s, l) = hsl(primary)
-    let step = Metrics.theme.companionLightnessStep.value
-    let offsets: [(hue: Double, lightness: Double)] = switch wheel {
-    case .analogous:
-        [(Metrics.theme.analogousHueOffset.value, step), (-Metrics.theme.analogousHueOffset.value, -step)]
-    case .complementary:
-        [(Metrics.theme.complementaryHueOffset.value, step), (0, -step)]
-    }
-    return offsets.map { rgb(hue: h + $0.hue, saturation: s, lightness: clamp01(l + $0.lightness)) }
+/// Linear-light conversions between sRGB and Display P3 (same white point and transfer curve).
+private func lin(_ v: Double) -> Double { v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+private func gam(_ v: Double) -> Double { v <= 0.0031308 ? 12.92 * v : 1.055 * pow(v, 1 / 2.4) - 0.055 }
+
+func displayP3(fromSRGB c: RGBA) -> RGBA {
+    if c.red == c.green && c.green == c.blue { return c }
+    let r = lin(c.red), g = lin(c.green), b = lin(c.blue)
+    return RGBA(gam(0.8224621 * r + 0.1775380 * g), gam(0.0331941 * r + 0.9668058 * g),
+                gam(0.0170827 * r + 0.0723974 * g + 0.9105199 * b), c.alpha)
+}
+
+func sRGB(fromDisplayP3 c: RGBA) -> RGBA {
+    if c.red == c.green && c.green == c.blue { return c }
+    let r = lin(c.red), g = lin(c.green), b = lin(c.blue)
+    return RGBA(clamp01(gam(1.2249401 * r - 0.2249404 * g)), clamp01(gam(-0.0420569 * r + 1.0420571 * g)),
+                clamp01(gam(-0.0196376 * r - 0.0786361 * g + 1.0982735 * b)), c.alpha)
 }
 
 private func clamp01(_ v: Double) -> Double { min(max(v, 0), 1) }

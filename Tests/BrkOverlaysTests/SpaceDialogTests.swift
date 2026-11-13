@@ -55,11 +55,11 @@ final class ThemeDraftTests: XCTestCase {
         XCTAssertEqual(draft.theme.texture, .denim, "the panel has no texture control (P28 d); the stored texture stays")
     }
 
-    func testPlusAddsTheComplementAndMinusNeverRemovesTheLastColor() {
-        var draft = ThemeDraft(theme: SpaceTheme(colors: [ThemePresets.brand[0]], texture: .grain, intensity: 0.25, appearance: .auto))
+    func testPlusUsesTheChosenWheelAndMinusNeverRemovesTheLastColor() {
+        var draft = ThemeDraft(theme: SpaceTheme(colors: [ThemePresets.brand[0]], wheel: .complementary, texture: .grain, intensity: 0.25, appearance: .auto))
         draft.addColor()
         XCTAssertEqual(draft.colors.count, 2)
-        XCTAssertEqual(HSL(draft.colors[1]).hue, (HSL(draft.colors[0]).hue + 180).truncatingRemainder(dividingBy: 360), accuracy: 1)
+        XCTAssertEqual(HSL(displayP3(fromSRGB: draft.colors[1])).hue, (HSL(displayP3(fromSRGB: draft.colors[0])).hue + 180).truncatingRemainder(dividingBy: 360), accuracy: 1)
         draft.addColor(); draft.addColor()
         XCTAssertEqual(draft.colors.count, 3)
         draft.removeColor(at: 0); draft.removeColor(at: 0); draft.removeColor(at: 0)
