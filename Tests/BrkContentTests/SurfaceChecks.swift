@@ -1,6 +1,7 @@
 import AppKit
 import BrkBase
 import BrkDomain
+import BrkTheme
 import XCTest
 
 /// What the pointer sweep and the readability check do to a drawn surface (PointerSweepTests, AppSurfaceSweepTests).
@@ -206,6 +207,9 @@ enum SurfaceChecks {
         var order: [(view: NSView, frame: CGRect, alpha: Double)] = []
         func walk(_ view: NSView, _ alpha: Double) {
             guard !view.isHidden, view.alphaValue > 0.01 else { return }
+            // `base` is the resolved theme. Its Metal canvas is not a layer background; reading only the material
+            // beneath that canvas would replace the theme with the Mac's plain window colour.
+            if view is ThemeBackgroundView { return }
             let shown = alpha * Double(view.alphaValue)
             order.append((view, view.convert(view.bounds, to: nil), shown))
             for child in view.subviews { walk(child, shown) }
