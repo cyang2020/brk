@@ -696,7 +696,11 @@ final class RowView: HoverView {
     private let joinSlot = NSView()
     /// Arc's `_audibilityButton`: the speaker between the icon and the title of a tab that makes sound or is muted.
     private let audio = GlyphButton()
+    /// Arc's drawn speaker over the speaker button, whose own glyph stays clear (the button keeps the hover and the click).
+    private let speakerGlyph = SpeakerGlyphView()
     private let button = GlyphButton()
+    /// Arc's × / − over the tab row's hover button, likewise.
+    private let crossOrHyphen = CrossOrHyphenView()
     private var segments: [SplitSegmentView] = []
     /// The peeked page's icon at the row's trailing end while the window's Peek was opened from this tab.
     private let peekMarker = PeekMarkerView()
@@ -756,8 +760,10 @@ final class RowView: HoverView {
         litMark.layer?.cornerCurve = .continuous
         litMark.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
         litMark.isHidden = true
-        for view in [background, litMark, joinSlot, icon, folderIcon, title, renameHint, suggestion, audio, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
+        for view in [background, litMark, joinSlot, icon, folderIcon, title, renameHint, suggestion, audio, speakerGlyph, button, crossOrHyphen, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
         folderIcon.isHidden = true
+        speakerGlyph.isHidden = true
+        crossOrHyphen.isHidden = true
         suggestion.isHidden = true
         suggestion.accept = { [weak self] in if let id = self?.row?.id { self?.dispatch(.assist(.acceptSuggestion(id))) } }
         suggestion.dismiss = { [weak self] in if let id = self?.row?.id { self?.dispatch(.assist(.dismissSuggestion(id))) } }
@@ -780,6 +786,9 @@ final class RowView: HoverView {
         // decided again. An unchanged one does not: that restarted the card's wait at every redraw, and a loading page
         // redraws the sidebar several times a second, so the card never opened.
         let changed = row != self.row
+        // The same row changing state (muted, become the current pinned tab) moves its glyphs; a reused or new one does not.
+        let sameRow = self.row?.id == row.id
+        let speakerShown = !speakerGlyph.isHidden
         self.row = row
         self.section = section
         self.depth = depth
@@ -789,6 +798,8 @@ final class RowView: HoverView {
         button.identify(.rowClose(row.id))
         joinSlot.identify(.tabTool("split-join-slot-" + row.id.rawValue))
         audio.isHidden = true
+        speakerGlyph.isHidden = true
+        crossOrHyphen.isHidden = true
         renameHint.isHidden = true
         suggestion.isHidden = true
         folderIcon.isHidden = true
@@ -796,14 +807,10 @@ final class RowView: HoverView {
         switch row {
         case .tab(let tab):
             audio.isHidden = tab.speaker == nil
+            speakerGlyph.isHidden = tab.speaker == nil
             let speakerInk = NSColor(white: palette.scheme == .light ? 0 : 1, alpha: Draw.rowSpeakerInk.value)
-            if tab.muted {
-                audio.render(.rowSpeakerMuted, size: Draw.rowSpeakerMutedGlyph.value, weight: .regular, palette: palette, tint: speakerInk,
-                             radius: Draw.rowSpeakerRadius.value, hoverFill: palette.tokens.itemHover)
-            } else {
-                audio.render(.rowSpeaker, size: Draw.rowSpeakerGlyph.value, weight: .medium, palette: palette, tint: speakerInk,
-                             radius: Draw.rowSpeakerRadius.value, hoverFill: palette.tokens.itemHover)
-            }
+            renderSpeakerButton(muted: tab.muted, ink: .clear, palette: palette)
+            speakerGlyph.render(muted: tab.muted, tint: speakerInk, animated: sameRow && speakerShown && !speakerGlyph.isHidden)
             audio.tip = tab.muted ? SidebarCopy.unmuteThisTab : SidebarCopy.muteThisTab
             audio.identify(.tabTool("audio-" + tab.id.rawValue))
             title.stringValue = tab.title
@@ -816,7 +823,7 @@ final class RowView: HoverView {
             icon.render(IconContent(tab: tab), tint: palette.ink.secondary, palette: palette)
             if tab.awaitingFirstDocument { title.stringValue = SidebarCopy.untitled }
             title.font = .systemFont(ofSize: Draw.rowTitleFont.value)
-            configureButton(tab: tab, palette: palette)
+            configureButton(tab: tab, palette: palette, animated: sameRow)
             setSegments([], palette: palette)
             peekMarker.isHidden = !tab.peeking
             if tab.peeking { peekMarker.render(favicon: tab.peekFavicon, palette: palette) }
@@ -910,7 +917,18 @@ final class RowView: HoverView {
         }
     }
 
-    private func configureButton(tab: TabRow, palette: Palette) {
+    /// The speaker button's own symbol: clear under the drawn speaker, inked for a picture of the row.
+    private func renderSpeakerButton(muted: Bool, ink: NSColor, palette: Palette) {
+        if muted {
+            audio.render(.rowSpeakerMuted, size: Draw.rowSpeakerMutedGlyph.value, weight: .regular, palette: palette, tint: ink,
+                         radius: Draw.rowSpeakerRadius.value, hoverFill: palette.tokens.itemHover)
+        } else {
+            audio.render(.rowSpeaker, size: Draw.rowSpeakerGlyph.value, weight: .medium, palette: palette, tint: ink,
+                         radius: Draw.rowSpeakerRadius.value, hoverFill: palette.tokens.itemHover)
+        }
+    }
+
+    private func configureButton(tab: TabRow, palette: Palette, animated: Bool) {
         // A window's own tabs (blank and incognito windows) archive like Today's.
         // Arc (Q18-rowbutton-*): the current Pinned row has a minus that closes the page and keeps the row; every
         // other row, Pinned ones too, loaded or not, has the × that archives it.
@@ -918,8 +936,10 @@ final class RowView: HoverView {
         hasButton = true
         button.isHidden = !hasButton && !dragLifted
         button.toolTip = keeps ? SidebarCopy.closeKeepPinned : Copy.archiveTabTooltip
-        button.render(keeps ? .closeKeepPinned : .archiveTab, size: Draw.rowCloseGlyph.value, weight: .semibold, palette: palette,
+        button.render(keeps ? .closeKeepPinned : .archiveTab, size: Draw.rowCloseGlyph.value, weight: .semibold, palette: palette, tint: .clear,
                       radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
+        crossOrHyphen.isHidden = false
+        crossOrHyphen.render(hyphen: keeps, tint: palette.ink.secondary, animated: animated)
     }
 
     /// The current tab of the Pinned section: its button closes the page and keeps the row.
@@ -942,6 +962,8 @@ final class RowView: HoverView {
         background.frame = g.selection
         litMark.frame = g.selection
         icon.frame = g.icon
+        crossOrHyphen.frame = g.button
+        speakerGlyph.frame = g.speaker
         let side = Draw.folderIconSide.value
         folderIcon.frame = CGRect(x: g.icon.midX - side / 2, y: g.icon.midY - side / 2, width: side, height: side)
         button.frame = g.button
@@ -1048,6 +1070,33 @@ final class RowView: HoverView {
         let shown = (isHovered || dragLifted) && !isEditingName
         if (button.alphaValue > 0) != shown { needsLayout = true }
         button.alphaValue = shown ? 1 : 0
+        crossOrHyphen.alphaValue = button.alphaValue
+        if case .tab = row { crossOrHyphen.isHidden = button.isHidden }
+    }
+
+    /// For a picture of the row (a drag, its way out of the list): the glyphs drawn on layers, which a view's cached image
+    /// leaves out, give way to their symbols. The row is drawn as before afterwards when `restore` runs.
+    private func pictureGlyphs() -> () -> Void {
+        guard let palette else { return {} }
+        var undo: [() -> Void] = []
+        if !folderIcon.isHidden {
+            folderIcon.isHidden = true
+            icon.render(.folder(open: folderIcon.state == .expanded), tint: palette.ink.secondary, palette: palette)
+            undo.append { [self] in folderIcon.isHidden = false; icon.render(.none, tint: palette.ink.secondary) }
+        }
+        if !speakerGlyph.isHidden {
+            speakerGlyph.isHidden = true
+            let ink = NSColor(white: palette.scheme == .light ? 0 : 1, alpha: Draw.rowSpeakerInk.value)
+            renderSpeakerButton(muted: speakerGlyph.muted, ink: ink, palette: palette)
+            undo.append { [self] in speakerGlyph.isHidden = false; renderSpeakerButton(muted: speakerGlyph.muted, ink: .clear, palette: palette) }
+        }
+        if !crossOrHyphen.isHidden, case .tab(let tab)? = row {
+            crossOrHyphen.isHidden = true
+            button.render(keepsPinned(tab) ? .closeKeepPinned : .archiveTab, size: Draw.rowCloseGlyph.value, weight: .semibold, palette: palette,
+                          radius: Metrics.tablist.hoverButtonRadius.value, hoverFill: palette.tokens.itemHover)
+            undo.append { [self] in crossOrHyphen.isHidden = false; configureButton(tab: tab, palette: palette, animated: false) }
+        }
+        return { undo.forEach { $0() } }
     }
 
     /// The row as it looks, for its way out of the list (`DepartingRowView`): without its hover button, and without its
@@ -1059,10 +1108,7 @@ final class RowView: HoverView {
             suggestion.isHidden = true
             for segment in segments { segment.showsTitle = false }
         }
-        if !folderIcon.isHidden, let palette {
-            folderIcon.isHidden = true
-            icon.render(.folder(open: folderIcon.state == .expanded), tint: palette.ink.secondary, palette: palette)
-        }
+        _ = pictureGlyphs()
         layoutSubtreeIfNeeded()
         guard let rep = bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
         cacheDisplay(in: bounds, to: rep)
@@ -1073,12 +1119,7 @@ final class RowView: HoverView {
 
     /// The row's icon, title and button for the drag image: no card and no shadow, the image has its own.
     func dragImage() -> NSImage? {
-        // The folder glyph is drawn by layers, which a view's cached image leaves out: the picture gets the drawn glyph.
-        let drawnFolder = !folderIcon.isHidden
-        if drawnFolder, let palette {
-            folderIcon.isHidden = true
-            icon.render(.folder(open: folderIcon.state == .expanded), tint: palette.ink.secondary, palette: palette)
-        }
+        let restore = pictureGlyphs()
         layoutSubtreeIfNeeded()
         let shadow = background.shadow, fill = background.layer?.backgroundColor
         background.shadow = nil
@@ -1086,10 +1127,7 @@ final class RowView: HoverView {
         defer {
             background.shadow = shadow
             background.layer?.backgroundColor = fill
-            if drawnFolder, let palette {
-                folderIcon.isHidden = false
-                icon.render(.none, tint: palette.ink.secondary)
-            }
+            restore()
         }
         guard let rep = bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
         cacheDisplay(in: bounds, to: rep)
