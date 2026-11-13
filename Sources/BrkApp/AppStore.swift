@@ -648,7 +648,7 @@ public final class AppStore {
                 if let window = windows[request.window]?.window { siteTools.run(request, in: window) }
             case .iconPicker(let window, let item, let initial):
                 guard let owner = windows[window]?.window else { continue }
-                TabIconPicker.present(for: item, in: owner, initial: initial) { [weak self, weak owner] icon in
+                TabIconPicker.present(for: item, in: owner, scheme: snapshot.windows[window]?.theme.scheme, initial: initial) { [weak self, weak owner] icon in
                     guard owner?.isVisible == true else { return }
                     self?.dispatch(.user(window, .item(.setIcon(item, icon))))
                 }

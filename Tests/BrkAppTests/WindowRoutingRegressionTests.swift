@@ -119,9 +119,10 @@ final class WindowRoutingRegressionTests: XCTestCase {
         defer { TabIconPicker.close(); h.cleanUp() }
         h.store.start()
         let controller = try XCTUnwrap(h.store.windowController(h.window))
-        TabIconPicker.present(for: h.page.item, in: controller.window) { _ in }
+        TabIconPicker.present(for: h.page.item, in: controller.window, scheme: .dark) { _ in }
         let grid = try XCTUnwrap(NSApp.windows.first { ViewTree.find("tab-icon-picker", in: $0) != nil })
         XCTAssertTrue(grid.isVisible)
+        XCTAssertEqual(grid.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]), .darkAqua, "the picker follows the sidebar's theme")
         XCTAssertTrue(TabIconPicker.isOpen)
         XCTAssertTrue(h.store.dispatchKey(h.window, h.key("cmd+w", stage: .menu, id: 1)))
         let closes = Date().addingTimeInterval(3)

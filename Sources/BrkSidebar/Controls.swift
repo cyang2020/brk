@@ -173,10 +173,12 @@ final class GlyphButton: HoverView {
         isPressed = true
     }
 
+    /// Only after a press that started here: the site controls keep the press on the site button that closes them,
+    /// and AppKit still hands the release to the button, which opened them again.
     override func mouseUp(with event: NSEvent) {
-        let inside = bounds.contains(local(event))
+        let inside = bounds.contains(local(event)), pressed = isPressed
         isPressed = false
-        if isEnabled, inside { action?(event.modifierFlags) }
+        if isEnabled, pressed, inside { action?(event.modifierFlags) }
     }
 }
 

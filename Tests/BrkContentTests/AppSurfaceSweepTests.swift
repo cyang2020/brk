@@ -108,7 +108,7 @@ final class AppSurfaceSweepTests: XCTestCase {
                 let dialogs = SiteDialogs()
                 let prompt = SitePermissionPrompt(id: "prompt", target: target, requestingOrigin: target.origin, capabilities: [.camera, .microphone],
                                                   frame: nil, mask: 0)
-                dialogs.permission(prompt, in: rig.window) { _, _ in }
+                dialogs.permission(prompt, in: rig.window, scheme: scheme) { _, _ in }
                 let shown = try XCTUnwrap(dialogs.permissionWindow(for: rig.id), "\(look): the prompt opened")
                 SurfaceChecks.conceal(shown)
                 let promptContent = try XCTUnwrap(shown.contentView)

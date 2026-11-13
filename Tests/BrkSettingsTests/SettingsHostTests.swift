@@ -335,6 +335,13 @@ final class SettingsHostTests: XCTestCase {
         XCTAssertEqual(sent { fallback.selectItem(withTitle: "Most Recent Space"); fallback.sendAction(fallback.action, to: fallback.target) },
                        [.settings(.links(.defaultRoute(.mostRecentSpace)))])
 
+        // VoiceOver and other Accessibility clients reach the sheet's click areas as named buttons.
+        for (field, label) in [("route-new", "New Route"), ("routes-close", "Close"), ("route-\(id)-remove", "Remove route")] {
+            let control = try XCTUnwrap(find(field) as NSControl?, field)
+            XCTAssertTrue(control.isAccessibilityElement(), field)
+            XCTAssertEqual(control.accessibilityRole(), .button, field)
+            XCTAssertEqual(control.accessibilityLabel(), label, field)
+        }
         guard case .settings(.links(.addRoute(let added)))? = sent({ (find("route-new") as NSControl?)?.performClick(nil) }).first else {
             return XCTFail("New Route did not add a route")
         }

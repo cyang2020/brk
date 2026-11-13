@@ -47,6 +47,7 @@ struct MaxPane: View {
             .padding(.horizontal, Metrics.settings.horizontalPadding.value)
             .padding(.bottom, M.footerBottom.value)
         }
+        .escapeCloses(note != nil) { note = nil }
         // The card says what each agent reports about itself: signed in or not, its models and efforts.
         .onAppear { send(.refreshAgents) }
     }
@@ -215,6 +216,7 @@ struct MaxPane: View {
                     }
                     .frame(width: M.popoverWidth.value).padding()
                 }
+                .escapeCloses(explaining) { explaining = false }
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
