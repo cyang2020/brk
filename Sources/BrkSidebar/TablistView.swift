@@ -696,10 +696,10 @@ final class RowView: HoverView {
     private let joinSlot = NSView()
     /// Arc's `_audibilityButton`: the speaker between the icon and the title of a tab that makes sound or is muted.
     private let audio = GlyphButton()
-    /// Arc's drawn speaker over the speaker button, whose own glyph stays clear (the button keeps the hover and the click).
+    /// Arc's drawn speaker inside the speaker button, whose own glyph stays clear (the button keeps the hover and the click).
     private let speakerGlyph = SpeakerGlyphView()
     private let button = GlyphButton()
-    /// Arc's × / − over the tab row's hover button, likewise.
+    /// Arc's × / − inside the tab row's hover button, likewise.
     private let crossOrHyphen = CrossOrHyphenView()
     private var segments: [SplitSegmentView] = []
     /// The peeked page's icon at the row's trailing end while the window's Peek was opened from this tab.
@@ -760,7 +760,10 @@ final class RowView: HoverView {
         litMark.layer?.cornerCurve = .continuous
         litMark.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
         litMark.isHidden = true
-        for view in [background, litMark, joinSlot, icon, folderIcon, title, renameHint, suggestion, audio, speakerGlyph, button, crossOrHyphen, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
+        for view in [background, litMark, joinSlot, icon, folderIcon, title, renameHint, suggestion, audio, button, peekMarker, spinner, liveMark] as [NSView] { addSubview(view) }
+        // Inside their buttons: they show, fade and hide with them.
+        audio.addSubview(speakerGlyph)
+        button.addSubview(crossOrHyphen)
         folderIcon.isHidden = true
         speakerGlyph.isHidden = true
         crossOrHyphen.isHidden = true
@@ -962,8 +965,8 @@ final class RowView: HoverView {
         background.frame = g.selection
         litMark.frame = g.selection
         icon.frame = g.icon
-        crossOrHyphen.frame = g.button
-        speakerGlyph.frame = g.speaker
+        crossOrHyphen.frame = CGRect(origin: .zero, size: g.button.size)
+        speakerGlyph.frame = CGRect(origin: .zero, size: g.speaker.size)
         let side = Draw.folderIconSide.value
         folderIcon.frame = CGRect(x: g.icon.midX - side / 2, y: g.icon.midY - side / 2, width: side, height: side)
         button.frame = g.button
@@ -1070,8 +1073,6 @@ final class RowView: HoverView {
         let shown = (isHovered || dragLifted) && !isEditingName
         if (button.alphaValue > 0) != shown { needsLayout = true }
         button.alphaValue = shown ? 1 : 0
-        crossOrHyphen.alphaValue = button.alphaValue
-        if case .tab = row { crossOrHyphen.isHidden = button.isHidden }
     }
 
     /// For a picture of the row (a drag, its way out of the list): the glyphs drawn on layers, which a view's cached image
