@@ -417,10 +417,14 @@ enum NativeSystemInput {
         return true
     }
 
-    static func staticTexts(pid: Int32) -> [(text: String, frame: CGRect)] {
+    /// `window`: only the app's window at that screen rectangle (a window of the app behind it lists its own texts).
+    static func staticTexts(pid: Int32, window: CGRect? = nil) -> [(text: String, frame: CGRect)] {
         let root = AXUIElementCreateApplication(pid)
         var out: [(String, CGRect)] = []
         var queue = NativePickerInput.attribute(root, kAXWindowsAttribute) as? [AXUIElement] ?? [], seen = 0
+        if let window {
+            queue = queue.filter { frame(of: $0).map { abs($0.minX - window.minX) + abs($0.minY - window.minY) + abs($0.width - window.width) < 6 } ?? false }
+        }
         while !queue.isEmpty, seen < 4000 {
             let node = queue.removeFirst(); seen += 1
             if NativePickerInput.string(node, kAXRoleAttribute) == kAXStaticTextRole,
@@ -433,6 +437,40 @@ enum NativeSystemInput {
             queue += NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
         }
         return out
+    }
+
+    /// The identifiers of the elements Accessibility reports as disabled in the app's window at that screen rectangle
+    /// (a greyed-out button, which a contrast check leaves out as WCAG does).
+    static func disabledIdentifiers(pid: Int32, window: CGRect) -> Set<String> {
+        var queue = (NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? []).filter {
+            frame(of: $0).map { abs($0.minX - window.minX) + abs($0.minY - window.minY) + abs($0.width - window.width) < 6 } ?? false
+        }
+        var out: Set<String> = [], seen = 0
+        while !queue.isEmpty, seen < 4000 {
+            let node = queue.removeFirst(); seen += 1
+            let identifier = NativePickerInput.string(node, kAXIdentifierAttribute)
+            if !identifier.isEmpty, NativePickerInput.attribute(node, kAXEnabledAttribute) as? Bool == false { out.insert(identifier) }
+            queue += NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
+        }
+        return out
+    }
+
+    /// The red button of the app's window titled `title`, for a real click on it.
+    static func closeButtonFrame(pid: Int32, window title: String) -> CGRect? {
+        let windows = NativePickerInput.attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? []
+        guard let window = windows.first(where: { NativePickerInput.string($0, kAXTitleAttribute) == title }),
+              let button = NativePickerInput.attribute(window, kAXCloseButtonAttribute), CFGetTypeID(button) == AXUIElementGetTypeID() else { return nil }
+        return frame(of: button as! AXUIElement)
+    }
+
+    /// An element's screen rectangle (top-left origin), nil when it has no size.
+    private static func frame(of element: AXUIElement) -> CGRect? {
+        var point = CGPoint.zero, size = CGSize.zero
+        guard let position = NativePickerInput.attribute(element, kAXPositionAttribute), CFGetTypeID(position) == AXValueGetTypeID(),
+              let extent = NativePickerInput.attribute(element, kAXSizeAttribute), CFGetTypeID(extent) == AXValueGetTypeID() else { return nil }
+        AXValueGetValue(position as! AXValue, .cgPoint, &point)
+        AXValueGetValue(extent as! AXValue, .cgSize, &size)
+        return size.width > 0 && size.height > 0 ? CGRect(origin: point, size: size) : nil
     }
 
     /// Every element of `role` in the app's windows, top to bottom, with its screen frame and value: the controls a
