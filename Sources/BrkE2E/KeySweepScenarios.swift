@@ -48,7 +48,10 @@ enum KeySweepScenarios {
         try app.waitUntil("Esc closes the command bar and gives the page the keyboard") {
             try overlay() == nil && app.native().focusedPage == page
         }
-        app.passed("the command bar: ⌘A kept it open, Esc closed it and gave the page the keyboard")
+        app.sleep(0.3)
+        let seen = tab(keys.id, in: try app.view())?.title
+        try expect(seen == NativeScenarios.keyTitle("cmd+a"), "the page saw a key pressed while the bar was open: \(seen ?? "no title")")
+        app.passed("the command bar: ⌘A kept it open, Esc closed it and gave the page the keyboard; the page saw none of ⌘T, ⌘A and Esc")
 
         // The Library (a native view has the keyboard): ⌘T opens the command bar over it; Esc closes what is open.
         try press("shift+cmd+l")
@@ -96,6 +99,7 @@ enum KeySweepScenarios {
         // ⌘2 jumps to the second item of the list (Favorites, Pinned, then Today).
         let listed = try app.view()
         let second = try XCTUnwrapValue((listed.favorites.tiles.map(\.id) + (listed.space.pinned.rows + listed.space.today.rows).map(\.id)).dropFirst().first)
+        try expect(!listed.content.panes.contains { $0.tab == second }, "the second row is shown before ⌘2")
         try press("cmd+2")
         try app.waitUntil("⌘2 shows the second row") { try app.view().content.panes.contains { $0.tab == second } }
         app.passed("⌘2 showed the second row")
@@ -111,11 +115,16 @@ enum KeySweepScenarios {
         try press("shift+cmd+e", in: little)
         app.sleep(0.8)
         try expect(try overlay(little) == nil && windows().count == 2, "⇧⌘E in a Little Arc opened something")
+        let littleFrame = try app.native(little).windowFrame
         try press("cmd+n", in: little)
         var opened: WindowID?
         try app.waitUntil("⌘N in a Little Arc opens a window") { opened = try windows().first { $0 != main && $0 != little }; return opened != nil }
         let fresh = try app.view(opened)
         try expect(fresh.kind == .standard && fresh.sidebar.visible, "the window ⌘N opened from a Little Arc: \(fresh.kind), sidebar \(fresh.sidebar.visible)")
+        // A window asked from a Little Arc opens at a standard window's size, not the Little Arc's moved down and right.
+        let openedFrame = try app.native(opened).windowFrame
+        try expect(openedFrame.width > littleFrame.width && openedFrame.width >= 800,
+                   "the window ⌘N opened from a Little Arc has the Little Arc's size: \(openedFrame.size)")
         try press("escape", in: opened)
         try press("shift+cmd+w", in: opened)
         try app.waitUntil("⇧⌘W closes that window") { try !windows().contains(opened!) }
@@ -123,7 +132,7 @@ enum KeySweepScenarios {
         try app.waitUntil("⌘O moves the Little Arc's page into the space") {
             try !windows().contains(little!) && currentTab(app.view())?.url == littleURL
         }
-        app.passed("a Little Arc: ⇧⌘E did nothing, ⌘N opened a standard window with its sidebar, ⌘O moved the page into the space")
+        app.passed("a Little Arc: ⇧⌘E did nothing, ⌘N opened a standard window with its sidebar at \(Int(openedFrame.width))×\(Int(openedFrame.height)) (the Little Arc \(Int(littleFrame.width))×\(Int(littleFrame.height))), ⌘O moved the page into the space")
 
         // A blank window (⌃⌘N with a page focused) closed with ⇧⌘W archives its tab.
         try app.waitUntil("the page has the keyboard") { try app.native().focusedPage != nil }

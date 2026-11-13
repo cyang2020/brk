@@ -8,8 +8,8 @@ import XCTest
 /// Arc or blank window, or with the last window closed). Every menu updates and every item validates the way the
 /// running app does it, against the window in front: a standard, incognito, Little Arc or blank window, in and out of
 /// full screen, and no window at all (the last one closed, Settings in front). Every item is a table action, an AppKit
-/// item, a submenu or Arc's label, so the command sweep (BrkDomainTests.CommandSweepTests) reduces every command the
-/// menu can send.
+/// item, a submenu or Arc's label, and every Dock and status-item row runs the table action it names, so the command
+/// sweep (BrkDomainTests.CommandSweepTests, which reduces every action's command) covers every command a menu can send.
 @MainActor
 final class MenuSweepTests: XCTestCase {
     func test_everyMenuItemValidatesInEveryWindowKind() throws {
@@ -81,6 +81,25 @@ final class MenuSweepTests: XCTestCase {
                     XCTAssertFalse(item.title.isEmpty, "\(name): \(action) has no title")
                     if action.spec.later != nil { XCTAssertFalse(target.validateMenuItem(item), "\(name): \(action) is a later row") }
                 }
+            }
+        }
+
+        // The Dock icon's menu and the status item's (the full audit: no test opened either): choosing a row performs
+        // the action it names, through the same table as the main menu. A menu item holds its target weakly: the
+        // Lifecycle, whose target the Dock rows have, is kept as the app keeps its delegate.
+        let lifecycle = Lifecycle(options: LaunchOptions(environment: [:]), engine: FakeEngine(), engineKind: "fake")
+        defer { withExtendedLifetime(lifecycle) {} }
+        let dock = try XCTUnwrap(lifecycle.applicationDockMenu(NSApp))
+        let entry = LittleEntryPoints(target: target, environment: ["BRK_TEST_NO_GLOBAL_SHORTCUT": "1"], activate: {}) { _ in }
+        defer { entry.stop() }
+        for (name, menu) in [("Dock", dock), ("status item", try XCTUnwrap(entry.status.menu))] {
+            XCTAssertFalse(menu.items.isEmpty, "\(name): no rows")
+            for item in menu.items {
+                let named = try XCTUnwrap((item.representedObject as? String).flatMap(ActionID.init(rawValue:)), "\(name): \(item.title) names no action")
+                var performed: [ActionID] = []
+                (item.target as? MenuTarget ?? target).perform = { action, _ in performed.append(action) }
+                XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(item.action), to: item.target, from: item), "\(name): \(item.title) has no target")
+                XCTAssertEqual(performed, [named], "\(name): \(item.title)")
             }
         }
     }

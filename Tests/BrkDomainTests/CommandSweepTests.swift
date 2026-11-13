@@ -19,9 +19,9 @@ import XCTest
 /// which the menus, the Dock and the Settings window send to, while another window is open and while none is.
 ///
 /// The first two tests take over 2 s: about 3,100 commands and 1,200 key presses are reduced, and every new state is
-/// projected (about 2 ms on these states, 40 % of it the Settings window's shortcut table), which comes to about 6 s
-/// and 2 s on a Mac mini M1. They replace ReduceSpecTests' reduce-is-total test (3.7 s), which reduced the inventory
-/// alone, one command after another.
+/// projected, normalized and, when its saved part changed, encoded and restored, which comes to about 6 s and 2 s on a
+/// Mac mini M1. They replace ReduceSpecTests' reduce-is-total test (3.7 s), which reduced the inventory alone, one
+/// command after another; that chain is kept at the end of the first test (0.4 s), checked once.
 final class CommandSweepTests: XCTestCase {
     /// The sweep's fixture, built once.
     private static let fixture = Fixture()
@@ -47,12 +47,25 @@ final class CommandSweepTests: XCTestCase {
                 failures += f.violations(t, from: state, in: kind).map { ("\(kind) \(event)", $0) }
             }
         }
+        // One command after another on the same state, then every event (what ReduceSpecTests' reduce-is-total test did):
+        // a rule that trips only over what an earlier command left behind (a deleted space or profile, a closed window, a
+        // Peek or a bar left open) is reached here. Checked once, at the end.
+        for kind in [Fixture.Kind.fresh, .standard] {
+            var (state, window) = f.base(kind)
+            for command in CommandInventory.commands { state = reduce(state, .user(window, command), f.ctx).state }
+            for event in CommandInventory.events { state = reduce(state, .system(event), f.ctx).state }
+            failures += (f.violations(state, in: kind) + f.savedFileViolations(state, in: kind)).map { ("\(kind) after every command in turn", $0) }
+        }
         XCTAssertTrue(failures.isEmpty, summary(failures))
     }
 
     /// Where the keyboard is decides the stage a key arrives in: CEF before and after a page (a text field in the page
     /// marks the press editable), the window's key-equivalent path while a native view has focus (the command bar's
     /// field and the AI composer are editable text; the sidebar, the Library and a capture's selection are not).
+    /// `KeyRouting.decide` reads only the stage, the chord, the editable flag and the press before, never the overlay, so
+    /// the routing checks here repeat for focus states with the same stage. What each focus state adds is the state
+    /// checks after every key run from it (a Peek, a capture, the Library, the bar, the AI panel open). Whether a real key
+    /// reaches each of these places is BrkE2E's Keys-RealFocus and, for the AI composer, AIAgentThreads-Spaces.
     func test_everyShortcutInEveryFocusState() {
         let f = Self.fixture
         let map = KeyRouting.defaultMap
@@ -87,18 +100,11 @@ final class CommandSweepTests: XCTestCase {
         XCTAssertTrue(failures.isEmpty, summary(failures))
     }
 
-    /// Every main-menu item, Dock and status-item row, shortcut and command bar row is an `ActionID` (the app has no
-    /// other list), and the sweep reduces each one's command in every window kind; an extension can never be given a
-    /// chord Brk routes, so no extension shortcut runs a command the sweep does not know.
-    func test_everyMenuItemAndShortcutIsInTheSweep() {
-        let f = Self.fixture
-        for kind in Fixture.Kind.allCases {
-            let swept = Set(f.commands(for: kind))
-            for action in ActionID.allCases {
-                XCTAssertTrue(swept.contains(action.spec.command), "\(kind): \(action) is not swept")
-                XCTAssertTrue(swept.contains(action.spec.barCommand), "\(kind): \(action)'s command bar row is not swept")
-            }
-        }
+    /// Every shortcut and command bar row is an `ActionID`, and so is every main-menu item, Dock row and status-item row
+    /// (BrkAppTests.MenuSweepTests checks the menus); `Fixture.commands(for:)` adds each action's command and its bar row's.
+    /// The one other way a chord runs something is an extension's shortcut: an extension can never be given a chord Brk
+    /// routes, so no extension shortcut runs a command the sweep does not know.
+    func test_noExtensionShortcutTakesARoutedChord() {
         let routed = KeyRouting.defaultMap.entries.keys.filter { chord in
             !chord.modifiers.intersection([.command, .control]).isEmpty && chord.key.menuKeyEquivalent.range(of: "^[a-z0-9]$", options: .regularExpression) != nil
         }
@@ -324,16 +330,21 @@ private final class Fixture: @unchecked Sendable {
         for item in state.doc.tree.allTabs() where base.doc.tree[item] == nil && state.tab(item)?.url == nil && !shown.contains(item) && !loading.contains(item) {
             out.append("tab \(item) was added with no address, not shown and not loading")
         }
-        if file, t.docChanged {
-            let data = StateCodec.encode(state)
-            if data.range(of: Data(Self.privateHost.utf8)) != nil { out.append("a private page's address reached the saved file") }
-            // Restored where the saved part changes in its own way: the standard window's (fresh, rich, closed alone) and a
-            // Little Arc's Open In. Incognito and blank windows' own tabs are never saved, and the closed window beside
-            // the incognito one saves what it saves alone.
-            if [.fresh, .standard, .little, .closedAlone].contains(kind) {
-                let restored = StateCodec.restore(data, seed: RestoreSeed(startURL: nil, contentSize: Driver.contentSize), ctx: ctx)
-                if restored.outcome != .restored(repairs: []) { out.append("the saved file restores as \(restored.outcome)") }
-            }
+        if file, t.docChanged { out += savedFileViolations(state, in: kind) }
+        return out
+    }
+
+    /// What is wrong with the state's saved file: a private page's address in it, or repairs when it is restored.
+    func savedFileViolations(_ state: AppState, in kind: Kind) -> [String] {
+        var out: [String] = []
+        let data = StateCodec.encode(state)
+        if data.range(of: Data(Self.privateHost.utf8)) != nil { out.append("a private page's address reached the saved file") }
+        // Restored where the saved part changes in its own way: the standard window's (fresh, rich, closed alone) and a
+        // Little Arc's Open In. Incognito and blank windows' own tabs are never saved, and the closed window beside
+        // the incognito one saves what it saves alone.
+        if [.fresh, .standard, .little, .closedAlone].contains(kind) {
+            let restored = StateCodec.restore(data, seed: RestoreSeed(startURL: nil, contentSize: Driver.contentSize), ctx: ctx)
+            if restored.outcome != .restored(repairs: []) { out.append("the saved file restores as \(restored.outcome)") }
         }
         return out
     }
@@ -370,6 +381,14 @@ private final class Fixture: @unchecked Sendable {
         }
         if state.doc.windows.values.contains(where: { $0.kind == .incognito }), state.session.privateSession == nil {
             out.append("an incognito window without a private session")
+        }
+        // Only a Peek puts a tab in a standard window's own tree (Rules/Peek.swift): any other tab there is a page left
+        // loaded behind the window's rows with no row to close it, which `owns` and the checks below take as the window's.
+        for (id, window) in state.doc.windows where window.kind == .standard {
+            let peeked = state.peekedTab(in: id)
+            if state.session.scratch[id]?.allTabs().contains(where: { $0 != peeked }) == true {
+                out.append("standard window \(id)'s own tree holds a tab that is not its open Peek")
+            }
         }
         if !state.session.loaded.allSatisfy(state.owns) { out.append("a loaded page no window owns") }
         if !Set(state.session.live.keys).isSubset(of: state.session.loaded) { out.append("a live page that is not loaded") }

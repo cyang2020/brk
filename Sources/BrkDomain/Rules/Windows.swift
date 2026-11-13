@@ -269,7 +269,9 @@ extension Command {
         // The Settings window's and the menus' commands that show something in the window: a page (Settings' Passwords
         // row, Extensions > Manage Extensions…), a dialog (New Profile, Change Profile) or a panel or sheet on it
         // (Getting Started, Import…, Add Extension…, Share…). Left closed, the window has no host to show them in, and the
-        // button or menu item did nothing (a page asked for there was left as an empty row).
+        // button or menu item did nothing (a page asked for there was left as an empty row). The window comes back before
+        // the command's own checks, so one that then does nothing (Remove for an extension not in the catalog, an install
+        // whose checks fail) brings it back empty; those come from popovers on open windows only.
         case .settings(.openBrowserPage), .profile(.openDialog), .app(.export),
              .sidebarData(.welcome), .sidebarData(.importFile), .sidebarData(.importBrowser), .sidebarData(.syncSettings),
              .sidebarData(.importSelected), .sidebarData(.connectSelectedFolder),
