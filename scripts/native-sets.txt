@@ -60,6 +60,7 @@ profiles W2-3
 profiles W2-P1
 profiles DataPrivateExpiry
 profiles DataCookiesRefreshRestart
+profiles Settings-Real
 
 # downloads：下载
 downloads W2-11
@@ -90,10 +91,10 @@ pages Core-dialogs
 # sites：广告拦截、清站点数据、权限、证书、扩展
 sites SitePolicy-blocking
 sites SitePolicy-clear
-sites SitePermission-prompt
 sites SiteSecurity-invalid
 sites Extension-install
 sites Core-popup
+sites SiteControls-Real
 
 # sidebar：侧栏拖拽、Favorites、重命名、Toast、标签工具、分屏工具、文字截断
 sidebar R53-TabIn

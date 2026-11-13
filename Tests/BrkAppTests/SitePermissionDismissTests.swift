@@ -20,9 +20,10 @@ final class SitePermissionDismissTests: XCTestCase {
         let dialogs = SiteDialogs()
         var answers: [SitePermission] = []
         dialogs.permission(SitePermissionPrompt(id: "p1", target: target, requestingOrigin: origin, capabilities: [.camera], frame: nil, mask: 0),
-                           in: window) { decision, _ in answers.append(decision) }
+                           in: window, scheme: .dark) { decision, _ in answers.append(decision) }
         let shown = try XCTUnwrap(dialogs.permissionWindow(for: page.window))
         XCTAssertTrue(shown.isVisible)
+        XCTAssertEqual(shown.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]), .darkAqua, "the prompt draws with the sidebar's theme, not the system's")
         dialogs.dismiss("p1")
         XCTAssertFalse(shown.isVisible, "the popover leaves the screen")
         XCTAssertEqual(answers, [.ask], "answered once, unanswered")

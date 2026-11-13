@@ -29,12 +29,12 @@ struct AirTrafficControlSheet: View {
                 Text(LinksRoutesCopy.newRoute).font(SettingsStyle.font).foregroundStyle(.primary)
                     .frame(width: A.newRouteSize.value.width, height: A.newRouteSize.value.height)
                     .background(RoundedRectangle(cornerRadius: A.newRouteRadius.value, style: .continuous).fill(ArtColor.rgb(0xEAEAEF)))
-                    .overlay(ClickArea(field: "route-new") {
+                    .overlay(ClickArea(field: "route-new", label: LinksRoutesCopy.newRoute) {
                         send(.addRoute(LinkRoute(id: LinkRouteID(UUID().uuidString), pattern: "", destination: .mostRecentSpace, match: .contains)))
                     })
                 Image(systemName: "xmark").font(.system(size: A.closeGlyph.value, weight: .regular)).foregroundStyle(ArtColor.rgb(0x4D5568))
                     .frame(width: A.closeSize.value, height: A.closeSize.value)
-                    .overlay(ClickArea(field: "routes-close") { finish() })
+                    .overlay(ClickArea(field: "routes-close", label: "Close") { finish() })
                     .padding(.leading, A.newRouteToClose.value)
             }
             .frame(height: A.headerHeight.value)
@@ -98,7 +98,7 @@ struct AirTrafficControlSheet: View {
                     .frame(width: A.patternWidth.value)
                     .padding(.leading, A.controlGap.value)
                 Image(systemName: "minus.circle.fill").font(.system(size: A.removeSize.value)).foregroundStyle(ArtColor.rgb(0x88888B))
-                    .overlay(ClickArea(field: "route-\(id)-remove") { send(.removeRoute(route.id)) })
+                    .overlay(ClickArea(field: "route-\(id)-remove", label: LinksRoutesCopy.remove) { send(.removeRoute(route.id)) })
                     .help(LinksRoutesCopy.remove)
                     .padding(.leading, A.controlGap.value)
             }

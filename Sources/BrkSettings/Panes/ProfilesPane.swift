@@ -43,6 +43,7 @@ struct ProfilesPane: View {
                     Text(ProfileCopy.paneDetail).font(SettingsStyle.font).fixedSize(horizontal: false, vertical: true)
                         .frame(width: CardMetrics.popoverWidth.value).padding()
                 }
+                .escapeCloses(explainingProfiles) { explainingProfiles = false }
             HStack(alignment: .top, spacing: P.columnGap.value) {
                 // Half a point wider than its place in the row, to the left (the cards keep their column).
                 profileList.frame(width: P.listWidth.value + P.listOverhang.value, height: listHeight)
@@ -176,7 +177,7 @@ struct ProfilesPane: View {
         .padding(.horizontal, P.rowInset.value)
         .frame(height: P.rowHeight.value)
         .background(RoundedRectangle(cornerRadius: P.rowRadius.value, style: .continuous).fill(isSelected ? P.selectedFill : Color.clear))
-        .background(ClickArea(field: "profileRow-\(id)") { selection = id })
+        .background(ClickArea(field: "profileRow-\(id)", label: row.profile.name) { selection = id })
         if renaming == id, ProfileCopy.isTaken(renames[id] ?? row.profile.name, among: others) {
             Text(ProfileCopy.nameTaken).font(.caption).foregroundStyle(.red).padding(.horizontal, P.rowInset.value)
         }
@@ -311,7 +312,7 @@ struct ProfileSettingsForm: View {
         }
         .padding(.horizontal, CardMetrics.rowPadding.value)
         .frame(height: P.dataRow.value)
-        .background(ClickArea(field: "profileData-\(name)-\(id)", action: action))
+        .background(ClickArea(field: "profileData-\(name)-\(id)", label: title, action: action))
     }
 
     /// Arc's three kinds of item: the folder, ask each time, and "Other…" (tags `arc.folder`,

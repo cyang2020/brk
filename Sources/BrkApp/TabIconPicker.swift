@@ -34,9 +34,11 @@ enum TabIconPicker {
         shown = nil
     }
 
-    static func present(for item: ItemID, in window: NSWindow, initial: CustomIcon? = nil, choose: @escaping (CustomIcon?) -> Void) {
+    /// `scheme` is the window theme's: the picker draws with the sidebar it opens from, as the Space icon picker does.
+    static func present(for item: ItemID, in window: NSWindow, scheme: Scheme?, initial: CustomIcon? = nil, choose: @escaping (CustomIcon?) -> Void) {
         close()
         let popover = NSPopover()
+        popover.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         popover.behavior = .applicationDefined
         popover.animates = false
         let grid = IconGridController(initial: initial) { icon in

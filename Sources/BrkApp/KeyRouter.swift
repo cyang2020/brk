@@ -66,7 +66,8 @@ final class KeyRouter: WebEngineDelegate {
     }
     func engine(_ engine: any WebEngine, dismissDestination ticket: DestinationTicket) { store.destinations.dismiss(ticket) }
     func engine(_ engine: any WebEngine, permission prompt: SitePermissionPrompt, reply: @escaping @MainActor (SitePermission) -> Void) {
-        store.siteDialogs.permission(prompt, in: store.windowController(prompt.target.page.window)?.window) { [weak self] answer, remember in
+        let window = prompt.target.page.window
+        store.siteDialogs.permission(prompt, in: store.windowController(window)?.window, scheme: store.snapshot.windows[window]?.theme.scheme) { [weak self] answer, remember in
             if remember, answer != .ask {
                 self?.store.dispatch(.user(prompt.target.page.window, .site(.permission(prompt.target, prompt.requestingOrigin, prompt.capabilities, answer))))
             }

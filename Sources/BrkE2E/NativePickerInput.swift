@@ -514,3 +514,159 @@ enum NativeSystemInput {
         return { UnregisterEventHotKey(ref) }
     }
 }
+
+/// Where `NativeSystemInput.control` looks for a control: the window with this title (the Settings window is titled
+/// with its pane), a popover (the site controls, the permission prompt, a Settings popover), a sheet over a window
+/// with this title (any window for nil), or anywhere in the app.
+enum AXPlace: Equatable, CustomStringConvertible {
+    case window(String)
+    case popover
+    case sheet(String?)
+    case anywhere
+
+    var description: String {
+        switch self {
+        case .window(let title): "the window \(title)"
+        case .popover: "a popover"
+        case .sheet(let title): "a sheet" + (title.map { " over \($0)" } ?? "")
+        case .anywhere: "the app"
+        }
+    }
+}
+
+/// Controls found through Accessibility in the app's windows, popovers and sheets, by identifier or title: where a real
+/// click goes (SitesSettingsRealScenarios). Frames are screen points with a top-left origin, as mouse events take them.
+extension NativeSystemInput {
+    /// The app's top-level elements except its menu bar: its windows, then what it lists only as a child.
+    private static func roots(pid: Int32) -> [AXUIElement] {
+        _ = wakeAccessibilityTree(pid: pid)
+        let app = AXUIElementCreateApplication(pid)
+        var roots = NativePickerInput.attribute(app, kAXWindowsAttribute) as? [AXUIElement] ?? []
+        for child in NativePickerInput.attribute(app, kAXChildrenAttribute) as? [AXUIElement] ?? []
+        where NativePickerInput.string(child, kAXRoleAttribute) != kAXMenuBarRole && !roots.contains(where: { CFEqual($0, child) }) {
+            roots.append(child)
+        }
+        return roots
+    }
+
+    private static func children(_ node: AXUIElement, role: String) -> [AXUIElement] {
+        (NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []).filter { NativePickerInput.string($0, kAXRoleAttribute) == role }
+    }
+
+    private static func elements(pid: Int32, _ place: AXPlace) -> [AXUIElement] {
+        let all = roots(pid: pid)
+        switch place {
+        case .anywhere: return all
+        case .window(let title): return all.filter { NativePickerInput.string($0, kAXTitleAttribute) == title }
+        // An NSPopover is a top-level element of its own or a child of the window it is attached to.
+        case .popover: return all.filter { NativePickerInput.string($0, kAXRoleAttribute) == "AXPopover" } + all.flatMap { children($0, role: "AXPopover") }
+        case .sheet(let title): return all.filter { title == nil || NativePickerInput.string($0, kAXTitleAttribute) == title }.flatMap { children($0, role: kAXSheetRole) }
+        }
+    }
+
+    private static func frame(of node: AXUIElement) -> CGRect? {
+        var point = CGPoint.zero, size = CGSize.zero
+        if let value = NativePickerInput.attribute(node, kAXPositionAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgPoint, &point) }
+        if let value = NativePickerInput.attribute(node, kAXSizeAttribute), CFGetTypeID(value) == AXValueGetTypeID() { AXValueGetValue(value as! AXValue, .cgSize, &size) }
+        return size.width > 0 && size.height > 0 ? CGRect(origin: point, size: size) : nil
+    }
+
+    /// A static text's words are its value; a control's are its title or description.
+    private static func named(_ node: AXUIElement, _ title: String) -> Bool {
+        [kAXTitleAttribute, kAXDescriptionAttribute].contains { NativePickerInput.string(node, $0) == title }
+            || NativePickerInput.string(node, kAXRoleAttribute) == kAXStaticTextRole && NativePickerInput.string(node, kAXValueAttribute) == title
+    }
+
+    private static func find(pid: Int32, _ place: AXPlace, identifier: String?, title: String?, roles: [String]) -> AXUIElement? {
+        for root in elements(pid: pid, place) {
+            if let node = NativePickerInput.find(root, { node, role in
+                if let identifier, NativePickerInput.string(node, kAXIdentifierAttribute) != identifier { return false }
+                if let title, !named(node, title) { return false }
+                return roles.isEmpty || roles.contains(role)
+            }) { return node }
+        }
+        return nil
+    }
+
+    /// The frame of the first control in `place` with this identifier, or these words, and one of `roles`; nil while
+    /// there is none.
+    static func control(pid: Int32, in place: AXPlace, identifier: String? = nil, title: String? = nil, roles: [String] = []) -> CGRect? {
+        find(pid: pid, place, identifier: identifier, title: title, roles: roles).flatMap(frame(of:))
+    }
+
+    /// The control of one of `roles` on the same line as the text `label` (a SwiftUI picker's pop-up beside its title).
+    static func control(pid: Int32, in place: AXPlace, beside label: String, roles: [String]) -> CGRect? {
+        for root in elements(pid: pid, place) {
+            guard let text = NativePickerInput.find(root, { node, role in role == kAXStaticTextRole && named(node, label) }).flatMap(frame(of:)) else { continue }
+            var queue = [root], best: (CGRect, CGFloat)?, seen = 0
+            while !queue.isEmpty, seen < 2500 {
+                let node = queue.removeFirst(); seen += 1
+                if roles.contains(NativePickerInput.string(node, kAXRoleAttribute)), let rect = frame(of: node) {
+                    let distance = abs(rect.midY - text.midY)
+                    if distance < max(text.height, rect.height) / 2 + 4, distance < (best?.1 ?? .infinity) { best = (rect, distance) }
+                }
+                queue += NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
+            }
+            if let best { return best.0 }
+        }
+        return nil
+    }
+
+    /// A checkbox's or switch's value as Accessibility reads it (0 off, 1 on); nil when there is no such control.
+    static func controlValue(pid: Int32, in place: AXPlace, identifier: String? = nil, title: String? = nil, roles: [String] = []) -> Int? {
+        find(pid: pid, place, identifier: identifier, title: title, roles: roles).flatMap { NativePickerInput.attribute($0, kAXValueAttribute) as? Int }
+    }
+
+    /// The frame of the place itself (the window, the popover or the sheet); nil while there is none.
+    static func placeFrame(pid: Int32, _ place: AXPlace) -> CGRect? {
+        elements(pid: pid, place).lazy.compactMap(frame(of:)).first
+    }
+
+    /// Visible static labels of this sheet or popover, with screen rectangles for checking the pixels behind them.
+    static func textFrames(pid: Int32, in place: AXPlace) -> [(text: String, frame: CGRect)] {
+        var queue = elements(pid: pid, place), out: [(String, CGRect)] = [], seen = 0
+        while !queue.isEmpty, seen < 2500 {
+            let node = queue.removeFirst(); seen += 1
+            if NativePickerInput.string(node, kAXRoleAttribute) == kAXStaticTextRole,
+               let text = NativePickerInput.attribute(node, kAXValueAttribute) as? String,
+               text.contains(where: { $0.isLetter || $0.isNumber }), let rect = frame(of: node) {
+                out.append((text, rect))
+            }
+            queue += NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
+        }
+        return out
+    }
+
+    /// Whether `place` is on screen with a text in it that contains `text`.
+    static func shows(pid: Int32, in place: AXPlace, text: String) -> Bool {
+        elements(pid: pid, place).contains { root in
+            NativePickerInput.find(root) { node, _ in
+                [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute].contains { (NativePickerInput.attribute(node, $0) as? String)?.contains(text) == true }
+            } != nil
+        }
+    }
+
+    /// The red close button of the window titled `title`.
+    static func closeButton(pid: Int32, window title: String) -> CGRect? {
+        guard let window = elements(pid: pid, .window(title)).first, let button = NativePickerInput.attribute(window, kAXCloseButtonAttribute),
+              CFGetTypeID(button) == AXUIElementGetTypeID() else { return nil }
+        return frame(of: button as! AXUIElement)
+    }
+
+    /// What Accessibility lists in `place` (role, title or description, identifier), for a failure message.
+    static func outline(pid: Int32, in place: AXPlace, limit: Int = 60) -> String {
+        var lines: [String] = []
+        for root in elements(pid: pid, place) {
+            var queue = [root]
+            while !queue.isEmpty, lines.count < limit {
+                let node = queue.removeFirst()
+                let words = [kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute].compactMap { NativePickerInput.attribute(node, $0) as? String }.filter { !$0.isEmpty }
+                let identifier = NativePickerInput.string(node, kAXIdentifierAttribute)
+                lines.append([NativePickerInput.string(node, kAXRoleAttribute), words.first.map { "'\($0.prefix(40))'" } ?? "", identifier].filter { !$0.isEmpty }.joined(separator: " "))
+                queue += NativePickerInput.attribute(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
+            }
+        }
+        let roots = roots(pid: pid).map { NativePickerInput.string($0, kAXRoleAttribute) + ":" + NativePickerInput.string($0, kAXTitleAttribute) }
+        return (lines.isEmpty ? "nothing in \(place)" : lines.joined(separator: " | ")) + " [roots: " + roots.joined(separator: ", ") + "]"
+    }
+}

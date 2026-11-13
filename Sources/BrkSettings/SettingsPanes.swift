@@ -70,6 +70,7 @@ struct PreviewsSheet: View {
                     Text(SettingsCopy.previewsDetail).font(SettingsStyle.font).fixedSize(horizontal: false, vertical: true)
                         .frame(width: C.popoverWidth.value).padding()
                 }
+                .escapeCloses(explaining) { explaining = false }
             VStack(alignment: .leading, spacing: C.sheetRowGap.value) {
                 SettingsCheckbox(title: SettingsCopy.folderAndTabPreviews, field: "tabHoverPreviews", isOn: tabs.hoverPreviews, size: .large) {
                     context.dispatch(.tabTools(.preferences(includeFavorites: tabs.includeFavoritesInNumbers, previews: $0)))
@@ -174,11 +175,12 @@ struct LinksPane: View {
                         HStack(spacing: C.infoGap.value) {
                             CardLabel(SettingsCopy.routesSummary)
                             Image(systemName: "info.circle").font(.system(size: C.infoSize.value)).foregroundStyle(SettingsStyle.text)
-                                .overlay(ClickArea(field: "airTrafficControlInfo") { explainingRoutes = true })
+                                .overlay(ClickArea(field: "airTrafficControlInfo", label: "About Air Traffic Control") { explainingRoutes = true })
                                 .popover(isPresented: $explainingRoutes) {
                                     Text(LinksRoutesCopy.explanation).font(SettingsStyle.font).fixedSize(horizontal: false, vertical: true)
                                         .frame(width: C.popoverWidth.value).padding()
                                 }
+                                .escapeCloses(explainingRoutes) { explainingRoutes = false }
                         }
                     } trailing: {
                         SettingsButton(title: SettingsCopy.airTrafficControlButton, field: "airTrafficControl") { showingRoutes = true }

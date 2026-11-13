@@ -125,21 +125,27 @@ struct IdentifiedRegion: NSViewRepresentable {
 // MARK: - Controls
 
 /// A transparent click target behind a SwiftUI row (a profile in the list, a data row): an NSControl the control
-/// socket and tests can click (`settings-field-<field>`), so the row is not a SwiftUI-only gesture.
+/// socket and tests can click (`settings-field-<field>`), so the row is not a SwiftUI-only gesture. It is a button named
+/// `label` to Accessibility: a bare NSControl is left out of the tree, so VoiceOver could not reach New Route, the
+/// routes' × and ⊖, the Icon rows or the profile rows at all.
 struct ClickArea: NSViewRepresentable {
     let field: String
+    let label: String
     let action: @MainActor () -> Void
 
     func makeNSView(context: NSViewRepresentableContext<Self>) -> ClickAreaControl { ClickAreaControl() }
 
     func updateNSView(_ control: ClickAreaControl, context: NSViewRepresentableContext<Self>) {
         control.identify(.settingsField(field))
+        control.setAccessibilityLabel(label)
         control.run = action
         control.isEnabled = context.environment.isEnabled
     }
 
     final class ClickAreaControl: NSControl {
         var run: (@MainActor () -> Void)?
+        override func isAccessibilityElement() -> Bool { true }
+        override func accessibilityRole() -> NSAccessibility.Role? { .button }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override func mouseDown(with event: NSEvent) {}
         override func mouseUp(with event: NSEvent) {
@@ -157,6 +163,16 @@ struct ClickArea: NSViewRepresentable {
 private func fitted(_ control: NSView, _ proposal: ProposedViewSize) -> CGSize {
     let natural = control.intrinsicContentSize
     return CGSize(width: min(proposal.width ?? natural.width, natural.width), height: natural.height)
+}
+
+extension View {
+    /// Escape closes a popover the pane shows (the routes' info, a Max note, Learn more). The window under it stays the
+    /// key window, so without this Escape went to Settings' own Escape and closed the whole window.
+    func escapeCloses(_ shown: Bool, _ close: @escaping @MainActor () -> Void) -> some View {
+        background {
+            if shown { Button("", action: close).keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0).accessibilityHidden(true) }
+        }
+    }
 }
 
 /// A checkbox for one Bool setting. `field` names it (`settings-field-<field>`).
