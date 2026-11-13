@@ -172,10 +172,10 @@ enum SpaceToolsScenarios {
         try managerMenu(app, created, choose: "Edit Theme Color…")
         try app.waitUntil("Edit Theme Color… opened the theme panel") { if case .theme(created, _)? = try app.view().dialog { return true } else { return false } }
         try clickWhenShown(app, "theme-appearance-light")
-        // The space's Drab navy under the light button: a light window that keeps the light ink over a white wash (r5-6).
+        // The space's Drab navy under the light button: a light window that keeps the light ink over a white underlay (r5-6).
         try app.waitUntil("the panel edits the card's space") {
             let v = try app.view()
-            if case .theme(created, let t)? = v.dialog { return t.appearance == .light && v.theme.wash.red == 1 } else { return false }
+            if case .theme(created, let t)? = v.dialog { return t.appearance == .light && v.theme.underlay.red == 1 } else { return false }
         }
         guard case .library? = try app.view().overlay else { throw Check(description: "the theme panel closed the Library") }
         try app.press("escape")

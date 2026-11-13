@@ -11,7 +11,9 @@ import QuartzCore
 ///    backing scale px), mixed by `progress` with the gradient last drawn.
 /// 2. overlay: the theme's tile, repeated from the top-left at its size in points, turned into the factor the
 ///    gradient is multiplied by (1 - opacity x (1 - tile value)), mixed by `progress` with the factor last drawn.
-/// 3. render: gradient (scaled to the drawable) x factor, then the wash, into the drawable.
+/// 3. render: gradient (scaled to the drawable) x factor at the theme's layer alpha over its underlay, premultiplied,
+///    into a drawable that is not opaque: the window's material shows through the rest (Arc's GradientLayer:
+///    `underlayColor` and the layer alpha; docs/checks/2026-11-13-window-translucency.md).
 ///
 /// The textures of passes 1 and 2 are kept in pairs: a transition freezes the pair last drawn as its "from" side, so
 /// a space switch that interrupts a running crossfade continues from exactly what is on screen.
@@ -32,12 +34,14 @@ final class ThemeRenderer {
     private var theme: ResolvedTheme?
     private var start: CFTimeInterval = 0
     private var duration: Double = 0
-    private var fromWash = SIMD4<Float>(0, 0, 0, 0)
+    private var fromLayer = Layer.clear
     private var targets: Targets?
     /// Which texture of each pair holds the "from" side; the other one is drawn into.
     private var from = 0
-    /// What the last frame drew (index of the pair, premultiplied wash), nil before the first frame.
-    private var last: (output: Int, wash: SIMD4<Float>)?
+    /// What the last frame drew (index of the pair, its layer values), nil before the first frame.
+    private var last: (output: Int, layer: Layer)?
+    /// The texture's opacity is multiplied by this: Metrics.theme.inactiveTextureFactor while the window is inactive.
+    var textureScale: Double = 1
     /// Two themes mixed at a progress the caller holds (a Space swipe's position), instead of a timed crossfade.
     /// `baseDrawn`: the "from" side of the pair holds `base`.
     private var scrubbing: (base: ResolvedTheme, progress: Double, baseDrawn: Bool)?
@@ -93,7 +97,7 @@ final class ThemeRenderer {
         start = now
         if let last, duration > 0 {
             from = last.output
-            fromWash = last.wash
+            fromLayer = last.layer
             self.duration = duration
         } else {
             self.duration = 0
@@ -126,28 +130,49 @@ final class ThemeRenderer {
         if let scrub = scrubbing, !scrub.baseDrawn {
             // The base goes into the pair's "from" side, whole; the frames after it mix over it.
             layers(of: scrub.base, into: from, over: 1 - from, progress: 1, scale: scale, targets: targets, commandBuffer: commandBuffer)
-            fromWash = Self.wash(scrub.base)
+            fromLayer = Layer(scrub.base)
             scrubbing?.baseDrawn = true
         }
         let p = Float(progress(at: time))
         let output = 1 - from
         layers(of: theme, into: output, over: from, progress: p, scale: scale, targets: targets, commandBuffer: commandBuffer)
 
-        // 3. Composite and wash.
-        let to = Self.wash(theme)
-        let wash = p >= 1 ? to : fromWash + (to - fromWash) * p
-        pass(commandBuffer, into: texture, renderPipeline, uniforms: [wash.x, wash.y, wash.z, wash.w],
+        // 3. Composite over the underlay, premultiplied.
+        let to = Layer(theme)
+        let layer = p >= 1 ? to : fromLayer.mixed(to, p)
+        pass(commandBuffer, into: texture, renderPipeline, uniforms: layer.uniforms,
              textures: [targets.gradients[output], targets.overlays[output]])
 
-        last = (output, wash)
+        last = (output, layer)
         if scrubbing != nil { return false }
         if p >= 1 { duration = 0 }
         return p < 1
     }
 
-    private static func wash(_ theme: ResolvedTheme) -> SIMD4<Float> {
-        SIMD4<Float>(Float(theme.wash.red * theme.wash.alpha), Float(theme.wash.green * theme.wash.alpha),
-                     Float(theme.wash.blue * theme.wash.alpha), Float(theme.wash.alpha))
+    /// The gradient's alpha and the underlay below it, premultiplied and already scaled by what the gradient leaves
+    /// uncovered: output = gradient x alpha + under, coverage = alpha + under.a.
+    struct Layer: Equatable {
+        var alpha: Float
+        var under: SIMD4<Float>
+
+        static let clear = Layer(alpha: 1, under: .zero)
+
+        init(alpha: Float, under: SIMD4<Float>) {
+            self.alpha = alpha
+            self.under = under
+        }
+
+        init(_ theme: ResolvedTheme) {
+            let a = min(max(theme.layerAlpha, 0), 1), u = theme.underlay.alpha * (1 - a)
+            self.init(alpha: Float(a), under: SIMD4<Float>(Float(theme.underlay.red * u), Float(theme.underlay.green * u),
+                                                           Float(theme.underlay.blue * u), Float(u)))
+        }
+
+        func mixed(_ other: Layer, _ p: Float) -> Layer {
+            Layer(alpha: alpha + (other.alpha - alpha) * p, under: under + (other.under - under) * p)
+        }
+
+        var uniforms: [Float] { [under.x, under.y, under.z, under.w, alpha, 0, 0, 0] }
     }
 
     /// The gradient and overlay of `theme` into one side of the texture pairs, mixed over the other side.
@@ -167,7 +192,7 @@ final class ThemeRenderer {
         // 2. Overlay factor.
         let tile = tiles.tile(theme.texture, scale: scale)
         let tilePixels = Float(TexturePixels.tileSize(theme.texture) * scale)
-        let overlay: [Float] = [tilePixels, tilePixels, tile == nil ? 0 : Float(theme.textureOpacity),
+        let overlay: [Float] = [tilePixels, tilePixels, tile == nil ? 0 : Float(theme.textureOpacity * textureScale),
                                 Float(theme.textureContrast), tile?.mean ?? 1, p, 0, 0]
         pass(commandBuffer, into: targets.overlays[output], overlayPipeline, uniforms: overlay,
              textures: [tile?.texture ?? blank, targets.overlays[from]])
@@ -279,16 +304,17 @@ final class ThemeRenderer {
         return float4(mix(from.read(uint2(in.position.xy)).r, to, u.progress), 0, 0, 1);
     }
 
-    struct RenderUniforms { float4 wash; };
+    struct RenderUniforms { float4 under; float alpha; };
 
-    // Gradient x factor, then the wash (premultiplied). A dither of half a step hides 8-bit banding in the blend.
+    // Gradient x factor at the layer alpha over the underlay, premultiplied (the layer is not opaque: the window's
+    // material shows through what it leaves). A dither of half a step hides 8-bit banding in the blend.
     fragment float4 renderFragment(Varyings in [[stage_in]], constant RenderUniforms& u [[buffer(0)]],
                                    texture2d<float> gradient [[texture(0)]], texture2d<float> overlay [[texture(1)]]) {
         constexpr sampler s(filter::linear, address::clamp_to_edge);
         float3 color = gradient.sample(s, in.uv).rgb * overlay.read(uint2(in.position.xy)).r;
-        color = color * (1 - u.wash.a) + u.wash.rgb;
+        float coverage = u.alpha + u.under.a;
         float dither = fract(sin(dot(in.position.xy, float2(12.9898, 78.233))) * 43758.5453) - 0.5;
-        return float4(color + dither / 255.0, 1);
+        return float4(color * u.alpha + u.under.rgb + dither / 255.0 * coverage, coverage);
     }
     """
 }
