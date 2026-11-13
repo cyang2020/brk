@@ -99,16 +99,20 @@ struct ThemeDraft: Equatable {
         edit { style in if style.colors.indices.contains(index) { style.colors[index].color = color } }
     }
 
-    /// The new base color sits opposite the primary on the pad (Arc adds the complement, P28 b), the third a
-    /// quarter turn on. At most three.
+    /// One more base color, at most three: Arc's editor makes the colors again from the primary on its wheel
+    /// (`themeWheelColors`: analogous +40 then -40, complementary +180, or +150 and +210, in Display P3).
     mutating func addColor() {
         edit { style in
             guard style.colors.count < 3, let primary = style.colors.first?.color else { return }
-            let hsl = HSL(primary)
-            let turn = style.colors.count == 1 ? 180.0 : 90.0
-            style.colors.append(ThemeColor(color: HSL(hue: hsl.hue + turn, saturation: hsl.saturation, lightness: hsl.lightness).rgba,
-                                           position: ThemePoint.anchors[style.colors.count]))
+            let colors = themeWheelColors(primary, count: style.colors.count + 1, wheel: style.wheel)
+            style.colors = colors.enumerated().map { ThemeColor(color: $1, position: ThemePoint.anchors[$0]) }
         }
+    }
+
+    /// A swatch sets the theme's colors (`ThemePresets.colors`): the Brand page's three, the other pages' one.
+    mutating func setPreset(_ colors: [RGBA]) {
+        guard !colors.isEmpty else { return }
+        edit { style in style.colors = colors.prefix(3).enumerated().map { ThemeColor(color: $1, position: ThemePoint.anchors[$0]) } }
     }
 
     /// Removes the given base color, or the last one when the primary is given. Never the only one.
@@ -383,7 +387,7 @@ struct ThemeEditorView: View {
             arrow("chevron.left", id: "theme-presets-previous", enabled: page > 0) { page -= 1 }
                 .position(x: m.arrowInset.value, y: (m.presetDot.value + 8) / 2)
             ForEach(Array(set.colors.enumerated()), id: \.offset) { index, color in
-                Button { model.update { $0.setColor(color, at: model.chosen ? current : 0) } } label: {
+                Button { model.update { $0.setPreset(ThemePresets.colors(page: page, index: index)) } } label: {
                     Circle().fill(color.swiftUI)
                         .overlay(Circle().strokeBorder(color == picked ? Color.white : ink.opacity(0.1), lineWidth: color == picked ? 3 : 2))
                         .frame(width: m.presetDot.value, height: m.presetDot.value)

@@ -6,7 +6,7 @@ import XCTest
 /// The crossfade, drawn offscreen and read back: what a space switch shows between two themes.
 @MainActor
 final class ThemeRendererTests: XCTestCase {
-    /// Flat themes (three equal stops) with no texture, so every pixel is exactly the gradient at the layer alpha over the
+    /// Flat themes (one color) with no texture, so every pixel is exactly the gradient at the layer alpha over the
     /// underlay, premultiplied. A: (0.2, 0.4, 0.6) at 0.75 over white at 0.5 -> (0.275, 0.425, 0.575), coverage 0.875.
     /// B: (0.8, 0.2, 0.1) at 0.5 over black at 0.2 -> (0.4, 0.1, 0.05), coverage 0.6. C: opaque green.
     private let a = flat(RGBA(0.2, 0.4, 0.6), alpha: 0.75, underlay: RGBA(1, 1, 1, 0.5))
@@ -30,9 +30,10 @@ final class ThemeRendererTests: XCTestCase {
         assertPixel(start.pixel, 70.13, 108.38, 146.63)
         let middle = try draw(renderer, at: 10.5)
         XCTAssertTrue(middle.animating)
-        // Gradient (0.5, 0.3, 0.35) at alpha 0.625 + underlay half way, 0.0625 -> (0.375, 0.25, 0.28125), coverage 0.7375.
-        assertPixel(middle.pixel, 95.63, 63.75, 71.72)
-        XCTAssertEqual(middle.coverage, 188.06, accuracy: 1)
+        // The premultiplied gradients and the underlays each half way: (0.275, 0.2, 0.25) at 0.625 over (0.25, 0.25, 0.25)
+        // at 0.35 -> (0.36875, 0.29375, 0.34375), coverage 0.75625.
+        assertPixel(middle.pixel, 94.03, 74.91, 87.66)
+        XCTAssertEqual(middle.coverage, 192.84, accuracy: 1)
         let end = try draw(renderer, at: 11)
         XCTAssertFalse(end.animating)
         assertPixel(end.pixel, 102, 25.5, 12.75)
@@ -52,8 +53,26 @@ final class ThemeRendererTests: XCTestCase {
         assertPixel(try draw(renderer, at: 11.5).pixel, 0, 255, 0)
     }
 
+    /// A third color is another translucent layer. Previews must retain the same coverage as the window renderer.
+    func testPreviewMatchesTheRenderedGradientOverMaterial() throws {
+        let renderer = try XCTUnwrap(ThemeRenderer(device: MTLCreateSystemDefaultDevice()))
+        let colors = [RGBA(0.2, 0.4, 0.6), RGBA(0.8, 0.2, 0.1), RGBA(0.1, 0.7, 0.3)]
+        for count in 1...3 {
+            var theme = a
+            theme.gradient = Array(colors.prefix(count))
+            renderer.transition(to: theme, duration: 0, at: 0)
+            for point in [(2, 2), (7, 8), (13, 14)] {
+                let frame = try draw(renderer, at: 0, pixelAt: point)
+                let preview = themeSample(theme, at: ThemePoint(x: (Double(point.0) + 0.5) / 16,
+                                                               y: (Double(point.1) + 0.5) / 16), aspect: 1)
+                let backdrop = theme.materialBackdrop * (255 - frame.coverage)
+                assertPixel(frame.pixel.map { $0 + backdrop }, preview.red * 255, preview.green * 255, preview.blue * 255)
+            }
+        }
+    }
+
     private static func flat(_ color: RGBA, alpha: Double, underlay: RGBA) -> ResolvedTheme {
-        var theme = ResolvedTheme(scheme: .light, gradient: [color, color, color], texture: .grain, textureOpacity: 0, textureContrast: 1,
+        var theme = ResolvedTheme(scheme: .light, gradient: [color], texture: .grain, textureOpacity: 0,
                                   wash: RGBA(0, 0, 0, 0), tokens: .light, windowColor: color)
         theme.layerAlpha = alpha
         theme.underlay = underlay
@@ -62,7 +81,8 @@ final class ThemeRendererTests: XCTestCase {
 
     /// Draws a 16 x 16 px frame at `time` and returns the mean BGRA -> RGB (premultiplied) and alpha of all its pixels.
     @discardableResult
-    private func draw(_ renderer: ThemeRenderer, at time: CFTimeInterval) throws -> (pixel: [Double], coverage: Double, animating: Bool) {
+    private func draw(_ renderer: ThemeRenderer, at time: CFTimeInterval,
+                      pixelAt: (Int, Int)? = nil) throws -> (pixel: [Double], coverage: Double, animating: Bool) {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: ThemeRenderer.drawableFormat, width: 16, height: 16,
                                                                   mipmapped: false)
         descriptor.usage = [.renderTarget, .shaderRead]
@@ -74,6 +94,10 @@ final class ThemeRendererTests: XCTestCase {
         commandBuffer.waitUntilCompleted()
         var bytes = [UInt8](repeating: 0, count: 16 * 16 * 4)
         texture.getBytes(&bytes, bytesPerRow: 16 * 4, from: MTLRegionMake2D(0, 0, 16, 16), mipmapLevel: 0)
+        if let (x, y) = pixelAt {
+            let i = (y * 16 + x) * 4
+            return ([Double(bytes[i + 2]), Double(bytes[i + 1]), Double(bytes[i])], Double(bytes[i + 3]), animating)
+        }
         var sum = [0.0, 0.0, 0.0, 0.0]
         for i in stride(from: 0, to: bytes.count, by: 4) {
             sum[0] += Double(bytes[i + 2]); sum[1] += Double(bytes[i + 1]); sum[2] += Double(bytes[i]); sum[3] += Double(bytes[i + 3])

@@ -119,7 +119,7 @@ final class ThemeCanvasView: NSView {
         super.init(frame: frame)
         wantsLayer = true
         layerContentsRedrawPolicy = .duringViewResize
-        renderer?.prewarm(scale: Int((NSScreen.main?.backingScaleFactor ?? 2).rounded()))
+        renderer?.prewarm()
         renderer?.onTileReady = { [weak self] kind in self?.tileArrived(kind) }
     }
 
@@ -203,7 +203,6 @@ final class ThemeCanvasView: NSView {
 
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
-        if let scale = window?.backingScaleFactor { renderer?.prewarm(scale: Int(scale.rounded())) }
         needsDisplay = true
     }
 

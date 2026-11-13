@@ -6,14 +6,14 @@ import Metal
 import QuartzCore
 
 /// Metal pipeline for the themed background, in three passes like Arc's shader library (gradientFragment,
-/// overlayFragment, renderFragment; anatomy, "Space theme system"):
-/// 1. gradient: the theme's stops blended softly across a small texture (Metrics.theme.gradientTexturePerFactor x
-///    backing scale px), mixed by `progress` with the gradient last drawn.
-/// 2. overlay: the theme's tile, repeated from the top-left at its size in points, turned into the factor the
-///    gradient is multiplied by (1 - opacity x (1 - tile value)), mixed by `progress` with the factor last drawn.
-/// 3. render: gradient (scaled to the drawable) x factor at the theme's layer alpha over its underlay, premultiplied,
-///    into a drawable that is not opaque: the window's material shows through the rest (Arc's GradientLayer:
-///    `underlayColor` and the layer alpha; docs/checks/2026-11-13-window-translucency.md).
+/// overlayFragment, renderFragment; docs/checks/2026-11-13-window-translucency.md):
+/// 1. gradient: Arc's layer color into a small texture (Metrics.theme.gradientTexturePerFactor x backing scale px),
+///    premultiplied: the first two colors mixed in OKLab along the 45 degree ramp (`themeRampCorners`), a third mixed in
+///    from clear at the top, each at the theme's layer alpha; mixed by `progress` with the gradient last drawn.
+/// 2. overlay: the theme's tile, one texel per device pixel, as premultiplied grey and alpha (the tile's alpha x the
+///    texture opacity), mixed by `progress` with the overlay last drawn.
+/// 3. render: the gradient (scaled to the drawable) over the underlay, then the overlay multiplied over both, as Arc's
+///    renderFragment does, into a drawable that is not opaque: the window's material shows through the rest.
 ///
 /// The textures of passes 1 and 2 are kept in pairs: a transition freezes the pair last drawn as its "from" side, so
 /// a space switch that interrupts a running crossfade continues from exactly what is on screen.
@@ -28,7 +28,7 @@ final class ThemeRenderer {
     private let overlayPipeline: any MTLRenderPipelineState
     private let renderPipeline: any MTLRenderPipelineState
     private let tiles: TileCache
-    /// Bound in place of a tile that is not generated yet (factor 1: no texture).
+    /// Bound in place of a tile that is not generated yet (alpha 0: no texture).
     private let blank: any MTLTexture
 
     private var theme: ResolvedTheme?
@@ -71,7 +71,7 @@ final class ThemeRenderer {
         }
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rg8Unorm, width: 1, height: 1, mipmapped: false)
         guard let blank = device.makeTexture(descriptor: descriptor) else { return nil }
-        blank.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: [UInt8(255), UInt8(255)], bytesPerRow: 2)
+        blank.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: [UInt8(255), UInt8(0)], bytesPerRow: 2)
         self.device = device
         self.queue = queue
         self.blank = blank
@@ -80,14 +80,15 @@ final class ThemeRenderer {
 
     static let drawableFormat = MTLPixelFormat.bgra8Unorm
     private static let gradientFormat = MTLPixelFormat.rgba16Float
-    private static let overlayFormat = MTLPixelFormat.r8Unorm
+    private static let overlayFormat = MTLPixelFormat.rg16Float
 
     /// The theme shown, or being faded to.
     var target: ResolvedTheme? { theme }
 
-    /// Starts generating every kind of tile at `scale` in the background, so a space switch never waits for one.
-    func prewarm(scale: Int) {
-        for kind in Texture.allCases { _ = tiles.tile(kind, scale: scale) }
+    /// Starts generating every kind of tile in the background, so a space switch never waits for one. The tiles are
+    /// one texel per device pixel at any backing scale, as Arc's.
+    func prewarm() {
+        for kind in Texture.allCases { _ = tiles.tile(kind) }
     }
 
     /// Fades from what the last frame showed to `theme` over `duration`; 0 (or no frame drawn yet) switches at once.
@@ -149,53 +150,44 @@ final class ThemeRenderer {
         return p < 1
     }
 
-    /// The gradient's alpha and the underlay below it, premultiplied and already scaled by what the gradient leaves
-    /// uncovered: output = gradient x alpha + under, coverage = alpha + under.a.
+    /// The underlay under the theme's colors, premultiplied (U x u, u): the render pass lays the gradient over it.
     struct Layer: Equatable {
-        var alpha: Float
         var under: SIMD4<Float>
 
-        static let clear = Layer(alpha: 1, under: .zero)
+        static let clear = Layer(under: .zero)
 
-        init(alpha: Float, under: SIMD4<Float>) {
-            self.alpha = alpha
-            self.under = under
-        }
+        init(under: SIMD4<Float>) { self.under = under }
 
         init(_ theme: ResolvedTheme) {
-            let a = min(max(theme.layerAlpha, 0), 1), u = theme.underlay.alpha * (1 - a)
-            self.init(alpha: Float(a), under: SIMD4<Float>(Float(theme.underlay.red * u), Float(theme.underlay.green * u),
-                                                           Float(theme.underlay.blue * u), Float(u)))
+            let u = Float(theme.underlay.alpha)
+            self.init(under: SIMD4<Float>(Float(theme.underlay.red) * u, Float(theme.underlay.green) * u, Float(theme.underlay.blue) * u, u))
         }
 
-        func mixed(_ other: Layer, _ p: Float) -> Layer {
-            Layer(alpha: alpha + (other.alpha - alpha) * p, under: under + (other.under - under) * p)
-        }
+        func mixed(_ other: Layer, _ p: Float) -> Layer { Layer(under: under + (other.under - under) * p) }
 
-        var uniforms: [Float] { [under.x, under.y, under.z, under.w, alpha, 0, 0, 0] }
+        var uniforms: [Float] { [under.x, under.y, under.z, under.w] }
     }
 
     /// The gradient and overlay of `theme` into one side of the texture pairs, mixed over the other side.
     private func layers(of theme: ResolvedTheme, into output: Int, over from: Int, progress p: Float, scale: Int, targets: Targets, commandBuffer: any MTLCommandBuffer) {
-        // 1. Gradient.
-        let stops = (theme.gradient + Array(repeating: theme.gradient.last ?? RGBA(0, 0, 0), count: 3)).prefix(3)
+        // 1. Gradient: up to three colors as OKLab, the ramp's corner values for the drawable's shape, the layer alpha.
+        let colors = theme.gradient.isEmpty ? [RGBA(1, 1, 1)] : Array(theme.gradient.prefix(3))
         var gradient: [Float] = []
-        for stop in stops { gradient += [Float(stop.red), Float(stop.green), Float(stop.blue), 1] }
         for i in 0..<3 {
-            let anchor = theme.positions.indices.contains(i) ? theme.positions[i] : ThemePoint.anchors[i]
-            gradient += [Float(anchor.x), Float(anchor.y), 0, 0]
+            let lab = OKLabColor(colors[min(i, colors.count - 1)])
+            gradient += [Float(lab.l), Float(lab.a), Float(lab.b), 1]
         }
-        gradient += [Float(min(theme.gradient.count, 3)), p, 0, 0]
+        gradient += themeRampCorners(aspect: Double(targets.width) / Double(max(targets.height, 1))).map(Float.init)
+        gradient += [Float(colors.count), Float(min(max(theme.layerAlpha, 0), 1)), p, 0]
         pass(commandBuffer, into: targets.gradients[output], gradientPipeline, uniforms: gradient,
              textures: [targets.gradients[from]])
 
-        // 2. Overlay factor.
-        let tile = tiles.tile(theme.texture, scale: scale)
-        let tilePixels = Float(TexturePixels.tileSize(theme.texture) * scale)
-        let overlay: [Float] = [tilePixels, tilePixels, tile == nil ? 0 : Float(theme.textureOpacity * textureScale),
-                                Float(theme.textureContrast), tile?.mean ?? 1, p, 0, 0]
+        // 2. Overlay: the tile at its pixel size, alpha = the tile's x the texture opacity.
+        let tile = tiles.tile(theme.texture)
+        let tilePixels = Float(TexturePixels.tileSize(theme.texture))
+        let overlay: [Float] = [tilePixels, tilePixels, tile == nil ? 0 : Float(theme.textureOpacity * textureScale), p]
         pass(commandBuffer, into: targets.overlays[output], overlayPipeline, uniforms: overlay,
-             textures: [tile?.texture ?? blank, targets.overlays[from]])
+             textures: [tile ?? blank, targets.overlays[from]])
     }
 
     /// Draws one frame into the layer's next drawable and presents it with the current Core Animation transaction
@@ -267,105 +259,110 @@ final class ThemeRenderer {
         return out;
     }
 
-    struct GradientUniforms { float4 colors[3]; float4 anchors[3]; float count; float progress; };
+    struct GradientUniforms { float4 colors[3]; float4 corners; float count; float alpha; float progress; float pad; };
 
-    // Primary top-left (where the sidebar is), the lighter companion top-right, the darker one at the bottom.
-    // Gaussian weights normalised per pixel give one soft blend with no flat spots or edges.
-    fragment float4 gradientFragment(Varyings in [[stage_in]], constant GradientUniforms& u [[buffer(0)]],
-                                     texture2d<float> from [[texture(0)]]) {
-        const float2 anchors[3] = { float2(0.1, 0.15), float2(0.95, 0.25), float2(0.5, 1.0) };
-        const float weights[3] = { 1.5, 1.0, 1.0 };
-        float3 sum = 0;
-        float total = 0;
-        for (int i = 0; i < int(u.count); i++) {
-            float2 d = in.uv - u.anchors[i].xy;
-            float w = weights[i] * exp(-dot(d, d) / (2 * 0.42 * 0.42));
-            sum += w * u.colors[i].rgb;
-            total += w;
-        }
-        float3 to = sum / max(total, 1e-6);
-        if (u.progress >= 1) { return float4(to, 1); }
-        constexpr sampler s(filter::linear, address::clamp_to_edge);
-        return float4(mix(from.sample(s, in.uv).rgb, to, u.progress), 1);
+    float3 oklabToLinear(float3 c) {
+        float l = c.x + 0.3963377774 * c.y + 0.2158037573 * c.z;
+        float m = c.x - 0.1055613458 * c.y - 0.0638541728 * c.z;
+        float s = c.x - 0.0894841775 * c.y - 1.2914855480 * c.z;
+        l = l * l * l; m = m * m * m; s = s * s * s;
+        return float3(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+                      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+                      -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s);
     }
 
-    struct OverlayUniforms { float2 tilePixels; float opacity; float contrast; float mean; float progress; };
+    float encodeSRGB(float x) {
+        float a = fabs(x);
+        return a > 0.0031308 ? sign(x) * (1.055 * pow(a, 1.0 / 2.4) - 0.055) : x * 12.92;
+    }
 
-    // The factor the gradient is multiplied by. The tile (luminance, alpha) is composited over white; noise scales
-    // its deviation from the tile's mean, so the noise dial changes the pattern, not the brightness.
+    // Arc's layerColor: the first two colors along the 45 degree ramp (the corner values interpolated over the quad's two
+    // triangles, full at three quarters), a third from clear at the top (full at three quarters of the height), mixed in
+    // OKLab, each at the layer alpha, the third laid over the first in linear light. Premultiplied sRGB out.
+    fragment float4 gradientFragment(Varyings in [[stage_in]], constant GradientUniforms& u [[buffer(0)]],
+                                     texture2d<float> from [[texture(0)]]) {
+        float2 p = in.uv;
+        float t = p.x + p.y <= 1 ? u.corners.x + p.x * (u.corners.y - u.corners.x) + p.y * (u.corners.z - u.corners.x)
+                                 : u.corners.w + (1 - p.x) * (u.corners.z - u.corners.w) + (1 - p.y) * (u.corners.y - u.corners.w);
+        float3 base = u.count > 1.5 ? mix(u.colors[0].xyz, u.colors[1].xyz, clamp(t * 4.0 / 3.0, 0.0, 1.0)) : u.colors[0].xyz;
+        float3 rgb = oklabToLinear(base);
+        float a = u.alpha;
+        if (u.count > 2.5) {
+            float ao = clamp(p.y * 4.0 / 3.0, 0.0, 1.0) * u.alpha;
+            float aOut = (1 - ao) * a + ao;
+            rgb = (oklabToLinear(u.colors[2].xyz) * ao + rgb * a * (1 - ao)) / max(aOut, 1e-6);
+            a = aOut;
+        }
+        float4 to = float4(float3(encodeSRGB(rgb.x), encodeSRGB(rgb.y), encodeSRGB(rgb.z)) * a, a);
+        if (u.progress >= 1) { return to; }
+        constexpr sampler s(filter::linear, address::clamp_to_edge);
+        return mix(from.sample(s, in.uv), to, u.progress);
+    }
+
+    struct OverlayUniforms { float2 tilePixels; float opacity; float progress; };
+
+    // Arc's overlayFragment: the tile as premultiplied grey and alpha, alpha = the tile's x the texture opacity.
     fragment float4 overlayFragment(Varyings in [[stage_in]], constant OverlayUniforms& u [[buffer(0)]],
                                     texture2d<float> tile [[texture(0)]], texture2d<float> from [[texture(1)]]) {
         constexpr sampler s(filter::nearest, address::repeat);
         float2 t = tile.sample(s, in.position.xy / u.tilePixels).rg;
-        float value = 1 - t.g * (1 - t.r);
-        value = u.mean + (value - u.mean) * u.contrast;
-        float to = 1 - u.opacity * (1 - value);
-        if (u.progress >= 1) { return float4(to, 0, 0, 1); }
-        return float4(mix(from.read(uint2(in.position.xy)).r, to, u.progress), 0, 0, 1);
+        float a = t.y * u.opacity;
+        float4 to = float4(t.x * a, a, 0, 1);
+        if (u.progress >= 1) { return to; }
+        return float4(mix(from.read(uint2(in.position.xy)).rg, to.rg, u.progress), 0, 1);
     }
 
-    struct RenderUniforms { float4 under; float alpha; };
+    struct RenderUniforms { float4 under; };
 
-    // Gradient x factor at the layer alpha over the underlay, premultiplied (the layer is not opaque: the window's
-    // material shows through what it leaves). A dither of half a step hides 8-bit banding in the blend.
+    // The gradient over the underlay, then Arc's renderFragment: the overlay multiplied over both
+    // (o x g + o x (1 - g.a) + g x (1 - o.a)), premultiplied; the layer is not opaque, so the window's material shows through
+    // what it leaves. A dither of half a step hides 8-bit banding in the blend.
     fragment float4 renderFragment(Varyings in [[stage_in]], constant RenderUniforms& u [[buffer(0)]],
                                    texture2d<float> gradient [[texture(0)]], texture2d<float> overlay [[texture(1)]]) {
         constexpr sampler s(filter::linear, address::clamp_to_edge);
-        float3 color = gradient.sample(s, in.uv).rgb * overlay.read(uint2(in.position.xy)).r;
-        float coverage = u.alpha + u.under.a;
+        float4 g = gradient.sample(s, in.uv);
+        float3 layer = g.rgb + u.under.rgb * (1 - g.a);
+        float coverage = g.a + u.under.a * (1 - g.a);
+        float2 o = overlay.read(uint2(in.position.xy)).rg;
+        float3 color = o.x * layer + o.x * (1 - coverage) + layer * (1 - o.y);
+        float alpha = o.y + coverage * (1 - o.y);
         float dither = fract(sin(dot(in.position.xy, float2(12.9898, 78.233))) * 43758.5453) - 0.5;
-        return float4(color * u.alpha + u.under.rgb + dither / 255.0 * coverage, coverage);
+        return float4(color + dither / 255.0 * alpha, alpha);
     }
     """
 }
 
-/// The procedural tiles as Metal textures, one per kind and backing scale, generated in the background
-/// (TexturePixels is pure) and uploaded on the main actor. Arc's asset files are not copied.
+/// The procedural tiles as Metal textures, one per kind, generated in the background (TexturePixels is pure) and
+/// uploaded on the main actor. Arc's asset files are not copied.
 @MainActor
 final class TileCache {
-    struct Tile {
-        let texture: any MTLTexture
-        /// Mean of the tile's luminance composited over white: what noise scales the deviation from.
-        let mean: Float
-    }
-
-    private struct Key: Hashable, Sendable {
-        let kind: Texture
-        let scale: Int
-    }
-
     let device: any MTLDevice
     var onReady: ((Texture) -> Void)?
-    private var tiles: [Key: Tile] = [:]
-    private var pending: Set<Key> = []
+    private var tiles: [Texture: any MTLTexture] = [:]
+    private var pending: Set<Texture> = []
 
     init(device: any MTLDevice) { self.device = device }
 
     /// The tile, or nil while it is being generated (`onReady` fires when it is there).
-    func tile(_ kind: Texture, scale: Int) -> Tile? {
-        let key = Key(kind: kind, scale: scale)
-        if let tile = tiles[key] { return tile }
-        if pending.insert(key).inserted {
-            let size = TexturePixels.tileSize(kind) * scale
+    func tile(_ kind: Texture) -> (any MTLTexture)? {
+        if let tile = tiles[kind] { return tile }
+        if pending.insert(kind).inserted {
+            let size = TexturePixels.tileSize(kind)
             Task.detached(priority: .userInitiated) { [weak self] in
                 let pixels = TexturePixels.generate(kind, size: size, seed: 1)
-                await self?.upload(key, pixels, size: size)
+                await self?.upload(kind, pixels, size: size)
             }
         }
         return nil
     }
 
-    private func upload(_ key: Key, _ pixels: [UInt8], size: Int) {
-        pending.remove(key)
+    private func upload(_ kind: Texture, _ pixels: [UInt8], size: Int) {
+        pending.remove(kind)
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rg8Unorm, width: size, height: size, mipmapped: false)
         descriptor.usage = .shaderRead
         guard let texture = device.makeTexture(descriptor: descriptor) else { return }
         texture.replace(region: MTLRegionMake2D(0, 0, size, size), mipmapLevel: 0, withBytes: pixels, bytesPerRow: size * 2)
-        var sum = 0.0
-        for i in stride(from: 0, to: pixels.count, by: 2) {
-            sum += 1 - Double(pixels[i + 1]) / 255 * (1 - Double(pixels[i]) / 255)
-        }
-        tiles[key] = Tile(texture: texture, mean: Float(sum / Double(size * size)))
-        onReady?(key.kind)
+        tiles[kind] = texture
+        onReady?(kind)
     }
 }

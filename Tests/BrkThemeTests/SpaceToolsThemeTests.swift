@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class SpaceToolsThemeTests: XCTestCase {
-    func testMovedColorChangesActualMetalPixelsAndFallbackImage() throws {
+    func testEditedColorChangesActualMetalPixelsAndFallbackImage() throws {
         let renderer = try XCTUnwrap(ThemeRenderer(device: MTLCreateSystemDefaultDevice()))
         var theme = SpaceTheme.default
         theme.colors = [RGBA(1, 0, 0), RGBA(0, 0, 1)]
@@ -15,7 +15,7 @@ final class SpaceToolsThemeTests: XCTestCase {
         let first = resolveTheme(theme)
         renderer.transition(to: first, duration: 0, at: 0)
         let before = try pixels(renderer)
-        theme.variants!.light.colors[0].position = ThemePoint(x: 0.95, y: 0.9)
+        theme.variants!.light.colors[0].color = RGBA(0, 1, 0)
         let second = resolveTheme(theme)
         renderer.transition(to: second, duration: 0, at: 1)
         let after = try pixels(renderer)
