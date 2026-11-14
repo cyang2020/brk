@@ -214,7 +214,7 @@ extension Work {
 }
 
 /// Typed command-bar text -> URL. Nil only for blank input (the bar stays open).
-/// - An explicit scheme the bar may open passes through: http and https with a host, file, about: and chrome:
+/// - An explicit scheme the bar may open passes through: http and https, file, about:, chrome:, and valid packaged extensions
 ///   (chrome://extensions works in the Chrome runtime).
 /// - `host[:port][/path]` gets a scheme: http for localhost with a port and IPv4 addresses, https for a dotted
 ///   domain whose last label is 2 to 63 letters ("example.com/x" -> https://example.com/x, "127.0.0.1:9/b" ->
@@ -235,11 +235,14 @@ public func resolveTypedInput(_ text: String, engine: SearchEngine = .google) ->
     return engine.searchURL(input)
 }
 
-/// Whether the user may open `url` by typing it: http and https with a host, file, about:, and chrome: with a host.
+/// User-entered addresses and restored tabs, including packaged extensions with a valid Chrome extension ID.
 /// Also what a restored tab may hold (`StateCodec`): a saved javascript: or data: URL is never loaded.
 func isOpenableURL(_ url: URL) -> Bool {
     switch url.scheme?.lowercased() {
     case "http", "https", "chrome": url.host?.isEmpty == false
+    case "chrome-extension":
+        url.host?.count == 32 && url.host?.utf8.allSatisfy { $0 >= 97 && $0 <= 112 } == true
+            && url.user == nil && url.password == nil && url.port == nil
     case "file", "about": true
     default: false
     }

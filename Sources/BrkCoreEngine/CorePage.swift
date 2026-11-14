@@ -8,9 +8,9 @@ import os
 /// document state and press pairing, one instance per incarnation of a page id.
 @MainActor
 final class CorePage: NSObject, BrkCoreWebContentsDelegate {
-    let id: PageID
+    var id: PageID
     let context: BrowsingContext
-    let incarnation: PageLedger.Incarnation
+    var incarnation: PageLedger.Incarnation
     let contents: any BrkCoreWebContents
     let surface: CoreSurface
     unowned let engine: CoreEngine
@@ -25,7 +25,10 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     var permissionSync: [(requesting: SiteOrigin, top: SiteOrigin, capabilities: Set<SiteCapability>)] = []
     var policyRevision: UInt64 = 0
     var websiteError: String?
-    var frozen = false
+    var automaticFreezing = false
+    var siteFreezing = false
+    var lastResourceUse = ProcessInfo.processInfo.systemUptime
+    var resourceHiddenSince: TimeInterval?
     var pictureInPictureDocument: DocumentToken?
     var documentPiPWorld: (document: DocumentToken, context: Int)?
     var documentPiPTask: Task<Void, Never>?
@@ -35,6 +38,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     var audible = false
     /// What checkSelection last reported for this document.
     var reportedSelection = false
+    var lastFavicon: URL?
     let contextMenu = CoreContextMenu()
     /// The page's audio and video elements as last read (`CoreMedia.swift`).
     var mediaPlayers: [MediaPlayer] = []
@@ -59,7 +63,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     var boostPickerWorld: (target: SiteTarget, id: Int, token: String)?
     /// The JavaScript dialog shown as a sheet for this page.
     var openDialog: (dialog: any BrkCoreDialog, alert: NSAlert)?
-    private(set) var mainDocument: MainDocumentState
+    var mainDocument: MainDocumentState
     private var reloadSequence = ReloadSequence()
     private var expectedReloadBrowse: URL?
     private var presses = PressCorrelator()
@@ -69,7 +73,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     private var requestedReloads = 0
     private var desiredMuted: Bool
     /// The browser whose tab this is; what extensions see.
-    let browser: any BrkCoreBrowser
+    var browser: any BrkCoreBrowser
     private let log = Logger(subsystem: "brk", category: "core-page")
 
     var readyDocument: DocumentToken? { mainDocument.readyDocument }
@@ -138,6 +142,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
                 guard let self, let committed = self.contents.committedURL else { return }
                 self.webContents(self.contents, didStartDocument: committed)
                 if !self.contents.isLoading { self.webContents(self.contents, didFinishDocument: committed) }
+                self.webContents(self.contents, didChangeTitle: self.contents.title)
             }
         }
     }
@@ -154,6 +159,10 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
         facts.hasDevTools = contents.hasDeveloperTools
         facts.inputViewHidden = contents.inputView?.isHiddenOrHasHiddenAncestor
         facts.websitePolicyError = websiteError
+        facts.resourceFrozen = contents.pageFrozen
+        facts.resourceDiscarded = contents.discarded
+        facts.resourceMemoryBytes = contents.estimatedMemoryBytes
+        facts.resourceFreezeRequested = !websitePolicy.visible && !resourceProtected && (automaticFreezing || siteFreezing)
         // Chromium's own audible state of this tab: the tab id is the target, there is no separate reader to fail.
         facts.audioTabID = Int(contents.tabID)
         facts.audioTargetID = "brkcore-tab-\(contents.tabID)"
@@ -315,6 +324,7 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     }
 
     func webContents(_ contents: any BrkCoreWebContents, didChangeFavicon url: URL?) {
+        lastFavicon = url
         engine.pageDidEmit(self, .faviconChanged(url))
     }
 

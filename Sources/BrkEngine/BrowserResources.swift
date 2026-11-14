@@ -32,6 +32,14 @@ public final class BrowserResources<Resource: AnyObject> {
         if removed != nil { leasesDidChange?(browser) }
     }
     public func unpresent(_ browser: BrowserToken) { entries[browser]?.presented = false }
+    /// A handoff changes presentation identity only after all document-bound operations have drained.
+    public func transfer(_ browser: BrowserToken, to replacement: BrowserToken) -> Bool {
+        guard let entry = entries[browser], entry.presented, !entry.closing, !entry.browserClosed,
+              entry.leases.isEmpty, entries[replacement] == nil else { return false }
+        entries[browser] = nil
+        entries[replacement] = entry
+        return true
+    }
     public func beginClose(_ browser: BrowserToken) -> Bool {
         guard let entry = entries[browser], !entry.presented, entry.leases.isEmpty, !entry.closing, !entry.browserClosed else { return false }
         entries[browser]!.closing = true

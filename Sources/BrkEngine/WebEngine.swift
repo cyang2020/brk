@@ -140,6 +140,7 @@ public protocol WebEngineDelegate: AnyObject {
                 reply: @escaping @MainActor (DestinationAnswer) -> Void)
     func engine(_ engine: any WebEngine, dismissDestination ticket: DestinationTicket)
     func engine(_ engine: any WebEngine, contextDisposed result: ContextDisposalResult)
+    func engine(_ engine: any WebEngine, extensionsDidChange catalog: ExtensionCatalog)
 
     func engine(_ engine: any WebEngine, permission prompt: SitePermissionPrompt, reply: @escaping @MainActor (SitePermission) -> Void)
     func engine(_ engine: any WebEngine, dismissPermission id: String)
@@ -187,6 +188,7 @@ extension WebEngineDelegate {
     public func engine(_ engine: any WebEngine, destination prompt: DownloadDestinationPrompt, reply: @escaping @MainActor (DestinationAnswer) -> Void) { reply(.ownerGone) }
     public func engine(_ engine: any WebEngine, dismissDestination ticket: DestinationTicket) {}
     public func engine(_ engine: any WebEngine, contextDisposed result: ContextDisposalResult) {}
+    public func engine(_ engine: any WebEngine, extensionsDidChange catalog: ExtensionCatalog) {}
 
     /// Allow by default: a delegate that does not route links (tests, tools) lets every navigation through.
     public func engine(_ engine: any WebEngine, page: PageID, shouldNavigateTo url: URL, userGesture: Bool) -> Bool { true }
@@ -197,7 +199,8 @@ extension WebEngineDelegate {
 open class PageSurfaceView: NSView {
     public static let contextMenuWillOpen = Notification.Name("brk.page-context-menu.will-open")
     public static let contextMenuDidClose = Notification.Name("brk.page-context-menu.did-close")
-    public let page: PageID
+    public private(set) var page: PageID
+    public func rebind(to page: PageID) { self.page = page }
 
     public init(page: PageID) {
         self.page = page

@@ -274,8 +274,31 @@ extension Work {
         case .addExtension:
             let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
             guard case .profile = context else { effects.append(.app(.beep)); return }
-            effects.append(.addLocalExtension(window, context))
+            state.session.sites.controls.remove(window)
+            state.session.sites.extensionErrors[context] = nil
+            _ = openExtensionsPage(URL(string: "https://chromewebstore.google.com/category/extensions")!, in: window, focus: true)
         }
+    }
+
+    mutating func openExtensionOptions(_ id: String, url: URL, from page: PageID) {
+        let context = state.browsingContext(of: page.item)
+        let optionsInManager = url.scheme == "chrome" && url.host == "extensions"
+            && URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems == [URLQueryItem(name: "options", value: id)]
+        guard case .profile(let profile) = context,
+              url.scheme == "chrome-extension" && url.host == id || optionsInManager,
+              state.session.sites.catalogs[context]?.extensions.contains(where: { $0.id == id && $0.enabled }) == true,
+              let shown = state.doc.windows[page.window] else { return }
+        if let existing = state.session.loaded.sorted().first(where: {
+            $0.window == page.window && state.browsingContext(of: $0.item) == context
+                && state.address(of: $0.item, in: page.window, for: .visible) == url
+        }) {
+            focus(existing.item, in: page.window)
+            return
+        }
+        let space = state.role(of: page.item)?.space ?? shown.space
+        guard state.doc.spaces[space]?.profile == profile else { return }
+        if shown.kind == .standard { _ = openTab(url, inSpace: space, window: page.window, focus: true) }
+        else { _ = openScratchTab(url, in: page.window, focus: true) }
     }
 
     /// The extensions page in a new tab: in the window's Space, or in a Little Arc's own tabs (it shows no Space's sidebar,

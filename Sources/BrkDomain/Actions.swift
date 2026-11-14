@@ -488,7 +488,7 @@ extension ActionID {
         // MARK: Extensions
         case .addExtension:
             entry(165, "Add Extension…", .extensions, 0, [], .site(.addExtension),
-                  bar: listing("plus.circle", "Install Extensions", "Extension Store", "Plugins", "Chrome Extensions", "Chrome Store"))
+                  bar: listing("plus.circle", "Install Extensions", "Extension Store", "Plugins", "Chrome Extensions", "Chrome Store", "Chrome Web Store"))
         case .manageExtensions:
             entry(166, "Manage Extensions…", .extensions, 0, [], .site(.extensions),
                   bar: listing("puzzlepiece", "Manage Extensions", "Extensions", "Plugins", "Chrome Extensions"))

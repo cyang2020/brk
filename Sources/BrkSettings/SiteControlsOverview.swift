@@ -15,7 +15,7 @@ final class SiteControlsOverview: NSView {
     private let boost = SiteTile(symbol: "paintbrush.pointed", badge: "sparkle", tip: "Boost", field: "siteBoost")
     private let capture = SiteTile(symbol: "camera", tip: "Capture", field: "siteCapture")
     private let fullPage = SiteTile(symbol: "text.viewfinder", tip: "Capture Full Page", field: "siteCaptureFullPage")
-    private let add = SiteTile(symbol: "plus", tip: "Add Extension", field: "siteAddExtension", filled: true)
+    private let add = SiteTile(symbol: "plus", tip: "Chrome Web Store", field: "siteAddExtension", filled: true)
     private var extensionTiles: [SiteTile] = []
     private let extensionsTitle = SectionTitle("Extensions", field: "siteExtensionsDetails")
     private let settingsTitle = SectionTitle("Settings", field: "siteSettingsDetails")
@@ -68,8 +68,6 @@ final class SiteControlsOverview: NSView {
                 return tile
             }
         }
-        // Chromium opens action popups only from its own toolbar, which Brk does not show (supportsNativeAction is
-        // false), so every extension button is in Arc's grey state: the icon in grey, no press.
         for (tile, item) in zip(extensionTiles, extensions) {
             tile.isEnabled = item.enabled && item.supportsNativeAction && site && !privateSession
             tile.setAccessibilityLabel(item.name + (tile.isEnabled ? "" : ", unavailable"))

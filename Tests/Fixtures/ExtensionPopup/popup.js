@@ -6,3 +6,4 @@ document.getElementById('save').addEventListener('click', async () => {
   await chrome.tabs.sendMessage(tab.id, {receipt});
   document.getElementById('status').textContent = 'Saved: ' + text;
 });
+document.getElementById('options').addEventListener('click', () => chrome.runtime.openOptionsPage());

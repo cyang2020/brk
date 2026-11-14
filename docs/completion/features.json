@@ -9600,7 +9600,7 @@
       "arc_evidence": "`ARC_ContentPanel` `ExtensionButton`; anatomy-m 2.5 `openExtensionsPicker`",
       "description": "Toolbar buttons and a pinned extensions picker",
       "historical_status": "planned",
-      "status": "blocked",
+      "status": "implemented",
       "acceptance": "Installed extension actions appear in a native picker/toolbar with per-profile pinning and usable popup/permission UI whose windows close safely.",
       "owner": "batch2-extensions-sites",
       "required_checks": [
@@ -9671,19 +9671,34 @@
           "command": "engine/run-native-core.py parent-core-e5ae9bd7 --only N1,N2,N3,N4,BB1,BB2,BB3,BB4,Core-popup,Core-activeTab",
           "artifact": "26b12eee81:verify/completion/review-r4/merge-gates/brkcore/REPORT-core.md",
           "scope": "Only on BRK_ENGINE=core, Brk's own Chromium build (engine/, docs/chromium/ARC-ENGINE.md): the action popup opens from the site controls, typed text reaches the page through chrome.tabs, activeTab goes to the opening page only. The default engine is still CEF, where this stays blocked."
+        },
+        {
+          "kind": "unit",
+          "result": "pass",
+          "command": "python3 scripts/with-batch-locks.py --lock /tmp/brk-batch-build.lock -- swift test",
+          "artifact": "docs/checks/2026-11-14-brkcore-resource-store.md",
+          "scope": "Clean integrated interface3/restoration source:1194 tests,2 designed skips,0 failures; restoration unit fails before and passes after the URL rule fix."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "scripts/run-native.py resource-store-options-after --only Core-popup,I1; actual Chrome Web Store UI under the native lock",
+          "artifact": "docs/checks/2026-11-14-brkcore-resource-store.md",
+          "scope": "Real HID action input, same-tab options reuse, native freeze/handoff; real CWS uBlock Origin Lite installation, live catalog, complete permissions title and popup. The saved dashboard was restored twice with real keyboard input and enabled DNR after fixing the codec boundary."
         }
       ],
       "remaining": [
-        "BLOCKED: actual popup invocation, typing/clicks/focus and owner navigation/close/profile/quit lifetimes. The forbidden browser-target route was removed before execution and never retried.",
-        "R3-8（2026-11-04，合并 c792cfc9）：扩展弹出面板经查证做不到：CEF 154 没有扩展接口，弹出面板只能从 Chrome 自己的工具栏打开（之前三次实验连那条工具栏都弹不出来），把弹出页放进 Brk 自己的浏览器里大多数扩展会操作错的标签页。按钮改成 Arc 的灰态（显示扩展图标、不能按），第二页写明原因；依据在 312e95f3ec:verify/visual-pairs/run-20261103/r3-8/EXTENSION-POPUP.md。",
-        "2026-11-07: works on BrkCore (BRK_ENGINE=core, main e5ae9bd7), not on the default CEF engine. The popup is a plain titled window, not Arc's bubble by the button. BrkCore is not the default: 19 of 38 sampled scenarios fail on it, none for a known impossibility."
+        "Popup appearance across every extension state has not been compared with Arc. Release verification covers the native action, permissions, settings and profile persistence listed in docs/checks/2026-11-14-brkcore-resource-store.md."
       ],
       "implementation": [
         "Sources/BrkBase/Extensions.swift",
-        "Sources/BrkCEF/Extensions.swift",
-        "Sources/BrkSettings/SiteControlsHost.swift"
+        "Sources/BrkCoreEngine/CoreEngine.swift",
+        "Sources/BrkCoreEngine/CoreExtensions.swift",
+        "Sources/BrkDomain/Rules/SitePolicies.swift",
+        "Sources/BrkSettings/SiteControlsHost.swift",
+        "engine/patches/0033-Open-validated-extension-options-in-embedded-browser.patch"
       ],
-      "current_behavior": "Native catalog enumeration and profile pins pass. Exactly three public-toolbar experiments produced no actual popup; production Open action stays disabled.",
+      "current_behavior": "BrkCore is the default engine. Installed extensions have working native action popups and profile pins. Add Extension opens Chrome Web Store; registry changes refresh the catalog automatically. Permission sheets use the originating browser window. Manifest-validated options requests open or select a Brk tab in the owning profile.",
       "assessment": {
         "proposal": "docs/completion/proposals/platform.json",
         "sha256": "18084c280b088dbbcc5174f7ed50f7649260ebf63359de8cb1b4b9e01135ff6f",
@@ -9699,7 +9714,12 @@
           "proposal_sha256": "8bed58e9822dc8a124258c9d1e97c92b16318e658f591294f383177d35bd2951",
           "native_run": "565e496989:verify/completion/browser-basic-parent/integration-final-2/REPORT.md"
         }
-      }
+      },
+      "historical_remaining": [
+        "BLOCKED: actual popup invocation, typing/clicks/focus and owner navigation/close/profile/quit lifetimes. The forbidden browser-target route was removed before execution and never retried.",
+        "R3-8（2026-11-04，合并 c792cfc9）：扩展弹出面板经查证做不到：CEF 154 没有扩展接口，弹出面板只能从 Chrome 自己的工具栏打开（之前三次实验连那条工具栏都弹不出来），把弹出页放进 Brk 自己的浏览器里大多数扩展会操作错的标签页。按钮改成 Arc 的灰态（显示扩展图标、不能按），第二页写明原因；依据在 312e95f3ec:verify/visual-pairs/run-20261103/r3-8/EXTENSION-POPUP.md。",
+        "2026-11-07: works on BrkCore (BRK_ENGINE=core, main e5ae9bd7), not on the default CEF engine. The popup is a plain titled window, not Arc's bubble by the button. BrkCore is not the default: 19 of 38 sampled scenarios fail on it, none for a known impossibility."
+      ]
     },
     {
       "id": "A098",

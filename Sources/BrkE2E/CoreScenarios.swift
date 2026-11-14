@@ -1,6 +1,7 @@
 import BrkBase
 import BrkControl
 import BrkDomain
+import CoreGraphics
 import Foundation
 
 /// Chromium UI hosted in Brk: extension actions and page dialogs.
@@ -9,9 +10,69 @@ enum CoreScenarios {
         Scenario("Core-tools", "developer console, source, task manager and trace work through real keys and menus", tools),
         Scenario("Core-editor", "the web editor supports native spelling and text transformations with undo", editor),
         Scenario("Core-pip", "document picture in picture moves the page into a native window and restores it on close", documentPiP),
-        Scenario("Core-popup", "an extension's action popup opens from the site controls; typed text and a click in it reach the page's content script", popupReceipt),
+        Scenario("Core-popup", "extension popup input reaches its page; its settings open as a Brk tab and reopening selects that tab", popupReceipt),
         Scenario("Core-dialogs", "a page's alert, confirm and prompt open as a sheet on its window; Return and Escape answer the page", dialogs),
     ]
+
+    @Sendable static func resources(_ app: AppUnderTest) throws {
+        let url = app.site.url("page-real.html")
+        let item = try app.load(url)
+        let first = app.window!
+        func clickRow(in window: WindowID) throws {
+            try WindowServerKeys.ensureFrontmost(app, window)
+            let facts = try app.native(window)
+            let row = try visible(facts, .row(item)).frame
+            let frame = facts.windowFrame
+            let point = CGPoint(x: frame.minX + row.midX,
+                                y: CGDisplayBounds(CGMainDisplayID()).height - frame.maxY + row.midY)
+            try PhysicalPointer.click(app, at: point, window: window)
+        }
+        let original = PageID(window: first, item: item)
+        try app.waitForPageInput(original, at: url)
+        let browser = try app.native().pages[original]?.browserID
+        try app.evaluate(original, "marker='retained';document.title=marker")
+        try waitForTitle(app, item, "retained")
+        try WindowServerKeys.press(app, KeyChord([.command], .n), window: first)
+        var second: WindowID?
+        try app.waitUntil("the second window") {
+            guard case .hello(let hello) = try app.send(.hello) else { return false }
+            second = hello.windows.first { $0 != first }
+            return second != nil
+        }
+        app.window = second
+        try WindowServerKeys.press(app, KeyChord([], .escape), window: second!)
+        try clickRow(in: second!)
+        let moved = PageID(window: second!, item: item)
+        try app.waitForPageInput(moved, at: url)
+        try expect(try app.native().pages[moved]?.browserID == browser, "handoff created another Chromium tab")
+        try app.evaluate(moved, "document.title=marker")
+        try waitForTitle(app, item, "retained")
+        try expect(try app.native(first).pages[original] == nil, "the old window still owns a second page")
+        try app.screenshot("handoff")
+
+        try SitesSettingsRealScenarios.openDetails(app)
+        try SitesSettingsRealScenarios.pressInDetails(app, title: "Suspend this site while its tab is hidden", roles: ["AXCheckBox"])
+        try WindowServerKeys.press(app, KeyChord([], .escape), window: second!)
+        let other = try app.load(app.site.url("page2.html"))
+        try app.waitForPageInput(PageID(window: second!, item: other), at: app.site.url("page2.html"))
+        try app.waitUntil("the background page frozen by Chromium", timeout: 30) {
+            try app.native().ownedPages?[moved]?.resourceFrozen == true
+        }
+        try clickRow(in: second!)
+        try app.waitForPageInput(moved, at: url)
+        try app.waitUntil("the visible page resumed") { try app.native().pages[moved]?.resourceFrozen == false }
+        try app.evaluate(moved, "document.title=marker")
+        try waitForTitle(app, item, "retained")
+
+        app.window = first
+        try WindowServerKeys.ensureFrontmost(app, first)
+        try clickRow(in: first)
+        try app.waitForPageInput(original, at: url)
+        try expect(try app.native().pages[original]?.browserID == browser, "the return handoff recreated the tab")
+        try app.evaluate(original, "document.title=marker")
+        try waitForTitle(app, item, "retained")
+        app.note("same Chromium tab and JavaScript document survived both handoffs and freeze/resume")
+    }
 
     private static func fixture(_ app: AppUnderTest, _ path: String) -> URL {
         app.site.root.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(path)
@@ -38,6 +99,10 @@ enum CoreScenarios {
     }
 
     @Sendable static func popupReceipt(_ app: AppUnderTest) throws {
+        func popupKeys(_ text: String) throws {
+            guard try app.native().appActive == true, try popupPanel(app)?.isKey == true else { throw Check(description: "the owned popup is not key") }
+            try PhysicalKeys.strike(text)
+        }
         let source = app.site.url("extension-popup.html")
         let extensionFixture = fixture(app, "Tests/Fixtures/ExtensionPopup")
         let item = try app.load(source)
@@ -60,9 +125,7 @@ enum CoreScenarios {
         capture.arguments = ["-x", "-l", String(panel.number), app.shotsDirectory.appendingPathComponent("Core-popup-panel.png").path]
         try capture.run(); capture.waitUntilExit()
         // The input has autofocus. A real key press, then Tab to the button and Return.
-        try app.type("hello")
-        try app.press("tab")
-        try app.press("return")
+        try popupKeys("hello\t\r")
         var title = ""
         try app.waitUntil("the receipt in the page's title", timeout: 10) {
             title = tab(item, in: try app.view())?.title ?? ""
@@ -76,6 +139,30 @@ enum CoreScenarios {
         let facts = try app.native().pages[page]
         try expect(receipt["tabId"] as? Int == facts?.browserID, "chrome.tabs named another tab: \(receipt), the page is \(String(describing: facts?.browserID))")
         app.note("receipt \(title)")
+        let options = URL(string: "chrome-extension://\(action.id)/options.html")!
+        try popupKeys("\t\r")
+        var optionsItem: ItemID?
+        try app.waitUntil("the extension's settings tab") {
+            optionsItem = tabRows(try app.view().space.today.rows).first { $0.url == options && $0.status == .current }?.id
+            return optionsItem != nil
+        }
+        let settings = PageID(window: app.window!, item: optionsItem!)
+        try app.waitForPageInput(settings, at: options)
+        try WindowServerKeys.ensureFrontmost(app, settings.window)
+        try PhysicalKeys.strike("retained")
+        try app.dispatch(.tab(.focus(item)))
+        try app.dispatch(.site(.invokeExtension(action.id)))
+        try app.waitUntil("the popup reopened") { try popupPanel(app) != nil }
+        // Input, receipt, settings: the third focus stop is the real options button.
+        try popupKeys("\t\t\r")
+        try app.waitUntil("the existing settings tab selected") {
+            tab(optionsItem!, in: try app.view())?.status == .current
+        }
+        try app.waitForPageInput(settings, at: options)
+        try expect(try tabRows(app.view().space.today.rows).filter { $0.url == options }.count == 1, "reopening settings duplicated the tab")
+        try app.evaluate(settings, "document.title=document.getElementById('setting').value")
+        try waitForTitle(app, optionsItem!, "retained")
+        app.note("real options button opened one Brk tab; reopening kept its document and typed value")
     }
 
     @Sendable static func dialogs(_ app: AppUnderTest) throws {

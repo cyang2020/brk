@@ -244,6 +244,19 @@ extension Work {
         case .navigationRequested(let url):
             live.loadProgress = 0
             live.requestedURL = url
+        case .locationRestored(let source, let url):
+            let prior = state.session.live[source.page].flatMap {
+                state.session.generations[source.page] == source.generation && source.page.item == tab
+                    && $0.requestContext == live.requestContext ? $0 : nil
+            }
+            let favicon = prior == nil ? nil : state.doc.windows[source.page.window]?.slots[tab]?.favicon
+            state.doc.windows[window]!.slots[tab] = SavedSlot(committedURL: url, observedTitle: prior?.observedTitle ?? live.observedTitle, favicon: favicon)
+            live.recordedVisitID = prior?.recordedVisitID
+            live.recordedVisit = live.document.token
+            live.lastHistoryAddress = url
+            live.failure = nil
+            live.crashed = false
+            if let requested = live.requestedURL { effects.append(.page(page, .navigate(requested))) }
         case .committed(let url):
             state.doc.windows[window]!.slots[tab] = SavedSlot(committedURL: url, observedTitle: live.observedTitle, favicon: state.doc.windows[window]?.slots[tab]?.favicon)
             live.requestedURL = nil
@@ -319,6 +332,8 @@ extension Work {
                 live.recoveryAttempted = true
                 effects.append(.page(page, .recover))
             }
+        case .extensionOptionsRequested(let id, let url):
+            openExtensionOptions(id, url: url, from: page)
         case .gainedFocus:
             if state.presentedPanes(in: window).contains(tab), let split = state.tree(scope)?.splitContaining(tab) {
                 state.doc.windows[window]!.splitFocus[split] = tab

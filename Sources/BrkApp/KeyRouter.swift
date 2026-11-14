@@ -20,6 +20,10 @@ final class KeyRouter: WebEngineDelegate {
         store.dispatch(.system(.page(page, event)))
     }
 
+    func engine(_ engine: any WebEngine, extensionsDidChange catalog: ExtensionCatalog) {
+        store.dispatch(.system(.extensionsRead(catalog)))
+    }
+
     /// Physical input requires the origin slot to be visible and attached to its owner's native window.
     func engine(_ engine: any WebEngine, page: PageID, key: KeyPress, stage: KeyStage, pressID: PressID) -> Bool {
         self.engine(engine, page: page, keyHandling: key, stage: stage, pressID: pressID).handled

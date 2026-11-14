@@ -574,6 +574,7 @@ enum CommandInventory {
             switch e {
             case .browserCreated: "page.browserCreated"
             case .documentChanged: "page.documentChanged"
+            case .locationRestored: "page.locationRestored"
             case .navigationRequested: "page.navigationRequested"
             case .committed: "page.committed"
             case .zoomChanged: "page.zoomChanged"
@@ -597,6 +598,7 @@ enum CommandInventory {
             case .linkMenuRequested: "page.linkMenuRequested"
             case .selectionChanged: "page.selectionChanged"
             case .gainedFocus: "page.gainedFocus"
+            case .extensionOptionsRequested: "page.extensionOptionsRequested"
             case .openRequested: "page.openRequested"
             case .closed: "page.closed"
             }

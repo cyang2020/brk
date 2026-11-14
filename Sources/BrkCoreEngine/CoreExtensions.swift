@@ -3,23 +3,39 @@ import BrkEngine
 import CBrkCore
 import Foundation
 
-/// Manages extensions through the extensions page's `chrome.developerPrivate` and `chrome.management` APIs.
-/// The domain opens that page when it needs it.
+/// Observes the profile's extension changes and edits settings through Chromium's extensions page.
 extension CoreEngine {
+    func observeExtensions(_ profile: any BrkCoreProfile, context: BrowsingContext) {
+        let refresh: () -> Void = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, self.isRunning, self.contexts.permitsWork(context) else { return }
+                let catalog = await self.extensionCatalog(context: context)
+                guard self.isRunning, self.contexts.permitsWork(context) else { return }
+                self.delegate?.engine(self, extensionsDidChange: catalog)
+            }
+        }
+        profile.setExtensionsChangedHandler(refresh)
+        refresh()
+    }
+
     struct ManagedExtension {
         let incognitoAllowed: Bool?
         let canChangeIncognito: Bool?
         let commands: [BrowserExtensionCommand]
     }
 
+    private func readyExtensionManager(context: BrowsingContext, target: PageID? = nil) -> CorePage? {
+        livePages.sorted(by: { $0.id < $1.id }).first { page in
+            guard target == nil || target == page.id, page.context == context,
+                  page.contents.committedURL?.scheme == "chrome", page.contents.committedURL?.host == "extensions" else { return false }
+            if case .ready = page.mainDocument.availability { return true }; return false
+        }
+    }
+
     private func extensionManager(context: BrowsingContext, target: PageID? = nil, wait seconds: Double = 10) async throws -> CorePage {
         let deadline = ProcessInfo.processInfo.systemUptime + seconds
         while isRunning, contexts.permitsWork(context), ProcessInfo.processInfo.systemUptime < deadline {
-            if let page = livePages.sorted(by: { $0.id < $1.id }).first(where: { page in
-                guard target == nil || target == page.id, page.context == context,
-                      page.contents.committedURL?.scheme == "chrome", page.contents.committedURL?.host == "extensions" else { return false }
-                if case .ready = page.mainDocument.availability { return true }; return false
-            }) { return page }
+            if let page = readyExtensionManager(context: context, target: target) { return page }
             try await Task.sleep(for: .milliseconds(30))
         }
         throw CoreProtocolError(message: "The originating profile's extension manager is unavailable")
@@ -42,7 +58,7 @@ extension CoreEngine {
     }
 
     func managerExtensionInfo(context: BrowsingContext) async -> [String: ManagedExtension] {
-        guard let page = try? await extensionManager(context: context),
+        guard let page = readyExtensionManager(context: context),
               let rows = try? await managerValue(page, expression: "chrome.developerPrivate.getExtensionsInfo({includeDisabled:true,includeTerminated:true})") as? [[String: Any]] else {
             return [:]
         }
