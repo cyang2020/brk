@@ -387,7 +387,10 @@ public enum HelpAction: Hashable, Sendable, Codable {
     /// Check the signed application update feed.
     case checkForUpdates
     case installUpdate
-    /// The release notes bundled with this build (made from the build's git history).
+    case setAutomaticUpdates(Bool)
+    case updateReleaseNotes
+    case dismissUpdateSummary
+    /// The curated release notes bundled with this build.
     case releaseNotes
     /// Arc's help center (the command bar's Help Center row opens the same page).
     case helpCenter

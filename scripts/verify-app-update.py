@@ -24,7 +24,7 @@ import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET
-from release import Release, appcast as release_appcast
+from release import Release, appcast as release_appcast, history_html
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -117,6 +117,9 @@ def fixture_app(app, name, bundle_id, build, version, public_key, base, environm
     info['LSEnvironment'] = {**info.get('LSEnvironment', {}), **environment}
     info['NSAppTransportSecurity'] = {'NSAllowsLocalNetworking': True}
     path.write_bytes(plistlib.dumps(info))
+    notes = app / 'Contents/Resources/Help/release-notes.html'
+    notes.parent.mkdir(parents=True, exist_ok=True)
+    notes.write_text(history_html(ROOT, Release(version, f'# Brk {version}\n\n- Fixture update for {version}/{build}.'), False))
     run(ROOT / 'scripts/sign-developer-id.sh', app, env={**os.environ, 'SIGN_IDENTITY': '-'})
     run('codesign', '--verify', '--deep', '--strict', app)
     return app / 'Contents/MacOS' / info['CFBundleExecutable']
@@ -137,14 +140,17 @@ def centre(rect):
     return x + width / 2, y + height / 2
 
 
-def native_click(control, pid):
+def native_click(control, pid, element=None, move_only=False, away=False):
     state = view(control)
     request(control, {'activateApp': {'window': state['id']}})
     native = request(control, {'native': {}})['native']['_0']
-    rect = native['computed']['sidebar'].get('updateBanner')
+    rect = native['computed']['sidebar'].get('updateBanner') if element is None else None
+    if away:
+        width, height = native['windowFrame'][1]
+        rect = [[width * 0.75, height * 0.5], [1, 1]]
     if not rect:
         candidates = [v['frame'] for k, v in native['actual'].items()
-                      if 'update' in k.lower() and not v.get('hidden', False)]
+                      if (element or 'install-update') in k and not v.get('hidden', False)]
         if len(candidates) != 1:
             raise RuntimeError(f'No unique visible update button: {candidates}')
         rect = candidates[0]
@@ -159,7 +165,46 @@ def native_click(control, pid):
         raise RuntimeError(f'Another application covers the update button: {front}')
     mouse = ROOT / 'scripts/station/bin/mouse'
     mouse_command = [mouse] if mouse.exists() else ['swift', ROOT / 'scripts/station/mouse.swift']
-    run(*mouse_command, 'click', x, y)
+    run(*mouse_command, 'move' if move_only else 'click', x, y)
+
+
+def reveal_card(control, pid):
+    native_click(control, pid, move_only=True)
+    until('expanded update controls', lambda: any('update-primary' in key and not value.get('hidden', False)
+          for key, value in request(control, {'native': {}})['native']['_0']['actual'].items()))
+
+
+def key_tap(key, modifiers=None):
+    executable = ROOT / 'scripts/station/bin/key'
+    command = [executable] if executable.exists() else ['swift', ROOT / 'scripts/station/key.swift']
+    run(*command, 'tap', key, *([modifiers] if modifiers else []))
+
+
+def card_visible(control):
+    return any('update-primary' in key and not value.get('hidden', False)
+               for key, value in request(control, {'native': {}})['native']['_0']['actual'].items())
+
+
+def action_color(control):
+    actual = request(control, {'native': {}})['native']['_0']['actual']
+    (x, y), (width, height) = next(value['frame'] for key, value in actual.items() if 'update-primary' in key)
+    return request(control, {'pixel': {'point': [x + width * 0.1, y + height / 2]}})['pixel']
+
+
+def verify_notes(control, version='0.0.1', build=44, bundled=False):
+    expected = json.dumps(f'Fixture update for {version}/{build}.')
+    def check():
+        state = view(control)
+        panes = state['content']['panes']
+        page = next((p['content']['page']['_0'] for p in panes if p.get('focused') and 'page' in p['content']), None)
+        if page is None or state['urlPill']['loading']:
+            return False
+        if bundled and '/Contents/Resources/Help/' not in (state['urlPill'].get('text') or ''):
+            return False
+        request(control, {'evaluate': {'page': page, 'script': "document.title = 'UPDATER_NOTES:' + document.body.innerText.includes(" + expected + ");"}})
+        return True
+    until('release notes document', check)
+    until('the actual version notes content', lambda: 'UPDATER_NOTES:true' in json.dumps(view(control)))
 
 
 def screenshot(control, output):
@@ -192,15 +237,16 @@ def verify(args, mode):
         folder = Path(temporary)
         web = folder / 'web'
         web.mkdir()
-        (web / 'page.html').write_text('<!doctype html><title>Updater fixture</title><h1>Update fixture</h1>')
-        (web / 'release-notes.html').write_text('<!doctype html><title>Update changes</title><p>Fixture update.</p>')
+        (web / 'page.html').write_text('<!doctype html><title>Updater fixture</title><h1>Update fixture</h1>'
+                                      '<script>document.addEventListener("keydown", e => document.title = "Updater fixture:" + e.key)</script>')
+        (web / 'release-notes.html').write_text('<!doctype html><title>Update changes</title><p>Fixture update for 0.0.1/44.</p>')
         server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(QuietHandler, directory=str(web)))
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f'http://127.0.0.1:{server.server_port}'
         source, target = folder / 'current/Brk.app', folder / 'target/Brk.app'
         control, data = folder / 'control.sock', folder / 'data'
         token = uuid.uuid4().hex[:12]
-        name = 'Brk' if mode == 'ui' else 'BrkUpdateFixture' + token
+        name = 'Brk'
         bundle_id = 'dev.brk.updatefixture.' + token
         environment = dict(BRK_DATA_DIR=str(data), BRK_CONTROL_SOCKET=str(control),
                            BRK_START_URL=base + '/page.html', BRK_TEST_NO_GLOBAL_SHORTCUT='1')
@@ -235,6 +281,7 @@ def verify(args, mode):
                 request(control, {'setWindowFrame': {'frame': [[320, 180], [1280, 776]]}})
                 geometry = {}
                 for appearance, color in [('light', [0.95, 0.918, 0.894]), ('dark', [0.4236151278, 0.7285773754, 0.8512415886])]:
+                    native_click(control, first['pid'], move_only=True, away=True)
                     theme = dict(colors=[dict(zip(('red', 'green', 'blue', 'alpha'), [*color, 1]))],
                                  wheel='analogous', texture='grain', noise=0.5, intensity=0.25, appearance=appearance)
                     dispatch(control, {'space': {'_0': {'update': {'_0': space, 'theme': theme}}}})
@@ -242,13 +289,42 @@ def verify(args, mode):
                     native = request(control, {'native': {}})['native']['_0']
                     geometry[appearance] = native['computed']['sidebar']['updateBanner']
                     screenshot(control, output / f'{appearance}.png')
+                    reveal_card(control, first['pid'])
+                    screenshot(control, output / f'{appearance}-expanded.png')
+                    if appearance == 'dark':
+                        motion_before = action_color(control)
+                        time.sleep(1.2)
+                        motion_after = action_color(control)
+                        screenshot(control, output / 'dark-animation.png')
+                        reduced = run('swift', '-e', 'import AppKit; print(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)').stdout.strip() == b'true'
+                        changes = max(abs(motion_after[c] - motion_before[c]) for c in ('red', 'green', 'blue'))
+                        if (not reduced and changes < 3) or (reduced and changes > 2):
+                            raise RuntimeError(f'Update animation did not follow Reduce Motion ({reduced}): {motion_before} -> {motion_after}')
+                native_click(control, first['pid'], 'update-automatic')
+                until('automatic update preference enabled', lambda: view(control)['sidebar']['automaticUpdates'])
+                native_click(control, first['pid'], 'update-automatic')
+                until('automatic update preference disabled', lambda: not view(control)['sidebar']['automaticUpdates'])
+                if hello(control)['pid'] != first['pid']:
+                    raise RuntimeError('Changing the preference restarted an active app')
+                key_tap('escape')
+                until('card closed by Escape', lambda: not card_visible(control))
+                key_tap('a')
+                until('webpage keyboard focus restored', lambda: 'Updater fixture:a' in json.dumps(view(control)))
+                reveal_card(control, first['pid'])
+                key_tap('t', 'command')
+                until('command bar opened above the card', lambda: view(control).get('overlay'))
+                key_tap('escape')
+                until('command bar closed with one Escape', lambda: view(control).get('overlay') is None)
                 (output / 'geometry.json').write_text(json.dumps(geometry, indent=2) + '\n')
-                result = dict(mode=mode, passed=True, measured=['light', 'dark'], geometry=geometry)
+                result = dict(mode=mode, passed=True, measured=['light', 'dark'], geometry=geometry,
+                              automaticPreferenceToggled=True, focusRestored=True, commandBarEscape=True,
+                              reduceMotion=reduced, animationSamples=[motion_before, motion_after])
             elif mode in ('reject', 'offline'):
+                reveal_card(control, first['pid'])
                 if mode == 'offline':
                     server.shutdown()
                     server.server_close()
-                native_click(control, first['pid'])
+                native_click(control, first['pid'], 'update-primary')
                 until('update rejection', lambda: (view(control)['sidebar'].get('update') or {}).get('failed'), timeout=60)
                 after = hello(control)
                 installed = plistlib.loads((source / 'Contents/Info.plist').read_bytes())
@@ -258,8 +334,15 @@ def verify(args, mode):
                 result = dict(mode=mode, passed=True, sourcePID=first['pid'], build=installed['CFBundleVersion'])
                 result['signatureRejected' if mode == 'reject' else 'offlineRejected'] = True
             else:
-                native_click(control, first['pid'])
+                reveal_card(control, first['pid'])
+                native_click(control, first['pid'], 'update-notes')
+                verify_notes(control)
+                reveal_card(control, first['pid'])
+                native_click(control, first['pid'], 'update-primary')
                 after = until('updated application relaunch', lambda: (h if (h := hello(control))['pid'] != first['pid'] else None), timeout=90)
+                screenshot(control, output / 'updated-animation-start.png')
+                time.sleep(0.35)
+                screenshot(control, output / 'updated-animation-end.png')
                 installed = plistlib.loads((source / 'Contents/Info.plist').read_bytes())
                 if installed['CFBundleVersion'] != '44' or installed['CFBundleShortVersionString'] != '0.0.1':
                     raise RuntimeError(f'Wrong installed version: {installed["CFBundleShortVersionString"]} ({installed["CFBundleVersion"]})')
@@ -269,8 +352,20 @@ def verify(args, mode):
                 if Path(after['dataDirectory']).resolve() != data.resolve():
                     raise RuntimeError('Updated app did not keep the isolated data directory')
                 screenshot(control, output / 'updated.png')
+                until('post-update summary', lambda: (view(control)['sidebar'].get('update') or {}).get('updated'))
+                reveal_card(control, after['pid'])
+                screenshot(control, output / 'updated-summary.png')
+                native_click(control, after['pid'], 'update-primary')
+                verify_notes(control, bundled=True)
+                until('summary acknowledged', lambda: view(control)['sidebar'].get('update') is None)
+                stop_fixture(control, folder)
+                process = subprocess.Popen([str(executable)], env={**os.environ, **environment}, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                until('restart after reading notes', lambda: hello(control), timeout=40)
+                if view(control)['sidebar'].get('update') is not None:
+                    raise RuntimeError('An acknowledged summary reappeared on the next launch')
                 result = dict(mode=mode, passed=True, sourcePID=first['pid'], targetPID=after['pid'],
-                              sourceVersion='0.1.0', sourceBuild=42, version='0.0.1', build=44, statePreserved=True)
+                              sourceVersion='0.1.0', sourceBuild=42, version='0.0.1', build=44, statePreserved=True,
+                              candidateNotesRead=True, installedNotesRead=True, summaryAcknowledged=True)
             (output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
             print(json.dumps(result), flush=True)
         finally:

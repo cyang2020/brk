@@ -141,6 +141,14 @@ public final class AppStore {
     var didPublish: ((AppSnapshot) -> Void)?
     private(set) lazy var appUpdates: AppUpdates = {
         let updates = AppUpdates()
+        updates.canAutomaticallyRestart = { [weak self] in
+            guard let self, !self.isTerminating, !self.state.hasUpdateBlockingActivity else { return false }
+            guard self.snapshot.windows.values.allSatisfy({
+                $0.dialog == nil && $0.profileDialog == nil && $0.pendingSpaceDeletion == nil &&
+                $0.pendingEaselDeletion == nil && $0.pendingConversationDeletion == nil && $0.pageLinkPrompt == nil
+            }), self.windows.values.allSatisfy({ $0.root.savePromptID == nil }) else { return false }
+            return NSApp.modalWindow == nil && NSApp.windows.allSatisfy { $0.attachedSheet == nil }
+        }
         updates.changed = { [weak self] in
             guard let self, !self.isTerminating else { return }
             self.refresh()
@@ -559,7 +567,8 @@ public final class AppStore {
     private func projected() -> AppSnapshot {
         project(state, ProjectionContext(now: clock.now(), calendar: calendar,
                                          systemScheme: NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .dark : .light,
-                                         systemLanguage: Locale.preferredLanguages.first ?? "en", softwareUpdate: appUpdates.presentation))
+                                         systemLanguage: Locale.preferredLanguages.first ?? "en", softwareUpdate: appUpdates.presentation,
+                                         automaticUpdates: appUpdates.automaticUpdates))
     }
 
     private func renderWindows() {

@@ -148,6 +148,7 @@ public struct WindowSnapshot: Sendable, Equatable, Codable {
 
 public struct SidebarSnapshot: Sendable, Equatable, Codable {
     public var update: UpdatePresentation? = nil
+    public var automaticUpdates: Bool = false
     public var visible: Bool
     public var width: Double
     /// Hidden sidebar floating over the content (left-edge hover).

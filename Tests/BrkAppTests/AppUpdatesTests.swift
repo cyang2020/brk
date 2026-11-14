@@ -8,11 +8,12 @@ import XCTest
 final class AppUpdatesTests: XCTestCase {
     private let release = UpdateRelease(version: "0.0.1", build: 44)
 
-    private func item(build: String = "44", informationOnly: Bool = false) throws -> SUAppcastItem {
-        let dictionary: [String: Any] = informationOnly
+    private func item(build: String = "44", informationOnly: Bool = false, notes: URL? = nil) throws -> SUAppcastItem {
+        var dictionary: [String: Any] = informationOnly
             ? ["sparkle:version": build, "sparkle:shortVersionString": "0.0.1", "link": "https://example.invalid/notes"]
             : ["enclosure": ["url": "https://example.invalid/Brk.dmg", "sparkle:version": build,
                                "sparkle:shortVersionString": "0.0.1", "length": "100"]]
+        if let notes { dictionary["sparkle:releaseNotesLink"] = ["content": notes.absoluteString] }
         return try XCTUnwrap(SUAppcastItem(dictionary: dictionary))
     }
 
@@ -167,6 +168,156 @@ final class AppUpdatesTests: XCTestCase {
         updates.check()
         XCTAssertNil(updates.presentation)
         XCTAssertEqual(messages, 1)
+    }
+
+    func testSummarySurvivesRelaunchAndAcknowledgementIncludingLegacyUpgrades() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let receipt = directory.appendingPathComponent("history.json")
+        let old = UpdateRelease(version: "0.0.1", build: 44)
+        let new = UpdateRelease(version: "0.0.2", build: 45)
+        XCTAssertNil(AppUpdateHistory(url: receipt).summary(for: old), "first install is not an update")
+        XCTAssertNil(AppUpdateHistory(url: receipt).summary(for: old, previouslyLaunched: true))
+        XCTAssertEqual(AppUpdateHistory(url: receipt).summary(for: new), new)
+        let relaunched = AppUpdateHistory(url: receipt)
+        XCTAssertEqual(relaunched.summary(for: new), new, "an unread summary survives another launch")
+        relaunched.dismiss(new)
+        XCTAssertNil(AppUpdateHistory(url: receipt).summary(for: new))
+        XCTAssertNil(AppUpdateHistory(url: receipt).summary(for: old), "downgrades must not celebrate an update")
+
+        let legacyReceipt = directory.appendingPathComponent("legacy.json")
+        let legacy = AppUpdateHistory(url: legacyReceipt)
+        XCTAssertEqual(legacy.summary(for: new, previouslyLaunched: true), new,
+                       "released Sparkle builds already wrote SUHasLaunchedBefore before this history existed")
+        legacy.dismiss(new)
+        XCTAssertNil(AppUpdateHistory(url: legacyReceipt).summary(for: new, previouslyLaunched: true))
+    }
+
+    func testAutomaticPreferencePersistsAndBackgroundPreparationDoesNotRestart() throws {
+        let suite = "brk-updates-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: directory) }
+        let updates = AppUpdates(defaults: defaults, directory: directory)
+        var choices: [SPUUserUpdateChoice] = []
+        var installs: [SPUUserUpdateChoice] = []
+        updates.driver.showUpdateFound(with: try item(), state: try state()) { choices.append($0) }
+        updates.setAutomaticUpdates(true)
+        updates.setAutomaticUpdates(true)
+        XCTAssertEqual(choices, [.install], "enabling automatic updates may prepare the offered update only once")
+        XCTAssertTrue(AppUpdates(defaults: defaults, directory: directory).automaticUpdates)
+        updates.driver.showDownloadDidStartExtractingUpdate()
+        updates.driver.showReady(toInstallAndRelaunch: { installs.append($0) })
+        pump()
+        XCTAssertEqual(updates.presentation, .ready(release))
+        XCTAssertTrue(installs.isEmpty, "preparation alone must not restart an active browsing session")
+        updates.setAutomaticUpdates(false)
+        XCTAssertFalse(AppUpdates(defaults: defaults, directory: directory).automaticUpdates)
+    }
+
+    func testAutomaticInstallRequiresScreenAwayAndNoActivityAndRechecksBeforeQuit() throws {
+        let suite = "brk-updates-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        let confirmed = Quit.confirmed, relaunch = Quit.relaunch
+        defer {
+            Quit.confirmed = confirmed; Quit.relaunch = relaunch
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let updates = AppUpdates(defaults: defaults, directory: directory)
+        var inactive = false
+        updates.canAutomaticallyRestart = { inactive }
+        updates.setAutomaticUpdates(true)
+        var installations = 0
+        XCTAssertTrue(updates.driver.showAutomaticUpdateReady(try item()) { installations += 1 })
+        updates.screenState.set(.locked, active: true)
+        pump()
+        XCTAssertEqual(installations, 0, "media, downloads or a modal dialog still prevent automatic restart")
+        inactive = true
+        updates.screenState.set(.locked, active: false)
+        updates.installAutomaticallyIfAllowed()
+        pump()
+        XCTAssertEqual(installations, 0, "a quiet but visible screen is not enough")
+        updates.screenState.set(.locked, active: true)
+        updates.screenState.set(.locked, active: false)
+        pump()
+        XCTAssertEqual(installations, 0, "unlocking before the queued quit cancels automatic restart")
+        XCTAssertEqual(updates.presentation, .ready(release))
+        Quit.confirmed = false
+        Quit.relaunch = true
+        updates.screenState.set(.screensaver, active: true)
+        pump()
+        updates.installAutomaticallyIfAllowed()
+        XCTAssertEqual(installations, 1)
+        XCTAssertTrue(Quit.confirmed)
+        XCTAssertFalse(Quit.relaunch)
+
+        let feed = UpdateFeed(url: try XCTUnwrap(URL(string: "https://example.invalid/appcast.xml")), driver: updates.driver)
+        let updater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: updates.driver, delegate: feed)
+        let failure = NSError(domain: NSCocoaErrorDomain, code: NSXPCConnectionInvalid)
+        feed.updater(updater, didAbortWithError: failure)
+        XCTAssertTrue(updates.driver.canCheck, "a failed background installer releases its dead continuation")
+        guard case .failed(let failureMessage) = updates.presentation else { return XCTFail("background installation must report failure") }
+        XCTAssertTrue(failureMessage.contains(failure.localizedDescription))
+        XCTAssertFalse(Quit.confirmed, "failed installation must not bypass the next ordinary quit confirmation")
+        XCTAssertTrue(Quit.relaunch)
+        feed.updater(updater, didFinishUpdateCycleFor: .updatesInBackground, error: failure)
+        XCTAssertEqual(updates.presentation, .failed(message: failureMessage))
+
+        XCTAssertTrue(updates.driver.showAutomaticUpdateReady(try item()) { installations += 1 })
+        updates.installAutomaticallyIfAllowed()
+        feed.updater(updater, didFinishUpdateCycleFor: .updatesInBackground, error: nil)
+        pump()
+        XCTAssertEqual(installations, 1, "a finished background cycle invalidates its queued installation")
+        XCTAssertNil(updates.presentation)
+        updates.setAutomaticUpdates(false)
+        updates.driver.showUpdateFound(with: try item(), state: try state()) { _ in }
+        let noUpdate = NSError(domain: SUSparkleErrorDomain, code: Int(SUError.noUpdateError.rawValue))
+        feed.updater(updater, didAbortWithError: noUpdate)
+        XCTAssertEqual(updates.presentation, .available(release), "unowned background callbacks do not dismiss a foreground offer")
+    }
+
+    func testMissingCandidateNotesStayOnTheCandidateVersion() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let updates = AppUpdates(directory: directory)
+        let notes = try XCTUnwrap(URL(string: "https://example.invalid/releases/0.0.1.html"))
+        updates.driver.showUpdateFound(with: try item(notes: notes), state: try state()) { _ in }
+        XCTAssertEqual(updates.releaseNotesURL, notes)
+        updates.driver.showUpdateReleaseNotesFailedToDownloadWithError(NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet))
+        let fallback = try XCTUnwrap(updates.releaseNotesURL)
+        XCTAssertTrue(fallback.isFileURL)
+        let content = try String(contentsOf: fallback, encoding: .utf8)
+        XCTAssertTrue(content.contains("Release notes for 0.0.1"))
+        XCTAssertTrue(content.contains(notes.absoluteString))
+        updates.driver.dismissUpdateInstallation()
+        XCTAssertNil(updates.releaseNotesURL, "a late notes failure must not substitute the current installed notes")
+    }
+
+    func testDownloadedNotesAreCachedAndAvailableOnTheNextOffer() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let notes = try XCTUnwrap(URL(string: "https://example.invalid/releases/0.0.1.html"))
+        let updates = AppUpdates(directory: directory)
+        updates.driver.showUpdateFound(with: try item(notes: notes), state: try state()) { _ in }
+        let archive = NSKeyedArchiver(requiringSecureCoding: true)
+        archive.encode(Data("<h1>Saved tab restoration is fixed</h1>".utf8), forKey: "SPUDownloadData")
+        archive.encode(notes, forKey: "SPUDownloadURL")
+        archive.encode("utf-8", forKey: "SPUDownloadTextEncoding")
+        archive.encode("text/html", forKey: "SPUDownloadMIMEType")
+        archive.finishEncoding()
+        let decoder = try NSKeyedUnarchiver(forReadingFrom: archive.encodedData)
+        let download = try XCTUnwrap(SPUDownloadData(coder: decoder))
+        decoder.finishDecoding()
+        updates.driver.showUpdateReleaseNotes(with: download)
+        let cached = try XCTUnwrap(updates.releaseNotesURL)
+        XCTAssertTrue(cached.isFileURL)
+        XCTAssertTrue(try String(contentsOf: cached, encoding: .utf8).contains("Saved tab restoration is fixed"))
+        let next = AppUpdates(directory: directory)
+        next.driver.showUpdateFound(with: try item(notes: notes), state: try state()) { _ in }
+        next.driver.showUpdateReleaseNotesFailedToDownloadWithError(NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet))
+        XCTAssertEqual(next.releaseNotesURL, cached, "an offline check retains notes already cached for this build")
     }
 }
 

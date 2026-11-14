@@ -2,6 +2,22 @@ import BrkBase
 import CoreGraphics
 import Foundation
 
+public struct UpdateReceipt: Codable {
+    public var lastRunBuild: UInt64
+    public var summaryBuild: UInt64?
+
+    public init(lastRunBuild: UInt64, summaryBuild: UInt64?) {
+        self.lastRunBuild = lastRunBuild
+        self.summaryBuild = summaryBuild
+    }
+
+    public static func decode(_ data: Data) -> UpdateReceipt? {
+        try? JSONDecoder().decode(Self.self, from: data)
+    }
+
+    public func encoded() -> Data { try! JSONEncoder().encode(self) }
+}
+
 // The state file format: `{ "version": 1, "doc": { ... } }` in state.json. Only `Doc` is saved; `Session` is
 // rebuilt fresh on every launch (so ephemeral containers in `Session.scratch` are never written). This file is the
 // only place that knows the format: the stored types are private DTOs, decoded and then validated into `Doc` (parse

@@ -200,6 +200,7 @@ public struct DockMetrics: MetricGroup {
 }
 
 public struct UpdateBannerMetrics: MetricGroup {
+    public let actionRadius = Metric(7.0, .guess("rounded gradient update action, fitted to the expanded Arc update card"))
     public let height = Metric(24.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: P01-a pill spans y 694...718 pt"))
     public let sideInset = Metric(8.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: P01-a pill spans x 8...220 in a 228 pt sidebar"))
     public let bottomGap = Metric(8.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: 24 pt pill in a 32 pt hosting region above the dock"))

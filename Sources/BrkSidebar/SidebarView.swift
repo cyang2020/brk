@@ -229,6 +229,7 @@ public final class SidebarView: NSView {
     }
 
     public func render(_ snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette) {
+        updateBanner.interactionAllowed = snapshot.overlay == nil && snapshot.dialog == nil
         defer {
             if pager.isActive { renderSidePages() }
             applyPagePosition()
@@ -303,8 +304,8 @@ public final class SidebarView: NSView {
         miniPlayers.isHidden = slice.creatingSpace || snapshot.miniPlayers.isEmpty
         miniPlayers.render(snapshot.miniPlayers, frames: f.miniPlayers, origin: f.frame.origin, palette: palette,
                            animated: previous != nil && previous?.miniPlayerHover != miniPlayers.hover)
-        updateBanner.frame = f.updateBanner.map(local) ?? .zero
-        updateBanner.render(f.updateBanner == nil ? nil : slice.update, palette: palette)
+        updateBanner.place(at: f.updateBanner.map(local) ?? .zero)
+        updateBanner.render(f.updateBanner == nil ? nil : slice.update, palette: palette, automaticUpdates: snapshot.sidebar.automaticUpdates)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
         dock.render(dockItems, frames: f, palette: palette, creating: slice.creatingSpace, plusMenu: slice.plusMenu)
@@ -540,7 +541,7 @@ public final class SidebarView: NSView {
     /// Escape while a hover card's search field has the keyboard: the card closes (true). The window routes Escape to
     /// Exit before a text field's delegate sees it, so it asks here first.
     public func takeEscape() -> Bool {
-        tablist.takeEscape() || favorites.takeEscape()
+        tablist.takeEscape() || favorites.takeEscape() || updateBanner.takeEscape()
     }
 
     // MARK: Brk's AI panel (docs/design/ai-right-panel.md)

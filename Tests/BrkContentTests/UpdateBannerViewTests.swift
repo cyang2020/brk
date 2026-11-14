@@ -20,7 +20,7 @@ final class UpdateBannerViewTests: XCTestCase {
         return project(state, ProjectionContext(now: now, calendar: Calendar(identifier: .gregorian))).windows.values.first!
     }
 
-    func testInstallClickIsConsumedOnceAndFailureOrReadyCanBeActedOnAgain() throws {
+    func testCardOpensBeforeInstallAndAnExplicitInstallIsConsumedOnce() throws {
         _ = NSApplication.shared
         var commands: [Command] = []
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: true)
@@ -35,6 +35,9 @@ final class UpdateBannerViewTests: XCTestCase {
         }
         render()
         let button = root.sidebar.updateBanner
+        func primary(_ title: String) throws -> NSButton {
+            try XCTUnwrap(button.subviews.flatMap(\.subviews).compactMap { $0 as? NSButton }.first { $0.title == title })
+        }
         func click(inside: Bool = true) throws {
             let point = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
             let down = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
@@ -47,18 +50,26 @@ final class UpdateBannerViewTests: XCTestCase {
         try click(inside: false)
         XCTAssertTrue(commands.isEmpty)
         try click()
+        XCTAssertTrue(button.expanded)
+        XCTAssertTrue(commands.isEmpty, "opening the card must not start an update")
+        try primary("Restart and Update").performClick(nil)
         render()
-        try click()
+        try primary("Restart and Update").performClick(nil)
         XCTAssertEqual(commands, [.app(.help(.installUpdate))])
         view.sidebar.update = .failed(message: "Signature verification failed")
         render()
         XCTAssertEqual(button.accessibilityHelp(), "Signature verification failed")
-        try click()
+        try primary("Try Again").performClick(nil)
         XCTAssertEqual(commands.count, 2)
         view.sidebar.update = .ready(release)
         render()
         XCTAssertTrue(button.accessibilityPerformPress())
+        try primary("Restart and Update").performClick(nil)
         XCTAssertEqual(commands, Array(repeating: .app(.help(.installUpdate)), count: 3))
+        view.sidebar.update = .updated(release)
+        render()
+        try primary("See What’s New").performClick(nil)
+        XCTAssertEqual(commands.last, .app(.help(.updateReleaseNotes)))
     }
 
     func testProgressInvalidatesTheSidebarAndBusyStatesCannotStartAnotherInstall() {
@@ -75,8 +86,9 @@ final class UpdateBannerViewTests: XCTestCase {
             root.render(view, frames: WindowLayout.compute(view, contentSize: size), surface: { _ in nil })
             let button = root.sidebar.updateBanner
             XCTAssertFalse(button.isHiddenOrHasHiddenAncestor)
-            XCTAssertFalse(button.isAccessibilityEnabled())
-            XCTAssertFalse(button.accessibilityPerformPress())
+            XCTAssertTrue(button.accessibilityPerformPress(), "progress remains inspectable")
+            let action = button.subviews.flatMap(\.subviews).compactMap { $0 as? UpdateActionButton }.first
+            XCTAssertEqual(action?.isEnabled, false)
             if case .downloading = state { progressLabels.append(button.accessibilityLabel() ?? "") }
         }
         XCTAssertTrue(progressLabels[0].contains("20%"))
