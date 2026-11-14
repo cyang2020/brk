@@ -295,6 +295,34 @@ enum PhysicalPointer {
         if let failure { throw failure }
     }
 
+    static func swipe(_ app: AppUnderTest, at point: CGPoint, steps: [(Double, Double)], interval: Double,
+                      window: WindowID, checking check: () throws -> Void) throws {
+        let at = try screen(app, point, window: window)
+        try checkFront(app, at: at, window: window)
+        try post(.mouseMoved, at: at)
+        usleep(250_000)
+        let finished = DispatchGroup()
+        finished.enter()
+        DispatchQueue.global().async {
+            defer { finished.leave() }
+            let source = CGEventSource(stateID: .hidSystemState)
+            let events: [(Int64, Double, Double)] = [(1, 0, 0)] + steps.map { (2, $0.0, $0.1) } + [(4, 0, 0)]
+            for (phase, dx, dy) in events {
+                guard let event = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 2,
+                                          wheel1: Int32(dy), wheel2: Int32(dx), wheel3: 0) else { continue }
+                event.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase)
+                event.setIntegerValueField(.scrollWheelEventMomentumPhase, value: 0)
+                event.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+                event.location = at
+                event.post(tap: .cghidEventTap)
+                usleep(UInt32(interval * 1_000_000))
+            }
+            usleep(400_000)
+        }
+        defer { finished.wait() }
+        repeat { try check() } while finished.wait(timeout: .now() + 0.02) == .timedOut
+    }
+
     static func drag(_ app: AppUnderTest, through path: [CGPoint], window: WindowID, held: () throws -> Void) throws {
         guard let first = path.first else { return }
         let start = try screen(app, first, window: window)

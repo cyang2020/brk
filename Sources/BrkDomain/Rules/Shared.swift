@@ -28,10 +28,8 @@ extension Work {
         for pane in state.panes(of: shown) { state.demand(PageID(window: window, item: pane)) }
     }
 
-    /// Switches the window to `space` (and ends a peek). Unknown space: no-op.
     mutating func showSpace(_ space: SpaceID, in window: WindowID) {
         guard state.doc.spaces[space] != nil, state.doc.windows[window] != nil else { return }
-        if state.session.windows[window]?.peek == true { state.session.windows[window]!.peek = false }
         if state.doc.windows[window]!.space != space { state.doc.windows[window]!.space = space; state.session.windows[window]?.tabSelection = TabSelection() }
     }
 

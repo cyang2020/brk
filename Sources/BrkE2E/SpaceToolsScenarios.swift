@@ -279,6 +279,24 @@ enum SpaceToolsScenarios {
         try PhysicalPointer.swipe(app, at: point(pageArea), steps: left, window: window)
         app.sleep(0.6)
         try expect(try app.view().space.id == first, "a swipe on the page switched Spaces")
+
+        try app.setWindowFrame(frame)
+        try finishAnimation(app)
+        let updatingPage = PageID(window: window, item: tabs[tabs.count - 1])
+        try app.evaluate(updatingPage, "(() => { let n = 0; window.brkSwipeBusy = setInterval(() => document.title = 'Swipe updates ' + (++n), 16); })()")
+        defer { try? app.evaluate(updatingPage, "clearInterval(window.brkSwipeBusy)") }
+        try app.waitUntil("the page updates its title while swiping") { tab(tabs[tabs.count - 1], in: try app.view())?.title.hasPrefix("Swipe updates ") == true }
+        let fastLeft = Array(repeating: (-30.0, 0.0), count: 12)
+        let fastRight = Array(repeating: (30.0, 0.0), count: 12)
+        for _ in 0..<3 {
+            for (destination, steps) in [(second, fastLeft), (first, fastRight)] {
+                try PhysicalPointer.swipe(app, at: try list(), steps: steps, interval: 0.004, window: window, checking: {
+                    _ = try app.send(.view(window: window), timeout: 0.5)
+                })
+                try app.waitUntil("a high-frequency swipe switched Spaces without blocking input") { try app.view().space.id == destination }
+                try finishAnimation(app)
+            }
+        }
     }
 
 

@@ -111,6 +111,7 @@ public final class ThemeBackgroundView: NSView {
 @MainActor
 final class ThemeCanvasView: NSView {
     private let renderer: ThemeRenderer?
+    private var metalLayer: CAMetalLayer?
     private var link: CADisplayLink?
     private var fallbackTheme: ResolvedTheme?
 
@@ -119,6 +120,20 @@ final class ThemeCanvasView: NSView {
         super.init(frame: frame)
         wantsLayer = true
         layerContentsRedrawPolicy = .duringViewResize
+        // AppKit invokes updateLayer through its own backing layer; Metal lives in a sublayer.
+        if let renderer {
+            let metal = CAMetalLayer()
+            metal.device = renderer.device
+            metal.pixelFormat = ThemeRenderer.drawableFormat
+            metal.colorspace = CGColorSpace(name: CGColorSpace.sRGB)
+            metal.framebufferOnly = true
+            metal.isOpaque = false
+            metal.presentsWithTransaction = true
+            metal.frame = bounds
+            metal.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+            layer?.addSublayer(metal)
+            metalLayer = metal
+        }
         renderer?.prewarm()
         renderer?.onTileReady = { [weak self] kind in self?.tileArrived(kind) }
     }
@@ -127,18 +142,6 @@ final class ThemeCanvasView: NSView {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     override var isFlipped: Bool { true }
-
-    override func makeBackingLayer() -> CALayer {
-        guard let renderer else { return super.makeBackingLayer() }
-        let layer = CAMetalLayer()
-        layer.device = renderer.device
-        layer.pixelFormat = ThemeRenderer.drawableFormat
-        layer.colorspace = CGColorSpace(name: CGColorSpace.sRGB)
-        layer.framebufferOnly = true
-        layer.isOpaque = false
-        layer.presentsWithTransaction = true
-        return layer
-    }
 
     func show(_ theme: ResolvedTheme, animated: Bool) {
         guard let renderer else {
@@ -155,13 +158,13 @@ final class ThemeCanvasView: NSView {
         guard theme != renderer.target || scrubbed else { return }
         let duration = animated ? Metrics.motion.themeCrossfade.value : 0
         renderer.transition(to: theme, duration: duration, at: CACurrentMediaTime())
-        if duration > 0 { animate() } else if scrubbed { _ = draw(at: CACurrentMediaTime()) } else { needsDisplay = true }
+        needsDisplay = true
     }
 
     func scrub(from base: ResolvedTheme, to theme: ResolvedTheme, progress: Double) {
         guard let renderer else { return show(progress < 0.5 ? base : theme, animated: false) }
         renderer.scrub(from: base, to: theme, progress: progress)
-        _ = draw(at: CACurrentMediaTime())
+        needsDisplay = true
     }
 
     /// The texture at full strength while the window is active, at Metrics.theme.inactiveTextureFactor while not.
@@ -193,6 +196,10 @@ final class ThemeCanvasView: NSView {
 
     override func updateLayer() {
         if draw(at: CACurrentMediaTime()) { animate() }
+        else {
+            link?.invalidate()
+            link = nil
+        }
     }
 
     override func setFrameSize(_ newSize: NSSize) {
@@ -208,6 +215,10 @@ final class ThemeCanvasView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if window == nil {
+            link?.invalidate()
+            link = nil
+        }
         needsDisplay = true
     }
 
@@ -218,7 +229,7 @@ final class ThemeCanvasView: NSView {
         guard let renderer, let theme = renderer.target, theme.texture == kind else { return }
         guard link == nil else { return needsDisplay = true }
         renderer.transition(to: theme, duration: Metrics.motion.themeCrossfade.value, at: CACurrentMediaTime())
-        animate()
+        needsDisplay = true
     }
 
     private func animate() {
@@ -229,7 +240,8 @@ final class ThemeCanvasView: NSView {
     }
 
     @objc private func step(_ link: CADisplayLink) {
-        if !draw(at: link.targetTimestamp) {
+        needsDisplay = true
+        if renderer?.isScrubbing == true || renderer?.progress(at: link.targetTimestamp) == 1 {
             link.invalidate()
             self.link = nil
         }
@@ -237,7 +249,7 @@ final class ThemeCanvasView: NSView {
 
     /// Draws one frame at the view's pixel size; true while a crossfade is still running.
     private func draw(at time: CFTimeInterval) -> Bool {
-        guard let renderer, let layer = layer as? CAMetalLayer, let window, bounds.width > 0, bounds.height > 0 else { return false }
+        guard let renderer, let layer = metalLayer, let window, bounds.width > 0, bounds.height > 0 else { return false }
         let scale = window.backingScaleFactor
         let size = CGSize(width: (bounds.width * scale).rounded(), height: (bounds.height * scale).rounded())
         if layer.contentsScale != scale { layer.contentsScale = scale }

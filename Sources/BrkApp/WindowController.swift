@@ -532,9 +532,10 @@ extension HostWindow {
         // AppKit centres the buttons in the titlebar's height and starts them `systemLeading` in from its left edge.
         let height = 2 * origin.y + size.height
         let shift = origin.x - resting.systemLeading
-        let target = CGRect(x: shift, y: frame.bounds.height - height, width: frame.bounds.width - shift, height: height)
+        let target = CGRect(x: 0, y: frame.bounds.height - height, width: frame.bounds.width, height: height)
         if container.frame != target { container.frame = target }
-        if titlebar.frame != container.bounds { titlebar.frame = container.bounds }
+        let titlebarFrame = CGRect(x: shift, y: 0, width: container.bounds.width - shift, height: height)
+        if titlebar.frame != titlebarFrame { titlebar.frame = titlebarFrame }
         // The same spots AppKit's own layout gives in this titlebar; only the pitch is Brk's to keep.
         let pitch = Metrics.window.trafficLightSize.value + Metrics.window.trafficLightSpacing.value
         for (i, button) in buttons.enumerated() {
