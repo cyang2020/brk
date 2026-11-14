@@ -24,7 +24,7 @@ final class ImportRulesTests: XCTestCase {
         "BrkControl": ["BrkBase", "BrkDomain", "BrkLayout", "Foundation", "CoreGraphics"],
         "BrkLocalModels": ["BrkBase", "Foundation", "CryptoKit", "Accelerate"],
         "BrkImport": ["BrkBase", "BrkDomain", "Foundation", "SQLite3", "CommonCrypto"],
-        "BrkApp": ["NaturalLanguage", "PDFKit", "Carbon", "CoreServices", "UserNotifications", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "BrkImport", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "LocalAuthentication", "Security", "os"],
+        "BrkApp": ["Sparkle", "NaturalLanguage", "PDFKit", "Carbon", "CoreServices", "UserNotifications", "BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "BrkImport", "AppKit", "Foundation", "CoreGraphics", "UniformTypeIdentifiers", "LocalAuthentication", "Security", "os"],
         "Brk": ["BrkApp", "BrkBase", "BrkCoreEngine", "BrkEngine", "AppKit", "Foundation"],
         // OS authorization of a site's camera, microphone, location and notifications (OSSiteAuthorization.swift).
         "BrkCoreEngine": ["AVFoundation", "CoreLocation", "UserNotifications", "PDFKit", "BrkBase", "BrkEngine", "CBrkCore", "ObjectiveC", "AppKit", "Foundation", "os"],

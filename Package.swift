@@ -19,7 +19,9 @@ let package = Package(
         .executable(name: productName, targets: [productName]),
         .executable(name: "brk-e2e", targets: ["BrkE2E"]),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1"),
+    ],
     targets: [
         // Vocabulary shared by every layer: ids, time, keys, the page vocabulary, the constants file.
         .target(name: "BrkBase", resources: [.process("Resources")], swiftSettings: strict),
@@ -63,7 +65,7 @@ let package = Package(
         // The running app: the state owner, windows, key routing, menu, persistence, clock, control server.
         .target(
             name: "BrkApp",
-            dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "BrkImport"],
+            dependencies: ["BrkBase", "BrkDomain", "BrkLayout", "BrkEngine", "BrkTheme", "BrkUIKit", "BrkContent", "BrkControl", "BrkSettings", "BrkLocalModels", "BrkImport", .product(name: "Sparkle", package: "Sparkle")],
             exclude: ["SoundAssets", "Scripting/Brk.sdef"],
             swiftSettings: strict
         ),
@@ -72,7 +74,8 @@ let package = Package(
             name: productName,
             dependencies: ["BrkBase", "BrkApp", "BrkEngine", "BrkCoreEngine"],
             path: "Sources/Brk",
-            swiftSettings: strict
+            swiftSettings: strict,
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
         // E2E scenario runner: launches the built .app, drives it over the control socket, writes the report.
         .executableTarget(
@@ -95,7 +98,7 @@ let package = Package(
         .testTarget(name: "BrkCoreEngineTests", dependencies: ["BrkBase", "BrkDomain", "BrkEngine", "BrkCoreEngine"], exclude: ["CaptureFixture.png"], swiftSettings: strict),
         .testTarget(name: "BrkLocalModelsTests", dependencies: ["BrkBase", "BrkLocalModels"], swiftSettings: strict),
         .testTarget(name: "BrkImportTests", dependencies: ["BrkBase", "BrkDomain", "BrkImport"], swiftSettings: strict, linkerSettings: [.linkedLibrary("sqlite3")]),
-        .testTarget(name: "BrkAppTests", dependencies: ["BrkBase", "BrkDomain", "BrkApp", "BrkSettings", "BrkLocalModels"], swiftSettings: strict),
+        .testTarget(name: "BrkAppTests", dependencies: ["BrkBase", "BrkDomain", "BrkApp", "BrkSettings", "BrkLocalModels", .product(name: "Sparkle", package: "Sparkle")], swiftSettings: strict),
         // Scans every `import` under Sources/ against the dependency rules in module-map.md.
         .testTarget(name: "ArchitectureTests", dependencies: ["BrkBase"], swiftSettings: strict),
     ]

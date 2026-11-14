@@ -24,6 +24,8 @@ KEYCHAIN_ARGS=()
 PRODUCT="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Contents/Info.plist")"
 
 sign() { codesign --force --timestamp --options runtime --sign "$IDENTITY" ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} "$@"; }
+# Sparkle ships its helpers with their own entitlements. Keep those, never the browser's JIT entitlements.
+sign_sparkle() { sign --preserve-metadata=entitlements "$@"; }
 # Deepest paths first, so whatever contains a file is signed after it.
 by_depth() { /usr/bin/awk -F/ '{ print NF "\t" $0 }' | sort -rn | cut -f2-; }
 is_macho() { case "$(file -b "$1")" in Mach-O*) return 0 ;; *) return 1 ;; esac; }
@@ -39,17 +41,26 @@ done
 # 1. Mach-O files that are not a bundle's own executable (those are sealed when their bundle is signed).
 find "$APP/Contents" -type f | while IFS= read -r file; do
   case "$file" in
-    *.app/Contents/MacOS/*|*.plugin/Contents/MacOS/*) continue ;;
+    *.app/Contents/MacOS/*|*.plugin/Contents/MacOS/*|*.xpc/Contents/MacOS/*) continue ;;
+    */Sparkle.framework/Versions/*/Autoupdate) ;;
     *.framework/Versions/*/*/*) ;;
     *.framework/Versions/*/*) continue ;;
   esac
   if is_macho "$file"; then echo "$file"; fi
-done | by_depth | while IFS= read -r file; do sign "$file"; done
+done | by_depth | while IFS= read -r file; do
+  case "$file" in
+    */Sparkle.framework/*) sign_sparkle "$file" ;;
+    *) sign "$file" ;;
+  esac
+done
 
-# 2. Nested bundles in one depth-ordered pass. Chromium's helpers live inside BrkCore.framework;
+# 2. Nested bundles, including Sparkle's XPC services, in one depth-ordered pass. Chromium's helpers live inside BrkCore.framework;
 # signing the framework before those helpers would invalidate its seal.
-find "$APP/Contents" -type d \( -name '*.framework' -o -name '*.plugin' -o -name '*.app' \) | by_depth \
+find "$APP/Contents" -type d \( -name '*.framework' -o -name '*.plugin' -o -name '*.app' -o -name '*.xpc' \) | by_depth \
   | while IFS= read -r bundle; do
+    case "$bundle" in
+      */Sparkle.framework|*/Sparkle.framework/*) sign_sparkle "$bundle"; continue ;;
+    esac
     case "$(basename "$bundle")" in
       *' (Renderer).app'|*' (GPU).app'|*' (Aperitif Renderer).app'|*' (Aperitif GPU).app')
         sign --entitlements "$SIGNING/helper-jit.entitlements" "$bundle" ;;
@@ -57,7 +68,7 @@ find "$APP/Contents" -type d \( -name '*.framework' -o -name '*.plugin' -o -name
     esac
   done
 
-# 4. The app.
+# 3. The app.
 sign --entitlements "$SIGNING/app.entitlements" "$APP"
 
 codesign --verify --deep --strict --verbose=2 "$APP"
