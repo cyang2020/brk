@@ -6,6 +6,7 @@ ENGINE_DIR="$(cd "$(dirname "$0")" && pwd)"
 destination="${1:?usage: release-artifacts.sh <new-output-directory>}"
 mkdir -p "$destination"
 destination="$(cd "$destination" && pwd)"
+"$ENGINE_DIR/sync-header.sh"
 for cpu in arm64 x64; do
   "$ENGINE_DIR/incremental.py" --release "$cpu"
   arch="$cpu"; [ "$cpu" = x64 ] && arch=x86_64
