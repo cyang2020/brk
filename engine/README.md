@@ -85,9 +85,9 @@ Total under `~/brk-chromium`: 42 GB. The development framework is copied into `d
   than a release build would be. Measure before judging speed from this build.
 - **`concurrent_links = 1`.** A framework link takes several GB.
 - **`use_siso = false`.** Plain ninja, so the build tool can be paused alone.
-- **Codecs: H.264 and AAC on** (the user's decision, 2026-11-08): `proprietary_codecs = true`, `ffmpeg_branding = "Chrome"`, as Arc and Chrome play them
-  and many sites need them. The CEF 154.0.34 binary Brk ships decodes VP8, VP9, AV1, MP3, Opus and FLAC only (`engine/tools/codec-probe.py`). This build
-  is local and not distributed. **Publishing it would need a licensing check first** (H.264 and AAC are patent-licensed codecs).
+- **Codecs: H.264 and AAC on**, in both development and release builds: `proprietary_codecs = true`, `ffmpeg_branding = "Chrome"`.
+  The earlier release configuration disabled these codecs, making H.264 and AAC content unplayable (issue #4).
+  Check the packaged engine with `engine/tools/codec-probe.py` and an H.264/AAC playback sample after rebuilding.
 - **Widevine off.** It needs Google's signed component, which a self-built Chromium cannot get. The user's decision.
 - **No Google API keys.** `use_official_google_api_keys = false`, none in the build. Chromium's sign-in and sync do not work without them, which Brk does not use.
 
@@ -102,9 +102,19 @@ engine/configure.sh release x64
 BRK_OUT=out/BrkRelease-x64 JOBS=4 engine/build.sh chrome
 ```
 
-`is_official_build` enables Chromium's PGO and ThinLTO. Binaries are stripped; line tables remain in separate dSYMs. Release codecs match the previously distributed app (VP8, VP9, AV1, MP3, Opus and FLAC); H.264/AAC and Widevine are disabled. No Google API keys are embedded. Brk starts Chromium with background networking, component updates, sync and domain reliability disabled.
+`is_official_build` enables Chromium's PGO and ThinLTO. Binaries are stripped; line tables remain in separate dSYMs. Release builds support H.264 and AAC alongside VP8, VP9, AV1, MP3, Opus and FLAC. Widevine remains disabled. No Google API keys are embedded. Brk starts Chromium with background networking, component updates, sync and domain reliability disabled.
 
-After committing and exporting source changes, package each completed build with `engine/package-artifact.py`. Upload the two archives to a versioned GitHub release and record the printed metadata in `engine/artifacts.json`. A changed `BrkCore.h` requires new engine archives before app CI can build.
+After committing and exporting source changes, package each completed build with `engine/package-artifact.py`. Upload the two archives to a versioned GitHub release and record the printed metadata in `engine/artifacts.json`. A changed `BrkCore.h` requires new engine archives before app CI can build. Build-argument changes also require rebuilding and repinning both archives: app CI downloads the pinned engines and does not compile Chromium.
+
+To check codec support and decoding, generate a short MP4 with FFmpeg, then run the probe under the native lock:
+
+```sh
+source engine/config.sh
+ffmpeg -f lavfi -i testsrc2=size=64x64:rate=10 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 1 -c:v libx264 -profile:v baseline -pix_fmt yuv420p -c:a aac -movflags +faststart /tmp/brk-codec-sample.mp4
+python3 scripts/with-batch-locks.py --lock /tmp/brk-core-native.lock -- python3 engine/tools/codec-probe.py --plain-chromium --headless --require-h264-aac --sample /tmp/brk-codec-sample.mp4 "$BRK_SRC/out/BrkRelease-arm64/Chromium.app/Contents/MacOS/Chromium" /tmp/brk-codecs.json
+```
+
+The probe fails unless H.264 Baseline, Main, High, and AAC support are reported by both `canPlayType` and Media Source Extensions. With `--sample`, the MP4 must also finish playing with decoded video frames. Run the same check against the Intel build on an Intel host or with Rosetta.
 
 ## How the build behaves
 
