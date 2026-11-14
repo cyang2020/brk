@@ -1,20 +1,20 @@
 {
   "repository": "cyang2020/brk",
-  "release": "brkcore-156.0.8078.88-26767050dc",
+  "release": "brkcore-156.0.8078.88-dd835a055e",
   "artifacts": {
     "arm64": {
       "file": "BrkCore-arm64.tar.xz",
-      "sha256": "680f6745f7ab576af4861f7df9f3b485328226bbe92fd17f288888ce0df7bf6d",
+      "sha256": "4ddf06e55bc17851eeff0d824b0034d9d06beca3fe4d1cb10a6741cec307e482",
       "architecture": "arm64",
-      "chromiumCommit": "26767050dcbe3df0450ca54eb632be3719bcdd2f",
-      "interfaceSHA256": "0c7d3a428bb069a8c7bf9c14ccd69dd50fc83838a21dc7a7bfb88c4c6394ea9b"
+      "chromiumCommit": "dd835a055ee5454f6d62a61c8cc102ef4ba5f6bd",
+      "interfaceSHA256": "d957c46605ac076ac49c0d559a1e545604ad01e524b12fbb5905d6aeaa6f601d"
     },
     "x86_64": {
       "file": "BrkCore-x86_64.tar.xz",
-      "sha256": "cb8dbd1b68ba02f1e3db5a127e3cabad86bd3da98133f3f8e9b689da32ec824f",
+      "sha256": "2f11eb4343a6284a96f3a20afb38c74697ee92c68fd02f6f4316982ddc1dae71",
       "architecture": "x86_64",
-      "chromiumCommit": "26767050dcbe3df0450ca54eb632be3719bcdd2f",
-      "interfaceSHA256": "0c7d3a428bb069a8c7bf9c14ccd69dd50fc83838a21dc7a7bfb88c4c6394ea9b"
+      "chromiumCommit": "dd835a055ee5454f6d62a61c8cc102ef4ba5f6bd",
+      "interfaceSHA256": "d957c46605ac076ac49c0d559a1e545604ad01e524b12fbb5905d6aeaa6f601d"
     }
   }
 }
