@@ -225,6 +225,12 @@ Open it and drag **Brk** into Applications. Builds are signed with a Developer I
 
 ## Bug fixes
 
+**2026-11-14**
+
+- **Downloaded apps failed strict signature verification.** The disk-image layout added Finder metadata after signing. Packaging now leaves the signed app unchanged and verifies its signature inside the finished disk image. Build 42.
+- **Extra page-host windows remained behind Brk’s windows.** Brk now embeds pages directly in its own windows through BrkCore, so each page no longer needs a separate Chromium host window. Build 41.
+- **Quitting could hang during a system media-permission check.** Background permission-status checks no longer block BrkCore shutdown. Build 41.
+
 **2026-11-13**
 
 - **Site controls reopened after closing, or Command-W closed the tab behind them.** Clicking outside now closes the site controls. Command-W closes the popover while keeping the tab open. Escape closes a Settings explanation and leaves Settings open. Build 40.
