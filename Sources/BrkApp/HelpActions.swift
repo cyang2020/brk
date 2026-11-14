@@ -57,7 +57,7 @@ final class HelpActions {
             send(window, .app(.help(.open(notes))))
         case .reportBug: openIssue(.bug, in: window)
         case .sendFeedback: openIssue(.feedback, in: window)
-        case .checkForUpdates:
+        case .checkForUpdates, .installUpdate:
             let info = BuildInfo.current(engine: engine.engineVersion)
             if let latest = HelpLinks.latestBuild(info) {
                 alert("\(Product.name) has no update channel", HelpLinks.updateText(info), in: window, second: "Open Latest Build") { [weak self] in
