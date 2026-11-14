@@ -813,6 +813,29 @@ final class ReduceSpecTests: XCTestCase {
         XCTAssertEqual(d.paneIDs, [w1])
     }
 
+    func testSwitchingSpacesKeepsTheFloatingSidebarUntilPointerExit() {
+        let d = Driver()
+        let first = d.view.space.id
+        let second = d.newSpace("Work")
+        d.user(.space(.focus(first)))
+        d.user(.sidebar(.toggle))
+        d.user(.sidebar(.peek(true)))
+
+        d.user(.space(.focus(second)))
+        XCTAssertEqual(d.view.space.id, second)
+        XCTAssertFalse(d.view.sidebar.visible)
+        XCTAssertTrue(d.view.sidebar.peek)
+
+        d.user(.space(.step(.previous)))
+        XCTAssertEqual(d.view.space.id, first)
+        XCTAssertTrue(d.view.sidebar.peek)
+
+        d.user(.sidebar(.peek(false)))
+        XCTAssertFalse(d.view.sidebar.peek)
+        d.user(.space(.focus(second)))
+        XCTAssertFalse(d.view.sidebar.peek)
+    }
+
     /// .space(.step) moves to the neighbour without wrapping
     func test_spaceStepMovesToTheNeighbourWithoutWrapping() throws {
         let d = Driver()
