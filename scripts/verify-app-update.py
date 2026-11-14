@@ -13,6 +13,7 @@ import http.server
 import json
 import os
 from pathlib import Path
+import platform
 import plistlib
 import signal
 import socket
@@ -23,6 +24,7 @@ import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET
+from release import Release, appcast as release_appcast
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -121,19 +123,12 @@ def fixture_app(app, name, bundle_id, build, version, public_key, base, environm
 
 
 def appcast(path, base, archive, signature, build, version):
-    rss = ET.Element('rss', version='2.0')
-    channel = ET.SubElement(rss, 'channel')
-    ET.SubElement(channel, 'title').text = 'Brk isolated update fixture'
-    item = ET.SubElement(channel, 'item')
-    ET.SubElement(item, 'title').text = version
-    ET.SubElement(item, 'pubDate').text = datetime.datetime.now(datetime.timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
-    ET.SubElement(item, f'{{{SPARKLE}}}minimumSystemVersion').text = '14.0'
-    ET.SubElement(item, 'enclosure', {
-        'url': base + '/' + archive.name,
-        'length': str(archive.stat().st_size), 'type': 'application/octet-stream',
-        f'{{{SPARKLE}}}version': str(build), f'{{{SPARKLE}}}shortVersionString': version,
-        f'{{{SPARKLE}}}edSignature': signature,
-    })
+    release = Release(version, Release.load(ROOT).notes)
+    rss = ET.fromstring(release_appcast(release, 'cyang2020/brk', platform.machine(), str(build),
+                                       archive, signature, datetime.datetime.now(datetime.timezone.utc)))
+    item = rss.find('./channel/item')
+    item.find('enclosure').set('url', base + '/' + archive.name)
+    item.find(f'{{{SPARKLE}}}releaseNotesLink').text = base + '/release-notes.html'
     ET.ElementTree(rss).write(path, encoding='utf-8', xml_declaration=True)
 
 
@@ -198,6 +193,7 @@ def verify(args, mode):
         web = folder / 'web'
         web.mkdir()
         (web / 'page.html').write_text('<!doctype html><title>Updater fixture</title><h1>Update fixture</h1>')
+        (web / 'release-notes.html').write_text('<!doctype html><title>Update changes</title><p>Fixture update.</p>')
         server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(QuietHandler, directory=str(web)))
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f'http://127.0.0.1:{server.server_port}'
@@ -213,8 +209,9 @@ def verify(args, mode):
         clone(args.app, target)
         executable = fixture_app(source, name, bundle_id, 42, '0.1.0', public, base, environment)
         fixture_app(target, name, bundle_id, 44, '0.0.1', public, base, environment)
-        archive = web / 'update.zip'
-        run('ditto', '-c', '-k', '--keepParent', '--sequesterRsrc', target, archive)
+        archive = web / ('Brk-' + platform.machine() + '.dmg')
+        run('hdiutil', 'create', '-quiet', '-fs', 'APFS', '-volname', name, '-srcfolder', target.parent,
+            '-format', 'ULFO', '-o', archive)
         signature = run(args.sign_tool, '--ed-key-file', secret, '-p', archive).stdout.decode().strip()
         run(args.sign_tool, '--verify', '--ed-key-file', secret, archive, signature)
         if mode == 'reject':

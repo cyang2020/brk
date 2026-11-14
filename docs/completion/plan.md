@@ -6,7 +6,7 @@ The user resumed work on 2026-10-31 and requested completion of the full agreed 
 
 Build Brk from scratch in Swift with native AppKit/SwiftUI views and CEF. Keep the existing domain, layout, privacy, lifecycle, and native-control boundaries unless a proven requirement needs a revised contract. Do not copy the excluded cra implementation.
 
-The user excluded account, membership, referral, and Send to Dia functionality. Sharing uses local file export. AI uses the user's local Claude or Codex command-line tools. Automatic updates remain deferred. Those decisions do not exclude the other unfinished Arc features.
+The user excluded account, membership, referral, and Send to Dia functionality. Sharing uses local file export. AI uses the user's local Claude or Codex command-line tools. On 2026-11-14 the user resumed application updates, choosing in-app download and restart installation with versioned release notes. Those decisions do not exclude the other unfinished Arc features.
 
 Every inventory row must have an explicit current state, acceptance criteria, an owner, and verification appropriate to its behavior. A persisted toggle, a disabled menu item, a placeholder, or a passing build alone is not completion. `scripts/check-completion.py --require-complete` must pass before the whole project is called complete. Passing the script checks bookkeeping; independent source and runtime review must still validate the evidence.
 

@@ -4,9 +4,7 @@
   "historical_baseline": "c61735f",
   "inventory_source": "docs/swift/feature-ledger.md",
   "scope_decisions": "docs/completion/plan.md",
-  "deferred_later_features": {
-    "updater": "User deferred automatic updates; .audit/arc-clone.tsv at 2026-10-30T12:23:56Z"
-  },
+  "deferred_later_features": {},
   "features": [
     {
       "id": "A001",
@@ -12051,28 +12049,40 @@
       "arc_evidence": "row 7; `ARC_SoftwareUpdaterClient` (Sparkle); update channels",
       "description": "Checks for and installs updates",
       "historical_status": "not started",
-      "status": "deferred",
-      "acceptance": "When the user resumes updater scope, check and install a valid update with explicit failure and restart behavior.",
-      "owner": "native-grounding",
-      "required_checks": [],
+      "status": "verified",
+      "acceptance": "Check the signed architecture feed, download and restart into an authenticated newer build while preserving browser data; report failures without replacing the app.",
+      "owner": "release-updater-20261114",
+      "required_checks": [
+        "unit",
+        "native"
+      ],
       "verification": [
         {
-          "kind": "static",
+          "kind": "unit",
           "result": "pass",
-          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
-          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
-          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+          "command": "swift test",
+          "artifact": "docs/checks/2026-11-14-updater.md",
+          "scope": "Clean integrated suite and actual disposable app download, replacement, relaunch, retained Space state, signature and offline rejection."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/verify-app-update.py --app <built-app> --sign-tool <Sparkle-sign_update> --out <outside-repo>",
+          "artifact": "docs/checks/2026-11-14-updater.md",
+          "scope": "Clean integrated suite and actual disposable app download, replacement, relaunch, retained Space state, signature and offline rejection."
         }
       ],
       "remaining": [
-        "Explicitly deferred by the user; keep the action disabled and do not imply updates work."
+        "Copies before0.0.1 need one manual installation. Sparkle may install a staged update on eventual exit, including the existing shutdown timeout."
       ],
       "implementation": [
-        "Sources/BrkDomain/Actions.swift",
-        "Sources/BrkDomain/Command.swift"
+        "Sources/BrkApp/AppUpdates.swift",
+        "Sources/BrkApp/HelpActions.swift",
+        "Sources/BrkBase/SoftwareUpdate.swift",
+        ".github/workflows/release.yml"
       ],
-      "current_behavior": "checkForUpdates is later(updater); there is no update service.",
-      "decision": "User decision: automatic updates are deferred. A128 is the readiness banner of that deferred updater, not a waiver for unrelated native polish.",
+      "current_behavior": "One Sparkle-backed app session checks the signed feed, downloads on click, preserves ordered quit, and lets Sparkle replace and relaunch the app. VERSION and curated notes own release history.",
+      "decision": "On2026-11-14 the user resumed this scope and selected in-app download followed by restart installation, superseding the earlier deferral.",
       "assessment": {
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
@@ -12086,28 +12096,47 @@
       "arc_evidence": "`ARC_SidebarBanner` `SoftwareUpdateBannerUpdateAvailableView`",
       "description": "Card in the sidebar when an update is ready",
       "historical_status": "not started",
-      "status": "deferred",
-      "acceptance": "When updater scope resumes, show a ready-update card and a working update action in the sidebar.",
-      "owner": "native-grounding",
-      "required_checks": [],
+      "status": "verified",
+      "acceptance": "Show the update button above the dock and install a signed update through a real click.",
+      "owner": "release-updater-20261114",
+      "required_checks": [
+        "unit",
+        "native",
+        "visual"
+      ],
       "verification": [
         {
-          "kind": "static",
+          "kind": "unit",
           "result": "pass",
-          "command": "python3 a3966b7375:verify/completion/native-grounding/validate.py",
-          "artifact": "a3966b7375:verify/completion/native-grounding/source-audit.json",
-          "scope": "Source trace and unchanged-source check; existing parent proof matches 520 source and test files. This does not establish the feature works."
+          "command": "swift test",
+          "artifact": "docs/checks/2026-11-14-updater.md",
+          "scope": "Clean integrated suite and actual disposable app download, replacement, relaunch, retained Space state, signature and offline rejection."
+        },
+        {
+          "kind": "native",
+          "result": "pass",
+          "command": "python3 scripts/verify-app-update.py --app <built-app> --sign-tool <Sparkle-sign_update> --out <outside-repo>",
+          "artifact": "docs/checks/2026-11-14-updater.md",
+          "scope": "Clean integrated suite and actual disposable app download, replacement, relaunch, retained Space state, signature and offline rejection."
+        },
+        {
+          "kind": "visual",
+          "result": "pass",
+          "command": "scripts/verify-app-update.py --mode ui; compare Arc1.170 reference geometry",
+          "artifact": "docs/checks/2026-11-14-updater.md",
+          "scope": "Native update button geometry and typography; opacity fit and unobserved states remain bounded below."
         }
       ],
       "remaining": [
-        "Deferred together with the user-authorized updater deferral; this is not an implemented banner."
+        "Exact Arc hover, pressed and busy-state visuals remain unmeasured; fill and stroke opacity are fitted to reference screenshots."
       ],
       "implementation": [
+        "Sources/BrkSidebar/UpdateBannerView.swift",
         "Sources/BrkSidebar/SidebarView.swift",
-        "Sources/BrkDomain/Model.swift"
+        "Sources/BrkLayout/SidebarLayout.swift"
       ],
-      "current_behavior": "No update banner exists and no updater readiness event is produced.",
-      "decision": "User decision: automatic updates are deferred. A128 is the readiness banner of that deferred updater, not a waiver for unrelated native polish.",
+      "current_behavior": "A measured Arc-style sidebar capsule renders shared update state and dispatches the real install action.",
+      "decision": "On2026-11-14 the user resumed this scope and selected in-app download followed by restart installation, superseding the earlier deferral.",
       "assessment": {
         "proposal": "docs/completion/proposals/native-shell.json",
         "sha256": "a1d0cc0fe8953a23fcf26e00da706001ada0c0b7e49fac3d1887e0dfd7c3420b",
