@@ -12,7 +12,9 @@
 
 <p align="center">
   <b><a href="#download">Download</a></b> ·
+  <a href="https://github.com/cyang2020/brk/releases">All releases</a> ·
   <a href="https://cyang2020.github.io/brk/">Website</a> ·
+  <a href="https://discord.gg/4d6ShsjCYz">Discord</a> ·
   <a href="https://github.com/cyang2020/brk/issues/new/choose">Report a bug</a> ·
   <a href="https://github.com/cyang2020/brk/issues/2">Bug fixes</a> ·
   <a href="https://github.com/cyang2020/brk/discussions">Discussions</a> ·
@@ -221,7 +223,7 @@ Download the disk image for your Mac:
 | Apple silicon (M1 and later) | **[Brk-arm64.dmg](https://github.com/cyang2020/brk/releases/download/latest/Brk-arm64.dmg)** |
 | Intel | **[Brk-x86_64.dmg](https://github.com/cyang2020/brk/releases/download/latest/Brk-x86_64.dmg)** |
 
-Open it and drag **Brk** into Applications. Builds are signed with a Developer ID and notarized by Apple, so they open with a double-click. Needs macOS 14 Sonoma or later. The links always fetch the newest build: [Latest build](https://github.com/cyang2020/brk/releases/tag/latest) is rebuilt from `main` after every change, and versioned releases appear on the same page when they are tagged. How the pipeline works is in [`docs/release.md`](docs/release.md).
+Open it and drag **Brk** into Applications. Builds are signed with a Developer ID and notarized by Apple, so they open with a double-click. Needs macOS 14 Sonoma or later. The links always fetch the newest build: [Latest build](https://github.com/cyang2020/brk/releases/tag/latest) is rebuilt from `main` after every change. Browse [all releases and version history](https://github.com/cyang2020/brk/releases) for older versions and release notes. How the pipeline works is in [`docs/release.md`](docs/release.md).
 
 ## Bug fixes
 
@@ -271,6 +273,10 @@ Every fix, newest first, with the first build that has it (Brk › About Brk sho
 - **"Save password?" sat in the top-right corner of the page.** Brk now asks the way Arc does, with a card in the middle of the window: *Save password for (site)?* with Never on this site, No and Save. Saving an address or a card asks the same way (*Save Address?*, *Save this card?*). Build 21.
 - **Clicking an autofill suggestion did nothing.** Saved emails, addresses and passwords appeared in the list under a field, but neither a click nor ↓ and Return filled them in. The cause was a bug in the Chromium Embedded Framework 154 that Brk used; Brk now runs CEF 156 (Chromium 156.0.8078.88), where it is fixed. Build 20.
 - **Brk quit when a site offered to sign in with a passkey from your phone,** for example Canva's sign-in: Continue another way, then a passkey, then *Use a phone or tablet*. macOS closed Brk because Brk had not said why it might use Bluetooth. Brk now asks for Bluetooth permission instead, and declares every other permission a website can ask for. Build 18.
+
+## Join the community
+
+Everyone is welcome in the [Brk Discord](https://discord.gg/4d6ShsjCYz). Ask questions, share your setup and workflows, discuss ideas, or help test fixes. Confirmed bugs and development work are tracked on GitHub.
 
 ## Feedback and bug reports
 
