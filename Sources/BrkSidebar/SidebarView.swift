@@ -43,6 +43,7 @@ public final class SidebarView: NSView {
     let dock: DockView
     /// Arc's mini players, between the list and the dock.
     let miniPlayers: MiniPlayerStackView
+    let updateBanner: UpdateBannerView
     /// The Library button's flyout over the bottom of the column and its badge in the dock (Arc: `HomeBadging`).
     let libraryFlyout: LibraryFlyoutView
     /// The edge views straddle or sit outside the column, so they live beside it in the root (installed when this
@@ -126,6 +127,7 @@ public final class SidebarView: NSView {
         var miniPlayerHover: MiniPlayerHover?
         var aiToggle: AIToggleSnapshot?
         var libraryFlyout: LibraryFlyoutSnapshot?
+        var update: UpdatePresentation?
     }
 
     public init(dispatch: @escaping Dispatch) {
@@ -138,14 +140,15 @@ public final class SidebarView: NSView {
         tablist = TablistView(dispatch: dispatch, drag: drag)
         dock = DockView(dispatch: dispatch)
         miniPlayers = MiniPlayerStackView(dispatch: dispatch)
+        updateBanner = UpdateBannerView(dispatch: dispatch)
         libraryFlyout = LibraryFlyoutView(dispatch: dispatch)
         resizeHandle = ResizeHandleView(dispatch: dispatch)
         revealStrip = RevealStripView(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [backdrop, header, urlPill, pagesClip, dock, miniPlayers, libraryFlyout, edgeFeedback] as [NSView] { addSubview(view) }
+        for view in [backdrop, header, urlPill, pagesClip, dock, miniPlayers, updateBanner, libraryFlyout, edgeFeedback] as [NSView] { addSubview(view) }
         dock.addSubview(libraryFlyout.badge)
-        libraryFlyout.faded = [pagesClip, miniPlayers]
+        libraryFlyout.faded = [pagesClip, miniPlayers, updateBanner]
         libraryFlyout.host = self
         pagesClip.clipsToBounds = true
         pagesClip.addSubview(strip)
@@ -247,7 +250,7 @@ public final class SidebarView: NSView {
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
                           newTabCurrent: newTabCurrent, creatingSpace: snapshot.dialog == .newSpace, favoritesDrag: favoritesDrag,
                           miniPlayers: snapshot.miniPlayers, miniPlayerHover: miniPlayers.hover, aiToggle: snapshot.aiToggle,
-                          libraryFlyout: snapshot.libraryFlyout)
+                          libraryFlyout: snapshot.libraryFlyout, update: snapshot.sidebar.update)
         // The Library opening (a swipe holds it mid-move) or Create a Space switches the flyout off without rendering the
         // column again: a full render in the middle of a page move would put the pages back where they rest.
         let flyoutOn = !libraryOpen(snapshot) && snapshot.dialog != .newSpace
@@ -300,6 +303,8 @@ public final class SidebarView: NSView {
         miniPlayers.isHidden = slice.creatingSpace || snapshot.miniPlayers.isEmpty
         miniPlayers.render(snapshot.miniPlayers, frames: f.miniPlayers, origin: f.frame.origin, palette: palette,
                            animated: previous != nil && previous?.miniPlayerHover != miniPlayers.hover)
+        updateBanner.frame = f.updateBanner.map(local) ?? .zero
+        updateBanner.render(f.updateBanner == nil ? nil : slice.update, palette: palette)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
         dock.render(dockItems, frames: f, palette: palette, creating: slice.creatingSpace, plusMenu: slice.plusMenu)
@@ -388,7 +393,8 @@ public final class SidebarView: NSView {
             if view.superview !== strip { strip.addSubview(view, positioned: .below, relativeTo: nil) }
             let width = f.frame.width
             view.frame = CGRect(x: previous ? -width : width, y: 0, width: width, height: f.frame.height)
-            view.render(page, sharesFavorites: page.favorites.root == snapshot.favorites.root, column: f.frame, snapshot: snapshot, now: snapshot.now)
+            view.render(page, sharesFavorites: page.favorites.root == snapshot.favorites.root, column: f.frame, snapshot: snapshot, now: snapshot.now,
+                        miniPlayerHover: miniPlayers.hover)
         }
     }
 

@@ -114,6 +114,8 @@ public struct SidebarFrames: Sendable, Equatable, Codable {
     public var dockSpaces: [SpaceID: CGRect]
     public var libraryButton: CGRect
     public var plusButton: CGRect
+    /// The update pill above the dock; its bottom gap is reserved by `SidebarLayout`.
+    public var updateBanner: CGRect? = nil
     /// The mini player cards above the dock, oldest first; `tablistViewport` ends above them (`MiniPlayerLayout`).
     public var miniPlayers: [MiniPlayerFrame] = []
 }
@@ -301,6 +303,7 @@ extension WindowFrames {
         case .dockSpace(let id): return sidebar?.dockSpaces[id]
         case .dockLibrary: return sidebar?.libraryButton
         case .dockPlus: return sidebar?.plusButton
+        case .tabTool("install-update"): return sidebar?.updateBanner
         case .resizeHandle: return resizeHandle
         case .revealStrip: return revealStrip
         case .card(let i): return cards.first { $0.pane == i }?.rect

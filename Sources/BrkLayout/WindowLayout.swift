@@ -40,7 +40,7 @@ public enum WindowLayout {
             let frame = CGRect(x: 0, y: 0, width: anchoredWidth, height: contentSize.height)
             sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible,
                                             thisWindow: SidebarLayout.listsOwnTabs(snapshot.kind), toolbarVisible: toolbarVisible, miniPlayers: snapshot.miniPlayers.map(\.tab),
-                                            fullScreen: snapshot.fullScreen)
+                                            fullScreen: snapshot.fullScreen, updateVisible: snapshot.sidebar.update != nil && snapshot.dialog != .newSpace)
             handle = CGRect(x: frame.maxX - m.resizeHitWidth.value / 2, y: m.resizeHitTop.value,
                             width: m.resizeHitWidth.value, height: max(0, contentSize.height - m.resizeHitBottomTrim.value))
         } else if snapshot.sidebar.peek {
@@ -49,7 +49,7 @@ public enum WindowLayout {
                                height: contentSize.height - 2 * m.floatingInset.value)
             sidebar = SidebarLayout.compute(frame: frame, favorites: snapshot.favorites, space: SidebarLayout.space(in: snapshot), dock: snapshot.dock, headerVisible: snapshot.sidebar.spaceHeaderVisible,
                                             thisWindow: SidebarLayout.listsOwnTabs(snapshot.kind), toolbarVisible: toolbarVisible, miniPlayers: snapshot.miniPlayers.map(\.tab),
-                                            fullScreen: snapshot.fullScreen)
+                                            fullScreen: snapshot.fullScreen, updateVisible: snapshot.sidebar.update != nil && snapshot.dialog != .newSpace)
         } else {
             reveal = CGRect(x: -m.revealOutsideFactor.value * inset, y: 0,
                             width: (m.revealOutsideFactor.value + m.revealInsideFactor.value) * inset, height: contentSize.height)

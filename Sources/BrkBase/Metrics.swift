@@ -58,6 +58,7 @@ public struct MetricsTable: MetricGroup {
     public let favorites = FavoritesMetrics()
     public let tablist = TablistMetrics()
     public let dock = DockMetrics()
+    public let updateBanner = UpdateBannerMetrics()
     public let pageSwipe = PageSwipeMetrics()
     public let miniPlayer = MiniPlayerMetrics()
     public let content = ContentMetrics()
@@ -198,6 +199,18 @@ public struct DockMetrics: MetricGroup {
     public let libraryBottom = Metric(9.0, .arc("\"+\" and Library buttons", .low, note: "Library 9 from the bottom"))
 }
 
+public struct UpdateBannerMetrics: MetricGroup {
+    public let height = Metric(24.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: P01-a pill spans y 694...718 pt"))
+    public let sideInset = Metric(8.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: P01-a pill spans x 8...220 in a 228 pt sidebar"))
+    public let bottomGap = Metric(8.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: 24 pt pill in a 32 pt hosting region above the dock"))
+    public let fontSize = Metric(12.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: NSFont system regular 12 measures 146.56 by 15 pt, matching Arc AX text"))
+    public let strokeWidth = Metric(0.5, .guess("one device pixel at 2x; exact sidebar outline thickness has not been isolated from antialiasing"))
+    public let fillAlpha = Metric([0.025, 0.13], .guess("black in light themes, white in dark themes; initial compositing fit to P01-a, P28-a and Q18-navy-window, not recovered material opacity"))
+    public let strokeAlpha = Metric([0.09, 0.24], .guess("initial black/white outline compositing fit to P01-a, P28-a and Q18-navy-window; exact material opacity is unknown"))
+    public let hoverAlpha = Metric(0.025, .guess("Brk hover feedback; Arc updater hover has not been observed"))
+    public let pressedAlpha = Metric(0.05, .guess("Brk pressed feedback; Arc updater pressed state has not been observed"))
+}
+
 /// Arc's mini player at the bottom of the sidebar (`MediaControlsFeature.MediaControlsView`, read from the binary and
 /// measured; 650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md has the addresses).
 public struct MiniPlayerMetrics: MetricGroup {
@@ -208,7 +221,7 @@ public struct MiniPlayerMetrics: MetricGroup {
     /// With its volume slider open.
     public let volumeHeight = Metric(99.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, bin:0x1024942a4"))
     public let sideInset = Metric(8.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the card spans x 8 to 220 of a 228 sidebar"))
-    public let bottomGap = Metric(8.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the card ends 8 above Arc's update banner, which ends 8 above the dock; Brk has no banner"))
+    public let bottomGap = Metric(8.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the card ends 8 above Arc's update banner, which ends 8 above the dock"))
     /// From the list's lower edge down to the stack.
     public let listGap = Metric(9.0, .anatomy("650eca2184:verify/visual-pairs/run-20261103/r5-5/REPORT.md, Q18-media-c-arc.png: the hairline at y 644, the card from y 653"))
     /// Cards at rest, per card behind the front one: up, narrower in all, and fainter down to a floor.

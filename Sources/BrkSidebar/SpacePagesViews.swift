@@ -39,12 +39,14 @@ final class SpaceSidePageView: NSView {
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    func render(_ page: SpacePage, sharesFavorites: Bool, column: CGRect, snapshot: WindowSnapshot, now: Instant) {
+    func render(_ page: SpacePage, sharesFavorites: Bool, column: CGRect, snapshot: WindowSnapshot, now: Instant, miniPlayerHover: MiniPlayerHover? = nil) {
         shown = page.space.id
         let palette = Palette(page.theme)
-        let f = SidebarLayout.compute(frame: column, favorites: page.favorites, space: page.space, dock: snapshot.dock,
+        var f = SidebarLayout.compute(frame: column, favorites: page.favorites, space: page.space, dock: snapshot.dock,
                                       headerVisible: snapshot.sidebar.spaceHeaderVisible, toolbarVisible: snapshot.sidebar.toolbarVisible,
-                                      miniPlayers: snapshot.miniPlayers.map(\.tab), fullScreen: snapshot.fullScreen)
+                                      miniPlayers: snapshot.miniPlayers.map(\.tab), fullScreen: snapshot.fullScreen,
+                                      updateVisible: snapshot.sidebar.update != nil && snapshot.dialog != .newSpace)
+        if let miniPlayerHover { f = MiniPlayerLayout.applying(snapshot.miniPlayers.map(\.tab), hover: miniPlayerHover, to: f) }
         let local = { (r: CGRect) in r.offsetBy(dx: -f.frame.minX, dy: -f.frame.minY) }
         favorites.isHidden = sharesFavorites
         favorites.frame = local(f.favoritesTray)

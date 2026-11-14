@@ -37,7 +37,8 @@ public enum SidebarLayout {
     /// the window's own tabs. With the toolbar shown the pill and the navigation buttons move to the toolbar: the pill
     /// is empty and the favorites tray starts under the traffic lights (Metrics.sidebar.toolbarTrayTop).
     public static func compute(frame: CGRect, favorites: FavoritesSnapshot, space: SpaceSnapshot, dock: [DockItem], headerVisible: Bool = true,
-                               thisWindow: Bool = false, toolbarVisible: Bool = false, miniPlayers: [ItemID] = [], fullScreen: Bool = false) -> SidebarFrames {
+                               thisWindow: Bool = false, toolbarVisible: Bool = false, miniPlayers: [ItemID] = [], fullScreen: Bool = false,
+                               updateVisible: Bool = false) -> SidebarFrames {
         let dock = thisWindow ? [] : dock
         let s = Metrics.sidebar, w = Metrics.window, p = Metrics.urlPill
         let titleRow = CGRect(x: frame.minX, y: frame.minY + s.headerTopInset.value, width: frame.width, height: s.titleRowHeight.value)
@@ -49,14 +50,17 @@ public enum SidebarLayout {
                           height: thisWindow ? 0 : grid.tray.height)
         let tiles = thisWindow ? [:] : grid.tiles.mapValues { $0.offsetBy(dx: tray.minX, dy: tray.minY) }
         let dockRect = CGRect(x: frame.minX, y: frame.maxY - Metrics.dock.height.value, width: frame.width, height: Metrics.dock.height.value)
+        let u = Metrics.updateBanner
+        let update = updateVisible ? CGRect(x: frame.minX + u.sideInset.value, y: dockRect.minY - u.bottomGap.value - u.height.value,
+                                            width: max(0, frame.width - 2 * u.sideInset.value), height: u.height.value) : nil
         let cells = DockLayout.cells(count: dock.count, in: dockRect)
         var dockSpaces: [SpaceID: CGRect] = [:]
         for (item, rect) in zip(dock, cells.spaces) { dockSpaces[item.id] = rect }
         let header = CGRect(x: frame.minX, y: tray.maxY, width: frame.width, height: headerVisible ? Metrics.tablist.spaceHeaderHeight.value : 0)
-        let viewport = CGRect(x: frame.minX, y: header.maxY, width: frame.width, height: max(0, dockRect.minY - header.maxY))
+        let viewport = CGRect(x: frame.minX, y: header.maxY, width: frame.width, height: max(0, (update?.minY ?? dockRect.minY) - header.maxY))
         let frames = SidebarFrames(frame: frame, titleRow: titleRow, trafficLightsOrigin: lights, urlPill: pill, favoritesTray: tray,
                                    favoriteTiles: tiles, spaceHeader: header, tablistViewport: viewport, rows: TablistLayout.rows(space, width: frame.width, divider: !thisWindow),
-                                   dock: dockRect, dockSpaces: dockSpaces, libraryButton: cells.library, plusButton: cells.plus)
+                                   dock: dockRect, dockSpaces: dockSpaces, libraryButton: cells.library, plusButton: cells.plus, updateBanner: update)
         return MiniPlayerLayout.applying(miniPlayers, to: frames)
     }
 }
@@ -101,9 +105,10 @@ public enum MiniPlayerLayout {
     /// `frames` with the cards of `tabs` in place and the list ending above them.
     public static func applying(_ tabs: [ItemID], hover: MiniPlayerHover? = nil, to frames: SidebarFrames) -> SidebarFrames {
         var f = frames
-        let cards = self.frames(tabs, minX: f.frame.minX, width: f.frame.width, bottom: f.dock.minY - Metrics.miniPlayer.bottomGap.value, hover: hover)
+        let bottom = f.updateBanner?.minY ?? f.dock.minY
+        let cards = self.frames(tabs, minX: f.frame.minX, width: f.frame.width, bottom: bottom - Metrics.miniPlayer.bottomGap.value, hover: hover)
         f.miniPlayers = cards
-        let end = (cards.map(\.rect.minY).min().map { $0 - Metrics.miniPlayer.listGap.value }) ?? f.dock.minY
+        let end = (cards.map(\.rect.minY).min().map { $0 - Metrics.miniPlayer.listGap.value }) ?? bottom
         f.tablistViewport.size.height = max(0, end - f.tablistViewport.minY)
         return f
     }
