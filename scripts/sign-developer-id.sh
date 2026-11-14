@@ -23,7 +23,9 @@ KEYCHAIN_ARGS=()
 [ -n "${SIGN_KEYCHAIN:-}" ] && KEYCHAIN_ARGS=(--keychain "$SIGN_KEYCHAIN")
 PRODUCT="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Contents/Info.plist")"
 
-sign() { codesign --force --timestamp --options runtime --sign "$IDENTITY" ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} "$@"; }
+OPTIONS=(--timestamp --options runtime)
+if [ "$IDENTITY" = - ]; then OPTIONS=(); fi
+sign() { codesign --force ${OPTIONS[@]+"${OPTIONS[@]}"} --sign "$IDENTITY" ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} "$@"; }
 # Sparkle ships its helpers with their own entitlements. Keep those, never the browser's JIT entitlements.
 sign_sparkle() { sign --preserve-metadata=entitlements "$@"; }
 # Deepest paths first, so whatever contains a file is signed after it.
@@ -72,10 +74,12 @@ find "$APP/Contents" -type d \( -name '*.framework' -o -name '*.plugin' -o -name
 sign --entitlements "$SIGNING/app.entitlements" "$APP"
 
 codesign --verify --deep --strict --verbose=2 "$APP"
-# Every piece of code must carry the hardened runtime, or notarization refuses the whole app.
-find "$APP/Contents" -type f | while IFS= read -r file; do
-  is_macho "$file" || continue
-  details="$(codesign -dv "$file" 2>&1)"
-  case "$details" in *flags=*runtime*) ;; *) echo "[sign] $file has no hardened runtime" >&2; exit 1 ;; esac
-done
-echo "[sign] $APP signed with \"$IDENTITY\", hardened runtime, timestamped"
+if [ "$IDENTITY" != - ]; then
+  # Every piece of code must carry the hardened runtime, or notarization refuses the whole app.
+  find "$APP/Contents" -type f | while IFS= read -r file; do
+    is_macho "$file" || continue
+    details="$(codesign -dv "$file" 2>&1)"
+    case "$details" in *flags=*runtime*) ;; *) echo "[sign] $file has no hardened runtime" >&2; exit 1 ;; esac
+  done
+fi
+echo "[sign] $APP signed with \"$IDENTITY\" and strictly verified"
