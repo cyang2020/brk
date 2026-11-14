@@ -8,15 +8,14 @@
   <a href="https://github.com/cyang2020/brk/releases/download/latest/Brk-arm64.dmg"><img src="https://img.shields.io/badge/Download-Apple%20silicon-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Apple silicon"></a>
   <a href="https://github.com/cyang2020/brk/releases/download/latest/Brk-x86_64.dmg"><img src="https://img.shields.io/badge/Download-Intel-555555?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Intel"></a>
   <a href="https://cyang2020.github.io/brk/"><img src="https://img.shields.io/badge/Website-cyang2020.github.io%2Fbrk-1a4fe0?style=for-the-badge" alt="Website"></a>
+  <a href="https://discord.gg/4d6ShsjCYz"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Brk Discord"></a>
 </p>
 
 <p align="center">
   <b><a href="#download">Download</a></b> ·
   <a href="https://github.com/cyang2020/brk/releases">All releases</a> ·
   <a href="https://cyang2020.github.io/brk/">Website</a> ·
-  <a href="https://discord.gg/4d6ShsjCYz">Discord</a> ·
   <a href="https://github.com/cyang2020/brk/issues/new/choose">Report a bug</a> ·
-  <a href="https://github.com/cyang2020/brk/issues/2">Bug fixes</a> ·
   <a href="https://github.com/cyang2020/brk/discussions">Discussions</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
@@ -30,17 +29,16 @@
 </p>
 
 <p align="center">
+  <a href="#join-the-brk-discord">Community</a> ·
   <a href="#t-upgraded">⌘T, upgraded</a> ·
   <a href="#everyday-upgrades">Everyday upgrades</a> ·
   <a href="#ai-on-your-mac">AI on your Mac</a> ·
   <a href="#more-ai-better-than-dia">More AI</a> ·
   <a href="#arc-pixel-for-pixel">Arc, pixel for pixel</a> ·
   <a href="#move-in-from-arc-chrome-or-safari">Move in</a> ·
-  <a href="#not-in-brk-yet">Not yet</a> ·
   <a href="#download">Download</a> ·
-  <a href="#bug-fixes">Bug fixes</a> ·
-  <a href="#join-the-community">Community</a> ·
-  <a href="#feedback-and-bug-reports">Feedback</a>
+  <a href="#bug-reports-and-fixes">Bug reports and fixes</a> ·
+  <a href="#not-in-brk-yet">Not yet</a>
 </p>
 
 <picture>
@@ -55,7 +53,21 @@
 
 Everything you know from Arc is here: the sidebar, Spaces, Favorites, Pinned tabs, split view, Little Arc, Peek, Boosts, the Library, the command bar and the shortcuts. Brk rebuilds Arc 1.170 feature by feature, from Arc's own measurements. On top of that it adds the things Arc never had.
 
-Arc no longer gets new features. Let's maintain ~~Arc~~ Brk together: [join the Brk Discord](https://discord.gg/4d6ShsjCYz).
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/media/readme/divider-light.svg">
+  <img alt="" src="docs/media/readme/divider-light.svg" width="100%">
+</picture>
+
+## Join the Brk Discord
+
+<p align="center"><b>Let's maintain <s>Arc</s> Brk together.</b></p>
+
+<p align="center">
+  <a href="https://discord.gg/4d6ShsjCYz"><img src="https://img.shields.io/badge/Join%20the-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Brk Discord"></a>
+</p>
+
+Arc no longer gets new features, and many people still use it every day. Brk is built so they can keep the browser they know. Everyone is welcome in the [Brk Discord](https://discord.gg/4d6ShsjCYz). Ask questions, share your setup and workflows, tell us where Brk still differs from Arc, discuss ideas, or help test fixes before they ship. Confirmed bugs and development work are tracked on GitHub, and longer threads can go to [Discussions](https://github.com/cyang2020/brk/discussions). To contribute code, see [`CONTRIBUTING.md`](CONTRIBUTING.md). Brk is MIT licensed.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
@@ -83,7 +95,7 @@ Inspired by Raycast, the command bar does much more than open pages. Type, and t
 | `color` + Tab, or `#ff5500` | A colour in hex, RGB and HSL. |
 | `window` + Tab, or `left half` | Put the window on a half, centre it, maximise it or move it to the next display. |
 | `split` + Tab | Open a tab or a page beside the current one. |
-| `claude`, `gpt`, `gemini`, `cursor` + Tab | Ask that agent, with the current tab attached. |
+| `claude`, `codex`, `gemini`, `cursor` + Tab | Ask that agent, with the current tab attached. `gpt` also opens Codex. |
 | `page`, `summarize` + Tab | Ask about the page you are on, or summarise it. |
 | A site's name + Tab | Search inside that site. |
 | A command, such as `dark mode` or `new space` | Run it. Every menu command is reachable by name. |
@@ -125,7 +137,7 @@ The ordinary results (open tabs, history, suggestions, top sites) are ranked by 
   <img src="docs/media/local-agents-and-models.png" width="800" alt="Settings: Claude Code as the AI, and the models on this Mac">
 </p>
 
-**No new subscription.** Brk uses the Claude Code or Codex already installed on your Mac, signed in to the Claude or ChatGPT plan you already pay for. No API key and no Brk account.
+**No new subscription.** Brk runs the coding agent signed in on your Mac (Claude, Codex, Gemini, Cursor or OpenCode) on the plan you already pay for. There is no Brk account. To use your own Anthropic or OpenAI API key instead, add it under Settings → Max → Accounts. That service then bills you per token.
 
 **The small jobs never leave your Mac.** Naming tabs and groups, tidying Today into groups and spotting duplicate tabs can run on small models on your Mac (Settings → Max → On This Mac). They don't call a large model, cost nothing and keep working offline.
 
@@ -179,7 +191,7 @@ The ordinary results (open tabs, history, suggestions, top sites) are ranked by 
   <img src="docs/media/arc-brk-window.png" width="900" alt="Arc 1.170 on the left, Brk on the right">
 </p>
 
-Arc 1.170 on the left, Brk on the right, same window and same pages: 0.14% of the pixels differ, and the visible one is Arc's update button. Sizes, colours, timings and rules are read from Arc's own app and compared with the real Arc on the same screen. Of the 148 Arc features in the ledger (`docs/completion/features.json`), 124 are verified.
+Arc 1.170 on the left, Brk on the right, same window and same pages: 0.14% of the pixels differ, and the visible one is Arc's update button. Sizes, colours, timings and rules are read from Arc's own app and compared with the real Arc on the same screen. Of the 148 Arc features in the ledger (`docs/completion/features.json`), 126 are verified.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
@@ -226,47 +238,33 @@ Download the disk image for your Mac:
 | Apple silicon (M1 and later) | **[Brk-arm64.dmg](https://github.com/cyang2020/brk/releases/download/latest/Brk-arm64.dmg)** |
 | Intel | **[Brk-x86_64.dmg](https://github.com/cyang2020/brk/releases/download/latest/Brk-x86_64.dmg)** |
 
-Open it and drag **Brk** into Applications. Builds are signed with a Developer ID and notarized by Apple, so they open with a double-click. Needs macOS 14 Sonoma or later. The links always fetch the newest build: [Latest build](https://github.com/cyang2020/brk/releases/tag/latest) is rebuilt from `main` after every change. Browse [all releases and version history](https://github.com/cyang2020/brk/releases) for older versions and release notes. How the pipeline works is in [`docs/release.md`](docs/release.md).
+Open it and drag **Brk** into Applications. Builds are signed with a Developer ID and notarized by Apple, so they open with a double-click. Needs macOS 14 Sonoma or later. The links always fetch the newest version. Older versions and their notes are on the [Releases page](https://github.com/cyang2020/brk/releases). How the pipeline works is in [`docs/release.md`](docs/release.md).
 
-## Bug fixes
+### Updates
 
-Each version's release notes list what it fixes, on the [Releases page](https://github.com/cyang2020/brk/releases). The fixes from the builds before versions began are in the [0.0.1 notes](https://github.com/cyang2020/brk/releases/tag/v0.0.1). In Brk, **Help › Release Notes** shows the notes for your version and the ones before it. To get a notification for each new fix, click **Subscribe** on the [Bug fixes issue](https://github.com/cyang2020/brk/issues/2).
+Brk checks for signed updates and shows a button above the sidebar's Spaces dock when one is available. Click it to download the update in the app, then restart into the new version. Tabs and settings stay in place. You can also choose **Brk › Check for Updates…**.
 
-## Join the community
+Copies that show version 0.1.0 were installed before 0.0.1 and have no updater. Install the [latest release](https://github.com/cyang2020/brk/releases/latest) from its disk image once. Later versions update in the app.
 
-<p align="center"><b>Let's maintain <s>Arc</s> Brk together.</b></p>
+## Bug reports and fixes
 
-<p align="center">
-  <a href="https://discord.gg/4d6ShsjCYz"><img src="https://img.shields.io/badge/Join%20the-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Brk Discord"></a>
-</p>
+Report a bug, or a place where Brk behaves differently from Arc, in one of these ways:
 
-Many people still use Arc every day, and Brk is built to keep that browser going. Everyone is welcome in the [Brk Discord](https://discord.gg/4d6ShsjCYz). Ask questions, share your setup and workflows, tell us where Brk still differs from Arc, discuss ideas, or help test fixes before they ship. Confirmed bugs and development work are tracked on GitHub.
+- **From inside Brk.** Help › **Report a Bug…** or **Send Feedback…** opens a GitHub issue with your Brk version, macOS version and Mac type already filled in. Nothing is sent until you submit it. After a crash, Brk offers once to report it on the next launch.
+- **On GitHub.** [Open an issue](https://github.com/cyang2020/brk/issues/new/choose) and pick **Bug report**, **Feature request or feedback**, or **Arc parity**. Use **Arc parity** for "Arc does X, Brk does Y", with a screenshot.
+- **Security issues.** Report them privately through [GitHub's security advisories](https://github.com/cyang2020/brk/security/advisories/new), as described in [`SECURITY.md`](.github/SECURITY.md).
 
-## Feedback and bug reports
-
-- **From inside Brk:** Help › **Report a Bug…** or **Send Feedback…** opens a GitHub issue with your Brk version, macOS version and Mac type already filled in. Nothing is sent until you submit it. After a crash, Brk offers once to report it on the next launch.
-- **On GitHub:** [open an issue](https://github.com/cyang2020/brk/issues/new/choose) and pick **Bug report**, **Feature request or feedback**, or **Arc parity**. The last one is for "Arc does X, Brk does Y", with a screenshot.
-- **Questions and ideas:** [Discussions](https://github.com/cyang2020/brk/discussions).
-- **What has been fixed:** each version's notes on the [Releases page](https://github.com/cyang2020/brk/releases), or subscribe to [Bug fixes on GitHub](https://github.com/cyang2020/brk/issues/2) to get a notification for each new fix.
-- **Security issues:** report them privately through [GitHub's security advisories](https://github.com/cyang2020/brk/security/advisories/new), as described in [`SECURITY.md`](.github/SECURITY.md).
-- **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING.md). Brk is MIT licensed.
-
-## Updates
-
-From version 0.0.1, Brk checks for signed updates and shows a button above the sidebar's Spaces dock when one is available. Click it to download the update in the app, then restart into the new version. Tabs and settings stay in place. You can also choose **Brk > Check for Updates…**.
-
-Copies installed before 0.0.1 need one manual update from the [latest release](https://github.com/cyang2020/brk/releases/latest). Later versions use the in-app updater. Each release has its own version and a list of changes; **Help > Release Notes** opens the notes bundled with your installed version.
+Each version's release notes list what it fixes, on the [Releases page](https://github.com/cyang2020/brk/releases). The fixes from the builds before versions began are in the [0.0.1 notes](https://github.com/cyang2020/brk/releases/tag/v0.0.1). In Brk, **Help › Release Notes** shows the notes for your version and the ones before it. To get a GitHub notification for each new version, choose **Watch › Custom › Releases** at the top of the [repository page](https://github.com/cyang2020/brk).
 
 ## Not in Brk yet
 
 <details>
 <summary><b>The Arc features Brk has not verified yet, and why</b></summary>
 
-These are the Arc features that Brk has not fully verified, with the reasons recorded in the ledger, followed by two smaller gaps.
+These are the Arc features that Brk has not fully verified, with the reasons recorded in the ledger.
 
 **Blocked**
 
-- **Extension buttons and their pop-ups (A097).** BrkCore hosts Chromium's native extension pop-ups, with the owning tab retained for extension APIs.
 - **Pixel identity on every screen (A148).** The screens that need a signed-in Arc have no reference pictures yet, so the screen-by-screen comparison is not complete.
 
 **Left out on purpose**
@@ -289,18 +287,14 @@ These are the Arc features that Brk has not fully verified, with the reasons rec
 - **Tab groups (A035).** There is no Arc picture of a group header to compare against, because Arc's Tidy could not be triggered on the test Mac.
 - **Save, print, share and cast (A044).** Casting has not been tried with a real receiver, since there is none near the test Mac. Sending a job to a printer and the Share menu have not been checked with real input.
 - **Auto-archive banner (A082).** It is rebuilt from Arc's binary. Arc shows it only on a new account, so there is no Arc picture to compare against.
+- **Extension buttons and their pop-ups (A097).** Extensions install from the Chrome Web Store and appear in site controls, with Chromium's own pop-ups. How the pop-ups look in every extension state has not been compared with Arc.
 - **Easels (A101).** Drawing, text, moving, deleting and PNG export work. Resizing with the corner handles, undo and colour choice are missing.
-- **Library Media page (A103).** It lists Brk's own captures. There is no Arc picture of the page with content, because Arc lists the screenshot folder only after a permission prompt.
+- **Library Media page (A103).** It lists Brk's own captures. macOS screenshots are not listed, because that needs permission for the Desktop folder. There is no Arc picture of the page with content, because Arc lists the screenshot folder only after a permission prompt.
 - **Picture in picture (A104).** Picture in picture for Google Meet needs a signed-in Meet call and has not been checked.
 - **Site permissions (A108).** Camera, microphone, location and notifications have not been checked through macOS's own permission prompts, since that would change system settings.
 - **Per-site rules (A110).** The keep-alive, picture-in-picture and suspension rules work, but the "page is using the camera or microphone" case needs macOS permission and has not been checked.
 - **Onboarding (A119).** The full-window setup is driven screen by screen with real clicks and typing in a test. The "make Brk the default browser" step is left off in tests, because it changes the Mac's settings.
 - **Import from other browsers (A122).** Importing from a real Arc profile was checked: 2 Spaces with their folders and a split view, 11 pinned and Today tabs, 4 Favorites and 184 history visits, and a second import added nothing. Chrome-family import was checked on a made-up Chrome profile, including a cookie that keeps a site logged in and a password that fills in after a restart. Not yet checked with real data: Arc's own passwords and cookies (they need someone to type the Mac's password at the Keychain prompt), Chrome (not installed on the test Mac), a real Safari export and Firefox. Extensions, open tabs and payment cards are not imported yet.
-
-**Smaller known gaps**
-
-- **Little Arc's download pill.** Being built now.
-- **macOS screenshots in the Library list.** Listing them needs permission for the Desktop folder, so the list shows only Brk's own captures.
 
 </details>
 
@@ -308,7 +302,7 @@ These are the Arc features that Brk has not fully verified, with the reasons rec
 <summary><b>Build from source</b></summary>
 
 Needs macOS 14 or later and Xcode with Swift 6. Download the pinned BrkCore framework for your Mac, or build it using `engine/README.md`.
-Ready-built apps for Apple silicon and Intel, from every merge into main, are on the [Releases page](https://github.com/cyang2020/brk/releases); see [docs/release.md](docs/release.md).
+Ready-built apps of every version, for Apple silicon and Intel, are on the [Releases page](https://github.com/cyang2020/brk/releases). How they are built is in [docs/release.md](docs/release.md).
 
 ```sh
 python3 engine/download-artifact.py "$(uname -m)" --out .build/brkcore
@@ -328,7 +322,7 @@ python3 scripts/run-native.py <name> --set smoke      # native scenarios with re
 
 Which tests a change adds, and what runs before a merge, is in `docs/testing-policy.md`.
 
-- `Sources/`: the SwiftPM targets. `Brk` is the app; `BrkDomain` holds the state and its rules; `BrkSidebar`, `BrkContent`, `BrkOverlays`, `BrkLibrary` and `BrkSettings` are the UI; `BrkCoreEngine` connects the app to Chromium.
+- `Sources/`: the SwiftPM targets. Among them, `Brk` and `BrkApp` are the app; `BrkDomain` holds the state and its rules; `BrkSidebar`, `BrkContent`, `BrkOverlays`, `BrkLibrary` and `BrkSettings` are the UI; `BrkCoreEngine` connects the app to Chromium.
 - `engine/`: BrkCore, Brk's sole browser engine, with its Chromium patch series and pinned release artifacts.
 - `docs/`: the design (`docs/design/`), Arc facts (`docs/arc-anatomy/`), the feature ledger and the testing rules.
 
