@@ -281,12 +281,18 @@ Every fix, newest first, with the first build that has it (Brk › About Brk sho
 - **Security issues:** report them privately through [GitHub's security advisories](https://github.com/cyang2020/brk/security/advisories/new), as described in [`SECURITY.md`](.github/SECURITY.md).
 - **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING.md). Brk is MIT licensed.
 
+## Updates
+
+From version 0.0.1, Brk checks for signed updates and shows a button above the sidebar's Spaces dock when one is available. Click it to download the update in the app, then restart into the new version. Tabs and settings stay in place. You can also choose **Brk > Check for Updates…**.
+
+Copies installed before 0.0.1 need one manual update from the [latest release](https://github.com/cyang2020/brk/releases/latest). Later versions use the in-app updater. Each release has its own version and a list of changes; **Help > Release Notes** opens the notes bundled with your installed version.
+
 ## Not in Brk yet
 
 <details>
 <summary><b>The Arc features Brk has not verified yet, and why</b></summary>
 
-These are the 24 Arc features that Brk has not verified, with the reasons recorded in the ledger, followed by two smaller gaps.
+These are the Arc features that Brk has not fully verified, with the reasons recorded in the ledger, followed by two smaller gaps.
 
 **Blocked**
 
@@ -300,10 +306,6 @@ These are the 24 Arc features that Brk has not verified, with the reasons record
 - **Notes (A100).** Arc 1.170 has no menu or command bar entry for making a note. Arc is retiring them.
 - **Menu bar icon (A132).** Arc 1.170 has none either. There is no setting for it and no code that creates one.
 - **Ask on Page (A135).** Arc 1.170's desktop app has no entry for it. ⌘F only finds text, and neither the Tabs menu nor the Max settings list it. In Brk, the AI panel can read the page instead.
-
-**Deferred**
-
-- **Software updates and the update banner (A127, A128).** The user deferred these. Brk does not update itself. To get a newer version, download the newest disk image and drag Brk into Applications again; your tabs and settings stay.
 
 **Partly done**
 

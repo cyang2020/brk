@@ -17,6 +17,7 @@ APP="dist/$PRODUCT.app"
 swift build -c "$CONFIG" --product "$PRODUCT" --explicit-target-dependency-import-check error
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 cp "$BIN/$PRODUCT" "$APP/Contents/MacOS/$PRODUCT"
+python3 scripts/embed-sparkle.py "$BIN" "$APP"
 cp Sources/BrkBase/Resources/website-rules.json "$APP/Contents/Resources/website-rules.json" 2>/dev/null || true
 # the app icon, the same way scripts/build.sh makes it (branches without the icon script keep whatever the bundle has)
 if [ -d Sources/BrkSettings/Resources/AppIcons ]; then
@@ -39,6 +40,5 @@ fi
 [ -x scripts/declare-scripting.sh ] && scripts/declare-scripting.sh "$APP"
 # the Dock tile plug-in (branches without it keep whatever the bundle has)
 [ -x scripts/dock-tile/build-plugin.sh ] && scripts/dock-tile/build-plugin.sh "$APP"
-codesign --force --deep --sign - "$APP"
-codesign --verify --deep --strict "$APP"
+SIGN_IDENTITY=- scripts/sign-developer-id.sh "$APP"
 echo "[refresh] $APP refreshed from $BIN ($(git rev-parse --short HEAD))"

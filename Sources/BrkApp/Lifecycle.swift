@@ -209,6 +209,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             Quit.request(relaunch: true)
         }
         store.start()
+        if options.controlSocket == nil { store.appUpdates.start() }
         offerCrashReport(dataDirectory: directory)
         // AppKit can consume fullscreen Escape before it reaches NSWindow.sendEvent.
         overlayEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in

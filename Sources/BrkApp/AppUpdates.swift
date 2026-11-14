@@ -80,7 +80,6 @@ final class UpdateFeed: NSObject, SPUUpdaterDelegate {
     static func url(info: [String: Any], arm64: Bool) -> URL? {
         guard let string = info["SUFeedURL"] as? String, let configured = URL(string: string),
               ["https", "http"].contains(configured.scheme?.lowercased() ?? ""), configured.host != nil else { return nil }
-        // A custom feed, including the disposable loopback fixture, keeps its configured URL.
         guard ["appcast-arm64.xml", "appcast-x86_64.xml"].contains(configured.lastPathComponent) else { return configured }
         return configured.deletingLastPathComponent().appendingPathComponent("appcast-\(arm64 ? "arm64" : "x86_64").xml")
     }

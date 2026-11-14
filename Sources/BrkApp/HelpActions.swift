@@ -7,20 +7,17 @@ import Foundation
 /// Check for Updates… and the Help menu (`AppEffect.help`). Pages open as new tabs through `.app(.help(.open))`;
 /// alerts attach to the window the row came from.
 ///
-/// - Release Notes: `Help/release-notes.html` in the bundle, written by `scripts/declare-scripting.sh` from the
-///   build's git history.
 /// - Visit Help Center: Arc's help center, as the command bar's Help Center row.
 /// - Report a Bug… and Send Feedback… (Contact the Team is the second): GitHub's issue forms on the repository the
 ///   build came from (`BrkRepositoryURL` in Info.plist), opened in a tab with the build, macOS, the Mac's chip and the
 ///   engine filled in (`HelpLinks.newIssue`). Nothing is sent; the user reads, edits and submits the form. Brk has no
 ///   team mailbox.
 /// - After a crash, the next launch offers once to report it (`offerCrashReport`), the report's first lines filled in.
-/// - Check for Updates…: Brk does not update itself; an alert names the build and where the newest one is (the
-///   repository's Latest build release, its DMGs rebuilt after every change), with a button that opens it.
 /// - Restore Data, Record and Cancel Trace, Open Task Manager: their windows and recorder below.
 @MainActor
 final class HelpActions {
     private let engine: any WebEngine
+    private let updates: AppUpdates
     private let send: @MainActor (WindowID, Command) -> Void
     private let owner: @MainActor (WindowID) -> NSWindow?
     let trace: TraceRecorder
@@ -34,8 +31,9 @@ final class HelpActions {
     private let now: () -> Instant
 
     init(engine: any WebEngine, now: @escaping () -> Instant, send: @escaping @MainActor (WindowID, Command) -> Void,
-         owner: @escaping @MainActor (WindowID) -> NSWindow?) {
+         owner: @escaping @MainActor (WindowID) -> NSWindow?, updates: AppUpdates = AppUpdates()) {
         self.engine = engine
+        self.updates = updates
         self.now = now
         self.send = send
         self.owner = owner
@@ -58,17 +56,8 @@ final class HelpActions {
         case .reportBug: openIssue(.bug, in: window)
         case .sendFeedback: openIssue(.feedback, in: window)
         case .checkForUpdates, .installUpdate:
-            let info = BuildInfo.current(engine: engine.engineVersion)
-            if let latest = HelpLinks.latestBuild(info) {
-                alert("\(Product.name) has no update channel", HelpLinks.updateText(info), in: window, second: "Open Latest Build") { [weak self] in
-                    self?.send(window, .app(.help(.open(latest))))
-                }
-            } else {
-                let notes: String? = HelpLinks.releaseNotes() == nil ? nil : "Release Notes"
-                alert("\(Product.name) has no update channel", HelpLinks.updateText(info), in: window, second: notes) { [weak self] in
-                    self?.run(.releaseNotes, owner: window)
-                }
-            }
+            updates.message = { [weak self] title, text in self?.alert(title, text, in: window) }
+            if action == .installUpdate { updates.install() } else { updates.check() }
         case .trace:
             trace.toggle { [weak self] message in self?.alert("Trace", message, in: window) }
         case .cancelTrace: trace.cancel()
@@ -169,20 +158,6 @@ enum HelpLinks {
             lines.removeLast()
         }
         return url(logs: lines.isEmpty ? nil : lines.joined(separator: "\n"))
-    }
-
-    /// The repository's Latest build release (README, docs/release.md): signed DMGs rebuilt from main after every change.
-    /// Nil for a build that names no repository.
-    static func latestBuild(_ info: BuildInfo) -> URL? {
-        info.repository?.appendingPathComponent("releases/tag/latest")
-    }
-
-    static func updateText(_ info: BuildInfo) -> String {
-        let copy = "This copy is \(info.versionLine)\(info.commit.map { ", commit \($0)" } ?? ""). \(Product.name) does not update itself, so nothing is downloaded."
-        guard latestBuild(info) != nil else {
-            return copy + " This build names no repository; to get a newer one, pull the repository and run scripts/build.sh."
-        }
-        return copy + " The newest build is on the repository's Latest build release, rebuilt after every change: download the DMG for your Mac and replace this copy in Applications."
     }
 }
 

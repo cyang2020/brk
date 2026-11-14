@@ -880,29 +880,6 @@ enum OnboardingScenarios {
         try expect(leafTitles(fromFile.children) == ["File One", "File Two"], "the file's bookmarks in Pinned: \(leafTitles(fromFile.children))")
         app.passed("Import from Another Browser…: Back from Arc's keychain step returned to the picker, and a bookmarks file chosen in the real open panel went into Pinned")
 
-        // Brk › Check for Updates… (pressed through Accessibility): the alert names this build; a real click on Open Latest
-        // Build opens the Latest build release. Only the new tab's address is checked; its page is not waited for, and the
-        // tab is closed right away.
-        try NativeSystemInput.chooseMainMenu(pid: owner, menu: "Brk", item: "Check for Updates…")
-        var open: CGRect?
-        try app.waitUntil("the update alert opens", timeout: 8) {
-            open = NativeSystemInput.frame(pid: owner, title: "Open Latest Build", roles: ["AXButton"])
-            return open != nil
-        }
-        let alert = NativeSystemInput.staticTexts(pid: owner).map(\.text)
-        try expect(alert.contains("Brk has no update channel") && alert.contains { $0.hasPrefix("This copy is Brk ") && $0.contains("does not update itself") },
-                   "the update alert says: \(alert)")
-        _ = try app.screenshotSheet("updates")
-        let tabsBefore = Set(allTabs(try app.view()).map(\.id))
-        try clickScreen(app, CGPoint(x: open!.midX, y: open!.midY))
-        var release: ItemID?
-        try app.waitUntil("Open Latest Build opens the Latest build release in a tab", timeout: 10) {
-            release = allTabs(try app.view()).first { !tabsBefore.contains($0.id) && $0.url?.host == "github.com" && $0.url?.path.hasSuffix("/releases/tag/latest") == true }?.id
-            return release != nil
-        }
-        if let release { try app.dispatch(.tab(.close(.item(release)))) }
-        app.passed("Check for Updates… named this build and Open Latest Build opened the release page in a tab")
-
         try expect(unreadable.isEmpty, "onboarding screens with hard-to-read text:\n" + unreadable.joined(separator: "\n"))
         app.passed("on every onboarding screen, in light and in dark, every static text and every piece of text in the buttons, the name field and the passwords row stands out from its background (3:1 or more)")
     }

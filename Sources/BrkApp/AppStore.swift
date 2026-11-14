@@ -139,10 +139,18 @@ public final class AppStore {
     public var insertCaptureInEasel: (@MainActor (EaselCaptureInsertion, WindowID) -> Void)?
     let outputSheets = OutputSheets()
     var didPublish: ((AppSnapshot) -> Void)?
+    private(set) lazy var appUpdates: AppUpdates = {
+        let updates = AppUpdates()
+        updates.changed = { [weak self] in
+            guard let self, !self.isTerminating else { return }
+            self.refresh()
+        }
+        return updates
+    }()
     /// Check for Updates… and the Help menu (`AppEffect.help`).
     private(set) lazy var help = HelpActions(engine: engine, now: { [clock] in clock.now() }, send: { [weak self] window, command in
         self?.dispatch(.user(window, command))
-    }, owner: { [weak self] window in self?.windows[window]?.window ?? self?.windowController(nil)?.window })
+    }, owner: { [weak self] window in self?.windows[window]?.window ?? self?.windowController(nil)?.window }, updates: appUpdates)
     let siteDialogs = SiteDialogs()
     /// Arc's save-password card in place of Chromium's bubble (SavePromptCards.swift).
     lazy var savePromptCards: SavePromptCards = {
@@ -551,7 +559,7 @@ public final class AppStore {
     private func projected() -> AppSnapshot {
         project(state, ProjectionContext(now: clock.now(), calendar: calendar,
                                          systemScheme: NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .dark : .light,
-                                         systemLanguage: Locale.preferredLanguages.first ?? "en"))
+                                         systemLanguage: Locale.preferredLanguages.first ?? "en", softwareUpdate: appUpdates.presentation))
     }
 
     private func renderWindows() {
