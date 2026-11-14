@@ -1,6 +1,7 @@
 import BrkBase
 import BrkControl
 import BrkDomain
+import CoreGraphics
 import Foundation
 
 /// Chromium UI hosted in Brk: extension actions and page dialogs.
@@ -17,12 +18,21 @@ enum CoreScenarios {
         let url = app.site.url("page-real.html")
         let item = try app.load(url)
         let first = app.window!
+        func clickRow(in window: WindowID) throws {
+            try WindowServerKeys.ensureFrontmost(app, window)
+            let facts = try app.native(window)
+            let row = try visible(facts, .row(item)).frame
+            let frame = facts.windowFrame
+            let point = CGPoint(x: frame.minX + row.midX,
+                                y: CGDisplayBounds(CGMainDisplayID()).height - frame.maxY + row.midY)
+            try PhysicalPointer.click(app, at: point, window: window)
+        }
         let original = PageID(window: first, item: item)
         try app.waitForPageInput(original, at: url)
         let browser = try app.native().pages[original]?.browserID
         try app.evaluate(original, "marker='retained';document.title=marker")
         try waitForTitle(app, item, "retained")
-        try app.press("cmd+n")
+        try WindowServerKeys.press(app, KeyChord([.command], .n), window: first)
         var second: WindowID?
         try app.waitUntil("the second window") {
             guard case .hello(let hello) = try app.send(.hello) else { return false }
@@ -30,8 +40,8 @@ enum CoreScenarios {
             return second != nil
         }
         app.window = second
-        try app.press("escape")
-        try app.click(.row(item))
+        try WindowServerKeys.press(app, KeyChord([], .escape), window: second!)
+        try clickRow(in: second!)
         let moved = PageID(window: second!, item: item)
         try app.waitForPageInput(moved, at: url)
         try expect(try app.native().pages[moved]?.browserID == browser, "handoff created another Chromium tab")
@@ -42,13 +52,13 @@ enum CoreScenarios {
 
         try SitesSettingsRealScenarios.openDetails(app)
         try SitesSettingsRealScenarios.pressInDetails(app, title: "Suspend this site while its tab is hidden", roles: ["AXCheckBox"])
-        try app.press("escape")
+        try WindowServerKeys.press(app, KeyChord([], .escape), window: second!)
         let other = try app.load(app.site.url("page2.html"))
         try app.waitForPageInput(PageID(window: second!, item: other), at: app.site.url("page2.html"))
         try app.waitUntil("the background page frozen by Chromium", timeout: 30) {
             try app.native().ownedPages?[moved]?.resourceFrozen == true
         }
-        try app.click(.row(item))
+        try clickRow(in: second!)
         try app.waitForPageInput(moved, at: url)
         try app.waitUntil("the visible page resumed") { try app.native().pages[moved]?.resourceFrozen == false }
         try app.evaluate(moved, "document.title=marker")
@@ -56,7 +66,7 @@ enum CoreScenarios {
 
         app.window = first
         try WindowServerKeys.ensureFrontmost(app, first)
-        try app.click(.row(item))
+        try clickRow(in: first)
         try app.waitForPageInput(original, at: url)
         try expect(try app.native().pages[original]?.browserID == browser, "the return handoff recreated the tab")
         try app.evaluate(original, "document.title=marker")
