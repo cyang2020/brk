@@ -899,7 +899,7 @@ final class ReduceSpecTests: XCTestCase {
 
     /// .clockTick archives an idle Today split holding the History tab (its brk:// address failed the archive's check, so
     /// the sweep skipped it for good), and "Auto archived" counts only what went: a split the archive cannot hold (an
-    /// extension page in it) stays, unannounced, instead of a toast every other tick
+    /// temporary data page in it) stays, unannounced, instead of a toast every other tick.
     func test_clocktickArchivesASplitWithTheHistoryTabAndAnnouncesOnlyWhatItArchived() throws {
         let d = Driver()
         let home = d.todayIDs[0]
@@ -918,7 +918,7 @@ final class ReduceSpecTests: XCTestCase {
         e.user(.split(.addPane)); e.user(.commandBar(.submit("https://example.com/right")))
         let split = try XCTUnwrap(e.view.content.split)
         let pane = try XCTUnwrap(e.view.content.panes.first { $0.focused }?.tab)
-        e.page(pane, .committed(url("chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html")))
+        e.page(pane, .committed(url("data:text/plain,temporary")))
         e.user(.tab(.focus(first)))
         e.user(.tabTools(.dismissToast))
         e.advance(.seconds(13 * 3_600))
