@@ -91,13 +91,19 @@ def structured(prompt, schema):
             out[key] = bool(re.search(r'(?i)\b(ai agents?|ai assistant|language model)\b', str(data.get('state', '')))) if key == 'hidden_instructions' else True
     return out
 
+def publish_pid(path, pid):
+    # Tests use the file's presence as readiness, so expose only a complete PID.
+    pending = path + '.pending'
+    with open(pending, 'w') as f: f.write(str(pid))
+    os.replace(pending, path)
+
 def background_child():
     """A command an agent ran, in a process group of its own: only a stop that walks the tree finds it."""
     # Its parent never waits for it; without this a stopped child stays as a zombie that still answers kill(pid, 0).
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)
     child = subprocess.Popen(['/bin/sleep', '300'], start_new_session=True)
     if path := os.environ.get('BRK_AI_FIXTURE_CHILD'):
-        with open(path, 'w') as f: f.write(str(child.pid))
+        publish_pid(path, child.pid)
     return child
 
 def hang_ignoring_term():
@@ -242,7 +248,7 @@ def claude():
             bridge['started'] = True
             signal.signal(signal.SIGCHLD, signal.SIG_IGN)
             time.sleep(.2)
-            with open(path, 'w') as f: f.write(str(subprocess.Popen(['/bin/sleep', '300']).pid))
+            publish_pid(path, subprocess.Popen(['/bin/sleep', '300']).pid)
         # The model the agent really runs, as a full id: what is chosen, else the fixture's own default.
         chosen = sys.argv[sys.argv.index('--model') + 1] if '--model' in sys.argv else 'fixture-opus'
         put({'type': 'system', 'subtype': 'init', 'session_id': session, 'model': 'claude-' + chosen})
