@@ -18,6 +18,7 @@ swift build -c "$CONFIG" --product "$PRODUCT" --explicit-target-dependency-impor
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 cp "$BIN/$PRODUCT" "$APP/Contents/MacOS/$PRODUCT"
 python3 scripts/embed-sparkle.py "$BIN" "$APP"
+python3 scripts/release.py configure-updates --app "$APP" --arch "$(uname -m)"
 cp Sources/BrkBase/Resources/website-rules.json "$APP/Contents/Resources/website-rules.json" 2>/dev/null || true
 # the app icon, the same way scripts/build.sh makes it (branches without the icon script keep whatever the bundle has)
 if [ -d Sources/BrkSettings/Resources/AppIcons ]; then

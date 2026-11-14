@@ -8,6 +8,7 @@ from email.utils import format_datetime
 import html
 import json
 from pathlib import Path
+import plistlib
 import re
 import subprocess
 import xml.etree.ElementTree as ET
@@ -33,6 +34,17 @@ def repository_name(value):
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", value):
         raise ValueError("repository must be owner/name")
     return value
+
+
+def updater_metadata(root, arch):
+    if arch not in ('arm64', 'x86_64'):
+        raise ValueError('updater architecture must be arm64 or x86_64')
+    key = (root / 'assets/updates/ed25519.pub').read_text().strip()
+    if len(base64.b64decode(key, validate=True)) != 32:
+        raise ValueError('updater public key must contain 32 bytes')
+    return dict(SUFeedURL='https://github.com/cyang2020/brk/releases/download/latest/appcast-' + arch + '.xml',
+                SUPublicEDKey=key, SUEnableAutomaticChecks=True, SUScheduledCheckInterval=28800,
+                SUSendProfileInfo=False, SUVerifyUpdateBeforeExtraction=True)
 
 
 @dataclass(frozen=True)
@@ -175,6 +187,9 @@ def main():
     validate.add_argument("--commit")
     validate.add_argument("--build")
     commands.add_parser("version")
+    metadata = commands.add_parser('configure-updates')
+    metadata.add_argument('--app', type=Path, required=True)
+    metadata.add_argument('--arch', choices=('arm64', 'x86_64'), required=True)
     markdown = commands.add_parser("markdown")
     markdown.add_argument("--signed", choices=("true", "false"), default="false")
     markdown.add_argument("--build", default="1")
@@ -204,6 +219,11 @@ def main():
             print(json.dumps({"version": release.version, "published": published}))
         elif args.command == "version":
             print(release.version)
+        elif args.command == 'configure-updates':
+            path = args.app / 'Contents/Info.plist'
+            info = plistlib.loads(path.read_bytes())
+            info.update(updater_metadata(args.root, args.arch))
+            path.write_bytes(plistlib.dumps(info))
         elif args.command == "markdown":
             print(release.markdown(args.signed == "true", args.build, args.commit), end="")
         elif args.command == "html":

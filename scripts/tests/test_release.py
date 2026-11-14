@@ -119,7 +119,7 @@ class ReleaseTests(unittest.TestCase):
             (out / ('appcast-' + arch + '.xml')).write_text(release.appcast(
                 current, 'owner/repo', arch, '43', archive, base64.b64encode(bytes(64)).decode(), datetime.now(timezone.utc)))
 
-        def run_publisher(kind, published, target='one'):
+        def run_publisher(kind, published, target='one', latest_build=None):
             calls = []
             def fake_run(command, **kwargs):
                 calls.append(command)
@@ -132,15 +132,23 @@ class ReleaseTests(unittest.TestCase):
                         if not published:
                             return subprocess.CompletedProcess(command, 1, '', 'HTTP 404')
                         result = {'draft': False}
+                    elif endpoint == 'releases/tags/latest' and latest_build is not None:
+                        result = {'assets': [{'name': 'release.json'}]}
                     elif endpoint in ('releases/tags/latest', 'git/ref/tags/latest'):
                         return subprocess.CompletedProcess(command, 1, '', 'HTTP 404')
+                elif command[1:4] == ['release', 'download', 'latest']:
+                    (self.root / 'current-release.json').write_text(json.dumps({'build': latest_build}))
                 return subprocess.CompletedProcess(command, 0, json.dumps(result), '')
             previous = Path.cwd()
             try:
                 os.chdir(self.root)
                 with patch.dict(os.environ, {'GH_REPO': 'owner/repo', 'VERSION': '0.0.1', 'GITHUB_SHA': 'one', 'KIND': kind}), \
                      patch.object(subprocess, 'run', side_effect=fake_run):
-                    exec(compile(publisher, 'release-workflow-publisher', 'exec'), {})
+                    try:
+                        exec(compile(publisher, 'release-workflow-publisher', 'exec'), {})
+                    except SystemExit as error:
+                        if error.code not in (None, 0):
+                            raise
             finally:
                 os.chdir(previous)
             return calls
@@ -157,6 +165,11 @@ class ReleaseTests(unittest.TestCase):
             run_publisher('release', False, target='other')
         with self.assertRaisesRegex(SystemExit, 'became public'):
             run_publisher('release', True)
+        older = run_publisher('release', False, latest_build=44)
+        stable = next(call for call in older if call[1:4] == ['release', 'edit', 'v0.0.1'])
+        self.assertIn('--latest=false', stable)
+        self.assertNotIn('--latest', stable)
+        self.assertFalse(any(call[1:4] == ['release', 'upload', 'latest'] for call in older))
 
     @unittest.skipUnless(sys.platform == 'darwin', 'bundle declaration uses macOS PlistBuddy')
     def test_real_bundle_help_and_plist_agree_with_version_authority(self):
@@ -176,6 +189,15 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(metadata['CFBundleVersion'], '43')
         self.assertIn('<h2>Brk ' + current.version + '</h2>', (contents / 'Resources/Help/release-notes.html').read_text())
         self.assertIn('install this release from the disk image once', (contents / 'Resources/Help/release-notes.html').read_text())
+        configured = subprocess.run([sys.executable, str(ROOT / 'scripts/release.py'), 'configure-updates',
+                                     '--app', str(app), '--arch', 'arm64'], capture_output=True, text=True)
+        self.assertEqual(configured.returncode, 0, configured.stderr)
+        metadata = plistlib.loads(plist.read_bytes())
+        self.assertEqual(metadata['CFBundleVersion'], '43')
+        self.assertTrue(metadata['SUFeedURL'].endswith('/appcast-arm64.xml'))
+        self.assertEqual(len(base64.b64decode(metadata['SUPublicEDKey'])), 32)
+        self.assertTrue(metadata['SUVerifyUpdateBeforeExtraction'])
+        self.assertIn('Sparkle updater', (contents / 'Resources/Help/credits.html').read_text())
 
 
 if __name__ == '__main__':

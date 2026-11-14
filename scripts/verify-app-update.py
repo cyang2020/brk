@@ -204,7 +204,8 @@ def verify(args, mode):
         source, target = folder / 'current/Brk.app', folder / 'target/Brk.app'
         control, data = folder / 'control.sock', folder / 'data'
         token = uuid.uuid4().hex[:12]
-        name, bundle_id = 'BrkUpdateFixture' + token, 'dev.brk.updatefixture.' + token
+        name = 'Brk' if mode == 'ui' else 'BrkUpdateFixture' + token
+        bundle_id = 'dev.brk.updatefixture.' + token
         environment = dict(BRK_DATA_DIR=str(data), BRK_CONTROL_SOCKET=str(control),
                            BRK_START_URL=base + '/page.html', BRK_TEST_NO_GLOBAL_SHORTCUT='1')
         secret, public = signing_key(folder)
@@ -233,16 +234,34 @@ def verify(args, mode):
             dispatch(control, {'app': {'_0': {'help': {'_0': {'checkForUpdates': {}}}}}})
             until('a real appcast update offer', lambda: (view(control)['sidebar'].get('update') or {}).get('available'))
             screenshot(control, output / 'available.png')
-            native_click(control, first['pid'])
-            if mode == 'reject':
-                until('signature rejection', lambda: (view(control)['sidebar'].get('update') or {}).get('failed'), timeout=60)
+            if mode == 'ui':
+                request(control, {'setWindowFrame': {'frame': [[320, 180], [1280, 776]]}})
+                geometry = {}
+                for appearance, color in [('light', [0.95, 0.918, 0.894]), ('dark', [0.4236151278, 0.7285773754, 0.8512415886])]:
+                    theme = dict(colors=[dict(zip(('red', 'green', 'blue', 'alpha'), [*color, 1]))],
+                                 wheel='analogous', texture='grain', noise=0.5, intensity=0.25, appearance=appearance)
+                    dispatch(control, {'space': {'_0': {'update': {'_0': space, 'theme': theme}}}})
+                    time.sleep(0.5)
+                    native = request(control, {'native': {}})['native']['_0']
+                    geometry[appearance] = native['computed']['sidebar']['updateBanner']
+                    screenshot(control, output / f'{appearance}.png')
+                (output / 'geometry.json').write_text(json.dumps(geometry, indent=2) + '\n')
+                result = dict(mode=mode, passed=True, measured=['light', 'dark'], geometry=geometry)
+            elif mode in ('reject', 'offline'):
+                if mode == 'offline':
+                    server.shutdown()
+                    server.server_close()
+                native_click(control, first['pid'])
+                until('update rejection', lambda: (view(control)['sidebar'].get('update') or {}).get('failed'), timeout=60)
                 after = hello(control)
                 installed = plistlib.loads((source / 'Contents/Info.plist').read_bytes())
                 if after['pid'] != first['pid'] or installed['CFBundleVersion'] != '42':
                     raise RuntimeError('An unauthenticated update replaced or restarted the application')
                 screenshot(control, output / 'rejected.png')
-                result = dict(mode=mode, passed=True, sourcePID=first['pid'], signatureRejected=True, build=installed['CFBundleVersion'])
+                result = dict(mode=mode, passed=True, sourcePID=first['pid'], build=installed['CFBundleVersion'])
+                result['signatureRejected' if mode == 'reject' else 'offlineRejected'] = True
             else:
+                native_click(control, first['pid'])
                 after = until('updated application relaunch', lambda: (h if (h := hello(control))['pid'] != first['pid'] else None), timeout=90)
                 installed = plistlib.loads((source / 'Contents/Info.plist').read_bytes())
                 if installed['CFBundleVersion'] != '44' or installed['CFBundleShortVersionString'] != '0.0.1':
@@ -270,7 +289,7 @@ def main():
     parser.add_argument('--app', required=True, type=Path)
     parser.add_argument('--sign-tool', required=True, type=Path)
     parser.add_argument('--out', required=True, type=Path)
-    parser.add_argument('--mode', choices=['install', 'reject', 'all'], default='all')
+    parser.add_argument('--mode', choices=['ui', 'install', 'reject', 'offline', 'all'], default='all')
     parser.add_argument('--locked', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     args.app, args.sign_tool, args.out = args.app.resolve(), args.sign_tool.resolve(), args.out.resolve()
@@ -279,7 +298,7 @@ def main():
                                 '--lock', '/tmp/brk-core-native.lock', '--', sys.executable,
                                 str(Path(__file__).resolve()), *sys.argv[1:], '--locked'])
     args.out.mkdir(parents=True, exist_ok=True)
-    for mode in ['install', 'reject'] if args.mode == 'all' else [args.mode]:
+    for mode in ['ui', 'install', 'reject', 'offline'] if args.mode == 'all' else [args.mode]:
         verify(args, mode)
     return 0
 

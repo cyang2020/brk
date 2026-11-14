@@ -35,6 +35,7 @@ Manual runs on other branches create a draft `ci-test-<run id>` release. They do
 | `markdown --signed true --build <number> --commit <sha>` | The current curated entry with installation and build information. |
 | `html` | The current version's permanent `release-notes.html` asset. |
 | `html --history` | All entries through the current version, newest first, for the app's offline Help page. |
+| `configure-updates --app <app> --arch arm64` | Refreshes the feed and public signing key in a development app before signing. |
 | `appcast --repository owner/repo --arch arm64 --build <number> --archive Brk-arm64.dmg --signature-file <file>` | A feed that refers only to this version's permanent assets. The signature file contains the base64 Ed25519 signature from `sign_update -p`. |
 
 `CFBundleShortVersionString` and `sparkle:shortVersionString` use `VERSION`. `CFBundleVersion` and `sparkle:version` use `GITHUB_RUN_NUMBER`. Build numbers must keep increasing even though the display version resets from the old 0.1.0 to 0.0.1. `BRK_VERSION`, when supplied to a local build, must agree with `VERSION`. `BRK_BUILD_NUMBER` defaults to 1 locally.

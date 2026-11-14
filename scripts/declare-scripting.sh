@@ -5,7 +5,7 @@
 # - BrkGitCommit (the short commit) and BrkRepositoryURL (the origin remote as an https address) in Info.plist, for
 #   Copy <Product> Info, Check for Updates… and Contact the Team;
 # - Resources/Help/release-notes.html, Help > Release Notes: curated version history from releases/*.md;
-# - Resources/Help/credits.html, About's "other open source software": the Chromium and retained FindEditorScript licences.
+# - Resources/Help/credits.html, About's "other open source software": Chromium, FindEditorScript and Sparkle licences.
 #
 #   scripts/declare-scripting.sh <path to .app>
 #
@@ -52,6 +52,7 @@ print("<!doctype html><meta charset=\"utf-8\"><title>Credits</title>"
       "<style>body{font:14px -apple-system,sans-serif;max-width:760px;margin:40px auto}pre{white-space:pre-wrap}</style>"
       "<h1>" + html.escape(product) + " Credits</h1>"
       "<p>BrkCore is built from Chromium. Its components and licences are listed at <code>chrome://credits</code>.</p>"
-      "<h2>Page find and editing script</h2><pre>" + html.escape(license) + "</pre>")
+      "<h2>Page find and editing script</h2><pre>" + html.escape(license) + "</pre>"
+      "<h2>Sparkle updater</h2><pre>" + html.escape(pathlib.Path("docs/licenses/Sparkle.txt").read_text()) + "</pre>")
 ' "$PRODUCT" > "$APP/Contents/Resources/Help/credits.html"
 echo "[scripting] $APP: $PRODUCT.sdef, commit ${COMMIT:-none}, repository ${REPO:-none}, release notes, credits"

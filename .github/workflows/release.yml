@@ -453,6 +453,11 @@ jobs:
                   enclosure.get('length') != str(archive.stat().st_size) or
                   not enclosure.get('{' + ns['sparkle'] + '}edSignature')):
                   raise SystemExit('Appcast does not match its release archive')
+          latest = api('releases/tags/latest')
+          newer_latest = False
+          if latest and any(asset['name'] == 'release.json' for asset in latest['assets']):
+              gh('release', 'download', 'latest', '--pattern', 'release.json', '--output', 'current-release.json')
+              newer_latest = json.loads(pathlib.Path('current-release.json').read_text())['build'] > manifest['build']
           tag = 'v' + version
           ref = api('git/ref/tags/' + tag)
           if ref:
@@ -472,15 +477,12 @@ jobs:
           elif release['draft']:
               gh('release', 'upload', tag, *base, *feeds, '--clobber')
           if not release or release['draft']:
-              gh('release', 'edit', tag, '--draft=false', '--prerelease=false', '--latest',
+              gh('release', 'edit', tag, '--draft=false', '--prerelease=false', '--latest=false' if newer_latest else '--latest',
                  '--title', 'Brk ' + version, '--notes-file', 'out/notes.md')
           # A published v* release is never edited or uploaded again.
-          latest = api('releases/tags/latest')
-          if latest and any(asset['name'] == 'release.json' for asset in latest['assets']):
-              gh('release', 'download', 'latest', '--pattern', 'release.json', '--output', 'current-release.json')
-              if json.loads(pathlib.Path('current-release.json').read_text())['build'] > manifest['build']:
-                  print('Keeping the newer latest update feed')
-                  raise SystemExit(0)
+          if newer_latest:
+              print('Keeping the newer latest release and update feed')
+              raise SystemExit(0)
           if api('git/ref/tags/latest'):
               api('git/refs/tags/latest', '-X', 'PATCH', '-f', 'sha=' + commit, '-F', 'force=true')
           else:
