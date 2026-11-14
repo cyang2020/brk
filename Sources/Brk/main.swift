@@ -19,6 +19,8 @@ MainActor.assumeIsolated {
     CrashBacktrace.install()
     // Logins an import staged while Chromium held a profile's Login Data go in now, before Chromium opens it.
     BrowserImportStartup.applyPendingLogins()
+    // Before Chromium reads them: the native messaging manifests 1Password and the like gave the other browsers.
+    BrowserImportStartup.adoptNativeMessagingHosts()
     let runtime: BrkCoreRuntime
     do {
         runtime = try BrkCoreRuntime(userDataDirectory: Product.dataDirectory().appendingPathComponent("Chromium", isDirectory: true),

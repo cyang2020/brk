@@ -956,7 +956,7 @@ final class RowView: HoverView {
         }
         while segments.count > panes.count { segments.removeLast().removeFromSuperview() }
         for (segment, pane) in zip(segments, panes) { segment.render(pane, palette: palette) }
-        title.isHidden = !panes.isEmpty
+        title.isHidden = !panes.isEmpty || renameField != nil
     }
 
     override func layout() {
@@ -998,12 +998,14 @@ final class RowView: HoverView {
             title.frame.origin.y += Draw.renameHintTitleShift.value
             suggestion.frame = CGRect(x: title.frame.minX, y: Draw.renameHintTop.value - 2, width: max(0, g.selection.maxX - Draw.titleTrailing.value - title.frame.minX), height: suggestion.fittingSize.height)
         }
-        // Arc's group header starts its title where a tab's favicon starts (no icon column).
+        // Arc's group header starts its title where a tab's favicon starts (no icon column); its rename field too.
+        var field = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
         if case .folder(let folder)? = row, folder.group {
             let start = g.selection.minX + Draw.groupTitleLeading.value
             title.frame = CGRect(x: start, y: title.frame.minY, width: max(0, trailing - start), height: height)
+            field = CGRect(x: start, y: field.minY, width: max(0, field.maxX - start), height: field.height)
         }
-        renameField?.frame = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
+        renameField?.frame = field
         layoutSegments(g)
     }
 

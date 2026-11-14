@@ -80,4 +80,12 @@ public enum BrowserImportStartup {
         // The rows were encrypted under Brk's key when they were staged; merging needs no key.
         LoginDataWriter.mergeStaged(chromiumRoot: BrkProfileFolders.chromiumRoot.resolvingSymlinksInPath(), staging: staging)
     }
+
+    /// Password managers' desktop apps registered with the other browsers become reachable from Brk's extensions too
+    /// (`NativeMessagingHosts`). A test profile (`BRK_DATA_DIR`) keeps none of the user's.
+    public static func adoptNativeMessagingHosts(environment: [String: String] = ProcessInfo.processInfo.environment) {
+        guard (environment["BRK_DATA_DIR"] ?? "").isEmpty else { return }
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        NativeMessagingHosts.adopt(into: BrkProfileFolders.chromiumRoot, support: support)
+    }
 }
