@@ -45,3 +45,7 @@ time	event	release	asset_id	asset	downloads
 2026-11-13T10:39:39Z	before-publish 0.1.0-40.e8ba12d	latest	742819406	Brk-x86_64.dmg	0
 2026-11-14T03:37:10Z	daily	latest	743259775	Brk-arm64.dmg	8
 2026-11-14T03:37:10Z	daily	latest	743259780	Brk-x86_64.dmg	0
+2026-11-14T04:55:33Z	before-publish 0.1.0-41.fcc59b2	latest	743259775	Brk-arm64.dmg	11
+2026-11-14T04:55:33Z	before-publish 0.1.0-41.fcc59b2	latest	743259780	Brk-x86_64.dmg	1
+2026-11-14T04:55:33Z	before-publish 0.1.0-41.fcc59b2	brkcore-156.0.8078.88-26767050dc	746301400	BrkCore-arm64.tar.xz	3
+2026-11-14T04:55:33Z	before-publish 0.1.0-41.fcc59b2	brkcore-156.0.8078.88-26767050dc	746301403	BrkCore-x86_64.tar.xz	3
