@@ -4,12 +4,14 @@ import Foundation
 
 /// Inputs to the projection besides state: the clock's time and the calendar for archive buckets.
 public struct ProjectionContext: Sendable {
+    public let softwareUpdate: UpdatePresentation?
     public let now: Instant
     public let calendar: Calendar
     public let systemScheme: Scheme
     /// The system's first preferred language ("en-US"): pages in another language offer translation into it.
     public let systemLanguage: String
-    public init(now: Instant, calendar: Calendar, systemScheme: Scheme = .light, systemLanguage: String = "en") {
+    public init(now: Instant, calendar: Calendar, systemScheme: Scheme = .light, systemLanguage: String = "en", softwareUpdate: UpdatePresentation? = nil) {
+        self.softwareUpdate = softwareUpdate
         self.systemScheme = systemScheme
         self.systemLanguage = systemLanguage
         self.now = now
@@ -604,6 +606,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         boostEditor: state.boostProfile(in: id) == session.boostEditor?.profile ? session.boostEditor : nil,
         websiteAppearance: websiteAppearance
     )
+    snapshot.sidebar.update = ctx.softwareUpdate
     snapshot.history = history
     if history != nil, let profile = historyProfile, let results = session.meaning[.history] {
         snapshot.historyMeaning = HistoryMeaning(text: results.text, rows: state.historyMeaningRows(results, profile: profile))

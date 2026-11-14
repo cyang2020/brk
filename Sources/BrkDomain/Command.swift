@@ -384,8 +384,9 @@ public enum StandardEdit: String, Hashable, Sendable, Codable, CaseIterable {
 /// Check for Updates… and the Help menu (Arc rows 7, 179 to 189). Most run in BrkApp (`AppEffect.help`); `open` is
 /// the page BrkApp resolved for one of them, opened as a new tab of the dispatching window.
 public enum HelpAction: Hashable, Sendable, Codable {
-    /// Brk has no update feed: an alert names the running build and says how a new one is made.
+    /// Check the signed application update feed.
     case checkForUpdates
+    case installUpdate
     /// The release notes bundled with this build (made from the build's git history).
     case releaseNotes
     /// Arc's help center (the command bar's Help Center row opens the same page).
