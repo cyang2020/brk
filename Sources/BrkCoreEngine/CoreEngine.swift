@@ -758,6 +758,18 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
 
     // MARK: BrkCoreBrowserDelegate: an extension's action popup
 
+    public func browser(_ browser: any BrkCoreBrowser, requestsOpeningExtensionOptions url: URL, extensionID: String, source: any BrkCoreWebContents) {
+        guard let page = livePages.first(where: { $0.browser === browser && $0.contents === source }) else { return }
+        if popupBrowser === browser { browser.closeExtensionPopup() }
+        Task { @MainActor [weak self, weak page] in
+            guard let self, let page, self.isLive(page) else { return }
+            let catalog = await self.extensionCatalog(context: page.context)
+            guard self.isLive(page), page.browser === browser else { return }
+            self.delegate?.engine(self, extensionsDidChange: catalog)
+            self.pageDidEmit(page, .extensionOptionsRequested(id: extensionID, url: url))
+        }
+    }
+
     private var popupPanel: NSWindow?
     private var popupObservers: [NSObjectProtocol] = []
     private weak var popupBrowser: (any BrkCoreBrowser)?

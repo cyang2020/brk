@@ -332,6 +332,8 @@ extension Work {
                 live.recoveryAttempted = true
                 effects.append(.page(page, .recover))
             }
+        case .extensionOptionsRequested(let id, let url):
+            openExtensionOptions(id, url: url, from: page)
         case .gainedFocus:
             if state.presentedPanes(in: window).contains(tab), let split = state.tree(scope)?.splitContaining(tab) {
                 state.doc.windows[window]!.splitFocus[split] = tab

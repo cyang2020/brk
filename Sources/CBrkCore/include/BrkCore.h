@@ -368,6 +368,9 @@ NS_SWIFT_UI_ACTOR
     didResizeExtensionPopup:(NSString*)extensionID
                        size:(NSSize)size;
 - (void)browser:(id<BrkCoreBrowser>)browser didCloseExtensionPopup:(NSString*)extensionID;
+@optional
+/// A manifest-validated options request from Chromium's extension API. Ordinary webpage navigation never uses this callback.
+- (void)browser:(id<BrkCoreBrowser>)browser requestsOpeningExtensionOptions:(NSURL*)url extensionID:(NSString*)extensionID source:(id<BrkCoreWebContents>)source;
 @end
 
 /// A Chrome `Browser` with Brk's own window object: one per Brk window and profile.

@@ -1,0 +1,204 @@
+From 6dca5a74b4ecfede44c75ab794f43c0cb7d6be5d Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Sat, 14 Nov 2026 16:57:27 +0800
+Subject: [PATCH] Open validated extension options in embedded browser tabs
+
+---
+ brk/browser/brk_application.mm                |  3 +-
+ brk/browser/brk_browser.h                     |  1 +
+ brk/browser/brk_browser.mm                    | 54 ++++++++++++++++---
+ brk/embedding/embedding.h                     |  2 +
+ .../browser_extension_window_controller.cc    |  5 ++
+ 5 files changed, 56 insertions(+), 9 deletions(-)
+
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index 3616f10729..e23302c997 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -86,7 +86,7 @@ NSString* TaskKind(task_manager::Task::Type type) {
+   return base::SysUTF8ToNSString(std::string(version_info::GetVersionNumber()));
+ }
+ 
+-- (NSUInteger)embeddingInterfaceVersion { return 2; }
++- (NSUInteger)embeddingInterfaceVersion { return 3; }
+ 
+ - (void)setArgc:(int)argc argv:(const char* const*)argv {
+   // SAFETY: argv has argc entries, as for main().
+@@ -229,6 +229,7 @@ __attribute__((visibility("default"))) void BrkCoreApplicationPrepare(int argc,
+   hooks.browser_process_starting = &brkcore::BrowserProcessStarting;
+   hooks.determine_download_target = &brkcore::DetermineDownloadTargetHook;
+   hooks.open_url_from_tab = &brkcore::OpenURLFromTabHook;
++  hooks.open_extension_options = &brkcore::OpenExtensionOptionsHook;
+   hooks.javascript_dialog_manager = &brkcore::JavaScriptDialogManagerHook;
+   hooks.show_context_menu = &brkcore::ShowContextMenuHook;
+   hooks.offer_password_save = &brkcore::OfferPasswordSaveHook;
+diff --git a/brk/browser/brk_browser.h b/brk/browser/brk_browser.h
+index c9f40244aa..7ac3039b33 100644
+--- a/brk/browser/brk_browser.h
++++ b/brk/browser/brk_browser.h
+@@ -35,6 +35,7 @@ namespace brkcore {
+ BrowserWindow* _Nullable CreateBrowserWindowHook(BrowserWindowInterface* browser);
+ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url);
+ bool OpenURLFromTabHook(content::WebContents* source, const content::OpenURLParams& params);
++bool OpenExtensionOptionsHook(BrowserWindowInterface* browser, const char* extension_id, const GURL& url);
+ }  // namespace brkcore
+ 
+ NS_ASSUME_NONNULL_END
+diff --git a/brk/browser/brk_browser.mm b/brk/browser/brk_browser.mm
+index 11b7a8dcf5..88fe102041 100644
+--- a/brk/browser/brk_browser.mm
++++ b/brk/browser/brk_browser.mm
+@@ -41,6 +41,7 @@ namespace {
+ // Set while a BrkBrowser creates its Browser, so the window factory knows whose it is.
+ BrkBrowser* g_creating = nil;
+ brkcore::BrkBrowserWindow* g_created_window = nullptr;
++NSHashTable<BrkBrowser*>* g_browsers = nil;
+ 
+ GURL TargetURL(content::WebContents* contents) {
+   content::NavigationEntry* entry = contents->GetController().GetPendingEntry();
+@@ -53,7 +54,8 @@ GURL TargetURL(content::WebContents* contents) {
+ }  // namespace
+ 
+ @interface BrkBrowser ()
+-- (void)tabInserted:(content::WebContents*)contents active:(BOOL)active;
++- (void)tabInserted:(content::WebContents*)contents active:(BOOL)active previous:(content::WebContents*)previous;
++- (BOOL)openOptionsForBrowser:(BrowserWindowInterface*)browser extensionID:(NSString*)extensionID url:(NSURL*)url;
+ - (void)offerUnadopted:(BrkWebContents*)page opener:(nullable BrkWebContents*)opener active:(BOOL)active attempt:(int)attempt;
+ - (nullable ExtensionActionViewModel*)modelForExtension:(const std::string&)extensionID;
+ @end
+@@ -71,7 +73,9 @@ class BrkTabStripObserver : public TabStripModelObserver {
+       return;
+     }
+     for (const auto& inserted : change.GetInsert()->contents) {
+-      [owner_ tabInserted:inserted.contents active:selection.new_contents == inserted.contents];
++      [owner_ tabInserted:inserted.contents
++                  active:selection.new_contents == inserted.contents
++                previous:selection.old_contents];
+     }
+   }
+ 
+@@ -145,6 +149,15 @@ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url) {
+   return true;
+ }
+ 
++bool OpenExtensionOptionsHook(BrowserWindowInterface* browser, const char* extension_id, const GURL& url) {
++  for (BrkBrowser* owner in g_browsers) {
++    if ([owner openOptionsForBrowser:browser extensionID:base::SysUTF8ToNSString(extension_id) url:net::NSURLWithGURL(url)]) {
++      return true;
++    }
++  }
++  return false;
++}
++
+ }  // namespace brkcore
+ 
+ @implementation BrkBrowser {
+@@ -182,6 +195,10 @@ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url) {
+     _window->SetNativeWindow(window);
+     _observer = std::make_unique<brkcore::BrkTabStripObserver>(self);
+     _browser->GetTabStripModel()->AddObserver(_observer.get());
++    if (!g_browsers) {
++      g_browsers = [NSHashTable weakObjectsHashTable];
++    }
++    [g_browsers addObject:self];
+     _extensionsContainer = std::make_unique<brkcore::BrkExtensionsContainer>(self);
+     _extensionsContainerData = std::make_unique<ui::ScopedUnownedUserData<ExtensionsContainer>>(
+         _browser->GetUnownedUserDataHost(), *_extensionsContainer);
+@@ -244,7 +261,7 @@ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url) {
+   return nil;
+ }
+ 
+-- (void)tabInserted:(content::WebContents*)contents active:(BOOL)active {
++- (void)tabInserted:(content::WebContents*)contents active:(BOOL)active previous:(content::WebContents*)previous {
+   if (_creatingPage || brkcore::PageForContents(contents)) {
+     return;
+   }
+@@ -252,16 +269,36 @@ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url) {
+   BrkWebContents* page = [[BrkWebContents alloc] initWithContents:contents browser:self];
+   [page tabHelpersReady];
+   [_unadopted addObject:page];
+-  // The page that opened it: its opener (window.open), or the first live page in its original opener chain (noopener and
+-  // target=_blank keep that one). The tab strip's active tab is not the shell's current page, so it is only the last resort.
++  // Browser-initiated foreground tabs have no DOM opener. The active tab is already the new page, whose delegate is still nil.
+   content::WebContents* openerContents = contents->GetFirstWebContentsInLiveOriginalOpenerChain();
+-  if (!openerContents || !brkcore::PageForContents(openerContents)) {
+-    openerContents = _browser->GetTabStripModel()->GetActiveWebContents();
+-  }
+   BrkWebContents* opener = openerContents ? brkcore::PageForContents(openerContents) : nil;
++  if (!opener.adopted || !opener.delegate) {
++    opener = previous && previous != contents ? brkcore::PageForContents(previous) : nil;
++  }
+   [self offerUnadopted:page opener:opener active:active attempt:0];
+ }
+ 
++- (BOOL)openOptionsForBrowser:(BrowserWindowInterface*)browser extensionID:(NSString*)extensionID url:(NSURL*)url {
++  if (!_browser || _browser != browser || ![_delegate respondsToSelector:@selector(browser:requestsOpeningExtensionOptions:extensionID:source:)]) {
++    return NO;
++  }
++  content::WebContents* active = _browser->GetTabStripModel()->GetActiveWebContents();
++  BrkWebContents* source = active ? brkcore::PageForContents(active) : nil;
++  if (!source.adopted || !source.delegate) {
++    return NO;
++  }
++  __weak BrkBrowser* weakSelf = self;
++  __weak BrkWebContents* weakSource = source;
++  dispatch_async(dispatch_get_main_queue(), ^{
++    BrkBrowser* owner = weakSelf;
++    BrkWebContents* origin = weakSource;
++    if (owner && owner->_browser && origin.contents && origin.browser == owner) {
++      [owner.delegate browser:owner requestsOpeningExtensionOptions:url extensionID:extensionID source:origin];
++    }
++  });
++  return YES;
++}
++
+ // Tells the opener's shell about a page Chromium made, on a later task, outside the tab strip's notification. window.open() makes
+ // the page before its navigation starts, so its URL may not be known yet: look again every 50 ms, up to half a second, then
+ // offer about:blank rather than no URL.
+@@ -349,6 +386,7 @@ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url) {
+ }
+ 
+ - (void)browserWillGo {
++  [g_browsers removeObject:self];
+   [self closeExtensionPopup];
+   _actionModels.clear();
+   _extensionsContainerData.reset();
+diff --git a/brk/embedding/embedding.h b/brk/embedding/embedding.h
+index 7a02105306..4eb2cfb519 100644
+--- a/brk/embedding/embedding.h
++++ b/brk/embedding/embedding.h
+@@ -50,6 +50,8 @@ struct Hooks {
+   bool (*determine_download_target)(download::DownloadItem* item, BrkDownloadTargetCallback* callback) = nullptr;
+   // True when Brk took a link that asks for a new window (Shift+click) from one of its pages; Chrome then opens nothing.
+   bool (*open_url_from_tab)(content::WebContents* source, const content::OpenURLParams& params) = nullptr;
++  // True when Brk opens a manifest-validated extension options page in its own tab model.
++  bool (*open_extension_options)(BrowserWindowInterface* browser, const char* extension_id, const GURL& url) = nullptr;
+   // Brk's JavaScript dialogs for one of its pages; null for every other page, which keeps Chrome's.
+   content::JavaScriptDialogManager* (*javascript_dialog_manager)(content::WebContents* source) = nullptr;
+   // True when Brk showed the page's context menu itself (one of its pages, which has no Views widget for Chrome's menu).
+diff --git a/chrome/browser/extensions/browser_extension_window_controller.cc b/chrome/browser/extensions/browser_extension_window_controller.cc
+index b48c0452f3..2ff60f0eb3 100644
+--- a/chrome/browser/extensions/browser_extension_window_controller.cc
++++ b/chrome/browser/extensions/browser_extension_window_controller.cc
+@@ -11,6 +11,7 @@
+ #include "base/feature_list.h"
+ #include "base/notimplemented.h"
+ #include "base/strings/stringprintf.h"
++#include "brk/embedding/embedding.h"
+ #include "chrome/browser/extensions/extension_tab_util.h"
+ #include "chrome/browser/extensions/window_controller_list.h"
+ #include "chrome/browser/profiles/profile.h"
+@@ -324,6 +325,10 @@ bool BrowserExtensionWindowController::OpenOptionsPage(
+   // However, if the options page opens inside the chrome://extensions page, we
+   // can override an existing page.
+   // Note: ref behavior is to ignore.
++  if (auto hook = brkcore::GetHooks().open_extension_options;
++      hook && hook(browser_to_use, extension->id().c_str(), url)) {
++    return true;
++  }
+   ShowSingletonTabOverwritingNTP(browser_to_use, url,
+                                  open_in_tab
+                                      ? NavigateParams::RESPECT
+-- 
+2.55.0
+

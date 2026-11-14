@@ -136,6 +136,48 @@ final class SitePolicyTests: XCTestCase {
         XCTAssertTrue(d.state.session.sites.privatePreferences.isEmpty)
     }
 
+    func testExtensionOptionsRequireATrustedEventAndAnEnabledOwningCatalog() throws {
+        let d = readyDriver()
+        let source = try XCTUnwrap(d.current?.id)
+        let id = String(repeating: "a", count: 32)
+        let options = url("chrome-extension://\(id)/options.html")
+        let extension_ = BrowserExtension(id: id, name: "Options probe", version: "1", enabled: true)
+        d.system(.extensionsRead(ExtensionCatalog(context: .profile(.default), extensions: [extension_], error: nil)))
+        d.page(source, .openRequested(options, .foregroundTab))
+        XCTAssertEqual(d.current?.id, source, "A webpage cannot gain the trusted options route")
+        d.page(source, .extensionOptionsRequested(id: id, url: url("chrome-extension://other/options.html")))
+        XCTAssertEqual(d.current?.id, source)
+        d.page(source, .extensionOptionsRequested(id: id, url: options))
+        XCTAssertEqual(d.current?.url, options)
+        d.user(.tab(.focus(source)))
+        let manager = url("chrome://extensions/?options=\(id)")
+        d.page(source, .extensionOptionsRequested(id: id, url: manager))
+        XCTAssertEqual(d.current?.url, manager, "Embedded options use Chromium's extensions manager")
+        d.user(.tab(.focus(source)))
+        d.system(.extensionsRead(ExtensionCatalog(context: .profile(.default), extensions: [], error: nil)))
+        d.page(source, .extensionOptionsRequested(id: id, url: options))
+        XCTAssertEqual(d.current?.id, source, "An uninstalled extension cannot open a privileged page")
+    }
+
+    func testExtensionOptionsUsePendingAndCurrentWindowAddresses() throws {
+        let d = readyDriver()
+        let source = try XCTUnwrap(d.current?.id)
+        let id = String(repeating: "a", count: 32)
+        let options = url("chrome-extension://\(id)/options.html")
+        d.system(.extensionsRead(ExtensionCatalog(context: .profile(.default), extensions: [
+            BrowserExtension(id: id, name: "Options probe", version: "1", enabled: true)
+        ], error: nil)))
+        d.page(source, .extensionOptionsRequested(id: id, url: options))
+        let first = try XCTUnwrap(d.current?.id)
+        d.page(source, .extensionOptionsRequested(id: id, url: options))
+        XCTAssertEqual(d.current?.id, first, "A request before the first commit must select the pending tab")
+        d.page(first, .committed(options))
+        d.user(.page(.navigate(.focused, url("https://away.example/"))))
+        d.page(source, .extensionOptionsRequested(id: id, url: options))
+        XCTAssertNotEqual(d.current?.id, first, "A tab navigating away is no longer the options tab")
+        XCTAssertEqual(d.current?.url, options)
+    }
+
     func testRememberedPermissionsAreOriginScopedAndCancelledTargetsCannotSaveGrants() throws {
         let d = readyDriver()
         let target = try XCTUnwrap(d.state.siteTarget(in: d.window))

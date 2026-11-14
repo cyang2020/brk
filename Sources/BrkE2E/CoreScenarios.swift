@@ -9,7 +9,7 @@ enum CoreScenarios {
         Scenario("Core-tools", "developer console, source, task manager and trace work through real keys and menus", tools),
         Scenario("Core-editor", "the web editor supports native spelling and text transformations with undo", editor),
         Scenario("Core-pip", "document picture in picture moves the page into a native window and restores it on close", documentPiP),
-        Scenario("Core-popup", "an extension's action popup opens from the site controls; typed text and a click in it reach the page's content script", popupReceipt),
+        Scenario("Core-popup", "extension popup input reaches its page; its settings open as a Brk tab and reopening selects that tab", popupReceipt),
         Scenario("Core-dialogs", "a page's alert, confirm and prompt open as a sheet on its window; Return and Escape answer the page", dialogs),
     ]
 
@@ -89,6 +89,10 @@ enum CoreScenarios {
     }
 
     @Sendable static func popupReceipt(_ app: AppUnderTest) throws {
+        func popupKeys(_ text: String) throws {
+            guard try app.native().appActive == true, try popupPanel(app)?.isKey == true else { throw Check(description: "the owned popup is not key") }
+            try PhysicalKeys.strike(text)
+        }
         let source = app.site.url("extension-popup.html")
         let extensionFixture = fixture(app, "Tests/Fixtures/ExtensionPopup")
         let item = try app.load(source)
@@ -111,9 +115,7 @@ enum CoreScenarios {
         capture.arguments = ["-x", "-l", String(panel.number), app.shotsDirectory.appendingPathComponent("Core-popup-panel.png").path]
         try capture.run(); capture.waitUntilExit()
         // The input has autofocus. A real key press, then Tab to the button and Return.
-        try app.type("hello")
-        try app.press("tab")
-        try app.press("return")
+        try popupKeys("hello\t\r")
         var title = ""
         try app.waitUntil("the receipt in the page's title", timeout: 10) {
             title = tab(item, in: try app.view())?.title ?? ""
@@ -127,6 +129,30 @@ enum CoreScenarios {
         let facts = try app.native().pages[page]
         try expect(receipt["tabId"] as? Int == facts?.browserID, "chrome.tabs named another tab: \(receipt), the page is \(String(describing: facts?.browserID))")
         app.note("receipt \(title)")
+        let options = URL(string: "chrome-extension://\(action.id)/options.html")!
+        try popupKeys("\t\r")
+        var optionsItem: ItemID?
+        try app.waitUntil("the extension's settings tab") {
+            optionsItem = tabRows(try app.view().space.today.rows).first { $0.url == options && $0.status == .current }?.id
+            return optionsItem != nil
+        }
+        let settings = PageID(window: app.window!, item: optionsItem!)
+        try app.waitForPageInput(settings, at: options)
+        try WindowServerKeys.ensureFrontmost(app, settings.window)
+        try PhysicalKeys.strike("retained")
+        try app.dispatch(.tab(.focus(item)))
+        try app.dispatch(.site(.invokeExtension(action.id)))
+        try app.waitUntil("the popup reopened") { try popupPanel(app) != nil }
+        // Input, receipt, settings: the third focus stop is the real options button.
+        try popupKeys("\t\t\r")
+        try app.waitUntil("the existing settings tab selected") {
+            tab(optionsItem!, in: try app.view())?.status == .current
+        }
+        try app.waitForPageInput(settings, at: options)
+        try expect(try tabRows(app.view().space.today.rows).filter { $0.url == options }.count == 1, "reopening settings duplicated the tab")
+        try app.evaluate(settings, "document.title=document.getElementById('setting').value")
+        try waitForTitle(app, optionsItem!, "retained")
+        app.note("real options button opened one Brk tab; reopening kept its document and typed value")
     }
 
     @Sendable static func dialogs(_ app: AppUnderTest) throws {

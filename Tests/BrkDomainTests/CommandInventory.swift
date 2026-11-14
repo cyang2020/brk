@@ -598,6 +598,7 @@ enum CommandInventory {
             case .linkMenuRequested: "page.linkMenuRequested"
             case .selectionChanged: "page.selectionChanged"
             case .gainedFocus: "page.gainedFocus"
+            case .extensionOptionsRequested: "page.extensionOptionsRequested"
             case .openRequested: "page.openRequested"
             case .closed: "page.closed"
             }

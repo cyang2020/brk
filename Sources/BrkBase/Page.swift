@@ -193,6 +193,8 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case closedByPage
     /// The page took keyboard focus (the user clicked into it, e.g. into another split pane).
     case gainedFocus
+    /// Chromium validated this installed extension's options URL. Ordinary page opens keep their separate URL restrictions.
+    case extensionOptionsRequested(id: String, url: URL)
     case openRequested(URL, OpenDisposition, metadata: PageOpenMetadata = .init())
     /// The browser finished closing (`OnBeforeClose`). The id may be reused by a new page right after.
     case closed
