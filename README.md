@@ -39,6 +39,7 @@
   <a href="#not-in-brk-yet">Not yet</a> ·
   <a href="#download">Download</a> ·
   <a href="#bug-fixes">Bug fixes</a> ·
+  <a href="#join-the-community">Community</a> ·
   <a href="#feedback-and-bug-reports">Feedback</a>
 </p>
 
@@ -53,6 +54,8 @@
 </p>
 
 Everything you know from Arc is here: the sidebar, Spaces, Favorites, Pinned tabs, split view, Little Arc, Peek, Boosts, the Library, the command bar and the shortcuts. Brk rebuilds Arc 1.170 feature by feature, from Arc's own measurements. On top of that it adds the things Arc never had.
+
+Arc no longer gets new features. Let's maintain ~~Arc~~ Brk together: [join the Brk Discord](https://discord.gg/4d6ShsjCYz).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-dark.svg">
@@ -227,63 +230,24 @@ Open it and drag **Brk** into Applications. Builds are signed with a Developer I
 
 ## Bug fixes
 
-**2026-11-14**
-
-- **Downloaded apps failed strict signature verification.** The disk-image layout added Finder metadata after signing. Packaging now leaves the signed app unchanged and verifies its signature inside the finished disk image. Build 42.
-- **Extra page-host windows remained behind Brk’s windows.** Brk now embeds pages directly in its own windows through BrkCore, so each page no longer needs a separate Chromium host window. Build 41.
-- **Quitting could hang during a system media-permission check.** Background permission-status checks no longer block BrkCore shutdown. Build 41.
-
-**2026-11-13**
-
-- **Site controls reopened after closing, or Command-W closed the tab behind them.** Clicking outside now closes the site controls. Command-W closes the popover while keeping the tab open. Escape closes a Settings explanation and leaves Settings open. Build 40.
-- **Some text became unreadable in dark mode.** Little Arc addresses, headings in site controls, dialog fields and keycaps, Library labels, AI conversation details, and Space names now stay readable against their backgrounds. Build 40.
-- **Onboarding tiles and badges were hard to read.** Favorites letter tiles keep enough contrast with white letters. The Recommended badge uses a lighter accent in dark mode. Build 40.
-- **Settings and menu commands did nothing after the last browser window closed.** Those commands now reopen a browser window and show their page or panel. Build 40.
-- **Reload stopped working after choosing Stay.** Refusing a reload now clears the pending reload, so the next Command-R works. Page dialogs identify the site instead of displaying the full address. Build 40.
-- **Context menus lost actions near the bottom of the screen.** Page menus and Library download menus now open above the pointer when there is not enough room below it. Build 40.
-- **Canceling Print or Save left a status notice on the page.** A cancellation that leaves no file now clears the notice. Successful saves show readable, centered text. Warnings about files that remain on disk stay visible. Build 40.
-- **Some Settings controls had no accessible button names.** Profile, app icon, and Air Traffic Control controls now expose named buttons. Disabled controls stay inactive. Build 40.
-
-- **Empty Brk windows appeared in Mission Control.** Chromium’s transparent page hosts were listed as separate windows. Brk now keeps them out of Mission Control and window cycling, including after leaving full screen. Build 38.
-- **Dark pages had a pale, rough rim around their rounded corners.** The white card fill and shadow backing showed through the edge pixels. They now stop inside the page edge, so the corner blends with the page and Space. Build 38.
-
-Every fix, newest first, with the first build that has it (Brk › About Brk shows yours). The same list is on GitHub as [Bug fixes](https://github.com/cyang2020/brk/issues/2): click **Subscribe** there to get a notification for each new fix.
-
-**2026-11-12**
-
-- **Four ways to crash Brk.** Importing an ad-block list with an empty option (such as `$domain=`); converting a very large time in the command bar; a history address longer than 64 KB, which crashed Brk again a few seconds after every launch; typing only "|" in Browse for Me. None of them crashes now. Build 34.
-- **Brk slowed down or locked up.** Browsing history was never trimmed and was saved in full on every change; the History and Media pages rebuilt every row and loaded every full-size picture on each key press; a page that kept showing alerts locked the whole app; a connected sync folder rewrote the whole state every minute. History now keeps a limited span, the pages load only what they show, and a page's alert stops only that page. Build 34.
-- **Tabs, history and settings could be lost.** A Live Folder refresh deleted tabs you had put in it; Delete on the History page could remove different visits from the ones checked; recording a shortcut picked up typing in browser windows and changed the shortcut; an AI message over 2,000 characters vanished with its text; Little Arc's Open in dropped its other tabs; undoing a Space delete flattened its folders; with Restore Windows on Launch off, tabs reopened at old addresses. All fixed. Build 34.
-- **Private browsing leaked into normal browsing.** Open Link in Incognito Window and Open in Little Brk from an incognito window opened the link in your normal profile; incognito favicons and command bar suggestions were stored in a shared disk cache and cookie store; a print that timed out left the page's PDF behind; deleting a profile left its Easels and AI conversations on disk. Private windows now keep nothing, and a deleted profile takes its files with it. Build 34.
-- **Features that did nothing.** Codex in a tab conversation refused every command without asking you (it now asks); changing the model in the middle of a conversation broke the next message; Stop on a first reply cut off Brk's tab tools; Print and Save Page As dialogs closed themselves after a minute; the Little Arc shortcut sent your typing to the other app; menu items chosen with the keyboard did nothing; Settings buttons acted on a random window; Hide cookie banners hid nothing; Open in Split View on a Favorite; Turn On Max; archiving Easel, History and AI page rows; Share in private and Little windows; Pinyin typed into the command bar being overwritten. All work now. Build 34.
-- **About 60 smaller fixes** to hover cards, Escape, Little Arc windows, closing the last window, find keeping its place when a page changes, auto-archive sparing tabs that play sound, Air Traffic Control route order, onboarding Back steps and more. One known issue is still open: closing a tab does not yet ask before throwing away text you typed into the page. Build 34.
-- **Scrolling the sidebar up and down, and swiping between Spaces, was still very slow with a large sidebar imported from Arc.** Brk kept a live view for every tab in a Space, including the hundreds out of sight, and macOS worked through all of them on every frame; a swipe also built the full lists of both neighbouring Spaces. The sidebar now keeps views only for the rows near what you see and adds the next ones as you scroll. With 5 Spaces and 560 imported tabs, Brk's main thread went from busy 98% of the time while scrolling and swiping to 40%. Build 33.
-- **The sidebar lagged when scrolling, worse with many tabs, folders and Spaces.** Every scroll step, key press and click made Brk recompute the whole window and redraw it, dozens of times a second, and an imported Arc sidebar made each pass slower. Brk now skips that when nothing changed: with 60 tabs, Brk's main thread is busy about half as much while scrolling the sidebar. Build 32.
-- **In full screen, the top-left corner was off.** With the menu bar shown, the strip under it started a few points in from the screen's edge, the window buttons were grey circles instead of red, yellow and green, and the sidebar button stayed where it leaves room for those buttons. The strip now starts at the edge, the buttons have their colours, and the sidebar button moves to the left as in Arc. Build 32.
-- **Spaces imported from Arc had the wrong colours.** A dark navy Space came out pale grey-lavender: Brk read Arc's colour slider backwards and ignored dark mode. Imported Spaces now keep Arc's colours in light and dark mode, and Spaces imported earlier are corrected the next time Brk opens. Build 32.
-- **Hover cards were hard to read in dark mode.** The Gmail "Recent Emails" card and the other Favorite, Pinned and folder cards turned dark in dark mode but kept black text, so they looked dimmed and stuck under the page. Their text and icons now turn light on the dark card. Build 32.
-- **The Today line did not move while Tidy worked.** Arc turns the line above Today into a moving wave while Tidy Tabs sorts the tabs; Brk's stayed straight. It now waves the way Arc's does, and the broom swings when you press Tidy. Build 32.
-- **Some text in Settings was invisible in dark mode.** The Previews sheet's title and checkbox labels, and the Air Traffic Control sheet's text, were white on a white sheet. They are dark now. Build 32.
-- **Dropping a tab group onto a group inside it deleted its tabs.** With a group inside a folder inside another group, dropping the outer group onto the inner one removed every tab in them without archiving them. Brk now refuses that drop. Build 27.
-- **A site's permission prompt could stay on screen with buttons that did nothing.** After Escape, a click elsewhere, or the page moving on, the prompt was given up but its card stayed. It now closes. Build 27.
-- **Brk kept busy in the background.** With more than eight ad-block lists in use (for example three profiles with three lists each), Brk reloaded them over and over and kept waking hidden tabs, so they never went to sleep. After a failed tab-naming request, it checked again ten times a second for five minutes. Both now wait as they should. Build 27.
-- **Importing some Arc sidebars never finished.** A sidebar file that lists an item twice, or inside itself, made the import build it billions of times. Each item is now read once. Build 27.
-- **Damaged data could make Brk loop or quit.** A kept AI page whose saved schedule was out of range refreshed nonstop, and a malformed reply from a local model made Brk quit. Both are now treated as invalid. Build 27.
-- **Brk quit when the pointer moved onto a row of a folder's hover card.** Hovering a collapsed folder, or a Favorite or Pinned tab that has a preview card, opens a card listing its pages. Putting the pointer on any row of that card closed Brk: highlighting the row redrew it, and the redraw asked for the highlight again, without end. Now the pointer on a row only highlights it, and ↑ and ↓ still move the highlight. Build 25.
-- **"Save password?" sat in the top-right corner of the page.** Brk now asks the way Arc does, with a card in the middle of the window: *Save password for (site)?* with Never on this site, No and Save. Saving an address or a card asks the same way (*Save Address?*, *Save this card?*). Build 21.
-- **Clicking an autofill suggestion did nothing.** Saved emails, addresses and passwords appeared in the list under a field, but neither a click nor ↓ and Return filled them in. The cause was a bug in the Chromium Embedded Framework 154 that Brk used; Brk now runs CEF 156 (Chromium 156.0.8078.88), where it is fixed. Build 20.
-- **Brk quit when a site offered to sign in with a passkey from your phone,** for example Canva's sign-in: Continue another way, then a passkey, then *Use a phone or tablet*. macOS closed Brk because Brk had not said why it might use Bluetooth. Brk now asks for Bluetooth permission instead, and declares every other permission a website can ask for. Build 18.
+Each version's release notes list what it fixes, on the [Releases page](https://github.com/cyang2020/brk/releases). The fixes from the builds before versions began are in the [0.0.1 notes](https://github.com/cyang2020/brk/releases/tag/v0.0.1). In Brk, **Help › Release Notes** shows the notes for your version and the ones before it. To get a notification for each new fix, click **Subscribe** on the [Bug fixes issue](https://github.com/cyang2020/brk/issues/2).
 
 ## Join the community
 
-Everyone is welcome in the [Brk Discord](https://discord.gg/4d6ShsjCYz). Ask questions, share your setup and workflows, discuss ideas, or help test fixes. Confirmed bugs and development work are tracked on GitHub.
+<p align="center"><b>Let's maintain <s>Arc</s> Brk together.</b></p>
+
+<p align="center">
+  <a href="https://discord.gg/4d6ShsjCYz"><img src="https://img.shields.io/badge/Join%20the-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Brk Discord"></a>
+</p>
+
+Many people still use Arc every day, and Brk is built to keep that browser going. Everyone is welcome in the [Brk Discord](https://discord.gg/4d6ShsjCYz). Ask questions, share your setup and workflows, tell us where Brk still differs from Arc, discuss ideas, or help test fixes before they ship. Confirmed bugs and development work are tracked on GitHub.
 
 ## Feedback and bug reports
 
 - **From inside Brk:** Help › **Report a Bug…** or **Send Feedback…** opens a GitHub issue with your Brk version, macOS version and Mac type already filled in. Nothing is sent until you submit it. After a crash, Brk offers once to report it on the next launch.
 - **On GitHub:** [open an issue](https://github.com/cyang2020/brk/issues/new/choose) and pick **Bug report**, **Feature request or feedback**, or **Arc parity**. The last one is for "Arc does X, Brk does Y", with a screenshot.
 - **Questions and ideas:** [Discussions](https://github.com/cyang2020/brk/discussions).
-- **What has been fixed:** see [Bug fixes](#bug-fixes) above, or subscribe to the [same list on GitHub](https://github.com/cyang2020/brk/issues/2) to get a notification for each new fix.
+- **What has been fixed:** each version's notes on the [Releases page](https://github.com/cyang2020/brk/releases), or subscribe to [Bug fixes on GitHub](https://github.com/cyang2020/brk/issues/2) to get a notification for each new fix.
 - **Security issues:** report them privately through [GitHub's security advisories](https://github.com/cyang2020/brk/security/advisories/new), as described in [`SECURITY.md`](.github/SECURITY.md).
 - **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING.md). Brk is MIT licensed.
 
