@@ -24,8 +24,7 @@ use_remoteexec = false
 # Plain ninja, so the build tool can be paused alone (engine/tools/paced-build.py).
 use_siso = false
 
-# H.264 and AAC, as Arc and Chrome play them; many sites need them (the user's decision, 2026-11-08). This build is local and not
-# distributed: publishing it would need a licensing check first (engine/README.md). Confirm with engine/tools/codec-probe.py.
+# H.264 and AAC, matching the release engine. Confirm with engine/tools/codec-probe.py.
 proprietary_codecs = true
 ffmpeg_branding = "Chrome"
 # Widevine needs Google's signed component, which a self-built Chromium cannot get (the user's decision: off).

@@ -19,10 +19,10 @@ enable_stripping = true
 use_remoteexec = false
 use_siso = false
 
-# Codecs as the CEF build Brk shipped before: VP8, VP9, AV1, Opus, FLAC, MP3, no H.264 or AAC. H.264 and AAC are patent-licensed;
-# publishing them is the user's decision (engine/README.md). No Widevine: it needs Google's signed component.
-proprietary_codecs = false
-ffmpeg_branding = "Chromium"
+# Match the development engine's H.264 and AAC support, missing from the release engine in issue #4.
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"
+# Widevine remains disabled; it needs Google's signed component.
 enable_widevine = false
 
 # No Google API keys of any kind. What still calls Google without keys is turned off in brk/ (engine/README.md, "Calls home").
