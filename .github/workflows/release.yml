@@ -1,13 +1,5 @@
-# Builds Brk for Apple silicon and Intel on every push to main and publishes both (docs/release.md).
-# - push to main: the rolling pre-release "Latest build" (tag `latest`, moved to the commit) gets the new disk images;
-# - tag v*: a normal release named after the tag;
-# - any other branch or a manual run off main: a draft release named ci-test-<run id>, which creates no tag.
-# Two jobs. `build` (macOS, read-only token) runs `swift test` once, builds the arm64 app and the x86_64 app
-# cross-compiled (ARCH=x86_64 scripts/build.sh), signs and notarizes them when the signing secrets are set, packs each
-# into a drag-to-Applications disk image (scripts/make-dmg.sh; signed and notarized too) and hands the images and
-# notes on as an artifact. The images keep fixed names (Brk-arm64.dmg, Brk-x86_64.dmg), so
-# https://github.com/<repo>/releases/download/latest/Brk-arm64.dmg always downloads the newest build. `publish` (Linux, the only job that may write) puts them on the release and
-# never sees a signing secret. Security rules: docs/release.md, "Security".
+# Build with read-only credentials and signing secrets. Publish only verified artifacts with a write token.
+# Main creates a permanent v<VERSION> release, then refreshes the latest download and appcast aliases.
 name: Release
 
 on:
@@ -15,18 +7,20 @@ on:
     branches: [main]
     tags: ['v*']
     # Changes that cannot change the app build nothing (tag pushes ignore this list).
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - 'Tests/**'
-      - 'site/**' # the website (pages.yml)
-      - '.gitignore'
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**/*.md'
+      - '!Tests/**'
+      - '!site/**' # the website (pages.yml)
+      - '!.gitignore'
+      - 'releases/**' # curated notes are bundled into the app
   workflow_dispatch:
 
-# A newer push to the same branch cancels the run still going; tag runs always finish.
+# Serialize stable publication across main and tags so an older run cannot replace a newer feed.
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  group: release-${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && 'stable' || github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -48,15 +42,50 @@ jobs:
       label: ${{ steps.version.outputs.label }}
       signed: ${{ steps.mode.outputs.signing }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # validate tags before any build or signing work
+          persist-credentials: false
+
+      - name: Validate version and publication
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          args=(validate)
+          case "$GITHUB_REF" in
+            refs/tags/v*) args+=(--tag "$GITHUB_REF_NAME"); kind=release ;;
+            refs/heads/main) kind=release ;;
+            *) kind=test ;;
+          esac
+          if [ "$kind" = release ]; then
+            args+=(--check-published --repository "$GITHUB_REPOSITORY" --commit "$GITHUB_SHA")
+          fi
+          metadata="$(python3 scripts/release.py "${args[@]}")"
+          version="$(printf '%s' "$metadata" | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')"
+          published="$(printf '%s' "$metadata" | python3 -c 'import json,sys; print(str(json.load(sys.stdin)["published"]).lower())')"
+          if [ "$published" = true ]; then kind=existing; fi
+          {
+            echo "kind=$kind"
+            echo "version=$version"
+            echo "label=$version"
+            echo "toolchain=$(xcodebuild -version | tr -s ' \n' '-' | sed 's/-$//')$([ "$(uname -m)" = x86_64 ] && echo -intel-host)"
+          } >> "$GITHUB_OUTPUT"
+          echo "$kind Brk $version, build $GITHUB_RUN_NUMBER"
+          python3 -m unittest discover -s scripts/tests -p 'test_release.py'
+
       # Only whether each secret is set reaches this step, never a value.
       - name: Signing mode
         id: mode
+        if: steps.version.outputs.kind != 'existing'
         env:
           HAS_MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
           HAS_MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD != '' }}
           HAS_APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 != '' }}
           HAS_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID != '' }}
           HAS_APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID != '' }}
+          HAS_SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY != '' }}
+          KIND: ${{ steps.version.outputs.kind }}
         run: |
           present=0; missing=()
           for name in MACOS_CERT_P12_BASE64 MACOS_CERT_PASSWORD APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER_ID; do
@@ -73,39 +102,16 @@ jobs:
             echo "signing=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Signing secrets are incomplete, so the apps are signed ad hoc; missing: ${missing[*]}"
           fi
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # the release notes and the in-app release notes read the history; tags give the version
-          persist-credentials: false
-
-      - name: Version
-        id: version
-        run: |
-          sha7="${GITHUB_SHA::7}"
-          base="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
-          base="${base#v}"; base="${base:-0.1.0}"
-          latest="$(git rev-parse -q --verify 'refs/tags/latest^{commit}' || true)"
-          case "$GITHUB_REF" in
-            refs/tags/v*)
-              kind=release; version="${GITHUB_REF_NAME#v}"; label="$version"
-              previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$GITHUB_SHA^" 2>/dev/null || true)" ;;
-            refs/heads/main)
-              kind=latest; version="$base"; label="$base-$GITHUB_RUN_NUMBER.$sha7"; previous="$latest" ;;
-            *)
-              kind=test; version="$base"; label="$base-$GITHUB_RUN_NUMBER.$sha7"; previous="$latest" ;;
-          esac
-          {
-            echo "kind=$kind"; echo "version=$version"; echo "label=$label"; echo "previous=$previous"
-            # An Intel runner (BRK_MACOS_RUNNER) keeps its own SwiftPM cache.
-            echo "toolchain=$(xcodebuild -version | tr -s ' \n' '-' | sed 's/-$//')$([ "$(uname -m)" = x86_64 ] && echo -intel-host)"
-          } >> "$GITHUB_OUTPUT"
-          echo "$kind build $label (CFBundleShortVersionString $version, CFBundleVersion $GITHUB_RUN_NUMBER), previous build ${previous:-none}"
+          if [ "$KIND" = release ] && { [ "$present" -ne 5 ] || [ "$HAS_SPARKLE_ED_PRIVATE_KEY" != true ]; }; then
+            echo "::error::Stable releases require Developer ID, notarization, and SPARKLE_ED_PRIVATE_KEY"
+            exit 1
+          fi
 
       # SwiftPM decides what to rebuild by file size and modification time. A fresh checkout gives every file a new
       # time, which would make a cached .build useless, so each tracked file gets a time derived from its content
       # (its git blob hash): unchanged files look unchanged to the cached build, changed ones do not.
       - name: Stable file times
+        if: steps.version.outputs.kind != 'existing'
         run: |
           python3 -I - <<'EOF'
           import os, subprocess
@@ -120,6 +126,7 @@ jobs:
           EOF
 
       - name: Restore the SwiftPM build
+        if: steps.version.outputs.kind != 'existing'
         id: spm-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -128,6 +135,7 @@ jobs:
           restore-keys: swiftpm-${{ steps.version.outputs.toolchain }}-
 
       - name: Download the pinned BrkCore builds
+        if: steps.version.outputs.kind != 'existing'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -135,12 +143,14 @@ jobs:
           python3 engine/download-artifact.py x86_64 --out "$RUNNER_TEMP/brkcore/x86_64"
 
       - name: Cache the llama.cpp runtime
+        if: steps.version.outputs.kind != 'existing'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/brk-llama
           key: llama-${{ hashFiles('scripts/add-llama-runtime.sh') }}
 
       - name: Unit tests and the app for the runner's architecture
+        if: steps.version.outputs.kind != 'existing'
         id: host
         env:
           BRK_VERSION: ${{ steps.version.outputs.version }}
@@ -152,6 +162,7 @@ jobs:
           if [ "$host" = arm64 ]; then echo "other=x86_64" >> "$GITHUB_OUTPUT"; else echo "other=arm64" >> "$GITHUB_OUTPUT"; fi
 
       - name: The other architecture's app (cross-compiled)
+        if: steps.version.outputs.kind != 'existing'
         env:
           ARCH: ${{ steps.host.outputs.other }}
           BRK_VERSION: ${{ steps.version.outputs.version }}
@@ -161,17 +172,27 @@ jobs:
           mkdir -p "out/$ARCH" && mv dist/Brk.app "out/$ARCH/"
 
       - name: Save the SwiftPM build
-        if: steps.spm-cache.outputs.cache-hit != 'true'
+        if: steps.version.outputs.kind != 'existing' && steps.spm-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
           key: swiftpm-${{ steps.version.outputs.toolchain }}-${{ github.sha }}
 
+      - name: Download pinned Sparkle signing tools
+        if: steps.version.outputs.kind != 'existing'
+        run: |
+          curl -fsSL --retry 2 -o "$RUNNER_TEMP/Sparkle-2.10.1.tar.xz" \
+            https://github.com/sparkle-project/Sparkle/releases/download/2.10.1/Sparkle-2.10.1.tar.xz
+          echo "1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27  $RUNNER_TEMP/Sparkle-2.10.1.tar.xz" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/sparkle-tools"
+          tar -xJf "$RUNNER_TEMP/Sparkle-2.10.1.tar.xz" -C "$RUNNER_TEMP/sparkle-tools" ./bin/sign_update
+          test -x "$RUNNER_TEMP/sparkle-tools/bin/sign_update"
+
       # The certificate goes into a temporary keychain; decoded secrets live only under $RUNNER_TEMP (mode 600) and
       # the cleanup step below deletes them whatever happens.
       - name: Signing keychain
         id: keychain
-        if: steps.mode.outputs.signing == 'true'
+        if: steps.version.outputs.kind != 'existing' && steps.mode.outputs.signing == 'true'
         env:
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
@@ -203,7 +224,7 @@ jobs:
           { echo "keychain=$keychain"; echo "identity=$identity"; } >> "$GITHUB_OUTPUT"
 
       - name: Developer ID signatures
-        if: steps.mode.outputs.signing == 'true'
+        if: steps.version.outputs.kind != 'existing' && steps.mode.outputs.signing == 'true'
         env:
           SIGN_IDENTITY: ${{ steps.keychain.outputs.identity }}
           SIGN_KEYCHAIN: ${{ steps.keychain.outputs.keychain }}
@@ -211,7 +232,7 @@ jobs:
           for arch in arm64 x86_64; do scripts/sign-developer-id.sh "out/$arch/Brk.app"; done
 
       - name: Notarization
-        if: steps.mode.outputs.signing == 'true'
+        if: steps.version.outputs.kind != 'existing' && steps.mode.outputs.signing == 'true'
         env:
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
           NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -232,6 +253,7 @@ jobs:
       # Signed with the same identity when signing is on (the keychain is still there), ad hoc builds get unsigned
       # images. dmgbuild lays the window out without Finder (scripts/dmg/settings.py).
       - name: Disk images
+        if: steps.version.outputs.kind != 'existing'
         env:
           SIGN_IDENTITY: ${{ steps.keychain.outputs.identity }}
           SIGN_KEYCHAIN: ${{ steps.keychain.outputs.keychain }}
@@ -241,7 +263,7 @@ jobs:
       # The apps inside are notarized and stapled already; the images get their own ticket, so opening a downloaded
       # image needs no network check either.
       - name: Notarize the disk images
-        if: steps.mode.outputs.signing == 'true'
+        if: steps.version.outputs.kind != 'existing' && steps.mode.outputs.signing == 'true'
         env:
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
           NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -259,19 +281,74 @@ jobs:
           cat "$RUNNER_TEMP/notarize-dmg-arm64.log" "$RUNNER_TEMP/notarize-dmg-x86_64.log"
           exit "$status"
 
+      - name: Sign final update archives and generate appcasts
+        if: steps.version.outputs.kind != 'existing' && steps.mode.outputs.signing == 'true'
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          KIND: ${{ steps.version.outputs.kind }}
+        run: |
+          if [ -z "$SPARKLE_ED_PRIVATE_KEY" ]; then
+            if [ "$KIND" = release ]; then echo "::error::Missing Sparkle signing key"; exit 1; fi
+            exit 0
+          fi
+          umask 077
+          key="$RUNNER_TEMP/sparkle-private-key"
+          trap 'rm -f "$key" "$RUNNER_TEMP/sign-update.log"' EXIT
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$key"
+          # Validate without printing malformed private material from sign_update diagnostics.
+          python3 - <<'PYKEY'
+          import base64, os, sys
+          try:
+              assert len(base64.b64decode(os.environ['SPARKLE_ED_PRIVATE_KEY'], validate=True)) in (32, 64, 96)
+          except Exception:
+              sys.exit('Invalid Sparkle private key encoding')
+          PYKEY
+          cat > "$RUNNER_TEMP/verify-update.swift" <<'SWIFT'
+          import CryptoKit
+          import Foundation
+          let args = CommandLine.arguments
+          let archive = try Data(contentsOf: URL(fileURLWithPath: args[1]), options: .mappedIfSafe)
+          let encoded = try String(contentsOfFile: args[2], encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+          let signatureText = try String(contentsOfFile: args[3], encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+          guard let publicBytes = Data(base64Encoded: encoded), let signature = Data(base64Encoded: signatureText) else { exit(1) }
+          let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicBytes)
+          guard publicKey.isValidSignature(signature, for: archive) else { exit(1) }
+          SWIFT
+          swiftc "$RUNNER_TEMP/verify-update.swift" -o "$RUNNER_TEMP/verify-update"
+          for arch in arm64 x86_64; do
+            if ! "$RUNNER_TEMP/sparkle-tools/bin/sign_update" --ed-key-file "$key" -p "out/Brk-$arch.dmg" \
+              > "$RUNNER_TEMP/sign-update.log" 2>&1; then
+              echo "::error::Sparkle archive signing failed"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/sign-update.log" "$RUNNER_TEMP/signature-$arch"
+            "$RUNNER_TEMP/verify-update" "out/Brk-$arch.dmg" assets/updates/ed25519.pub "$RUNNER_TEMP/signature-$arch"
+            python3 scripts/release.py appcast --repository "$GITHUB_REPOSITORY" --arch "$arch" \
+              --build "$GITHUB_RUN_NUMBER" --archive "out/Brk-$arch.dmg" \
+              --signature-file "$RUNNER_TEMP/signature-$arch" --date "$(git show -s --format=%cI HEAD)" > "out/appcast-$arch.xml"
+          done
+
       - name: Remove the signing keychain and keys
         if: always() && steps.mode.outputs.signing == 'true'
         run: |
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/AuthKey.p8"
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/sparkle-private-key" "$RUNNER_TEMP/sign-update.log"
 
       - name: Release notes
+        if: steps.version.outputs.kind != 'existing'
         env:
-          LABEL: ${{ steps.version.outputs.label }}
-          PREVIOUS: ${{ steps.version.outputs.previous }}
+          VERSION: ${{ steps.version.outputs.version }}
           SIGNED: ${{ steps.mode.outputs.signing }}
         run: |
-          scripts/release-notes.sh "$LABEL" "$PREVIOUS" "$SIGNED" > out/notes.md
+          scripts/release-notes.sh "$SIGNED" > out/notes.md
+          python3 scripts/release.py html > out/release-notes.html
+          python3 - <<'MANIFEST'
+          import json, os, pathlib
+          pathlib.Path('out/release.json').write_text(json.dumps({
+              'version': os.environ['VERSION'], 'build': int(os.environ['GITHUB_RUN_NUMBER']),
+              'commit': os.environ['GITHUB_SHA'], 'signed': os.environ['SIGNED'] == 'true'
+          }) + '\n')
+          MANIFEST
           {
             echo; echo "### SHA-256"; echo; echo '```'
             (cd out && shasum -a 256 Brk-*.dmg)
@@ -281,12 +358,16 @@ jobs:
           ls -l out/*.dmg
           cat out/notes.md >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - if: steps.version.outputs.kind != 'existing'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-${{ github.run_id }}
           path: |
             out/Brk-*.dmg
             out/notes.md
+            out/release-notes.html
+            out/release.json
+            out/appcast-*.xml
           compression-level: 0 # the disk images are compressed already
           retention-days: 3
           if-no-files-found: error
@@ -317,46 +398,99 @@ jobs:
       VERSION: ${{ needs.build.outputs.version }}
       LABEL: ${{ needs.build.outputs.label }}
     steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - if: needs.build.outputs.kind != 'existing'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-${{ github.run_id }}
           path: out
 
-      - name: Publish
+      - name: Reuse an already published version
+        if: needs.build.outputs.kind == 'existing'
         run: |
-          assets=(out/Brk-*.dmg)
-          ls -l "${assets[@]}"
-          move_latest_tag() {
-            if gh api "repos/$GH_REPO/git/ref/tags/latest" > /dev/null 2>&1; then
-              gh api -X PATCH "repos/$GH_REPO/git/refs/tags/latest" -f sha="$GITHUB_SHA" -F force=true > /dev/null
-            else
-              gh api -X POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/latest -f sha="$GITHUB_SHA" > /dev/null
-            fi
-          }
-          case "$KIND" in
-            latest)
-              if gh release view latest > /dev/null 2>&1; then
-                old="$(gh release view latest --json assets -q '.assets[].name')"
-                gh release upload latest "${assets[@]}" --clobber
-                move_latest_tag
-                gh release edit latest --title "Latest build" --notes-file out/notes.md --prerelease
-                for name in $old; do
-                  [ -e "out/$name" ] || gh release delete-asset latest "$name" --yes
-                done
-              else
-                move_latest_tag
-                gh release create latest "${assets[@]}" --title "Latest build" --notes-file out/notes.md --prerelease --verify-tag
-              fi ;;
-            release)
-              if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-                gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
-                gh release edit "$GITHUB_REF_NAME" --notes-file out/notes.md
-              else
-                gh release create "$GITHUB_REF_NAME" "${assets[@]}" --title "Brk $VERSION" --notes-file out/notes.md --verify-tag
-              fi ;;
-            test)
-              gh release create "ci-test-$GITHUB_RUN_ID" "${assets[@]}" --draft --target "$GITHUB_SHA" \
-                --title "CI test $LABEL" --notes-file out/notes.md ;;
-            *) echo "::error::unknown build kind '$KIND'"; exit 1 ;;
-          esac
-          gh release list --limit 3
+          mkdir -p out
+          gh release download "v$VERSION" --dir out \
+            --pattern Brk-arm64.dmg --pattern Brk-x86_64.dmg --pattern notes.md \
+            --pattern release-notes.html --pattern release.json \
+            --pattern appcast-arm64.xml --pattern appcast-x86_64.xml
+
+      # This inline publisher uses only downloaded data, never checked-out repository scripts.
+      - name: Publish permanent release, then latest aliases
+        run: |
+          python3 - <<'PUBLISH'
+          import json, os, pathlib, subprocess, xml.etree.ElementTree as ET
+          repo, version, commit, kind = (os.environ[key] for key in ('GH_REPO', 'VERSION', 'GITHUB_SHA', 'KIND'))
+          base = ['out/Brk-arm64.dmg', 'out/Brk-x86_64.dmg', 'out/notes.md', 'out/release-notes.html', 'out/release.json']
+          feeds = ['out/appcast-arm64.xml', 'out/appcast-x86_64.xml']
+          def gh(*args):
+              subprocess.run(['gh', *args], check=True)
+          def api(endpoint, *args):
+              result = subprocess.run(['gh', 'api', 'repos/' + repo + '/' + endpoint, *args], capture_output=True, text=True)
+              if result.returncode:
+                  if 'HTTP 404' in result.stderr:
+                      return None
+                  raise SystemExit('GitHub API request failed for ' + endpoint)
+              return json.loads(result.stdout) if result.stdout.strip() else None
+          manifest = json.loads(pathlib.Path('out/release.json').read_text())
+          if manifest['version'] != version or manifest['commit'] != commit:
+              raise SystemExit('Release artifact does not match the requested version and commit')
+          if kind == 'test':
+              gh('release', 'create', 'ci-test-' + os.environ['GITHUB_RUN_ID'], *base,
+                 *[feed for feed in feeds if pathlib.Path(feed).exists()], '--draft', '--target', commit,
+                 '--title', 'CI test ' + version, '--notes-file', 'out/notes.md')
+              raise SystemExit(0)
+          if kind not in ('release', 'existing') or not manifest['signed']:
+              raise SystemExit('Stable publication requires signed release artifacts')
+          ns = {'sparkle': 'http://www.andymatuschak.org/xml-namespaces/sparkle'}
+          for arch, feed in zip(('arm64', 'x86_64'), feeds):
+              item = ET.parse(feed).find('./channel/item')
+              archive = pathlib.Path('out/Brk-' + arch + '.dmg')
+              url = 'https://github.com/' + repo + '/releases/download/v' + version + '/'
+              enclosure = item.find('enclosure')
+              if (item.findtext('sparkle:version', namespaces=ns) != str(manifest['build']) or
+                  item.findtext('sparkle:shortVersionString', namespaces=ns) != version or
+                  item.findtext('sparkle:releaseNotesLink', namespaces=ns) != url + 'release-notes.html' or
+                  enclosure.get('url') != url + archive.name or
+                  enclosure.get('length') != str(archive.stat().st_size) or
+                  not enclosure.get('{' + ns['sparkle'] + '}edSignature')):
+                  raise SystemExit('Appcast does not match its release archive')
+          tag = 'v' + version
+          ref = api('git/ref/tags/' + tag)
+          if ref:
+              target = ref['object']
+              while target['type'] == 'tag':
+                  target = api('git/tags/' + target['sha'])['object']
+              if target['type'] != 'commit' or target['sha'] != commit:
+                  raise SystemExit('Published version tag targets different code; bump VERSION')
+          else:
+              api('git/refs', '-X', 'POST', '-f', 'ref=refs/tags/' + tag, '-f', 'sha=' + commit)
+          release = api('releases/tags/' + tag)
+          if release and not release['draft'] and kind != 'existing':
+              raise SystemExit('Version became public during this build; rerun to reuse its exact artifacts')
+          if not release:
+              gh('release', 'create', tag, *base, *feeds, '--draft', '--verify-tag',
+                 '--title', 'Brk ' + version, '--notes-file', 'out/notes.md')
+          elif release['draft']:
+              gh('release', 'upload', tag, *base, *feeds, '--clobber')
+          if not release or release['draft']:
+              gh('release', 'edit', tag, '--draft=false', '--prerelease=false', '--latest',
+                 '--title', 'Brk ' + version, '--notes-file', 'out/notes.md')
+          # A published v* release is never edited or uploaded again.
+          latest = api('releases/tags/latest')
+          if latest and any(asset['name'] == 'release.json' for asset in latest['assets']):
+              gh('release', 'download', 'latest', '--pattern', 'release.json', '--output', 'current-release.json')
+              if json.loads(pathlib.Path('current-release.json').read_text())['build'] > manifest['build']:
+                  print('Keeping the newer latest update feed')
+                  raise SystemExit(0)
+          if api('git/ref/tags/latest'):
+              api('git/refs/tags/latest', '-X', 'PATCH', '-f', 'sha=' + commit, '-F', 'force=true')
+          else:
+              api('git/refs', '-X', 'POST', '-f', 'ref=refs/tags/latest', '-f', 'sha=' + commit)
+          if latest:
+              gh('release', 'upload', 'latest', *base, '--clobber')
+              gh('release', 'edit', 'latest', '--title', 'Latest build', '--notes-file', 'out/notes.md', '--prerelease')
+          else:
+              gh('release', 'create', 'latest', *base, '--title', 'Latest build',
+                 '--notes-file', 'out/notes.md', '--prerelease', '--verify-tag')
+          # Feeds become visible only after their immutable archives and notes are public.
+          gh('release', 'upload', 'latest', *feeds, '--clobber')
+          PUBLISH
