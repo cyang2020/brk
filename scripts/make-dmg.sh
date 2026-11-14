@@ -19,7 +19,11 @@ ICON_FILE="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "$APP/Contents
 ICON="$APP/Contents/Resources/${ICON_FILE%.icns}.icns"
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+cleanup() {
+  [ ! -d "$WORK/check" ] || hdiutil detach "$WORK/check" >/dev/null 2>&1 || true
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
 # dmgbuild needs Python 3.10 or later; /usr/bin/python3 (Xcode's) is 3.9, so the one on PATH is used.
 "${PYTHON:-python3}" -I -m venv "$WORK/venv"
 "$WORK/venv/bin/python" -I -m pip install --quiet --disable-pip-version-check --no-deps --require-hashes \
@@ -41,4 +45,9 @@ if [ -n "${SIGN_IDENTITY:-}" ]; then
   codesign --verify --verbose "$OUT"
 fi
 hdiutil verify -quiet "$OUT"
+mkdir "$WORK/check"
+hdiutil attach -readonly -nobrowse -mountpoint "$WORK/check" "$OUT" >/dev/null
+codesign --verify --deep --strict "$WORK/check/$(basename "$APP")"
+hdiutil detach "$WORK/check" >/dev/null
+rmdir "$WORK/check"
 echo "[dmg] $OUT ($(du -h "$OUT" | cut -f1))"
