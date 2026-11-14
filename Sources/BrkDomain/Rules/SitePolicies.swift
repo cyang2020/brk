@@ -274,7 +274,9 @@ extension Work {
         case .addExtension:
             let context = state.siteTarget(in: window)?.context ?? state.libraryContext(in: window)
             guard case .profile = context else { effects.append(.app(.beep)); return }
-            effects.append(.addLocalExtension(window, context))
+            state.session.sites.controls.remove(window)
+            state.session.sites.extensionErrors[context] = nil
+            _ = openExtensionsPage(URL(string: "https://chromewebstore.google.com/category/extensions")!, in: window, focus: true)
         }
     }
 

@@ -4,6 +4,16 @@ import XCTest
 @testable import BrkCoreEngine
 
 final class MainDocumentStateTests: XCTestCase {
+    func testWindowHandoffRebindsTheReadyDocumentWithoutStartingANavigation() {
+        var state = MainDocumentState(browser: token)
+        _ = state.started(first)
+        _ = state.finished(first)
+        let replacement = BrowserToken(page: PageID(window: WindowID("other"), item: token.page.item), generation: 8)
+        state.rebind(to: replacement)
+        XCTAssertEqual(state.readyDocument, DocumentToken(browser: replacement, sequence: 1))
+        XCTAssertEqual(state.lastSequence, 1)
+        XCTAssertEqual(state.addressChanged(first, loading: false), [])
+    }
     private let token = BrowserToken(page: PageID(window: WindowID("window"), item: ItemID("tab")), generation: 1)
     private let first = URL(string: "https://example.com/first")!
     private let next = URL(string: "https://example.com/next")!

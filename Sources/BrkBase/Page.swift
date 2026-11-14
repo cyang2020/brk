@@ -160,6 +160,8 @@ public enum PageEvent: Hashable, Sendable, Codable {
     case navigationRequested(URL)
     /// A committed main-frame document confirmed usable, or a same-document address update. Never a failed load.
     case committed(URL)
+    /// An existing document moved to this window. Restore its address without recording another navigation.
+    case locationRestored(from: BrowserToken, url: URL)
     case titleChanged(String)
     case linkHovered(URL?)
     /// The ready document's language, once it finished loading: its `<html lang>`, else what its text was recognized
@@ -266,6 +268,10 @@ public struct PageFacts: Hashable, Sendable, Codable {
     public var extensionDialogDecision: String? = nil
     public var extensionFileDialogCallbacks: Int? = nil
     public var websiteFrozen: Bool? = nil
+    public var resourceFrozen: Bool? = nil
+    public var resourceDiscarded: Bool? = nil
+    public var resourceMemoryBytes: UInt64? = nil
+    public var resourceFreezeRequested: Bool? = nil
     public var websitePolicyError: String? = nil
     public var boostError: String? = nil
     /// The page surface's frame in its window, top-left origin, points. Nil when the surface is in no window.

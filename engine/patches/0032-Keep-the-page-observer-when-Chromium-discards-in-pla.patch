@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 14 Nov 2026 14:47:20 +0800
+Subject: [PATCH] Keep the page observer when Chromium discards in place
+
+---
+ brk/browser/brk_web_contents.mm | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index 4fc248c39e7e66e03bcfe7e7db36ce842fa9d10e..0726709b7cb61ec93b47d9f32d70a25688295f37 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -617,6 +617,10 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+ }
+ 
+ - (void)replaceDiscardedContents:(content::WebContents*)replacement {
++  if (replacement == _contents) {
++    _discarded = YES;
++    return;
++  }
+   BrkPage* old = _contents ? BrkPage::FromWebContents(_contents) : nullptr;
+   if (old) old->DetachOwner();
+   brkcore::CancelPageDialog(_contents);

@@ -13,6 +13,57 @@ enum CoreScenarios {
         Scenario("Core-dialogs", "a page's alert, confirm and prompt open as a sheet on its window; Return and Escape answer the page", dialogs),
     ]
 
+    @Sendable static func resources(_ app: AppUnderTest) throws {
+        let url = app.site.url("page-real.html")
+        let item = try app.load(url)
+        let first = app.window!
+        let original = PageID(window: first, item: item)
+        try app.waitForPageInput(original, at: url)
+        let browser = try app.native().pages[original]?.browserID
+        try app.evaluate(original, "marker='retained';document.title=marker")
+        try waitForTitle(app, item, "retained")
+        try app.press("cmd+n")
+        var second: WindowID?
+        try app.waitUntil("the second window") {
+            guard case .hello(let hello) = try app.send(.hello) else { return false }
+            second = hello.windows.first { $0 != first }
+            return second != nil
+        }
+        app.window = second
+        try app.press("escape")
+        try app.click(.row(item))
+        let moved = PageID(window: second!, item: item)
+        try app.waitForPageInput(moved, at: url)
+        try expect(try app.native().pages[moved]?.browserID == browser, "handoff created another Chromium tab")
+        try app.evaluate(moved, "document.title=marker")
+        try waitForTitle(app, item, "retained")
+        try expect(try app.native(first).pages[original] == nil, "the old window still owns a second page")
+        try app.screenshot("handoff")
+
+        try SitesSettingsRealScenarios.openDetails(app)
+        try SitesSettingsRealScenarios.pressInDetails(app, title: "Suspend this site while its tab is hidden", roles: ["AXCheckBox"])
+        try app.press("escape")
+        let other = try app.load(app.site.url("page2.html"))
+        try app.waitForPageInput(PageID(window: second!, item: other), at: app.site.url("page2.html"))
+        try app.waitUntil("the background page frozen by Chromium", timeout: 30) {
+            try app.native().ownedPages?[moved]?.resourceFrozen == true
+        }
+        try app.click(.row(item))
+        try app.waitForPageInput(moved, at: url)
+        try app.waitUntil("the visible page resumed") { try app.native().pages[moved]?.resourceFrozen == false }
+        try app.evaluate(moved, "document.title=marker")
+        try waitForTitle(app, item, "retained")
+
+        app.window = first
+        try WindowServerKeys.ensureFrontmost(app, first)
+        try app.click(.row(item))
+        try app.waitForPageInput(original, at: url)
+        try expect(try app.native().pages[original]?.browserID == browser, "the return handoff recreated the tab")
+        try app.evaluate(original, "document.title=marker")
+        try waitForTitle(app, item, "retained")
+        app.note("same Chromium tab and JavaScript document survived both handoffs and freeze/resume")
+    }
+
     private static func fixture(_ app: AppUnderTest, _ path: String) -> URL {
         app.site.root.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(path)
     }

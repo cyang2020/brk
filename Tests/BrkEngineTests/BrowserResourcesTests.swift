@@ -36,4 +36,21 @@ import XCTest
         XCTAssertTrue(owner.entries.isEmpty)
     }
 
+    func testWindowHandoffPreservesTheResourceAndRejectsOutstandingOperations() {
+        let resources = BrowserResources<NSObject>()
+        let resource = NSObject()
+        let source = BrowserToken(page: PageID(window: WindowID("first"), item: ItemID("tab")), generation: 1)
+        let destination = BrowserToken(page: PageID(window: WindowID("second"), item: ItemID("tab")), generation: 2)
+        let context = ContextEpoch(context: .profile(.default), generation: 1)
+        resources.insert(resource, browser: source, context: context)
+        resources.hostClosed(source)
+        XCTAssertTrue(resources.acquire(.transfer(DownloadID("file")), browser: source))
+        XCTAssertFalse(resources.transfer(source, to: destination))
+        resources.release(.transfer(DownloadID("file")), browser: source)
+        XCTAssertTrue(resources.transfer(source, to: destination))
+        XCTAssertNil(resources.entries[source])
+        XCTAssertTrue(resources.entries[destination]?.resource === resource)
+        XCTAssertTrue(resources.entries[destination]?.hostClosed == true)
+        XCTAssertEqual(resources.entries[destination]?.context, context)
+    }
 }

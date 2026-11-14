@@ -36,6 +36,9 @@ public final class BrkCoreRuntime {
         guard let application = object as? any BrkCoreApplication else {
             throw Unavailable(description: "BrkCore.framework's application has another interface")
         }
+        guard application.responds(to: NSSelectorFromString("embeddingInterfaceVersion")), application.embeddingInterfaceVersion >= 2 else {
+            throw Unavailable(description: "BrkCore.framework predates page resource management and store installation. Rebuild the engine before bundling this app.")
+        }
         self.application = application
     }
 

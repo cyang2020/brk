@@ -126,7 +126,8 @@ enum FindScenarios {
         app.window=second;try app.perform(.activate(window:second));try focus(app,PageID(window:second,item:page.item))
         try app.press("cmd+f");try typeQuery(app,"apple");try matches(app,6)
         try expect(try app.view(first).find?.query.text == "needle","two windows shared the query")
-        try expect(try app.view(first).find?.count == 3,"interleaved browser callbacks contaminated results")
+        try expect(try app.view(first).find?.count == nil && app.view(first).find?.searching == false,
+                   "the window without the page retained another window's find results")
         try app.dispatch(.find(.close));try app.dispatch(.peek(.open(app.site.url("find.html"))))
         try app.settle();try app.press("cmd+f");try typeQuery(app,"needle");try matches(app,3)
         try expect(try app.view().overlay != nil,"find dismissed Peek")

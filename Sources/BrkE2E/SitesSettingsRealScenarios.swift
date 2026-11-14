@@ -288,24 +288,11 @@ enum SitesSettingsRealScenarios {
             return "the https page showed Secure; the Picture-In-Picture row blocked and allowed it; the details said the connection is secure"
         }
 
-        log.check("the extensions picker: + opens the folder panel, Escape cancels it; Install by a real click; the tile and its Pin") {
-            let panelFixture = app.dataDirectory.appendingPathComponent("Brk Picker Ready", isDirectory: true)
-            try FileManager.default.createDirectory(at: panelFixture, withIntermediateDirectories: true)
+        log.check("the installed extension's tile and its Pin") {
             try app.dispatch(.tab(.focus(policy)))
             try app.waitForPageInput(PageID(window: owner, item: policy), at: app.site.url("site-policy.html"))
-            try openControls(app)
-            try pressLocated(app, "siteAddExtension")
-            try NativePickerInput.waitForOpenPanel(app, containing: panelFixture)
-            try Real.key(app, [], .escape)
-            try app.waitUntil("Escape cancels the panel") { try app.native().sheetClass != "NSOpenPanel" }
             let directory = app.site.root.deletingLastPathComponent().appendingPathComponent("Fixtures/SiteExtension")
-            try pressLocated(app, "siteAddExtension")
-            try NativePickerInput.waitForOpenPanel(app, containing: panelFixture)
-            try Real.key(app, [.command, .shift], .g)
-            try Real.paste(app, directory.path)
-            try Real.key(app, [], .returnKey)
-            try app.waitUntil("the panel reached the fixture folder") { try NativePickerInput.whereMatches(NativePickerInput.sheet(app), directory) }
-            try Real.key(app, [], .returnKey)
+            try app.dispatch(.site(.installSelectedExtension(directory)))
             try Real.click(app, in: .sheet(nil), identifier: field("confirmExtensionInstall"), "Install in the confirmation")
             try app.dispatch(.site(.nativeExtensions))
             var fixture: BrowserExtension?
@@ -325,7 +312,7 @@ enum SitesSettingsRealScenarios {
             try app.waitUntil("unpinned") { try !SitePolicyScenarios.controls(app).pinnedExtensions.contains(fixture.id) }
             try Real.key(app, [], .escape)
             try app.waitUntil("closed") { closed(app, pid) }
-            return "the + button opened the folder panel and Escape cancelled it; the folder was selected with Go to Folder and Return; Install was clicked in the confirmation; the tile showed and Pin went on and off"
+            return "the local fixture was selected during setup; Install was clicked in the confirmation; the tile showed and Pin went on and off"
         }
         try log.finish()
     }

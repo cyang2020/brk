@@ -43,6 +43,7 @@ final class CoreSurface: PageSurfaceView, NSMenuItemValidation {
     }
 
     var isReadyForFocus: Bool { contents?.inputView != nil }
+    func refreshInputView() { waitForInputView(attempt: 0) }
     var keyboardTarget: NSView { contents?.inputView ?? self }
     var containsFirstResponder: Bool {
         guard let responder = window?.firstResponder as? NSView else { return false }

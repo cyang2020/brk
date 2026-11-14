@@ -48,6 +48,12 @@ typedef NS_ENUM(NSInteger, BrkCoreDisposition) {
 @protocol BrkCoreBrowser;
 @protocol BrkCoreExtension;
 
+typedef NS_ENUM(NSInteger, BrkCoreFreezingMode) {
+  BrkCoreFreezingModeActive = 0,
+  BrkCoreFreezingModeAutomatic = 1,
+  BrkCoreFreezingModeUserRequested = 2,
+};
+
 /// The connection of the page's visible navigation entry, the input of Chrome's own security indicator (content's SSLStatus).
 typedef struct {
   /// The entry has a valid address; false: nothing to say yet.
@@ -253,6 +259,10 @@ NS_SWIFT_UI_ACTOR
 - (void)webContentsFrameDocumentsChanged:(id<BrkCoreWebContents>)contents;
 /// The page entered or left fullscreen (an element's requestFullscreen, its exit, or -exitFullscreen). The shell sizes the window.
 - (void)webContents:(id<BrkCoreWebContents>)contents didChangeFullscreen:(BOOL)fullscreen;
+/// The renderer was safely discarded; the tab and its navigation history remain.
+- (void)webContentsWasDiscarded:(id<BrkCoreWebContents>)contents;
+/// The shell's idle protocol session detached for a discard attempt that was vetoed. Reapply session-scoped policy.
+- (void)webContentsProtocolStateInvalidated:(id<BrkCoreWebContents>)contents;
 @end
 
 NS_SWIFT_UI_ACTOR
@@ -265,6 +275,7 @@ NS_SWIFT_UI_ACTOR
 @property(nonatomic, readonly, nullable) NSURL* visibleURL;
 /// The main frame's committed document address (CEF's main frame URL); nil before the first commit.
 @property(nonatomic, readonly, nullable) NSURL* committedURL;
+@property(nonatomic, readonly, copy) NSString* title;
 @property(nonatomic, readonly) BOOL isLoading;
 @property(nonatomic, readonly) BOOL canGoBack;
 @property(nonatomic, readonly) BOOL canGoForward;
@@ -281,6 +292,14 @@ NS_SWIFT_UI_ACTOR
 - (void)stopLoading;
 - (void)setPageFocused:(BOOL)focused;
 - (void)setHidden:(BOOL)hidden;
+/// Automatic mode votes through Chromium's freezing policy; explicit site suspension also honors its safety exclusions.
+- (BOOL)setFreezingMode:(BrkCoreFreezingMode)mode;
+@property(nonatomic, readonly) BOOL pageFrozen;
+@property(nonatomic, readonly) BOOL discarded;
+@property(nonatomic, readonly) uint64_t estimatedMemoryBytes;
+/// Chromium's eligibility policy decides whether this background page can be reclaimed.
+- (BOOL)discardIfEligible;
+- (void)resumeIfDiscarded;
 - (void)evaluateJavaScript:(NSString*)script
                 completion:(nullable void (^)(NSString* _Nullable json, NSString* _Nullable error))completion;
 /// One DevTools protocol command on this page. `parameters` and the result are JSON objects as text.
@@ -366,6 +385,8 @@ NS_SWIFT_UI_ACTOR
 - (nullable id<BrkCoreWebContents>)adoptWebContentsWithURL:(NSURL*)url;
 /// Makes the page the browser's active tab. What extensions see as the active tab of this window.
 - (void)activateWebContents:(id<BrkCoreWebContents>)contents;
+/// Moves the existing tab, including its renderer and history, between windows of the same profile.
+- (BOOL)takeOwnershipOfWebContents:(id<BrkCoreWebContents>)contents;
 /// As a click on the extension's toolbar button, on the active tab. Grants activeTab. nil, or why not.
 - (nullable NSString*)executeExtensionAction:(NSString*)extensionID;
 - (void)closeExtensionPopup;
@@ -398,6 +419,7 @@ NS_SWIFT_UI_ACTOR
 /// Calls back once Chromium's extension system is ready for this profile.
 - (void)whenExtensionsReady:(void (^)(void))completion;
 - (NSArray<id<BrkCoreExtension>>*)installedExtensions;
+- (void)setExtensionsChangedHandler:(nullable void (^)(void))handler;
 /// Installs an unpacked extension, as "Load unpacked". Calls back with nil, or why not.
 - (void)installUnpackedExtensionAtPath:(NSString*)path
                             completion:(void (^)(NSString* _Nullable extensionID, NSString* _Nullable error))completion;
@@ -414,6 +436,7 @@ NS_SWIFT_UI_ACTOR
 
 NS_SWIFT_UI_ACTOR
 @protocol BrkCoreApplication <NSObject>
+@property(nonatomic, readonly) NSUInteger embeddingInterfaceVersion;
 /// Chromium's version, 154.0.8037.98.
 @property(nonatomic, readonly, copy) NSString* version;
 /// Runs Chromium's main with the arguments given to BrkCoreApplicationPrepare. Blocks in Chromium's run loop, which runs -[NSApp run],

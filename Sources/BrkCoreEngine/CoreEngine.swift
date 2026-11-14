@@ -16,6 +16,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     let resources = BrowserResources<CorePage>()
     let transfers = Transfers()
     private var appearanceObservation: NSKeyValueObservation?
+    private var resourceManagement: CoreResourceManagement?
     private var live: [PageID: CorePage] {
         Dictionary(uniqueKeysWithValues: resources.entries.filter { $0.value.presented }.map { ($0.key.page, $0.value.resource) })
     }
@@ -24,6 +25,8 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     private var pendingSaves: [PageID: String] = [:]
     var contexts = ContextLifetimes()
     private var wanted: [PageSpec] = []
+    private var requestedPages: [PageSpec] = []
+    private var handoffPlaceholders: [PageID: PageSurfaceView] = [:]
     private let reconciliation = PageReconciliation()
     private let outputs = DocumentOutputs()
     private var outputPreparations: [OutputID: Task<Void, Never>] = [:]
@@ -48,6 +51,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     public init(runtime: BrkCoreRuntime) {
         self.runtime = runtime
         super.init()
+        resourceManagement = CoreResourceManagement(engine: self)
         outputs.acquire = { [weak self] id, browser in self?.resources.acquire(.documentOutput(id.rawValue), browser: browser) ?? false }
         outputs.release = { [weak self] id, browser in
             guard let self else { return }
@@ -101,12 +105,20 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
 
     public func reconcile(_ pages: [PageSpec]) {
         guard running else { return }
-        wanted = pages.filter { contexts.permitsWork($0.context) }
+        requestedPages = pages.filter { contexts.permitsWork($0.context) }
+        let requestedIDs = Set(requestedPages.map(\.id))
+        handoffPlaceholders = handoffPlaceholders.filter { requestedIDs.contains($0.key) }
+        wanted = uniquePageOwners(requestedPages)
         reconciliation.submit(wanted, invalidate: {
             for page in Array(self.live.values) where !self.wanted.contains(where: { $0.id == page.id && $0.context == page.context }) {
-                self.retire(page)
+                if !self.canHandoff(page) || !self.wanted.contains(where: { $0.id.item == page.id.item && $0.context == page.context }) {
+                    self.retire(page)
+                }
             }
-        }) { self.applyDemand($0) }
+        }) {
+            self.applyDemand($0)
+            self.resourceManagement?.reconcile()
+        }
     }
 
     private func applyDemand(_ pages: [PageSpec]) {
@@ -124,6 +136,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
                 page.applyBoostPolicy(spec.boostPolicy)
                 continue
             }
+            if handoff(to: spec) { continue }
             guard let url = spec.initialURL, let browser = browser(window: spec.id.window, context: spec.context) else { continue }
             let incarnation = ledger.create(spec.id)
             let page = CorePage(spec: spec, url: url, engine: self, incarnation: incarnation, browser: browser)
@@ -134,6 +147,83 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
             delegate?.engine(self, page: incarnation, didEmit: .browserCreated(spec.context, .unavailable))
             page.reportInitialLoading()
         }
+    }
+
+    private struct LogicalPage: Hashable { let item: ItemID; let context: BrowsingContext }
+
+    private func canHandoff(_ page: CorePage) -> Bool {
+        !page.websiteOperationProtected() && !page.contents.isLoading && page.openDialog == nil && pendingSaves[page.id] == nil
+            && page.contents.committedURL?.host != "chromewebstore.google.com"
+    }
+
+    private func uniquePageOwners(_ pages: [PageSpec]) -> [PageSpec] {
+        let groups = Dictionary(grouping: pages) { LogicalPage(item: $0.id.item, context: $0.context) }
+        let owners = Dictionary(grouping: live.values) { LogicalPage(item: $0.id.item, context: $0.context) }
+        return groups.compactMap { key, candidates in
+            let existing = owners[key]?.first
+            if let existing, !canHandoff(existing), let spec = candidates.first(where: { $0.id == existing.id }) { return spec }
+            if let focused = candidates.first(where: { $0.websitePolicy.visible && delegate?.engine(self, ownerWindow: $0.id.window)?.isKeyWindow == true }) {
+                return focused
+            }
+            if let existing, let spec = candidates.first(where: { $0.id == existing.id }) { return spec }
+            return candidates.sorted { $0.id < $1.id }.first
+        }.sorted { $0.id < $1.id }
+    }
+
+    /// Rebinds the Swift presentation while Chromium moves the same TabModel, renderer, and document.
+    private func handoff(to spec: PageSpec) -> Bool {
+        guard live[spec.id] == nil,
+              let page = live.values.first(where: { $0.id.item == spec.id.item && $0.context == spec.context }),
+              canHandoff(page), let destination = browser(window: spec.id.window, context: spec.context),
+              destination.takeOwnership(of: page.contents) else { return false }
+        let previous = page.incarnation
+        let oldDocument = page.readyDocument
+        page.find.invalidate()
+        page.policyRevision &+= 1
+        page.boostRevision &+= 1
+        page.surface.removeFromSuperview()
+        outputs.sourceGone(previous)
+        transfers.sourceGone(previous)
+        _ = ledger.retire(page.id)
+        let replacement = ledger.create(spec.id)
+        precondition(resources.transfer(previous, to: replacement))
+        _ = ledger.closed(previous)
+        page.id = spec.id
+        page.incarnation = replacement
+        page.browser = destination
+        page.surface.rebind(to: spec.id)
+        page.mainDocument.rebind(to: replacement)
+        page.permissionGrants = page.permissionGrants.map {
+            (DocumentToken(browser: replacement, sequence: $0.document.sequence), $0.requesting, $0.top, $0.capabilities)
+        }
+        if let document = page.readyDocument, oldDocument != nil {
+            if let value = page.policyWorld { page.policyWorld = (document, value.context) }
+            if let value = page.websiteStyleOwner { page.websiteStyleOwner = (document, value.id) }
+            if page.boostDocument == oldDocument { page.boostDocument = document }
+        }
+        page.downloadPolicy = spec.downloadPolicy
+        page.setMuted(spec.muted)
+        page.lastResourceUse = ProcessInfo.processInfo.systemUptime
+        delegate?.engine(self, page: previous, didEmit: .documentChanged(.unavailable))
+        delegate?.engine(self, page: previous, didEmit: .closed)
+        delegate?.engine(self, page: replacement, didEmit: .browserCreated(spec.context, page.mainDocument.availability))
+        pageDidEmit(page, .documentChanged(page.mainDocument.availability))
+        if let url = page.contents.committedURL { pageDidEmit(page, .locationRestored(from: previous, url: url)) }
+        pageDidEmit(page, .titleChanged(page.contents.title))
+        if let favicon = page.lastFavicon { pageDidEmit(page, .faviconChanged(favicon)) }
+        if let document = page.readyDocument {
+            pageDidEmit(page, .mediaChanged(document, page.mediaPlayers, error: nil))
+            pageDidEmit(page, .selectionChanged(document, page.reportedSelection))
+            if let language = page.detectedLanguage { pageDidEmit(page, .languageDetected(document, language)) }
+        }
+        pageDidEmit(page, .loadingChanged(isLoading: page.contents.isLoading,
+                                         canGoBack: page.contents.canGoBack, canGoForward: page.contents.canGoForward))
+        page.reportZoom()
+        page.reportSecurity()
+        checkSelection(page.id)
+        page.applyWebsitePolicy(spec.websitePolicy)
+        page.applyBoostPolicy(spec.boostPolicy)
+        return true
     }
 
     /// The `Browser` of this window and context; nil while its profile loads, and the demand replays when it has.
@@ -171,7 +261,8 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
                 self.loading.remove(id)
                 if let profile {
                     self.profiles[id] = profile
-                    if self.running { self.reconcile(self.wanted) }
+                    self.observeExtensions(profile, context: .profile(id))
+                    if self.running { self.reconcile(self.requestedPages) }
                 } else {
                     self.log.fault("profile \(directory, privacy: .public) did not load")
                 }
@@ -180,7 +271,18 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         return profiles[id]
     }
 
-    public func surface(for page: PageID) -> PageSurfaceView? { live[page]?.surface }
+    public func surface(for page: PageID) -> PageSurfaceView? {
+        if let surface = live[page]?.surface { return surface }
+        guard requestedPages.contains(where: { $0.id == page }) else { return nil }
+        if let existing = handoffPlaceholders[page] { return existing }
+        let placeholder = PageHandoffPlaceholder(page: page) { [weak self] in
+            guard let self else { return }
+            self.delegate?.engine(self, ownerWindow: page.window)?.makeKeyAndOrderFront(nil)
+            self.reconcile(self.requestedPages)
+        }
+        handoffPlaceholders[page] = placeholder
+        return placeholder
+    }
 
     func livePage(_ id: PageID) -> CorePage? { live[id] }
     var livePages: [CorePage] { Array(live.values) }
@@ -188,7 +290,11 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     public func cancelDownload(_ id: DownloadID) { transfers.cancel(id) }
 
     public func perform(_ action: PageAction, on page: PageID) {
-        guard running, let live = live[page] else { return }
+        guard running else { return }
+        if live[page] == nil, let spec = requestedPages.first(where: { $0.id == page }) {
+            _ = handoff(to: spec)
+        }
+        guard let live = live[page] else { return }
         switch action {
         case .navigate, .goBack, .goForward, .reload, .recover: outputs.sourceGone(live.incarnation)
         default: break
@@ -329,7 +435,10 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
                 continuation.resume()
             }
         }
-        if let loaded = box.profile, profiles[id] == nil { profiles[id] = loaded }
+        if let loaded = box.profile, profiles[id] == nil {
+            profiles[id] = loaded
+            observeExtensions(loaded, context: .profile(id))
+        }
         return box.profile
     }
 
@@ -445,6 +554,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
     /// `BrkCoreRuntime.run` and so the process (`-[BrowserCrApplication replyToApplicationShouldTerminate:]`).
     private func runShutdown() async -> ShutdownOutcome {
         running = false
+        resourceManagement?.stop()
         focusRequests.removeAll()
         wanted = []
         contexts.stop()
@@ -556,7 +666,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         }
         delegate?.engine(self, page: page.incarnation, didEmit: event)
         switch event {
-        case .committed, .loadingChanged, .titleChanged: restoreFocus(page)
+        case .committed, .locationRestored, .loadingChanged, .titleChanged: restoreFocus(page)
         default: break
         }
     }

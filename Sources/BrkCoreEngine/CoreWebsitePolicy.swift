@@ -43,21 +43,23 @@ extension CorePage {
         guard valid() else { throw CocoaError(.userCancelled) }
         guard contents.committedURL.flatMap(SiteOrigin.init) != nil else { return }
         policyRevision += 1
-        _ = try await protocolSession.call("Page.setWebLifecycleState", ["state": "active"])
+        _ = contents.setFreezingMode(.active)
         guard valid() else { throw CocoaError(.userCancelled) }
-        frozen = false
     }
 
     func applyWebsitePolicy(_ policy: WebsitePolicy) {
         let changed = websitePolicy != policy
         let before = websitePolicy.preferences
         websitePolicy = policy
+        let restoring = policy.visible && contents.discarded
+        contents.setHidden(!policy.visible)
+        if restoring { surface.refreshInputView() }
         if let origin = contents.committedURL.flatMap(SiteOrigin.init) {
             permissionSync += Self.changedPermissions(before, policy.preferences, top: origin)
             flushPermissionSync()
         }
         configureRequestFilter(navigatingTo ?? contents.committedURL)
-        if changed || (frozen && websiteOperationProtected()) { refreshWebsitePolicy() }
+        if changed || (contents.pageFrozen && websiteOperationProtected()) { refreshWebsitePolicy() }
     }
 
     /// The profile's built-in blocking rules for this document, as Chromium's DevTools URL blocking (CEF uses a request handler). The
@@ -149,10 +151,9 @@ extension CorePage {
             guard let self, self.engine.isLive(self), self.policyRevision == revision, self.mainDocument.availability == .ready(document) else { return }
             @MainActor func current() -> Bool { self.policyRevision == revision && self.engine.isLive(self) && self.mainDocument.availability == .ready(document) }
             do {
-                if self.frozen {
-                    _ = try await session.call("Page.setWebLifecycleState", ["state": "active"])
+                if self.contents.pageFrozen {
+                    _ = self.contents.setFreezingMode(.active)
                     guard current() else { return }
-                    self.frozen = false
                 }
                 let automatic = NSApplication.shared.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? "dark" : "light"
                 let effective = policy.appearance == .automatic ? automatic : policy.appearance.rawValue
@@ -188,17 +189,17 @@ extension CorePage {
                 }
                 guard current() else { return }
                 let freeze = shouldFreeze && !media && !self.websiteOperationProtected()
-                _ = try await session.call("Page.setWebLifecycleState", ["state": freeze ? "frozen" : "active"])
+                self.siteFreezing = freeze
+                self.reconcileFreezing()
                 guard current() else { return }
-                self.frozen = freeze
                 self.websiteError = nil
                 let authorization = await OSSiteAuthorization.shared.readback()
                 guard current() else { return }
-                self.engine.pageDidEmit(self, .websitePolicyApplied(WebsitePolicyStatus(document: document, appearance: policy.appearance, themeApplied: !policy.themeCSS.isEmpty, frozen: freeze, error: nil, osAuthorization: authorization, htmlMediaActive: shouldFreeze ? media : nil)))
+                self.engine.pageDidEmit(self, .websitePolicyApplied(WebsitePolicyStatus(document: document, appearance: policy.appearance, themeApplied: !policy.themeCSS.isEmpty, frozen: self.contents.pageFrozen, error: nil, osAuthorization: authorization, htmlMediaActive: shouldFreeze ? media : nil)))
             } catch {
                 self.websiteError = error.localizedDescription
                 guard self.policyRevision == revision, self.mainDocument.availability == .ready(document), self.engine.isLive(self) else { return }
-                self.engine.pageDidEmit(self, .websitePolicyApplied(WebsitePolicyStatus(document: document, appearance: policy.appearance, themeApplied: false, frozen: self.frozen, error: error.localizedDescription)))
+                self.engine.pageDidEmit(self, .websitePolicyApplied(WebsitePolicyStatus(document: document, appearance: policy.appearance, themeApplied: false, frozen: self.contents.pageFrozen, error: error.localizedDescription)))
             }
         }
     }

@@ -3,7 +3,7 @@ import Foundation
 
 /// Converts main-frame callbacks into document observations without letting an older attempt fail its replacement.
 struct MainDocumentState {
-    let browser: BrowserToken
+    private(set) var browser: BrowserToken
     private var sequence: UInt64 = 0
     private var document: DocumentAvailability = .unavailable
     var availability: DocumentAvailability { document }
@@ -15,6 +15,15 @@ struct MainDocumentState {
     private var committedAddress: URL?
 
     init(browser: BrowserToken) { self.browser = browser }
+
+    mutating func rebind(to browser: BrowserToken) {
+        self.browser = browser
+        switch document {
+        case .ready(let token): document = .ready(DocumentToken(browser: browser, sequence: token.sequence))
+        case .loading(let token): document = .loading(DocumentToken(browser: browser, sequence: token.sequence))
+        case .unavailable: break
+        }
+    }
 
     mutating func prepareNavigation() {
         failed = false

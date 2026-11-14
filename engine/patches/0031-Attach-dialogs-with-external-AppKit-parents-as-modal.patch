@@ -1,0 +1,132 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 14 Nov 2026 14:47:16 +0800
+Subject: [PATCH] Attach dialogs with external AppKit parents as modal sheets
+
+---
+ .../app_shim/native_widget_ns_window_bridge.h |  6 +++
+ .../native_widget_ns_window_bridge.mm         | 40 ++++++++++++++++++-
+ ui/views/widget/native_widget_mac.mm          |  7 ++++
+ 3 files changed, 51 insertions(+), 2 deletions(-)
+
+diff --git a/components/remote_cocoa/app_shim/native_widget_ns_window_bridge.h b/components/remote_cocoa/app_shim/native_widget_ns_window_bridge.h
+index 49a322bb5d3c2e68d9e5ac604f9274d3e2eebf83..5a817fb8cda049b49d96b394a53888c9494d2112 100644
+--- a/components/remote_cocoa/app_shim/native_widget_ns_window_bridge.h
++++ b/components/remote_cocoa/app_shim/native_widget_ns_window_bridge.h
+@@ -116,6 +116,10 @@ class REMOTE_COCOA_APP_SHIM_EXPORT NativeWidgetNSWindowBridge
+   // explicitly set an NSWindow in this way.
+   void SetWindow(NativeWidgetMacNSWindow* window);
+ 
++  // In-process embedders can own an AppKit window without a Views widget.
++  // Window-modal dialogs still need that window as their native sheet parent.
++  void SetExternalSheetParent(NSWindow* parent);
++
+   void OnWindowSetForTesting(
+       base::OnceCallback<void(NativeWidgetMacNSWindow*)> callback);
+ 
+@@ -471,6 +475,8 @@ class REMOTE_COCOA_APP_SHIM_EXPORT NativeWidgetNSWindowBridge
+ 
+   raw_ptr<NativeWidgetNSWindowBridge> parent_ =
+       nullptr;  // Weak. If non-null, owns this.
++  NSWindow* __weak external_sheet_parent_ = nil;
++  id __strong external_sheet_parent_close_observer_ = nil;
+   std::vector<NativeWidgetNSWindowBridge*> child_windows_;
+ 
+   // The size of the content area of the window most recently sent to |host_|
+diff --git a/components/remote_cocoa/app_shim/native_widget_ns_window_bridge.mm b/components/remote_cocoa/app_shim/native_widget_ns_window_bridge.mm
+index 26a877e3a629380251d72faf43f675dc7106eacc..70e4e6b24a36a584a33842843d8e69bd0b4c71a2 100644
+--- a/components/remote_cocoa/app_shim/native_widget_ns_window_bridge.mm
++++ b/components/remote_cocoa/app_shim/native_widget_ns_window_bridge.mm
+@@ -443,6 +443,7 @@ NativeWidgetNSWindowBridge::NativeWidgetNSWindowBridge(
+ }
+ 
+ NativeWidgetNSWindowBridge::~NativeWidgetNSWindowBridge() {
++  SetExternalSheetParent(nil);
+   SetLocalEventMonitorEnabled(false);
+   DCHECK(!local_event_monitor_);
+   GetPendingWindowTitleMap().erase(window_);
+@@ -484,6 +485,7 @@ void NativeWidgetNSWindowBridge::SetCommandDispatcher(
+ }
+ 
+ void NativeWidgetNSWindowBridge::SetParent(uint64_t new_parent_id) {
++  SetExternalSheetParent(nil);
+   const bool was_allowing_screenshots = ShouldAllowScreenshots();
+ 
+   // Remove from the old parent.
+@@ -538,6 +540,38 @@ void NativeWidgetNSWindowBridge::SetParent(uint64_t new_parent_id) {
+   }
+ }
+ 
++void NativeWidgetNSWindowBridge::SetExternalSheetParent(NSWindow* parent) {
++  if (parent && external_sheet_parent_ == parent) {
++    return;
++  }
++  if (external_sheet_parent_close_observer_) {
++    [[NSNotificationCenter defaultCenter]
++        removeObserver:external_sheet_parent_close_observer_];
++    external_sheet_parent_close_observer_ = nil;
++  }
++  external_sheet_parent_ = parent;
++  if (!parent) {
++    return;
++  }
++
++  DCHECK(!parent_);
++  DCHECK_EQ(modal_type_, ui::mojom::ModalType::kWindow);
++  window_.collectionBehavior =
++      (window_.collectionBehavior & ~NSWindowCollectionBehaviorManaged) |
++      NSWindowCollectionBehaviorTransient;
++  base::WeakPtr<NativeWidgetNSWindowBridge> weak_this = factory_.GetWeakPtr();
++  external_sheet_parent_close_observer_ =
++      [[NSNotificationCenter defaultCenter]
++          addObserverForName:NSWindowWillCloseNotification
++                      object:parent
++                       queue:nil
++                  usingBlock:^(NSNotification*) {
++                    if (weak_this) {
++                      weak_this->CloseWindow();
++                    }
++                  }];
++}
++
+ void NativeWidgetNSWindowBridge::CreateSelectFileDialog(
+     mojo::PendingReceiver<mojom::SelectFileDialog> receiver) {
+   mojo::MakeSelfOwnedReceiver(
+@@ -2331,7 +2365,8 @@ void NativeWidgetNSWindowBridge::UpdateWindowDisplay() {
+ }
+ 
+ bool NativeWidgetNSWindowBridge::IsWindowModalSheet() const {
+-  return parent_ && modal_type_ == ui::mojom::ModalType::kWindow;
++  return (parent_ || external_sheet_parent_) &&
++         modal_type_ == ui::mojom::ModalType::kWindow;
+ }
+ 
+ void NativeWidgetNSWindowBridge::ShowAsModalSheet() {
+@@ -2342,7 +2377,8 @@ void NativeWidgetNSWindowBridge::ShowAsModalSheet() {
+   window_visible_ = true;
+   host_->OnVisibilityChanged(window_visible_);
+ 
+-  NSWindow* parent_window = parent_->ns_window();
++  NSWindow* parent_window =
++      parent_ ? parent_->ns_window() : external_sheet_parent_;
+   if (NativeWidgetMacNSWindow* parent_widget_window =
+           base::apple::ObjCCast<NativeWidgetMacNSWindow>(parent_window)) {
+     parent_window = [parent_widget_window preferredSheetParent];
+diff --git a/ui/views/widget/native_widget_mac.mm b/ui/views/widget/native_widget_mac.mm
+index 4b50e1882176b4e5e0a077c0f96a6a405ddf1826..b90f072f3fb18a6a1556a540107a4706b85cb07d 100644
+--- a/ui/views/widget/native_widget_mac.mm
++++ b/ui/views/widget/native_widget_mac.mm
+@@ -317,6 +317,13 @@ void NativeWidgetMac::InitNativeWidget(Widget::InitParams params) {
+   ns_window_host_->InitWindow(params,
+                               ConvertBoundsToScreenIfNeeded(params.bounds));
+ 
++  if (!parent_host && params.parent && params.delegate &&
++      params.delegate->GetModalType() == ui::mojom::ModalType::kWindow) {
++    if (auto* bridge = ns_window_host_->GetInProcessNSWindowBridge()) {
++      bridge->SetExternalSheetParent(params.parent.GetNativeNSView().window);
++    }
++  }
++
+   OnWindowInitialized();
+ 
+   // Only set the z-order here if it is non-default since setting it may affect

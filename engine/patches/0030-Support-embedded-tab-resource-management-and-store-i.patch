@@ -1,0 +1,517 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brk Engine <brk-engine@localhost>
+Date: Sat, 14 Nov 2026 13:20:52 +0800
+Subject: [PATCH] Support embedded tab resource management and store installs
+
+Expose Chromium freeze votes and safe discards, keep the page wrapper across renderer replacement, and move existing tabs between browser windows. Release an idle shell protocol session before a discard while preserving user debugger protection.
+
+Observe profile extension changes and skip the BrowserView post-install promo in embedded mode. Keep the native permission prompt and CRX verification.
+---
+ brk/browser/brk_application.mm                |   2 +
+ brk/browser/brk_browser.mm                    |  20 +++
+ brk/browser/brk_devtools_session.cc           |   8 +
+ brk/browser/brk_devtools_session.h            |   2 +
+ brk/browser/brk_profile.mm                    |  66 ++++++++
+ brk/browser/brk_web_contents.h                |   2 +
+ brk/browser/brk_web_contents.mm               | 158 +++++++++++++++++-
+ chrome/browser/ui/browser.cc                  |   4 +-
+ .../extension_install_ui_desktop.cc           |   7 +
+ 9 files changed, 267 insertions(+), 2 deletions(-)
+
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index 09dde45c9f2adc35bbc6e686fc89d43d86715b1a..3616f107297661065137bfa079ce8b8f120b41dc 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -86,6 +86,8 @@ NSString* TaskKind(task_manager::Task::Type type) {
+   return base::SysUTF8ToNSString(std::string(version_info::GetVersionNumber()));
+ }
+ 
++- (NSUInteger)embeddingInterfaceVersion { return 2; }
++
+ - (void)setArgc:(int)argc argv:(const char* const*)argv {
+   // SAFETY: argv has argc entries, as for main().
+   UNSAFE_BUFFERS(_arguments.assign(argv, argv + argc));
+diff --git a/brk/browser/brk_browser.mm b/brk/browser/brk_browser.mm
+index 42085c83baee342d5586040c47777bf6262cbf15..11b7a8dcf5f5dd0fa03ca20c4a8c2ea53c8666b2 100644
+--- a/brk/browser/brk_browser.mm
++++ b/brk/browser/brk_browser.mm
+@@ -20,6 +20,7 @@
+ #include "chrome/browser/ui/extensions/extensions_container.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
++#include "chrome/browser/ui/tabs/tab_model.h"
+ #include "chrome/browser/ui/toolbar/toolbar_action_view_model.h"
+ #include "content/public/browser/navigation_controller.h"
+ #include "content/public/browser/navigation_entry.h"
+@@ -312,6 +313,25 @@ bool UpdateTargetURLHook(content::WebContents* source, const GURL& url) {
+   }
+ }
+ 
++- (BOOL)takeOwnershipOfWebContents:(id<BrkCoreWebContents>)contents {
++  BrkWebContents* page = (BrkWebContents*)contents;
++  BrkBrowser* source = page.browser;
++  if (!source || !_browser || !source->_browser || !page.contents) return NO;
++  if (source == self) return YES;
++  if (_browser->GetProfile() != source->_browser->GetProfile()) return NO;
++  TabStripModel* oldStrip = source->_browser->GetTabStripModel();
++  const int index = oldStrip->GetIndexOfWebContents(page.contents);
++  if (index == TabStripModel::kNoTab) return NO;
++  std::unique_ptr<tabs::TabModel> tab = oldStrip->DetachTabAtForInsertion(index);
++  [source->_pages removeObject:page];
++  [source->_unadopted removeObject:page];
++  [page moveToBrowser:self];
++  _browser->GetTabStripModel()->InsertDetachedTabAt(
++      _browser->GetTabStripModel()->count(), std::move(tab), 0);
++  [_pages addObject:page];
++  return YES;
++}
++
+ - (void)closeContents:(content::WebContents*)contents {
+   if (!_browser) {
+     return;
+diff --git a/brk/browser/brk_devtools_session.cc b/brk/browser/brk_devtools_session.cc
+index 8c79ee96d4facba8f199541c1d95882a9974cd32..5bf8501fa596f2e669821374e9fce1ecf8ee0708 100644
+--- a/brk/browser/brk_devtools_session.cc
++++ b/brk/browser/brk_devtools_session.cc
+@@ -93,6 +93,14 @@ void BrkDevToolsSession::DispatchProtocolMessage(content::DevToolsAgentHost* age
+   }
+ }
+ 
++bool BrkDevToolsSession::DetachForDiscard() {
++  if (!host_ || !waiting_.empty()) return false;
++  host_->DetachClient(this);
++  host_ = nullptr;
++  keep_attached_ = false;
++  return true;
++}
++
+ void BrkDevToolsSession::AgentHostClosed(content::DevToolsAgentHost* agent_host) {
+   host_ = nullptr;
+   keep_attached_ = false;
+diff --git a/brk/browser/brk_devtools_session.h b/brk/browser/brk_devtools_session.h
+index 8d1d5b4d5fb2ace075c94e9c0c12f5de466e48f3..c2886aa3e1b20e57cf5f8502346e2de0640ff5d3 100644
+--- a/brk/browser/brk_devtools_session.h
++++ b/brk/browser/brk_devtools_session.h
+@@ -27,6 +27,8 @@ class BrkDevToolsSession : public content::DevToolsAgentHostClient {
+   ~BrkDevToolsSession() override;
+ 
+   void Send(const std::string& method, const std::string& parameters_json, Reply reply);
++  // Detaches only this shell's client, and only when no command is in flight.
++  bool DetachForDiscard();
+ 
+   // content::DevToolsAgentHostClient:
+   void DispatchProtocolMessage(content::DevToolsAgentHost* agent_host,
+diff --git a/brk/browser/brk_profile.mm b/brk/browser/brk_profile.mm
+index 643a591b85a6e201a90fedb0ebbe4857deaa7a8a..4245f1314ac60502997e15bb2b6833dfb9545533 100644
+--- a/brk/browser/brk_profile.mm
++++ b/brk/browser/brk_profile.mm
+@@ -1,5 +1,6 @@
+ #import "brk/browser/brk_profile.h"
+ 
++#include <memory>
+ #include <string>
+ 
+ #include "base/files/file_path.h"
+@@ -8,6 +9,8 @@
+ #include "base/memory/scoped_refptr.h"
+ #include "base/memory/weak_ptr.h"
+ #include "base/one_shot_event.h"
++#include "base/scoped_observation.h"
++#include "base/task/single_thread_task_runner.h"
+ #include "base/strings/sys_string_conversions.h"
+ #include "base/strings/utf_string_conversions.h"
+ #import "brk/browser/brk_browser.h"
+@@ -26,13 +29,50 @@
+ #include "services/network/public/mojom/network_context.mojom.h"
+ #include "extensions/browser/extension_action_manager.h"
+ #include "extensions/browser/extension_registry.h"
++#include "extensions/browser/extension_registry_observer.h"
+ #include "extensions/browser/extension_system.h"
+ #include "extensions/browser/unpacked_installer.h"
+ #include "extensions/common/manifest.h"
+ #include "extensions/common/extension.h"
+ 
++@interface BrkProfile ()
++- (void)extensionRegistryChanged;
++@end
++
++namespace brkcore {
++
++class ProfileExtensionObserver final : public extensions::ExtensionRegistryObserver {
++ public:
++  ProfileExtensionObserver(BrkProfile* owner, Profile* profile) : owner_(owner) {
++    observation_.Observe(extensions::ExtensionRegistry::Get(profile));
++  }
++
++  void OnExtensionLoaded(content::BrowserContext*, const extensions::Extension* extension) override { Changed(extension); }
++  void OnExtensionUnloaded(content::BrowserContext*, const extensions::Extension* extension,
++                           extensions::UnloadedExtensionReason) override { Changed(extension); }
++  void OnExtensionInstalled(content::BrowserContext*, const extensions::Extension* extension, bool) override { Changed(extension); }
++  void OnExtensionUninstalled(content::BrowserContext*, const extensions::Extension* extension,
++                              extensions::UninstallReason) override { Changed(extension); }
++  void OnShutdown(extensions::ExtensionRegistry*) override { observation_.Reset(); }
++
++ private:
++  void Changed(const extensions::Extension* extension) {
++    if (!extensions::Manifest::IsComponentLocation(extension->location())) {
++      [owner_ extensionRegistryChanged];
++    }
++  }
++
++  __weak BrkProfile* owner_;
++  base::ScopedObservation<extensions::ExtensionRegistry, extensions::ExtensionRegistryObserver> observation_{this};
++};
++
++}  // namespace brkcore
++
+ @implementation BrkProfile {
+   base::WeakPtr<Profile> _profile;
++  std::unique_ptr<brkcore::ProfileExtensionObserver> _extensionObserver;
++  void (^_extensionsChangedHandler)(void);
++  BOOL _extensionChangePending;
+ }
+ 
+ - (instancetype)initWithProfile:(Profile*)profile {
+@@ -69,6 +109,32 @@
+   }));
+ }
+ 
++- (void)setExtensionsChangedHandler:(void (^)(void))handler {
++  _extensionsChangedHandler = [handler copy];
++  _extensionObserver.reset();
++  if (handler && _profile && !_profile->IsOffTheRecord()) {
++    _extensionObserver = std::make_unique<brkcore::ProfileExtensionObserver>(self, _profile.get());
++  }
++}
++
++- (void)extensionRegistryChanged {
++  if (_extensionChangePending) {
++    return;
++  }
++  _extensionChangePending = YES;
++  __weak BrkProfile* weakSelf = self;
++  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE, base::BindOnce(^{
++    BrkProfile* owner = weakSelf;
++    if (!owner) {
++      return;
++    }
++    owner->_extensionChangePending = NO;
++    if (owner->_profile && owner->_extensionsChangedHandler) {
++      owner->_extensionsChangedHandler();
++    }
++  }));
++}
++
+ - (NSArray<id<BrkCoreExtension>>*)installedExtensions {
+   NSMutableArray<id<BrkCoreExtension>>* out = [NSMutableArray array];
+   if (!_profile) {
+diff --git a/brk/browser/brk_web_contents.h b/brk/browser/brk_web_contents.h
+index 9a6172df912e65fbf4a73f526e6ba34385e9b37a..b687c1a786207ed3033c18e7a1d74441e9ba8ea3 100644
+--- a/brk/browser/brk_web_contents.h
++++ b/brk/browser/brk_web_contents.h
+@@ -21,6 +21,8 @@ struct NativeWebKeyboardEvent;
+ - (instancetype)initWithContents:(content::WebContents*)contents browser:(BrkBrowser*)browser;
+ @property(nonatomic, readonly) content::WebContents* contents;
+ @property(nonatomic, readonly, weak) BrkBrowser* browser;
++- (void)moveToBrowser:(BrkBrowser*)browser;
++- (void)documentDidCommit;
+ // The shell has taken this page. A page Chromium made itself (target=_blank) waits unadopted until then.
+ @property(nonatomic) BOOL adopted;
+ // The JavaScript dialog the shell shows for this page, until it is answered or cancelled (brk_javascript_dialogs.mm).
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index 8e7bfce177b704cbcb233f397090c6e99dfc4e8e..4fc248c39e7e66e03bcfe7e7db36ce842fa9d10e 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -1,6 +1,7 @@
+ #import "brk/browser/brk_web_contents.h"
+ #include "brk/browser/brk_javascript_dialogs.h"
+ 
++#include <algorithm>
+ #include <memory>
+ #include <optional>
+ #include <string>
+@@ -35,6 +36,13 @@
+ #include "net/cert/cert_status_flags.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/performance_manager/policies/discard_eligibility_policy.h"
++#include "chrome/browser/performance_manager/policies/page_discarding_helper.h"
++#include "chrome/browser/performance_manager/public/user_tuning/user_tuning_utils.h"
++#include "components/performance_manager/freezing/freezing_policy.h"
++#include "components/performance_manager/public/freezing/freezing.h"
++#include "components/performance_manager/public/graph/page_node.h"
++#include "components/performance_manager/public/performance_manager.h"
+ #include "components/input/native_web_keyboard_event.h"
+ #include "components/sessions/content/session_tab_helper.h"
+ #include "components/zoom/zoom_controller.h"
+@@ -149,6 +157,18 @@ class BrkPage : public content::WebContentsObserver,
+   }
+   bool closing_by_shell() const { return closing_by_shell_; }
+   void set_closing_by_shell() { closing_by_shell_ = true; }
++  void DetachOwner() { owner_ = nil; freezing_vote_.reset(); }
++  void SetFreezingVote(bool enabled) {
++    if (!enabled) freezing_vote_.reset();
++    else if (!freezing_vote_) {
++      freezing_vote_ = std::make_unique<performance_manager::freezing::FreezingVote>(&GetWebContents());
++    }
++  }
++  void AboutToBeDiscarded(content::WebContents* replacement) override;
++  void WasDiscarded() override;
++  bool ReleaseIdleDevToolsForDiscard() {
++    return devtools_ && devtools_->DetachForDiscard();
++  }
+ 
+   // content::WebContentsObserver:
+   void DidStartNavigation(content::NavigationHandle* handle) override {
+@@ -167,6 +187,7 @@ class BrkPage : public content::WebContentsObserver,
+     id<BrkCoreWebContentsDelegate> delegate = owner_.delegate;
+     NSURL* url = NSURLFromGURL(handle->GetURL());
+     if (handle->HasCommitted() && !handle->IsErrorPage()) {
++      [owner_ documentDidCommit];
+       if (handle->IsSameDocument()) {
+         [delegate webContents:owner_ didChangeAddress:url];
+       } else {
+@@ -312,6 +333,7 @@ class BrkPage : public content::WebContentsObserver,
+ 
+   __weak BrkWebContents* owner_;
+   std::unique_ptr<brkcore::BrkDevToolsSession> devtools_;
++  std::unique_ptr<performance_manager::freezing::FreezingVote> freezing_vote_;
+   bool closing_by_shell_ = false;
+   bool frames_report_posted_ = false;
+   base::ScopedObservation<find_in_page::FindTabHelper, find_in_page::FindResultObserver> find_observation_{this};
+@@ -334,6 +356,8 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+ @interface BrkWebContents ()
+ - (void)contentsWillGo:(BOOL)byShell;
+ - (content::RenderFrameHost*)liveFrame:(NSString*)frame;
++- (void)replaceDiscardedContents:(content::WebContents*)contents;
++- (void)didDiscardContents;
+ @end
+ 
+ @implementation BrkWebContents {
+@@ -341,6 +365,7 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   __weak id<BrkCoreWebContentsDelegate> _delegate;
+   __weak BrkBrowser* _browser;
+   NSView* _nativeView;
++  BOOL _discarded;
+ }
+ 
+ @synthesize delegate = _delegate;
+@@ -353,7 +378,11 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+     _browser = browser;
+     BrkPage::CreateForWebContents(contents, self);
+     brkcore::WatchMediaPlayers(contents, self);
+-    _nativeView = contents->GetNativeView().GetNativeNSView();
++    _nativeView = [[NSView alloc] initWithFrame:NSZeroRect];
++    NSView* child = contents->GetNativeView().GetNativeNSView();
++    child.frame = _nativeView.bounds;
++    child.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
++    [_nativeView addSubview:child];
+   }
+   return self;
+ }
+@@ -366,6 +395,9 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   return _browser;
+ }
+ 
++- (void)moveToBrowser:(BrkBrowser*)browser { _browser = browser; }
++- (void)documentDidCommit { _discarded = NO; }
++
+ - (void)contentsWillGo:(BOOL)byShell {
+   _contents = nullptr;
+   id<BrkCoreWebContentsDelegate> delegate = _delegate;
+@@ -395,6 +427,10 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   return _contents ? NSURLFromGURL(_contents->GetLastCommittedURL()) : nil;
+ }
+ 
++- (NSString*)title {
++  return _contents ? base::SysUTF16ToNSString(_contents->GetTitle()) : @"";
++}
++
+ - (BOOL)isLoading {
+   return _contents && _contents->IsLoading();
+ }
+@@ -483,10 +519,124 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   // A page made hidden has its view hidden as well (WebContentsViewMac::CreateView), and in Chrome only the Views host shows it again
+   // (ViewsHostableSetVisible). Brk has no Views host, so the view follows here.
+   _nativeView.hidden = hidden;
++  _contents->GetNativeView().GetNativeNSView().hidden = hidden;
+   if (hidden) {
+     _contents->WasHidden();
+   } else {
++    [self setFreezingMode:BrkCoreFreezingModeActive];
+     _contents->WasShown();
++    [self resumeIfDiscarded];
++  }
++}
++
++- (BOOL)setFreezingMode:(BrkCoreFreezingMode)mode {
++  if (!_contents || _discarded) return NO;
++  BrkPage* bridge = BrkPage::FromWebContents(_contents);
++  if (!bridge) return NO;
++  if (mode == BrkCoreFreezingModeActive) {
++    bridge->SetFreezingVote(false);
++    _contents->SetPageFrozen(false);
++    return YES;
++  }
++  using namespace performance_manager;
++  if (_contents->GetVisibility() != content::Visibility::HIDDEN ||
++      !PerformanceManager::IsAvailable()) return NO;
++  auto node = PerformanceManager::GetPrimaryPageNodeForWebContents(_contents);
++  auto* graph = PerformanceManager::GetGraph();
++  if (!node || !FreezingPolicy::GetFromGraph(graph)) return NO;
++  if (mode == BrkCoreFreezingModeUserRequested) {
++    auto details = freezing::GetCanFreezeDetailsForPageNode(node.get());
++    auto reasons = details.cannot_freeze_reasons;
++    reasons.PutAll(details.cannot_freeze_reasons_connected_pages);
++    reasons.Remove(freezing::CannotFreezeReason::kRecentlyVisible);
++    reasons.Remove(freezing::CannotFreezeReason::kRecentlyAudible);
++    reasons.Remove(freezing::CannotFreezeReason::kMostRecentlyUsed);
++    if (!reasons.empty()) {
++      bridge->SetFreezingVote(false);
++      _contents->SetPageFrozen(false);
++      return NO;
++    }
++  }
++  bridge->SetFreezingVote(true);
++  if (mode == BrkCoreFreezingModeUserRequested) _contents->SetPageFrozen(true);
++  return YES;
++}
++
++- (BOOL)pageFrozen {
++  if (!_contents || !performance_manager::PerformanceManager::IsAvailable()) return NO;
++  auto node = performance_manager::PerformanceManager::GetPrimaryPageNodeForWebContents(_contents);
++  return node && node->GetLifecycleState() == performance_manager::mojom::LifecycleState::kFrozen;
++}
++
++- (BOOL)discarded { return _discarded; }
++
++- (uint64_t)estimatedMemoryBytes {
++  if (!_contents || !performance_manager::PerformanceManager::IsAvailable()) return 0;
++  auto node = performance_manager::PerformanceManager::GetPrimaryPageNodeForWebContents(_contents);
++  return node ? performance_manager::user_tuning::GetDiscardedMemoryEstimateForPage(node.get()).InBytes() : 0;
++}
++
++- (BOOL)discardIfEligible {
++  if (!_contents || _discarded || _contents->IsCurrentlyAudible() || _contents->IsBeingCaptured() ||
++      _contents->GetVisibility() != content::Visibility::HIDDEN ||
++      !performance_manager::PerformanceManager::IsAvailable()) return NO;
++  using namespace performance_manager;
++  auto node = PerformanceManager::GetPrimaryPageNodeForWebContents(_contents);
++  auto* graph = PerformanceManager::GetGraph();
++  auto* policy = policies::DiscardEligibilityPolicy::GetFromGraph(graph);
++  auto* helper = policies::PageDiscardingHelper::GetFromGraph(graph);
++  constexpr auto reason = ::mojom::LifecycleUnitDiscardReason::PROACTIVE;
++  if (!node || !policy || !helper) return NO;
++  std::vector<policies::CannotDiscardReason> reasons;
++  const auto eligibility = policy->CanDiscard(node.get(), reason, false, &reasons);
++  bool detached = false;
++  if (eligibility != policies::CanDiscardResult::kEligible) {
++    // The shell keeps emulation and filtering in its protocol session. It is
++    // not a user's debugger: detach it only when it is the sole veto, then let
++    // Chromium check again so a real debugger remains protected.
++    if (reasons.empty() || !std::all_of(reasons.begin(), reasons.end(), [](auto value) {
++          return value == policies::CannotDiscardReason::kDevToolsOpen;
++        })) return NO;
++    auto* bridge = BrkPage::FromWebContents(_contents);
++    if (!bridge || !bridge->ReleaseIdleDevToolsForDiscard()) return NO;
++    detached = true;
++  }
++  if (policy->CanDiscard(node.get(), reason) == policies::CanDiscardResult::kEligible &&
++      helper->ImmediatelyDiscardMultiplePages({node.get()}, reason, false)) return YES;
++  if (detached && [_delegate respondsToSelector:@selector(webContentsProtocolStateInvalidated:)]) {
++    [_delegate webContentsProtocolStateInvalidated:self];
++  }
++  return NO;
++}
++
++- (void)resumeIfDiscarded {
++  if (!_contents || !_discarded) return;
++  _discarded = NO;
++  _contents->GetController().SetNeedsReload();
++  _contents->GetController().LoadIfNecessary();
++}
++
++- (void)replaceDiscardedContents:(content::WebContents*)replacement {
++  BrkPage* old = _contents ? BrkPage::FromWebContents(_contents) : nullptr;
++  if (old) old->DetachOwner();
++  brkcore::CancelPageDialog(_contents);
++  _contents = replacement;
++  _discarded = YES;
++  BrkPage::CreateForWebContents(replacement, self);
++  brkcore::WatchMediaPlayers(replacement, self);
++  for (NSView* child in [_nativeView.subviews copy]) [child removeFromSuperview];
++  NSView* child = replacement->GetNativeView().GetNativeNSView();
++  child.frame = _nativeView.bounds;
++  child.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
++  [_nativeView addSubview:child];
++}
++
++- (void)didDiscardContents {
++  _discarded = YES;
++  if (auto* bridge = BrkPage::FromWebContents(_contents)) bridge->SetFreezingVote(false);
++  [self tabHelpersReady];
++  if ([_delegate respondsToSelector:@selector(webContentsWasDiscarded:)]) {
++    [_delegate webContentsWasDiscarded:self];
+   }
+ }
+ 
+@@ -810,6 +960,12 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+ @end
+ 
+ namespace {
++void BrkPage::AboutToBeDiscarded(content::WebContents* replacement) {
++  [owner_ replaceDiscardedContents:replacement];
++}
++void BrkPage::WasDiscarded() {
++  [owner_ didDiscardContents];
++}
+ void BrkPage::WebContentsDestroyed() {
+   [owner_ contentsWillGo:closing_by_shell_];
+ }
+diff --git a/chrome/browser/ui/browser.cc b/chrome/browser/ui/browser.cc
+index 07de580deb67c305fdbf25ddb9c168b3cc646a4f..fe6778b540305595f73986ed150b8350d34b6831 100644
+--- a/chrome/browser/ui/browser.cc
++++ b/chrome/browser/ui/browser.cc
+@@ -25,6 +25,7 @@
+ #include "base/metrics/user_metrics.h"
+ #include "base/metrics/user_metrics_action.h"
+ #include "base/notimplemented.h"
++#include "brk/embedding/embedding.h"
+ #include "base/process/process_info.h"
+ #include "base/strings/string_number_conversions.h"
+ #include "base/strings/string_util.h"
+@@ -571,7 +572,8 @@ void Browser::OnTabStripModelChanged(TabStripModel* tab_strip_model,
+       // is inserted in a new window.
+       find_in_page::FindTabHelper* find_tab_helper =
+           find_in_page::FindTabHelper::FromWebContents(selection.new_contents);
+-      if (!FindBarController::From(this)->HasFindBar() && find_tab_helper &&
++      if (!brkcore::IsEmbedded() &&
++          !FindBarController::From(this)->HasFindBar() && find_tab_helper &&
+           find_tab_helper->is_find_session_active()) {
+         FindBarController::From(this)->find_bar();
+       }
+diff --git a/chrome/browser/ui/extensions/extension_install_ui_desktop.cc b/chrome/browser/ui/extensions/extension_install_ui_desktop.cc
+index c9e2a59c3e0dd03fbf9a6bf9eb1f5d63f1ee4a14..817ba3922b36ded3fbffb634e296fa57b11f3610 100644
+--- a/chrome/browser/ui/extensions/extension_install_ui_desktop.cc
++++ b/chrome/browser/ui/extensions/extension_install_ui_desktop.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/extensions/extension_install_ui_desktop.h"
+ 
++#include "brk/embedding/embedding.h"
++
+ #include <string>
+ #include <utility>
+ 
+@@ -123,6 +125,11 @@ void ExtensionInstallUIDesktop::OnInstallSuccess(
+     return;
+   }
+ 
++  if (brkcore::IsEmbedded()) {
++    // Brk updates its extension controls from the registry; Chrome's post-install bubble requires BrowserView.
++    return;
++  }
++
+   if (!profile()) {
+     // TODO(zelidrag): Figure out what exact conditions cause crash
+     // http://crbug.com/40293301 and write browser test to cover it.
