@@ -1,0 +1,259 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Sat, 14 Nov 2026 20:32:07 +0800
+Subject: [PATCH] Prevent macOS thread-pool shutdown starvation
+
+Raise low-QoS workers from the shutdown caller so startup and running tasks do not have to execute their own boost first. Cover pooled and single-thread workers, recheck shutdown after thread creation, and retain native overrides through detach or join.
+
+Add a macOS regression that observes kernel priority while worker initialization is blocked.
+---
+ ...ooled_single_thread_task_runner_manager.cc |  3 +
+ base/task/thread_pool/thread_group_impl.cc    |  3 +
+ base/task/thread_pool/worker_thread.cc        | 49 ++++++++++++++-
+ base/task/thread_pool/worker_thread.h         | 11 ++++
+ .../thread_pool/worker_thread_unittest.cc     | 62 +++++++++++++++++++
+ 5 files changed, 127 insertions(+), 1 deletion(-)
+
+diff --git a/base/task/thread_pool/pooled_single_thread_task_runner_manager.cc b/base/task/thread_pool/pooled_single_thread_task_runner_manager.cc
+index 797febff372eda1b2d83401c19759aa2e426b61a..431d380e20d86e09c65f50a68cfcb4585a767d8a 100644
+--- a/base/task/thread_pool/pooled_single_thread_task_runner_manager.cc
++++ b/base/task/thread_pool/pooled_single_thread_task_runner_manager.cc
+@@ -681,6 +681,9 @@ void PooledSingleThreadTaskRunnerManager::DidUpdateCanRunPolicy() {
+   // CanRunPolicy if tasks are posted to it and thus doesn't need a
+   // DidUpdateCanRunPolicy() notification.
+   for (auto& worker : workers_to_update) {
++#if BUILDFLAG(IS_MAC)
++    worker->MaybeBoostPriorityForShutdown();
++#endif
+     static_cast<WorkerThreadDelegate*>(worker->delegate())
+         ->DidUpdateCanRunPolicy();
+   }
+diff --git a/base/task/thread_pool/thread_group_impl.cc b/base/task/thread_pool/thread_group_impl.cc
+index a7ef4e8765d4c90b3f9cf42c0e8519b26d5f11e3..c3070f4637587f3a027d6e49bfc2e22000185ce6 100644
+--- a/base/task/thread_pool/thread_group_impl.cc
++++ b/base/task/thread_pool/thread_group_impl.cc
+@@ -1026,6 +1026,9 @@ void ThreadGroupImpl::OnShutdownStarted() {
+ 
+   // Start a MAY_BLOCK scope on each worker that is already running a task.
+   for (scoped_refptr<WorkerThread>& worker : workers_) {
++#if BUILDFLAG(IS_MAC)
++    worker->MaybeBoostPriorityForShutdown();
++#endif
+     // The delegates of workers inside a ThreadGroupImpl should be
+     // `WorkerDelegate`s.
+     WorkerDelegate* delegate = static_cast<WorkerDelegate*>(worker->delegate());
+diff --git a/base/task/thread_pool/worker_thread.cc b/base/task/thread_pool/worker_thread.cc
+index 378cee753ff7000b6c48a6cbd23de8cacc337150..148d0a6e016c4c8c20a4b76c4f1eee37254fbbaa 100644
+--- a/base/task/thread_pool/worker_thread.cc
++++ b/base/task/thread_pool/worker_thread.cc
+@@ -182,20 +182,35 @@ bool WorkerThread::Start(
+   self_ = this;
+ 
+   constexpr size_t kDefaultStackSize = 0;
++  ThreadType initial_thread_type = thread_type_hint_;
++#if BUILDFLAG(IS_MAC)
++  if (task_tracker_->HasShutdownStarted()) {
++    initial_thread_type = std::max(initial_thread_type, ThreadType::kDefault);
++  }
++#endif
+   PlatformThread::CreateWithType(kDefaultStackSize, this, &thread_handle_,
+-                                 thread_type_hint_);
++                                 initial_thread_type);
+ 
+   if (thread_handle_.is_null()) {
+     self_ = nullptr;
+     return false;
+   }
+ 
++#if BUILDFLAG(IS_MAC)
++  // Shutdown may have started while the native thread was being created.
++  MaybeBoostPriorityForShutdownLockRequired();
++#endif
+   return true;
+ }
+ 
+ void WorkerThread::Destroy() {
+   CheckedAutoLock auto_lock(thread_lock_);
+ 
++#if BUILDFLAG(IS_MAC)
++  RemoveThreadTypeOverride(thread_handle_, shutdown_priority_override_,
++                           thread_type_hint_);
++  shutdown_priority_override_ = nullptr;
++#endif
+   // If |thread_handle_| wasn't joined, detach it.
+   if (!thread_handle_.is_null()) {
+     PlatformThread::Detach(thread_handle_);
+@@ -213,6 +228,10 @@ void WorkerThread::JoinForTesting() {
+   delegate_->wake_up_event_.Signal();
+ 
+   PlatformThreadHandle thread_handle;
++#if BUILDFLAG(IS_MAC)
++  PlatformPriorityOverride shutdown_priority_override = nullptr;
++  const ThreadType initial_thread_type = thread_type_hint_;
++#endif
+ 
+   {
+     CheckedAutoLock auto_lock(thread_lock_);
+@@ -222,11 +241,21 @@ void WorkerThread::JoinForTesting() {
+     }
+ 
+     thread_handle = thread_handle_;
++#if BUILDFLAG(IS_MAC)
++    shutdown_priority_override =
++        std::exchange(shutdown_priority_override_, nullptr);
++#endif
+     // Reset |thread_handle_| so it isn't joined by the destructor.
+     thread_handle_ = PlatformThreadHandle();
+   }
+ 
+   PlatformThread::Join(thread_handle);
++
++#if BUILDFLAG(IS_MAC)
++  // The worker can destroy itself while Join waits. Only use local state here.
++  RemoveThreadTypeOverride(thread_handle, shutdown_priority_override,
++                           initial_thread_type);
++#endif
+ }
+ 
+ void WorkerThread::Cleanup() {
+@@ -271,13 +300,31 @@ void WorkerThread::MaybeUpdateThreadType() {
+ }
+ 
+ void WorkerThread::MaybeBoostPriorityForShutdown() {
++#if BUILDFLAG(IS_MAC)
++  CheckedAutoLock auto_lock(thread_lock_);
++  MaybeBoostPriorityForShutdownLockRequired();
++#else
+   if (priority_boost_.has_value() && !priority_boost_->IsActive() &&
+       task_tracker_->HasShutdownStarted() &&
+       thread_type_hint_ < ThreadType::kDefault) {
+     priority_boost_->BoostPriority(ThreadType::kDefault);
+   }
++#endif
+ }
+ 
++#if BUILDFLAG(IS_MAC)
++void WorkerThread::MaybeBoostPriorityForShutdownLockRequired() {
++  if (!thread_handle_.is_null() && !shutdown_priority_override_ &&
++      thread_type_hint_ < ThreadType::kDefault &&
++      task_tracker_->HasShutdownStarted()) {
++    // A background worker can be starved in its initial QoS change or in a
++    // running task. It cannot be responsible for its own shutdown boost.
++    shutdown_priority_override_ =
++        SetThreadTypeOverride(thread_handle_, ThreadType::kDefault);
++  }
++}
++#endif
++
+ void WorkerThread::BeginUnusedPeriod() {
+   CheckedAutoLock auto_lock(thread_lock_);
+   DCHECK(last_used_time_.is_null());
+diff --git a/base/task/thread_pool/worker_thread.h b/base/task/thread_pool/worker_thread.h
+index 331fe5cbdb47c5e95591187abce5e40bd489dfec..73f0ebeb031050d22c3e370e00a45d6d816b7686 100644
+--- a/base/task/thread_pool/worker_thread.h
++++ b/base/task/thread_pool/worker_thread.h
+@@ -226,6 +226,11 @@ class BASE_EXPORT WorkerThread : public RefCountedThreadSafe<WorkerThread>,
+   // Must be called on the thread managed by |this|.
+   void MaybeUpdateThreadType();
+ 
++#if BUILDFLAG(IS_MAC)
++  void MaybeBoostPriorityForShutdownLockRequired()
++      EXCLUSIVE_LOCKS_REQUIRED(thread_lock_);
++#endif
++
+   // PlatformThread::Delegate:
+   void ThreadMain() override;
+ 
+@@ -261,6 +266,12 @@ class BASE_EXPORT WorkerThread : public RefCountedThreadSafe<WorkerThread>,
+   // Handle for the thread managed by |this|.
+   PlatformThreadHandle thread_handle_ GUARDED_BY(thread_lock_);
+ 
++#if BUILDFLAG(IS_MAC)
++  // Installed by the shutdown caller, even before the worker reaches RunWorker.
++  PlatformPriorityOverride shutdown_priority_override_
++      GUARDED_BY(thread_lock_) = nullptr;
++#endif
++
+   // The last time this worker was used by its owner (e.g. to process work or
+   // stand as a required idle thread).
+   TimeTicks last_used_time_ GUARDED_BY(thread_lock_);
+diff --git a/base/task/thread_pool/worker_thread_unittest.cc b/base/task/thread_pool/worker_thread_unittest.cc
+index 820c79c48e888b6147245204c6faab72968dec74..e3a6338e9ddd4e708df30b1fc0f43a54ae0bf4b5 100644
+--- a/base/task/thread_pool/worker_thread_unittest.cc
++++ b/base/task/thread_pool/worker_thread_unittest.cc
+@@ -43,6 +43,11 @@
+ #include "testing/gmock/include/gmock/gmock.h"
+ #include "testing/gtest/include/gtest/gtest.h"
+ 
++#if BUILDFLAG(IS_MAC)
++#include <mach/mach.h>
++#include <pthread.h>
++#endif
++
+ #if PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && \
+     PA_CONFIG(THREAD_CACHE_SUPPORTED)
+ #include "partition_alloc/extended_api.h"
+@@ -836,6 +841,63 @@ TEST_F(ThreadPoolWorkerTest, BumpThreadTypeOfAliveThreadDuringShutdown) {
+   worker->JoinForTesting();
+ }
+ 
++#if BUILDFLAG(IS_MAC)
++namespace {
++
++class BlockWorkerStartupDelegate : public WorkerThreadDefaultDelegate {
++ public:
++  void OnMainEntry(WorkerThread* worker) override {
++    thread_ = pthread_self();
++    entered.Signal();
++    resume.Wait();
++  }
++
++  int NativePriority() {
++    thread_extended_info_data_t info = {};
++    mach_msg_type_number_t count = THREAD_EXTENDED_INFO_COUNT;
++    EXPECT_EQ(KERN_SUCCESS,
++              thread_info(pthread_mach_thread_np(thread_), THREAD_EXTENDED_INFO,
++                          reinterpret_cast<thread_info_t>(&info), &count));
++    return info.pth_priority;
++  }
++
++  TestWaitableEvent entered;
++  TestWaitableEvent resume;
++
++ private:
++  pthread_t thread_ = nullptr;
++};
++
++}  // namespace
++
++TEST_F(ThreadPoolWorkerTest,
++       ShutdownBoostsWorkerBeforeInitializationCompletes) {
++  if (!CanUseBackgroundThreadTypeForWorkerThread()) {
++    GTEST_SKIP();
++  }
++  TaskTracker task_tracker;
++  auto delegate = std::make_unique<BlockWorkerStartupDelegate>();
++  auto* delegate_raw = delegate.get();
++  auto worker =
++      MakeRefCounted<WorkerThread>(ThreadType::kBackground, std::move(delegate),
++                                   task_tracker.GetTrackedRef(), 0);
++  ASSERT_TRUE(worker->Start(service_thread_.task_runner()));
++  ScopedClosureRunner cleanup(BindLambdaForTesting([&] {
++    delegate_raw->resume.Signal();
++    worker->JoinForTesting();
++  }));
++  ASSERT_TRUE(delegate_raw->entered.TimedWait(TestTimeouts::action_timeout()));
++  const int background_priority = delegate_raw->NativePriority();
++
++  task_tracker.StartShutdown();
++  worker->MaybeBoostPriorityForShutdown();
++
++  // The worker has not constructed its own boost yet and cannot run its
++  // shutdown check. Observe kernel priority: requested QoS excludes overrides.
++  EXPECT_GT(delegate_raw->NativePriority(), background_priority);
++}
++#endif  // BUILDFLAG(IS_MAC)
++
+ namespace {
+ 
+ class VerifyCallsToObserverDelegate : public WorkerThreadDefaultDelegate {
