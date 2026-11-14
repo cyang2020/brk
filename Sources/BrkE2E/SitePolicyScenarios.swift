@@ -5,6 +5,7 @@ import Foundation
 
 enum SitePolicyScenarios {
     static let all = [
+        Scenario("SitePolicy-appearance", "website appearance uses native dark CSS, keeps light-only pages readable, and survives restart", appearance),
         Scenario("SitePolicy-clear", "origin cookies and storage clear while another origin and profile survive restart", clearData),
         Scenario("SitePolicy-blocking", "network/cosmetic blocking and per-site exceptions", blocking),
     ]
@@ -27,9 +28,32 @@ enum SitePolicyScenarios {
         return value
     }
     @Sendable static func appearance(_ app: AppUnderTest) throws {
+        let lightOnly = try app.load(app.site.url("appearance.html"))
+        try waitForTitle(app, lightOnly, "Appearance:light")
+        try app.dispatch(.site(.appearance(.dark)))
+        try waitForTitle(app, lightOnly, "Appearance:dark")
+        try app.dispatch(.site(.controls))
+        try app.waitUntil("dark website policy applied") { try controls(app).applied?.appearance == .dark }
+        try app.dispatch(.site(.closeControls))
+        let area = try app.native().computed.contentArea
+        let sample = CGPoint(x: area.minX + 40, y: area.minY + 40)
+        try app.waitUntil("light-only page keeps its white canvas in Dark appearance") {
+            try app.pixel(sample).prefix(3).allSatisfy { $0 > 240 }
+        }
+        try app.screenshot("light-only-in-dark")
+        let nativeDark = try app.load(app.site.url("appearance.html?native"))
+        try waitForTitle(app, nativeDark, "Appearance:dark")
+        try app.dispatch(.site(.controls))
+        try app.waitUntil("native dark website policy applied") { try controls(app).applied?.appearance == .dark }
+        try app.dispatch(.site(.closeControls))
+        try app.waitUntil("native dark page paints its own dark canvas") {
+            try app.pixel(sample).prefix(3).allSatisfy { $0 < 60 }
+        }
+        try app.screenshot("native-dark")
+        try app.dispatch(.site(.appearance(.light)))
         let item = try app.load(app.site.url("site-policy.html"))
         try waitForTitle(app, item, "Site policy fixture")
-        try app.click(.siteInfo)
+        try app.dispatch(.site(.controls))
         try app.waitUntil("origin-bound site controls") { try controls(app).target != nil }
         _ = try app.screenshotSiteControls("controls")
         try app.dispatch(.site(.appearance(.dark)))

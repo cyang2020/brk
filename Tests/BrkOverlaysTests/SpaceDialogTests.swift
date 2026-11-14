@@ -70,7 +70,7 @@ final class ThemeDraftTests: XCTestCase {
         // P28 a: the cream preset sits 29° below the right-hand axis at 0.82 of the inscribed radius.
         let cream = ThemePad.point(of: ThemePresets.brand[0])
         let angle = atan2(cream.y - 0.5, cream.x - 0.5) * 180 / .pi
-        XCTAssertEqual(angle, HSL(ThemePresets.brand[0]).hue, accuracy: 0.5)
+        XCTAssertEqual(angle, HSL(displayP3(fromSRGB: ThemePresets.brand[0])).hue, accuracy: 0.5)
         XCTAssertEqual(hypot(cream.x - 0.5, cream.y - 0.5) / 0.5, 0.82, accuracy: 0.02)
         // P28 a: the Greyscale page's white sits on the left-hand axis at the pad's edge; a grey has no hue.
         let white = ThemePad.point(of: ThemePresets.greyscale[0])
@@ -79,9 +79,17 @@ final class ThemeDraftTests: XCTestCase {
         XCTAssertLessThan(ThemePad.point(of: ThemePresets.greyscale[4]).x, 0.5, "mid grey left of the centre")
         // Round trip: a dot dragged to where a color sits picks that color.
         for color in [ThemePresets.brand[3], ThemePresets.drab[7], ThemePresets.pastel[4]] {
-            let back = ThemePad.color(at: ThemePad.point(of: color), saturation: HSL(color).saturation)
+            let back = ThemePad.color(at: ThemePad.point(of: color), saturation: HSL(displayP3(fromSRGB: color)).saturation)
             XCTAssertEqual(back.hex, color.hex)
         }
+    }
+
+    func testThePadPicksColorsInDisplayP3LikeArcsPresets() throws {
+        let picked = ThemePad.color(at: CGPoint(x: 0.8, y: 0.5), saturation: 0.6)
+        let expected = try XCTUnwrap(NSColor(displayP3Red: 0.88, green: 0.52, blue: 0.52, alpha: 1).usingColorSpace(.sRGB))
+        XCTAssertEqual(picked.red, expected.redComponent, accuracy: 0.001)
+        XCTAssertEqual(picked.green, expected.greenComponent, accuracy: 0.001)
+        XCTAssertEqual(picked.blue, expected.blueComponent, accuracy: 0.001)
     }
 }
 

@@ -26,6 +26,7 @@ final class LibraryFlyoutRowView: HoverView, NSDraggingSource {
         self.dispatch = dispatch
         super.init(frame: .zero)
         layer?.cornerCurve = .circular
+        ring.disc = true
         icon.imageScaling = .scaleProportionallyUpOrDown
         for label in [title, subtitle] {
             label.lineBreakMode = .byTruncatingTail
@@ -95,7 +96,7 @@ final class LibraryFlyoutRowView: HoverView, NSDraggingSource {
     override func stateChanged() {
         guard let palette else { return }
         layer?.cornerRadius = Metrics.libraryFlyout.rowRadius.value
-        layer?.backgroundColor = isHovered || isPressed ? palette.color(palette.tokens.itemBackground).cgColor : nil
+        layer?.backgroundColor = item?.running == true || isHovered || isPressed ? palette.color(palette.tokens.itemBackground).cgColor : nil
     }
 
     override func setHovered(_ hovered: Bool) {
@@ -245,7 +246,7 @@ enum LibraryFlyoutIcons {
 @MainActor
 final class LibraryProgressRing: NSView {
     var progress = 0.0 { didSet { if progress != oldValue { needsDisplay = true } } }
-    /// The badge draws a disc behind the ring.
+    /// A pale disc behind the ring in download rows and the dock badge.
     var disc = false { didSet { needsDisplay = true } }
 
     override var isFlipped: Bool { true }

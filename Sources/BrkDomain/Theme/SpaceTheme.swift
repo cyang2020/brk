@@ -317,14 +317,14 @@ public func themeWheelColors(_ primary: RGBA, count: Int, wheel: ColorWheel) -> 
 private func lin(_ v: Double) -> Double { v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
 private func gam(_ v: Double) -> Double { v <= 0.0031308 ? 12.92 * v : 1.055 * pow(v, 1 / 2.4) - 0.055 }
 
-func displayP3(fromSRGB c: RGBA) -> RGBA {
+public func displayP3(fromSRGB c: RGBA) -> RGBA {
     if c.red == c.green && c.green == c.blue { return c }
     let r = lin(c.red), g = lin(c.green), b = lin(c.blue)
     return RGBA(gam(0.8224621 * r + 0.1775380 * g), gam(0.0331941 * r + 0.9668058 * g),
                 gam(0.0170827 * r + 0.0723974 * g + 0.9105199 * b), c.alpha)
 }
 
-func sRGB(fromDisplayP3 c: RGBA) -> RGBA {
+public func sRGB(fromDisplayP3 c: RGBA) -> RGBA {
     if c.red == c.green && c.green == c.blue { return c }
     let r = lin(c.red), g = lin(c.green), b = lin(c.blue)
     return RGBA(clamp01(gam(1.2249401 * r - 0.2249404 * g)), clamp01(gam(-0.0420569 * r + 1.0420571 * g)),

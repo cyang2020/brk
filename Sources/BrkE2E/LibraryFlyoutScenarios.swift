@@ -331,7 +331,8 @@ enum LibraryFlyoutScenarios {
     }
 
     @Sendable static func running(_ app: AppUnderTest) throws {
-        try prepare(app, ["notes.txt"])
+        let dark = SpaceTheme(colors: [ThemePresets.drab[0]], texture: .grain, noise: 0, intensity: 0.25, appearance: .dark)
+        try prepare(app, ["notes.txt"], theme: dark)
         _ = try app.send(.load(window: app.window, url: app.site.url("download-slow?name=big-download.bin&bytes=3000000&seconds=14")))
         try app.waitUntil("the slow download receiving", timeout: 10) {
             try flyout(app).items.last.map { item in

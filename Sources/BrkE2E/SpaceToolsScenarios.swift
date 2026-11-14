@@ -142,6 +142,21 @@ enum SpaceToolsScenarios {
             guard case .theme(_, let t)? = try app.view().dialog else { return false }
             return t.variants?.dark.colors.first?.color == ThemePresets.drab[8]
         }
+        let knob = try Real.control(app, in: .anywhere, title: "Noise", "theme noise knob")
+        guard case .theme(_, let beforeNoise)? = try app.view().dialog else { throw Check(description: "theme panel closed") }
+        let frame = try app.native().windowFrame
+        let top = CGDisplayBounds(CGMainDisplayID()).height - frame.maxY
+        let centre = CGPoint(x: knob.midX - frame.minX, y: knob.midY - top)
+        try PhysicalPointer.drag(app, through: [centre, CGPoint(x: centre.x, y: centre.y - 60)], window: app.window!) {}
+        try app.waitUntil("dragging the noise knob upward changes the texture") {
+            guard case .theme(_, let t)? = try app.view().dialog else { return false }
+            return t.noise > beforeNoise.noise + 0.1
+        }
+        try app.press("cmd+z")
+        try app.waitUntil("one undo restores the noise drag") {
+            guard case .theme(_, let t)? = try app.view().dialog else { return false }
+            return t.noise == beforeNoise.noise
+        }
         try app.screenshot("theme-editor")
         try app.press("escape")
         try app.waitUntil("Esc closed the theme panel") { try app.view().dialog == nil }

@@ -127,8 +127,8 @@ struct ThemeDraft: Equatable {
     mutating func setNoise(_ value: Double) { edit { $0.noise = min(max(value, 0), 1) } }
 }
 
-/// The color pad is a hue wheel (read off the Arc captures: the cream preset #F2EAE4, hue 24°, sits 29° below the
-/// right-hand axis, and the complement Arc adds sits opposite it at the same distance). Angle, clockwise from the
+/// The color pad is a hue wheel in Display P3 (Arc's cream preset sits about 29° below the right-hand axis, and the
+/// complement Arc adds sits opposite it at the same distance). Angle, clockwise from the
 /// right on screen, is the hue; distance from the centre is the lightness (cream, lightness 0.92, sits at 0.82 of
 /// the inscribed radius, so lightness = 0.1 + distance). Saturation is not on the pad: it stays the dot's own.
 enum ThemePad {
@@ -136,7 +136,7 @@ enum ThemePad {
     /// left-hand axis, white at the pad's edge (P28-a, the Greyscale page's white: its dot centred 7 pt in from the
     /// left edge, halfway down).
     static func point(of color: RGBA) -> CGPoint {
-        let hsl = HSL(color)
+        let hsl = HSL(displayP3(fromSRGB: color))
         if hsl.saturation < 0.01 {
             return CGPoint(x: 0.5 - min(hsl.lightness, 0.96) * 0.5, y: 0.5)
         }
@@ -152,7 +152,7 @@ enum ThemePad {
         let distance = min(hypot(dx, dy) / 0.5, 0.9)
         var hue = atan2(dy, dx) * 180 / .pi
         if hue < 0 { hue += 360 }
-        return HSL(hue: hue, saturation: saturation < 0.05 ? 0.5 : saturation, lightness: 0.1 + distance).rgba
+        return sRGB(fromDisplayP3: HSL(hue: hue, saturation: saturation < 0.05 ? 0.5 : saturation, lightness: 0.1 + distance).rgba)
     }
 }
 
@@ -311,7 +311,7 @@ struct ThemeEditorView: View {
                     // A tap on the pad moves the selected dot there (the primary in a fresh draft).
                     let point = CGPoint(x: event.location.x / side, y: event.location.y / side)
                     let index = model.chosen ? current : 0
-                    let saturation = colors.indices.contains(index) ? HSL(colors[index]).saturation : 0.6
+                    let saturation = colors.indices.contains(index) ? HSL(displayP3(fromSRGB: colors[index])).saturation : 0.6
                     model.update { $0.setColor(ThemePad.color(at: point, saturation: saturation), at: index) }
                 })
                 .spaceToolsID("theme-pad")
@@ -323,7 +323,7 @@ struct ThemeEditorView: View {
                         .gesture(DragGesture(minimumDistance: 0).onChanged { event in
                             selected = index
                             let p = CGPoint(x: event.location.x / side, y: event.location.y / side)
-                            model.update(group: "point-\(index)") { $0.setColor(ThemePad.color(at: p, saturation: HSL(color).saturation), at: index) }
+                            model.update(group: "point-\(index)") { $0.setColor(ThemePad.color(at: p, saturation: HSL(displayP3(fromSRGB: color)).saturation), at: index) }
                         }.onEnded { _ in model.endGroup() })
                         .accessibilityLabel("Color \(index + 1)")
                         .spaceToolsID("theme-point-\(index)")
@@ -501,13 +501,14 @@ private struct WaveSlider: View {
 }
 
 /// Arc's noise knob: a ring of tick dots, an inner circle, and a white pointer on the ring; 0 at the lower left,
-/// 0.5 straight up, 1 at the lower right. Dragging turns it.
+/// 0.5 straight up, 1 at the lower right. The ring turns directly; the centre also accepts a horizontal or vertical drag.
 private struct NoiseKnob: View {
     let value: Double
     let ink: Color
     let enabled: Bool
     let ended: () -> Void
     let change: (Double) -> Void
+    @State private var dragStartValue: Double?
 
     var body: some View {
         GeometryReader { geometry in
@@ -530,10 +531,28 @@ private struct NoiseKnob: View {
             .opacity(enabled ? 1 : 0.45)
             .contentShape(Circle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { event in
+                guard enabled else { return }
+                if hypot(event.startLocation.x - centre.x, event.startLocation.y - centre.y) <= inner {
+                    let start = dragStartValue ?? value
+                    dragStartValue = start
+                    let delta = abs(event.translation.width) > abs(event.translation.height) ? event.translation.width : -event.translation.height
+                    change(min(max(start + delta / (ring * 4), 0), 1))
+                    return
+                }
                 var degrees = atan2(event.location.y - centre.y, event.location.x - centre.x) * 180 / Double.pi + 90
                 if degrees > 180 { degrees -= 360 }
                 change(min(max(degrees / 270 + 0.5, 0), 1))
-            }.onEnded { _ in ended() })
+            }.onEnded { _ in dragStartValue = nil; ended() })
+        }
+        .accessibilityValue("\(Int(value * 100))%")
+        .accessibilityAdjustableAction { direction in
+            guard enabled else { return }
+            switch direction {
+            case .increment: change(min(value + 0.05, 1))
+            case .decrement: change(max(value - 0.05, 0))
+            @unknown default: return
+            }
+            ended()
         }
     }
 }

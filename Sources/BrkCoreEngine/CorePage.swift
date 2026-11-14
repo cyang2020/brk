@@ -25,7 +25,6 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     var permissionSync: [(requesting: SiteOrigin, top: SiteOrigin, capabilities: Set<SiteCapability>)] = []
     var policyRevision: UInt64 = 0
     var websiteError: String?
-    var autoDark: (document: DocumentToken, enabled: Bool)?
     var frozen = false
     var pictureInPictureDocument: DocumentToken?
     var documentPiPWorld: (document: DocumentToken, context: Int)?

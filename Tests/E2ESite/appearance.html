@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Appearance:light</title>
+<style>
+  body { margin: 0; padding: 100px 40px; color: #111; font: 24px system-ui; }
+  @media (prefers-color-scheme: dark) {
+    html.native { color-scheme: dark; background: #202124; }
+    html.native body { color: #eee; }
+  }
+</style>
+<script>
+  if (location.search === '?native') document.documentElement.classList.add('native');
+  const preference = matchMedia('(prefers-color-scheme: dark)');
+  const report = () => document.title = 'Appearance:' + (preference.matches ? 'dark' : 'light');
+  preference.addEventListener('change', report);
+  report();
+</script>
+<h1>Website appearance</h1>
+<p>Dark preference must preserve a light-only page and activate a site's own dark theme.</p>

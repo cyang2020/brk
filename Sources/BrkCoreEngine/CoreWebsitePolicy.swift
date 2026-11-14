@@ -119,15 +119,12 @@ extension CorePage {
         let content = ":root{" + css + "}" + cosmetic + banners
         if websiteStyleOwner?.document != document { websiteStyleOwner = (document, UUID().uuidString) }
         let owner = Self.jsString(websiteStyleOwner!.id)
-        let canvas = policy.appearance == .dark ? "true" : "false"
         let script = """
         (()=>{
           if(location.origin!==\(Self.jsString(origin.value)))return false;
           const owner=\(owner);let s=document.querySelector('style[data-brk-policy-owner="'+owner+'"]');
           if(!s){s=document.createElement('style');s.setAttribute('data-brk-policy-owner',owner);(document.head||document.documentElement).append(s);}
           s.textContent=\(Self.jsString(content));
-          if(\(canvas)){const bare=e=>{const c=getComputedStyle(e);return c.backgroundColor==='rgba(0, 0, 0, 0)'&&c.backgroundImage==='none'};
-            if(bare(document.documentElement)&&(!document.body||bare(document.body)))s.textContent+=':where(html){background-color:Canvas}';}
           if(!s.textContent||s.textContent===':root{}')s.remove();
           if(!globalThis.brkMedia){
             const playing=new WeakSet();
@@ -161,12 +158,6 @@ extension CorePage {
                 let effective = policy.appearance == .automatic ? automatic : policy.appearance.rawValue
                 _ = try await session.call("Emulation.setEmulatedMedia", ["features": [["name": "prefers-color-scheme", "value": effective]]])
                 guard current() else { return }
-                let dark = policy.appearance == .dark, sent = self.autoDark
-                if (sent?.enabled ?? false) != dark || dark && sent?.document != document {
-                    _ = try await session.call("Emulation.setAutoDarkModeOverride", dark ? ["enabled": true] : [:])
-                    self.autoDark = (document, dark)
-                    guard current() else { return }
-                }
                 @MainActor func newWorld() async throws -> Int? {
                     let frameTree = try await session.call("Page.getFrameTree")
                     guard let tree = frameTree["frameTree"] as? [String: Any], let frame = tree["frame"] as? [String: Any], let frameID = frame["id"] as? String,

@@ -95,6 +95,7 @@ pages PageReal-Keys
 
 # sites：广告拦截、清站点数据、权限、证书、扩展
 sites SitePolicy-blocking
+sites SitePolicy-appearance
 sites SitePolicy-clear
 sites SiteSecurity-invalid
 sites Extension-install
