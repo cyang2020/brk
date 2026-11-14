@@ -8,6 +8,8 @@ DerivedData/
 dist/
 xcuserdata/
 scripts/__pycache__/
+engine/__pycache__/
+engine/tests/__pycache__/
 dist-core/
 
 # Local only: the work log and leftover packages, not part of the project

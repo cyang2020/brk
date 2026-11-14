@@ -14,6 +14,7 @@ outname="$(basename "$BRK_OUT")"
 log="$BRK_LOGS/build-$outname-${target//[^A-Za-z0-9_-]/_}-$stamp.log"
 cd "$BRK_SRC"
 ln -sf "$log" "$BRK_LOGS/build-latest.log"
+echo "[build] log: $log"
 # One Chromium build at a time: a development build (out/Brk, minutes) makes every other out directory's build wait while it runs (their
 # pause files exist); a long release build never makes a development build wait. BRK_PAUSE_OTHERS=0 or 1 overrides.
 own_pause="$BRK_LOGS/pause-$outname"
@@ -27,3 +28,4 @@ done
 for file in ${others[@]+"${others[@]}"}; do echo "paused by build of $outname (pid $$)" > "$file"; done
 trap 'rm -f ${others[@]+"${others[@]}"}' EXIT
 python3 "$ENGINE_DIR/tools/paced-build.py" --log "$log" --pause-file "$own_pause" -- "$BRK_SRC/third_party/ninja/ninja" -C "$BRK_OUT" -j "$jobs" "$target"
+tail -n 1 "$log"

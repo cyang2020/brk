@@ -31,10 +31,38 @@ App releases use the ARM64 and x86_64 archives pinned in `engine/artifacts.json`
 
     engine/fetch.sh
     engine/apply-patches.sh
-    engine/configure.sh
-    nohup engine/build.sh chrome >/dev/null 2>&1 &   # many hours; rerunning continues
+    engine/incremental.py                            # first build takes hours; rerunning keeps the cache
     engine/build-demo.sh                             # then run the demo
     scripts/build.sh                               # dist/Brk.app uses out/Brk by default
+
+## Incremental builds
+
+For normal Core development, run one command:
+
+```sh
+engine/incremental.py
+```
+
+The command synchronizes the interface, configures `out/Brk` when needed, and runs Ninja against the existing objects. It keeps `args.gn` and the generated configuration unchanged on repeat runs. Ninja tracks source and header dependencies and regenerates its manifest when GN source files change. An unchanged tree finishes with `no work to do`; a local source edit rebuilds its affected objects and links the result.
+
+The default uses the development preset, which disables PGO and ThinLTO. To incrementally build one official architecture, choose it explicitly:
+
+```sh
+engine/incremental.py --release arm64
+engine/incremental.py --release x64
+```
+
+Each mode keeps its own output directory: `out/Brk`, `out/BrkRelease-arm64`, or `out/BrkRelease-x64`. Keep these directories between builds. The first invocation with an existing cache runs GN once to record the successful configuration and retains the compiled objects. Later invocations skip GN and profile downloads unless the preset, PGO reference, V8 revision, or profile scripts change, or the manifest is missing. Use `engine/configure.sh --force dev` to explicitly regenerate the development configuration.
+
+The entry point serializes incremental invocations within a Chromium tree. If another bundled Ninja is already running there, it exits with code 75 before changing the header or build configuration. Use a separate `BRK_CHROMIUM_ROOT` for another source branch, with that branch's matching public interface. The command does not reset or reapply Chromium patches.
+
+Changing global GN flags, Chromium versions, or widely included headers can still invalidate many objects. Reusing a cache does not make those changes local. For Swift-only changes, run `scripts/build.sh` and reuse the Core framework directly.
+
+Run the incremental workflow integration checks with Ninja and Clang on PATH:
+
+```sh
+python3 -m unittest discover -s engine/tests -v
+```
 
 ## Measured on this machine (Apple M1, 8 cores, 16 GB)
 
