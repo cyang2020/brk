@@ -1,3 +1,4 @@
+import AppKit
 import BrkBase
 import BrkImport
 import Foundation
@@ -87,5 +88,8 @@ public enum BrowserImportStartup {
         guard (environment["BRK_DATA_DIR"] ?? "").isEmpty else { return }
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         NativeMessagingHosts.adopt(into: BrkProfileFolders.chromiumRoot, support: support)
+        // 1Password needs no other browser: Brk writes its file from the 1Password app itself (after the copy, so it wins).
+        OnePasswordBridge.connect(app: NSWorkspace.shared.urlForApplication(withBundleIdentifier: OnePasswordBridge.bundleIdentifier),
+                                  chromiumRoot: BrkProfileFolders.chromiumRoot)
     }
 }
