@@ -58,6 +58,14 @@ final class HelpActions {
         case .checkForUpdates, .installUpdate:
             updates.message = { [weak self] title, text in self?.alert(title, text, in: window) }
             if action == .installUpdate { updates.install() } else { updates.check() }
+        case .setAutomaticUpdates(let enabled): updates.setAutomaticUpdates(enabled)
+        case .dismissUpdateSummary: updates.dismissSummary()
+        case .updateReleaseNotes:
+            guard let notes = updates.releaseNotesURL else {
+                return alert("Release notes unavailable", "This update did not include release notes. You can still install it or try checking again later.", in: window)
+            }
+            send(window, .app(.help(.open(notes))))
+            updates.dismissSummary()
         case .trace:
             trace.toggle { [weak self] message in self?.alert("Trace", message, in: window) }
         case .cancelTrace: trace.cancel()

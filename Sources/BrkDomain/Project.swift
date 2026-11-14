@@ -2,16 +2,26 @@ import BrkBase
 import CoreGraphics
 import Foundation
 
+extension AppState {
+    public var hasUpdateBlockingActivity: Bool {
+        doc.downloads.contains { $0.state.isActive } || session.live.values.contains {
+            $0.audible || $0.documentPictureInPicture || $0.mediaPlayers.contains { !$0.paused && !$0.ended }
+        }
+    }
+}
+
 /// Inputs to the projection besides state: the clock's time and the calendar for archive buckets.
 public struct ProjectionContext: Sendable {
     public let softwareUpdate: UpdatePresentation?
+    public let automaticUpdates: Bool
     public let now: Instant
     public let calendar: Calendar
     public let systemScheme: Scheme
     /// The system's first preferred language ("en-US"): pages in another language offer translation into it.
     public let systemLanguage: String
-    public init(now: Instant, calendar: Calendar, systemScheme: Scheme = .light, systemLanguage: String = "en", softwareUpdate: UpdatePresentation? = nil) {
+    public init(now: Instant, calendar: Calendar, systemScheme: Scheme = .light, systemLanguage: String = "en", softwareUpdate: UpdatePresentation? = nil, automaticUpdates: Bool = false) {
         self.softwareUpdate = softwareUpdate
+        self.automaticUpdates = automaticUpdates
         self.systemScheme = systemScheme
         self.systemLanguage = systemLanguage
         self.now = now
@@ -607,6 +617,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         websiteAppearance: websiteAppearance
     )
     snapshot.sidebar.update = ctx.softwareUpdate
+    snapshot.sidebar.automaticUpdates = ctx.automaticUpdates
     snapshot.history = history
     if history != nil, let profile = historyProfile, let results = session.meaning[.history] {
         snapshot.historyMeaning = HistoryMeaning(text: results.text, rows: state.historyMeaningRows(results, profile: profile))
