@@ -9,7 +9,7 @@ Downloads of the release files of [cyang2020/brk](https://github.com/cyang2020/b
 | Intel | 49 |
 | Other | 47 |
 
-Stars: 20 · Forks: 1 (at 2026-11-15T03:07:36Z)
+Stars: 20 · Forks: 1 (at 2026-11-15T03:09:52Z)
 
 ## New downloads per day (UTC, last 30 days)
 
