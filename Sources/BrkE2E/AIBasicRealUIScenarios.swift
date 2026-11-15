@@ -4,8 +4,6 @@ import BrkDomain
 import BrkLayout
 import CoreGraphics
 import Foundation
-import ImageIO
-import Vision
 
 /// The basic AI layer the way a person meets it, on a real agent's small model: real keys and clicks at the window
 /// server from a new user's state (Settings → Max, Turn On Max, the agent), then Name Tabs, a title the user typed,
@@ -182,22 +180,6 @@ enum AIBasicRealUIScenarios {
         } else { return }
         try? capture.run(); capture.waitUntilExit()
     }
-    /// The text drawn in `region` (window points) of a window screenshot `width` pixels wide, by Apple's text
-    /// recognition.
-    private static func readText(_ url: URL, in region: CGRect, app: AppUnderTest, width: Int) throws -> String {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            throw Check(description: "cannot read \(url.lastPathComponent)")
-        }
-        let scale = Double(image.width) / max(1, try app.native().contentSize.width)
-        let box = CGRect(x: region.minX * scale, y: region.minY * scale, width: region.width * scale, height: region.height * scale).insetBy(dx: -6, dy: -4)
-        guard let crop = image.cropping(to: box.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))) else { throw Check(description: "the region \(region) is outside the shot") }
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = false
-        try VNImageRequestHandler(cgImage: crop, options: [:]).perform([request])
-        return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
-    }
-
     private static func settingsWindow(_ app: AppUnderTest) throws -> Int? {
         try app.native().appWindows.first(where: { $0.className == "NSWindow" && $0.isVisible })?.number
     }
@@ -435,24 +417,21 @@ enum AIBasicRealUIScenarios {
                 return suggestion != nil || toast(app)?.hasPrefix("Moved to") == true
             }
             app.sleep(0.5)
-            let shown = try app.screenshot("AIBasicRealUI-placement-suggestion")
+            _ = try app.screenshot("AIBasicRealUI-placement-suggestion")
             if toast(app)?.hasPrefix("Moved to") == true { return "moved at once: \(toast(app)!)" }
             let label = try XCTUnwrapValue(suggestion)
-            try expect(try folders(app).contains { $0.title == label.name }, "the suggestion names \(label.name), not a group of this space")
-            // What the row draws, read from the screenshot's pixels: the group's name must be on screen.
-            let drawn = try readText(shown.url, in: try frame(app, .tabTool("ai-suggestion-line-" + pie.id.rawValue)), app: app, width: shown.width)
-            // The whole name, or on a narrow row its start and an ellipsis; "Move to" is never the part cut.
-            let afterAction = drawn.components(separatedBy: label.action).dropFirst().joined(separator: label.action).trimmingCharacters(in: .whitespaces)
-            let shownName = afterAction.components(separatedBy: CharacterSet(charactersIn: "…×xX")).first?.replacingOccurrences(of: "...", with: "").trimmingCharacters(in: .whitespaces) ?? ""
-            let whole = drawn.contains(label.name)
-            try expect(drawn.contains("Move to"), "the row draws \"\(drawn)\"")
-            try expect(whole || (shownName.count >= 4 && label.name.hasPrefix(shownName) && (drawn.contains("…") || drawn.contains("..."))),
-                       "the row draws \"\(drawn)\" for \(label.text)")
+            try expect(try folders(app).contains { $0.group && $0.title == label.name }, "the suggestion names \(label.name), not a Tidy group of this space")
+            // The row's arrow: a real hover shows where the tab would go (Arc's tooltip), a real click moves it.
+            try hover(app, .tabTool("ai-suggestion-" + pie.id.rawValue))
+            try app.waitUntil("the arrow's tooltip", timeout: 3) { isShown(try app.native(), .tabTool("arc-tooltip")) }
+            let tip = try SidebarReviewScenarios.texts(app, in: frame(app, .tabTool("arc-tooltip")))
+            try expect(tip.contains { $0.contains(label.text) }, "the tooltip reads \(tip)")
+            shot(app, "placement-hover")
             try click(app, .tabTool("ai-suggestion-" + pie.id.rawValue))
             try app.waitUntil("the tab in its group") { try folders(app).contains { $0.children.contains { $0.id == pie.id } } }
             let into = try folders(app).first { $0.children.contains { $0.id == pie.id } }?.title ?? "?"
             shot(app, "placement-moved")
-            return "suggested \"\(label.text)\", drawn as \"\(drawn)\" (\(whole ? "whole name" : "name cut with an ellipsis")), clicked, now in \"\(into)\""
+            return "suggested \"\(label.text)\", tooltip \(tip), clicked, now in \"\(into)\""
         } }
 
         if wanted("cleanup") { log.check("Suggest Tabs to Close: a duplicate is listed beside Tidy and closed from the list") {

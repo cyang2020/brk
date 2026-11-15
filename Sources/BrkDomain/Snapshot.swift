@@ -248,12 +248,13 @@ public struct SectionSnapshot: Sendable, Equatable, Codable {
 }
 
 /// The link under the pointer as Arc's capsule shows it: the address without "http://".
-/// A suggestion's words: what it does ("Move to") and where to ("Recipes"). The row shows both; when it is narrow the
-/// destination's name is cut short, never the action.
+/// A suggestion's words: what it does ("Move to") and where to ("Recipes"), with the destination's own icon or emoji
+/// when it has one. The row shows a small icon; hovering it shows these.
 public struct AISuggestionLabel: Hashable, Sendable, Codable {
     public let action: String
     public let name: String
-    public init(action: String, name: String) { self.action = action; self.name = name }
+    public let icon: CustomIcon?
+    public init(action: String, name: String, icon: CustomIcon? = nil) { self.action = action; self.name = name; self.icon = icon }
     public var text: String { action + " " + name }
 }
 
@@ -353,7 +354,7 @@ public struct TabRow: Sendable, Equatable, Codable {
     public var peekFavicon: URL? = nil
     /// The row shows "Double-click to rename" under its title (dropped on the Space name strip, Q13-h).
     public var renameHint: Bool = false
-    /// Place New Tabs' one-click suggestion under the title; nil when there is none.
+    /// Place New Tabs' suggestion: a small icon at the row's trailing end whose click makes the move; nil when there is none.
     public var aiSuggestion: AISuggestionLabel? = nil
     /// A kept AI page's mark at the row's trailing end: new data since the user last looked, or a refresh that stopped.
     /// Its schedule and last refresh are the row's tooltip (`sourceStatus`).

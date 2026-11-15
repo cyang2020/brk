@@ -281,6 +281,10 @@ extension Work {
         var model = arcMenuModel(for: request, in: window)
         // Brk's own row goes after all of Arc's, so Arc's rows keep their order; it shows only while the panel's
         // conversation can be used.
+        if !model.entries.isEmpty, case .item(let id) = request {
+            let suggestion = state.suggestionMenu(id)
+            if !suggestion.isEmpty { model.entries += [.separator] + suggestion }
+        }
         if !model.entries.isEmpty, let sources = askAISources(for: request, in: window), !sources.isEmpty {
             model.entries += [.separator, .action(title: "Ask AI", command: .assist(.attach(sources)), enabled: true)]
         }

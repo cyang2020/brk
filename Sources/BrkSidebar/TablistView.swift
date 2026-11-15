@@ -690,8 +690,9 @@ final class RowView: HoverView {
     private let title = NSTextField(labelWithString: "")
     /// "Double-click to rename" under the title, on a tab just dropped on the Space name strip (Q13-h).
     private let renameHint = NSTextField(labelWithString: SidebarCopy.renameHint)
-    /// Place New Tabs' suggestion under the title ("Move to Recipes"): a click makes the move, its × drops it.
-    private let suggestion = SuggestionLine()
+    /// Place New Tabs' suggestion: a small arrow left of the hover button's place. Hovering it shows Arc's tooltip with
+    /// where the tab would go ("Move to Recipes"); its click makes the move. Dropping it is in the row's menu.
+    private let suggestion = GlyphButton()
     /// The half of this row a held tab would take (Q15).
     private let joinSlot = NSView()
     /// Arc's `_audibilityButton`: the speaker between the icon and the title of a tab that makes sound or is muted.
@@ -768,8 +769,8 @@ final class RowView: HoverView {
         speakerGlyph.isHidden = true
         crossOrHyphen.isHidden = true
         suggestion.isHidden = true
-        suggestion.accept = { [weak self] in if let id = self?.row?.id { self?.dispatch(.assist(.acceptSuggestion(id))) } }
-        suggestion.dismiss = { [weak self] in if let id = self?.row?.id { self?.dispatch(.assist(.dismissSuggestion(id))) } }
+        suggestion.action = { [weak self] _ in if let id = self?.row?.id { self?.dispatch(.assist(.acceptSuggestion(id))) } }
+        suggestion.setAccessibilityRole(.button)
         peekMarker.isHidden = true
         spinner.style = .spinning
         spinner.controlSize = .small
@@ -800,17 +801,21 @@ final class RowView: HoverView {
         identify(.row(row.id))
         button.identify(.rowClose(row.id))
         joinSlot.identify(.tabTool("split-join-slot-" + row.id.rawValue))
-        audio.isHidden = true
+        // The two buttons that keep a hover (and its tooltip) are shown or hidden once per render, never hidden and shown
+        // again: hiding drops the hover, and AppKit says nothing more until the pointer moves, so a row redrawn several
+        // times a second (a loading page, a tab being named) lost the arrow's tooltip and the speaker's under a still pointer.
+        let speaker: Bool = if case .tab(let tab) = row { tab.speaker != nil } else { false }
+        let moveSuggestion: AISuggestionLabel? = if case .tab(let tab) = row, !renaming { tab.aiSuggestion } else { nil }
+        audio.isHidden = !speaker
+        suggestion.isHidden = moveSuggestion == nil
         speakerGlyph.isHidden = true
         crossOrHyphen.isHidden = true
         renameHint.isHidden = true
-        suggestion.isHidden = true
         folderIcon.isHidden = true
         renderLive(row, palette: palette)
         switch row {
         case .tab(let tab):
-            audio.isHidden = tab.speaker == nil
-            speakerGlyph.isHidden = tab.speaker == nil
+            speakerGlyph.isHidden = !speaker
             let speakerInk = NSColor(white: palette.scheme == .light ? 0 : 1, alpha: Draw.rowSpeakerInk.value)
             renderSpeakerButton(muted: tab.muted, ink: .clear, palette: palette)
             speakerGlyph.render(muted: tab.muted, tint: speakerInk, animated: sameRow && speakerShown && !speakerGlyph.isHidden)
@@ -819,9 +824,13 @@ final class RowView: HoverView {
             title.stringValue = tab.title
             renameHint.isHidden = !tab.renameHint || renaming
             renameHint.textColor = palette.ink.text.withAlphaComponent(Draw.renameHintInk.value)
-            if let label = tab.aiSuggestion, !renaming, !tab.renameHint {
-                suggestion.isHidden = false
-                suggestion.render(label, id: tab.id, palette: palette)
+            if let label = moveSuggestion {
+                suggestion.render(.moveSuggestion, size: Draw.suggestionGlyph.value, weight: .semibold, palette: palette, tint: palette.focusColor,
+                                  radius: Draw.suggestionRadius.value, hoverFill: palette.tokens.itemHover)
+                suggestion.tip = label.text
+                suggestion.tipIcon = label.icon
+                suggestion.identify(.tabTool("ai-suggestion-" + tab.id.rawValue))
+                suggestion.setAccessibilityLabel(label.text)
             }
             icon.render(IconContent(tab: tab), tint: palette.ink.secondary, palette: palette)
             if tab.awaitingFirstDocument { title.stringValue = SidebarCopy.untitled }
@@ -977,9 +986,16 @@ final class RowView: HoverView {
         liveMark.frame = (button.alphaValue > 0 && !button.isHidden ? g.button.offsetBy(dx: -g.button.width, dy: 0) : g.button)
         // The hover button takes room from the title only while it shows (Arc truncates at the selection's end).
         let buttonShown = !button.isHidden && button.alphaValue > 0
-        let trailing = !spinner.isHidden ? spinner.frame.minX : !liveMark.isHidden ? liveMark.frame.minX
+        var trailing = !spinner.isHidden ? spinner.frame.minX : !liveMark.isHidden ? liveMark.frame.minX
             : !peekMarker.isHidden ? g.button.minX
             : buttonShown ? g.selection.maxX - Draw.rowTitleOverButton.value : g.selection.maxX - Draw.titleTrailing.value
+        if !suggestion.isHidden {
+            // Always just before the hover button's place, never on it, and never moving: the × fades in when the pointer
+            // comes onto the row, and an arrow that slid aside then would put the × under a pointer heading for it.
+            let side = Draw.suggestionSide.value
+            suggestion.frame = CGRect(x: g.button.minX - Draw.suggestionGap.value - side, y: g.button.midY - side / 2, width: side, height: side)
+            trailing = min(trailing, suggestion.frame.minX - Draw.suggestionGap.value)
+        }
         title.frame = g.title(height: height, trailing: trailing, in: bounds)
         if let leading = joinLeading {
             // The slot takes one half, the row's own icon and title the other, cut off at its end (Q15-a, Q15-b).
@@ -992,11 +1008,6 @@ final class RowView: HoverView {
         if !renameHint.isHidden {
             title.frame.origin.y += Draw.renameHintTitleShift.value
             renameHint.frame = CGRect(x: title.frame.minX, y: Draw.renameHintTop.value, width: title.frame.width, height: renameHint.intrinsicContentSize.height)
-        }
-        if !suggestion.isHidden {
-            // The same two lines as "Double-click to rename" (Q13-h): the title moves up, the suggestion goes under it.
-            title.frame.origin.y += Draw.renameHintTitleShift.value
-            suggestion.frame = CGRect(x: title.frame.minX, y: Draw.renameHintTop.value - 2, width: max(0, g.selection.maxX - Draw.titleTrailing.value - title.frame.minX), height: suggestion.fittingSize.height)
         }
         // Arc's group header starts its title where a tab's favicon starts (no icon column); its rename field too.
         var field = g.title(height: height, trailing: g.selection.maxX - Draw.titleTrailing.value, in: bounds)
@@ -1332,114 +1343,6 @@ final class SplitSegmentView: HoverView {
         guard let pane else { return }
         dispatch(.sidebar(.popupMenu(.item(pane.id), at: rootPoint(fromWindow: event.locationInWindow))))
     }
-}
-
-/// Place New Tabs' suggestion on a row: "→ Move to" and the destination's name in the accent colour, a small × after
-/// them. Each is one line; when the row is narrow the name is cut short with "…", never the action. Every part is a
-/// `HoverView`, so it takes the click before the row does.
-@MainActor
-final class SuggestionLine: NSView {
-    let action = SuggestionPart()
-    let name = SuggestionPart()
-    let close = SuggestionPart()
-    var accept: (() -> Void)? { didSet { action.action = accept; name.action = accept } }
-    var dismiss: (() -> Void)? { didSet { close.action = dismiss } }
-    static let closeWidth: CGFloat = 14
-    static let gap: CGFloat = 3
-    /// The labels draw their text 2 points in from each side; this makes the space after "Move to" a word space.
-    static let wordGap: CGFloat = -1
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        for part in [action, name, close] { addSubview(part) }
-        close.toolTip = "Dismiss suggestion"
-    }
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    override var isFlipped: Bool { true }
-
-    func render(_ label: AISuggestionLabel, id: ItemID, palette: Palette) {
-        action.text("→ " + label.action, color: palette.focusColor)
-        name.text(label.name, color: palette.focusColor)
-        toolTip = label.text
-        close.glyph.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Dismiss suggestion")?
-            .withSymbolConfiguration(.init(pointSize: Draw.renameHintFont.value - 2, weight: .semibold))
-        close.glyph.contentTintColor = palette.ink.secondary
-        identify(.tabTool("ai-suggestion-line-" + id.rawValue))
-        action.identify(.tabTool("ai-suggestion-" + id.rawValue))
-        name.identify(.tabTool("ai-suggestion-name-" + id.rawValue))
-        close.identify(.tabTool("ai-suggestion-dismiss-" + id.rawValue))
-        action.setAccessibilityLabel(label.text)
-        name.setAccessibilityLabel(label.text)
-        close.setAccessibilityLabel("Dismiss suggestion")
-        needsLayout = true
-    }
-
-    override var fittingSize: NSSize {
-        NSSize(width: action.natural.width + Self.wordGap + name.natural.width + Self.gap + Self.closeWidth, height: max(action.natural.height, 14))
-    }
-
-    override func layout() {
-        super.layout()
-        let actionWidth = min(action.natural.width, bounds.width - Self.closeWidth - Self.gap)
-        action.frame = CGRect(x: 0, y: 0, width: max(0, actionWidth), height: bounds.height)
-        let room = bounds.width - action.frame.maxX - Self.wordGap - Self.gap - Self.closeWidth
-        name.frame = CGRect(x: action.frame.maxX + Self.wordGap, y: 0, width: max(0, min(name.natural.width, room)), height: bounds.height)
-        close.frame = CGRect(x: name.frame.maxX + Self.gap, y: 0, width: Self.closeWidth, height: bounds.height)
-    }
-}
-
-/// One clickable part of a suggestion: a one-line label or a glyph, acting on mouse up inside it.
-@MainActor
-final class SuggestionPart: HoverView {
-    let label = NSTextField(labelWithString: "")
-    let glyph = NSImageView()
-    var action: (() -> Void)?
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        label.isSelectable = false
-        label.usesSingleLineMode = true
-        label.maximumNumberOfLines = 1
-        label.cell?.wraps = false
-        label.cell?.truncatesLastVisibleLine = true
-        label.lineBreakMode = .byTruncatingTail
-        addSubview(label)
-        addSubview(glyph)
-        setAccessibilityRole(.button)
-    }
-
-    /// The text on one line, cut with "…" at its end when the part is narrower than it.
-    func text(_ value: String, color: NSColor) {
-        let style = NSMutableParagraphStyle()
-        style.lineBreakMode = .byTruncatingTail
-        label.attributedStringValue = NSAttributedString(string: value, attributes: [.font: NSFont.systemFont(ofSize: Draw.renameHintFont.value, weight: .medium),
-                                                                                     .foregroundColor: color, .paragraphStyle: style])
-        needsLayout = true
-    }
-
-    /// The width and height the text takes on one line.
-    var natural: CGSize {
-        let size = label.attributedStringValue.size()
-        return CGSize(width: ceil(size.width) + 4, height: ceil(size.height))
-    }
-
-    /// The text does not fit and ends in "…".
-    var isTruncated: Bool { bounds.width < natural.width }
-
-    override func layout() {
-        super.layout()
-        label.frame = bounds
-        glyph.frame = bounds
-    }
-
-    override func stateChanged() { alphaValue = isPressed ? 0.6 : 1 }
-    override func mouseDown(with event: NSEvent) { isPressed = true }
-    override func mouseUp(with event: NSEvent) {
-        isPressed = false
-        if bounds.contains(local(event)) { action?() }
-    }
-    override func accessibilityPerformPress() -> Bool { action?(); return true }
 }
 
 /// Arc's Peek marker at the trailing end of the row a Peek was opened from: the peeked page's icon in a

@@ -37,11 +37,13 @@ public struct AIDuplicatePair: Hashable, Sendable, Codable {
     public init(a: ItemID, b: ItemID, similarity: Double) { self.a = a; self.b = b; self.similarity = similarity }
 }
 
-/// A one-click suggestion on a tab's row. Never applied by itself.
+/// A one-click suggestion on a tab's row. Never applied by itself. It holds only while the tab stays directly in the
+/// Today of `from` and the target is still one Place New Tabs may name (`AppState.canPlace`).
 public struct AISuggestion: Hashable, Sendable, Codable {
     public enum Target: Hashable, Sendable, Codable { case folder(ItemID), space(SpaceID) }
     public let target: Target
-    public let label: AISuggestionLabel
+    /// The Space whose Today the tab was in when it was asked about.
+    let from: SpaceID
     let at: Instant
 }
 
@@ -117,15 +119,9 @@ extension Work {
         } else {
             state.session.ai.basic.placing = [:]
         }
-        // A suggestion goes when its tab left Today, closed, or was moved by hand.
-        for (tab, suggestion) in state.session.ai.basic.suggestions {
-            let inToday = state.role(of: tab)?.kind == .today && state.tab(tab) != nil
-            let targetGone: Bool = switch suggestion.target {
-            case .folder(let folder): state.doc.tree[folder] == nil
-            case .space(let space): state.doc.spaces[space] == nil
-            }
-            if !inToday || targetGone || !max.enabled(.tabPlacement) { state.session.ai.basic.suggestions[tab] = nil }
-        }
+        // A suggestion goes when its tab closed or was moved by hand (pinned, into a folder, to another Space), or its
+        // target went (the group's header removed, the group emptied, the Space deleted).
+        for tab in state.session.ai.basic.suggestions.keys where state.liveSuggestion(tab) == nil { state.session.ai.basic.suggestions[tab] = nil }
     }
 
     // MARK: Name Tabs
@@ -296,7 +292,9 @@ extension Work {
 
     // MARK: Place New Tabs
 
-    /// A new tab's first page settled: one decision request, the groups of this space and the spaces of its profile.
+    /// A new tab's first page settled: one decision request, the Tidy groups of this space's Today and the spaces of its
+    /// profile. Pinned folders, Favorites and plain folders are never offered: moving there pins the tab or files it
+    /// somewhere the person made by hand, which is theirs to decide.
     private mutating func considerPlacing(_ tab: ItemID, in window: WindowID) {
         guard let doc = state.doc.windows[window], let space = state.doc.spaces[doc.space],
               state.doc.tree[tab]?.parent == space.todayRoot else { state.session.ai.basic.placing[tab] = nil; return }
@@ -318,18 +316,15 @@ extension Work {
             state.doc.tree.tabs(under: folder).prefix(6).compactMap { state.displayedTab($0, in: window)?.displayTitle }.joined(separator: "; ")
         }
         var members: [String: [AITab]] = [:]
-        for root in [space.todayRoot, space.pinnedRoot] {
-            for id in state.doc.tree[root]?.children ?? [] where options.count < DecisionQuestion.maxChoices - 1 {
-                guard case .folder(let folder)? = state.doc.tree[id]?.body else { continue }
-                let name = unique(folder.title)
-                ask.groups[name] = id
-                members[name] = state.doc.tree.tabs(under: id).prefix(12).compactMap { member in
-                    guard let shown = state.displayedTab(member, in: window), let url = shown.url else { return nil }
-                    return AITab(id: member, title: shown.displayTitle, url: url)
-                }
-                let place = root == space.todayRoot ? "a group in Today" : "a pinned folder"
-                options.append(DecisionOption(name, "\(place); tabs: \(contents(id))"))
+        for id in state.doc.tree[space.todayRoot]?.children ?? [] where options.count < DecisionQuestion.maxChoices - 1 {
+            guard state.canPlace(into: .folder(id), from: doc.space), case .folder(let folder)? = state.doc.tree[id]?.body else { continue }
+            let name = unique(folder.title)
+            ask.groups[name] = id
+            members[name] = state.doc.tree.tabs(under: id).prefix(12).compactMap { member in
+                guard let shown = state.displayedTab(member, in: window), let url = shown.url else { return nil }
+                return AITab(id: member, title: shown.displayTitle, url: url)
             }
+            options.append(DecisionOption(name, "a group in Today; tabs: \(contents(id))"))
         }
         if !options.isEmpty {
             questions["group"] = .choice("Which group of the current Space does this new tab belong in?", options: options, none: "None of these groups fits the tab")
@@ -364,29 +359,31 @@ extension Work {
         // The tab must still be where it opened, on the page that was asked about.
         guard let space = state.doc.spaces[ask.space], state.doc.tree[ask.tab]?.parent == space.todayRoot,
               currentURL(ask.tab)?.host == ask.url.host, state.doc.windows[ask.window] != nil else { return }
-        if case .choice(let name, _)? = answers["space"], let target = ask.spaces[name], target != ask.space,
+        if case .choice(let name, _)? = answers["space"], let target = ask.spaces[name], state.canPlace(into: .space(target), from: ask.space),
            DecisionBand(answers["space"]?.probability) != .ignore {
             // Another space is only ever suggested.
-            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .space(target), label: AISuggestionLabel(action: AICopy.moveTo, name: state.displayTitle(of: target)), at: ctx.now)
+            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .space(target), from: ask.space, at: ctx.now)
             return
         }
-        guard case .choice(let name, _)? = answers["group"], let folder = ask.groups[name], case .folder(let value)? = state.doc.tree[folder]?.body else { return }
-        let inToday = state.doc.tree[folder]?.parent == space.todayRoot
+        // The group is checked again: its header may have been removed, or the group emptied, while the request ran.
+        guard case .choice(let name, _)? = answers["group"], let folder = ask.groups[name], state.canPlace(into: .folder(folder), from: ask.space),
+              case .folder(let value)? = state.doc.tree[folder]?.body else { return }
         switch DecisionBand(answers["group"]?.probability) {
-        case .act where inToday:
+        case .act:
             let index = state.doc.tree[space.todayRoot]?.children.firstIndex(of: ask.tab) ?? 0
             _ = moveItem(ask.tab, to: .into(parent: folder, index: Int.max))
             undoToast("Moved to “\(value.title)”! Use", undo: .placement(ask.tab, parent: space.todayRoot, index: index), in: ask.window)
-        case .act, .suggest:
-            // A pinned folder pins the tab: that is the person's call, however sure the answer is.
-            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .folder(folder), label: AISuggestionLabel(action: AICopy.moveTo, name: value.title), at: ctx.now)
+        case .suggest:
+            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .folder(folder), from: ask.space, at: ctx.now)
         case .ignore: break
         }
     }
 
     /// The suggestion's click: the move it offered, through the same command a drag makes.
     mutating func acceptSuggestion(_ tab: ItemID, in window: WindowID) {
-        guard let suggestion = state.session.ai.basic.suggestions.removeValue(forKey: tab) else { return }
+        let suggestion = state.liveSuggestion(tab)
+        state.session.ai.basic.suggestions[tab] = nil
+        guard let suggestion else { return }
         switch suggestion.target {
         case .folder(let folder): items(.move(tab, to: .into(parent: folder, index: Int.max)), in: window)
         case .space(let space): items(.move(tab, to: .space(space)), in: window)
@@ -527,5 +524,49 @@ extension AIValidation {
         line = line.trimmingCharacters(in: .whitespaces)
         guard !line.isEmpty, !line.contains(where: { $0.isASCII && $0.asciiValue! < 32 }) else { return nil }
         return String(line.prefix(limit))
+    }
+}
+
+extension AppState {
+    /// Where Place New Tabs may send a tab from the Today of `space`, as a suggestion or a sure move: a group Tidy made in
+    /// that Today (a group folder directly under it), or another Space of the same profile. Never a pinned folder, a
+    /// Favorites folder, a plain folder or a group somewhere else.
+    func canPlace(into target: AISuggestion.Target, from space: SpaceID) -> Bool {
+        guard let from = doc.spaces[space] else { return false }
+        switch target {
+        case .folder(let id):
+            guard let node = doc.tree[id], case .folder(let folder) = node.body else { return false }
+            return folder.isGroup && node.parent == from.todayRoot
+        case .space(let id):
+            return id != space && doc.spaces[id]?.profile == from.profile
+        }
+    }
+
+    /// The tab's suggestion while it still holds: Place New Tabs on, the tab directly in the Today it was asked about,
+    /// and the target still one `canPlace` allows.
+    func liveSuggestion(_ tab: ItemID) -> AISuggestion? {
+        guard let suggestion = session.ai.basic.suggestions[tab], doc.settings.max.enabled(.tabPlacement), let space = doc.spaces[suggestion.from],
+              doc.tree[tab]?.kind == .tab, doc.tree[tab]?.parent == space.todayRoot, canPlace(into: suggestion.target, from: suggestion.from) else { return nil }
+        return suggestion
+    }
+
+    /// The suggestion's words and the destination's icon as they are now (a group renamed since keeps up).
+    func suggestionLabel(_ tab: ItemID) -> AISuggestionLabel? {
+        guard let suggestion = liveSuggestion(tab) else { return nil }
+        switch suggestion.target {
+        case .folder(let id):
+            guard case .folder(let folder)? = doc.tree[id]?.body else { return nil }
+            let name = folder.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            return AISuggestionLabel(action: AICopy.moveTo, name: name.isEmpty ? Work.unnamedGroup : name, icon: folder.icon)
+        case .space(let id):
+            return AISuggestionLabel(action: AICopy.moveTo, name: displayTitle(of: id), icon: doc.spaces[id]?.icon.custom)
+        }
+    }
+
+    /// Brk's own rows at the end of a tab's right-click menu while it has a suggestion: the move, and a way to drop it.
+    func suggestionMenu(_ tab: ItemID) -> [MenuEntry] {
+        guard let label = suggestionLabel(tab) else { return [] }
+        return [.action(title: label.text, command: .assist(.acceptSuggestion(tab)), enabled: true),
+                .action(title: AICopy.dismissSuggestion, command: .assist(.dismissSuggestion(tab)), enabled: true)]
     }
 }

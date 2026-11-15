@@ -97,6 +97,7 @@ extension AICopy {
     public static let pagePill = "AI Page"
     public static let nameWithAI = "Name with AI"
     public static let moveTo = "Move to"
+    public static let dismissSuggestion = "Dismiss Suggestion"
     public static let cleanupDuplicates = "Duplicates"
     public static let cleanupStale = "Not Opened Lately"
     public static let cleanupTooltip = "Tabs you might close"

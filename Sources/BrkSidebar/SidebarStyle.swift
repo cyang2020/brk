@@ -322,6 +322,11 @@ struct SidebarDrawMetrics: MetricGroup {
     let currentTileShadowOpacity = Metric(0.11, .anatomy("~/brk-arc-reference/Q13/Q13-n5-arc.png: #F2 against the #FD sidebar at the tile's edge"))
     let pressedTileShade = Metric(0.02, .anatomy("~/brk-arc-reference/Q13/Q13-press-favorite-arc.png: a pressed tile reads #F7F7F7, the current tile #FBFBFB"))
     let rowCloseGlyph = Metric(13.5, .anatomy("~/brk-arc-reference/Q13/Q13-press-row-arc.png: the row's × is 10 pt across"))
+    // Place New Tabs' suggestion: Brk's own control, drawn like the row's speaker button (a glyph on a small hover square).
+    let suggestionSide = Metric(20.0, .guess("Brk's own: smaller than the 24 pt × beside it, so a click meant for the row or the × does not reach it"))
+    let suggestionGap = Metric(2.0, .guess("Brk's own: room between the arrow's square, the × square and the title"))
+    let suggestionGlyph = Metric(11.5, .guess("Brk's own: the arrow's ink about 10 pt across, as the row's × (Q13-press-row-arc.png)"))
+    let suggestionRadius = Metric(6.0, .guess("Brk's own: the speaker button's hover square corner (rowSpeakerRadius)"))
     let renameHintFont = Metric(11.0, .anatomy("~/brk-arc-reference/Q13/Q13-h-arc.png: \"Double-click to rename\" is 119.5 pt wide"))
     let renameHintTitleShift = Metric(-7.0, .anatomy("~/brk-arc-reference/Q13/Q13-h-arc.png: the title's ink spans 192 to 202.5 in the row at 186...221.5"))
     let renameHintTop = Metric(21.5, .anatomy("~/brk-arc-reference/Q13/Q13-h-arc.png: the hint's ink spans 208 to 216 in that row"))

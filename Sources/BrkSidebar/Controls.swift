@@ -117,6 +117,8 @@ final class GlyphButton: HoverView {
     var latchedFill: RGBA? { didSet { if latchedFill != oldValue { stateChanged() } } }
     /// Arc's own tooltip while the pointer is on the button (`ArcTooltip`), for the controls that have it.
     var tip: String?
+    /// An icon or emoji before the tooltip's words (a move suggestion shows its destination's).
+    var tipIcon: CustomIcon?
     private var symbolName: String?
     /// How the glyph moves while the button is held (Arc's toolbar icons read `isArcButtonPressed`); nil keeps it
     /// still. With a motion the glyph is drawn by `motion` instead of the image view.
@@ -299,7 +301,7 @@ final class GlyphButton: HoverView {
     override func setHovered(_ hovered: Bool) {
         let was = isHovered
         super.setHovered(hovered)
-        if tip != nil { ArcTooltip.pointer(on: self, text: hovered && isEnabled ? tip : nil) }
+        if tip != nil { ArcTooltip.pointer(on: self, text: hovered && isEnabled ? tip : nil, icon: tipIcon) }
         if isHovered != was { hoverChanged?(isHovered) }
     }
 

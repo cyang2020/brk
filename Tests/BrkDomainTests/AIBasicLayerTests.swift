@@ -280,6 +280,75 @@ final class AIBasicLayerTests: XCTestCase {
         XCTAssertEqual(d.state.role(of: tab)?.space, work)
     }
 
+    /// The user (2026-11-15): a suggestion pointed at a folder in a Space's pinned section. Only Tidy's groups in this
+    /// Space's Today and the other Spaces are offered; pinned folders and groups, and plain folders, never are.
+    func testOnlyTidyGroupsOfThisTodayAndOtherSpacesAreOffered() throws {
+        let (d, _) = try placementDriver()
+        let home = d.view.space.id
+        let today = try XCTUnwrap(d.state.doc.spaces[home]?.todayRoot)
+        func folder(_ title: String, group: Bool, from url: String) throws -> ItemID {
+            let tab = d.open(url)
+            d.user(.tabTools(.bulk(.items([tab]), .newFolder(group: group))))
+            let id = try XCTUnwrap(d.state.doc.tree[tab]?.parent)
+            d.user(.item(.rename(id, title: title)))
+            return id
+        }
+        _ = try folder("Pinned Recipes", group: false, from: "https://recipes.example/pinned")
+        _ = try folder("Pinned Group", group: true, from: "https://recipes.example/pinned-group")
+        let plain = try folder("Plain Recipes", group: false, from: "https://recipes.example/plain")
+        d.user(.item(.move(plain, to: .into(parent: today, index: 0))))
+        XCTAssertEqual(d.state.doc.tree[plain]?.parent, today, "a plain folder in Today")
+        _ = d.newSpace("Work")
+        d.user(.space(.focus(home)))
+        let (_, request) = try placementRequest(d, d.open("https://recipes.example/noodles"))
+        let groups = Set(request.questions["group"]?.choiceNames ?? []).subtracting([DecisionQuestion.noneName])
+        XCTAssertTrue(groups.contains("Recipes"))
+        XCTAssertTrue(groups.isDisjoint(with: ["Pinned Recipes", "Pinned Group", "Plain Recipes"]), "offered: \(groups)")
+        XCTAssertTrue(request.questions["space"]?.choiceNames.contains("Work") == true)
+    }
+
+    /// A sure answer moves the tab only into a Tidy group that is still one: a group whose header was removed while the
+    /// request ran leaves the tab where it is, with nothing to click.
+    func testASureAnswerMovesOnlyIntoAGroupThatIsStillThere() throws {
+        let (d, group) = try placementDriver()
+        let tab = d.open("https://recipes.example/noodles")
+        let (id, _) = try placementRequest(d, tab)
+        d.user(.tabTools(.removeGroupHeader(group)))
+        d.system(.aiResult(id, .reply(.decision(DecisionAnswers(answers: ["group": .choice("Recipes", probabilities: ["Recipes": 0.97, DecisionQuestion.noneName: 0.03])], backend: "jevk5")))))
+        XCTAssertEqual(d.state.doc.tree[tab]?.parent, d.state.doc.spaces[d.view.space.id]?.todayRoot)
+        XCTAssertNil(d.row(tab)?.aiSuggestion)
+        XCTAssertFalse(d.view.tabTools.toast?.text.contains("Moved to") == true)
+    }
+
+    /// A suggestion goes once it no longer holds: the tab pinned by hand, or the group's header removed. While it holds,
+    /// the row's menu offers the move and a way to drop it.
+    func testASuggestionGoesWhenItNoLongerHolds() throws {
+        let (d, group) = try placementDriver()
+        func suggested(_ url: String) throws -> ItemID {
+            let tab = d.open(url)
+            let (id, _) = try placementRequest(d, tab)
+            d.system(.aiResult(id, .reply(.decision(DecisionAnswers(answers: ["group": .choice("Recipes", probabilities: nil)], backend: "text")))))
+            XCTAssertEqual(d.row(tab)?.aiSuggestion?.text, "Move to Recipes")
+            return tab
+        }
+        let pinned = try suggested("https://recipes.example/rice")
+        d.user(.tab(.togglePin(.item(pinned))))
+        XCTAssertNil(d.row(pinned)?.aiSuggestion)
+        XCTAssertNil(d.state.session.ai.basic.suggestions[pinned])
+
+        let kept = try suggested("https://recipes.example/stew")
+        let menu = try XCTUnwrap(popup(d.user(.sidebar(.popupMenu(.item(kept), at: .zero)))))
+        XCTAssertEqual(command(menu, "Move to Recipes"), .assist(.acceptSuggestion(kept)))
+        d.user(try XCTUnwrap(command(menu, AICopy.dismissSuggestion)))
+        XCTAssertNil(d.row(kept)?.aiSuggestion)
+
+        let orphan = try suggested("https://recipes.example/pie")
+        d.user(.tabTools(.removeGroupHeader(group)))
+        XCTAssertNil(d.row(orphan)?.aiSuggestion)
+        d.user(.assist(.acceptSuggestion(orphan)))
+        XCTAssertEqual(d.state.doc.tree[orphan]?.parent, d.state.doc.spaces[d.view.space.id]?.todayRoot, "a stale suggestion moves nothing")
+    }
+
     func testOnlyNewTabsAreAskedAndAMovedTabIsLeftAlone() throws {
         let (d, _) = try placementDriver()
         let tab = d.open("https://recipes.example/rice")

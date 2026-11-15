@@ -12,6 +12,8 @@ enum Glyph {
     case back, forward, reload, stop, sidebarToggle
     case plus, library, archiveTab, closeKeepPinned, clearDown, copyLink, copiedLink
     case siteControls, search, globe, chevronDown, chevronRight, more, close, warning
+    /// Brk's own: Place New Tabs' suggestion on a tab row (no Arc counterpart).
+    case moveSuggestion
     /// A tab row's outlined speaker (Arc draws its own `SpeakerIcon`; these are the nearest symbols) and the mini player's.
     case rowSpeaker, rowSpeakerMuted, mediaPrevious, mediaPlay, mediaPause, mediaNext, currentRowUp, currentRowDown
 
@@ -45,6 +47,7 @@ enum Glyph {
         case .more: "ellipsis"
         case .close: "xmark"
         case .warning: "exclamationmark.triangle.fill"
+        case .moveSuggestion: "arrow.turn.down.right"
         }
     }
 

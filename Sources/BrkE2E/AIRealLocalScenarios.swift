@@ -414,9 +414,16 @@ enum AIRealLocalScenarios {
                 return "moved at once (\(moved)), now in “\(into)”; text-model requests \(used)"
             }
             let label = try XCTUnwrapValue(suggestion)
+            try expect(try folders(app).contains { $0.group && $0.title == label.name }, "the suggestion names \(label.name), not a Tidy group of this Space")
+            // The row's arrow: a real hover shows where the tab would go, a real click moves it.
+            try hover(app, .tabTool("ai-suggestion-" + pie.id.rawValue))
+            try app.waitUntil("the arrow's tooltip", timeout: 3) { isShown(try app.native(), .tabTool("arc-tooltip")) }
+            let tip = try SidebarReviewScenarios.texts(app, in: visible(app.native(), .tabTool("arc-tooltip")).frame)
+            try expect(tip.contains { $0.contains(label.text) }, "the tooltip reads \(tip)")
+            _ = shot(app, "placement-hover-\(name)")
             try click(app, .tabTool("ai-suggestion-" + pie.id.rawValue))
             try app.waitUntil("the tab in its group") { try folders(app).contains { $0.children.contains { $0.id == pie.id } } }
-            return "suggested “\(label.text)”, clicked, now in “\(try folders(app).first { $0.children.contains { $0.id == pie.id } }?.title ?? "?")”; text-model requests \(used)"
+            return "suggested “\(label.text)”, tooltip \(tip), clicked, now in “\(try folders(app).first { $0.children.contains { $0.id == pie.id } }?.title ?? "?")”; text-model requests \(used)"
         } }
 
         if wanted("duplicates") { log.check("Duplicates: the same page under another address, by meaning, then JevK5's yes, listed beside Tidy and closed from the list") {

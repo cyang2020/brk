@@ -204,7 +204,7 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
         row.mediaPlayers = state.session.live[PageID(window: id, item: tab)]?.mediaPlayers ?? []
         row.mediaError = state.session.live[PageID(window: id, item: tab)]?.mediaError
         row.renameHint = session.renameHint == tab
-        row.aiSuggestion = state.session.ai.basic.suggestions[tab]?.label
+        row.aiSuggestion = state.suggestionLabel(tab)
         if let live = state.livePageRow(t.url, now: ctx.now) {
             row.liveMark = live.mark
             row.sourceStatus = live.status

@@ -359,8 +359,8 @@ final class ArcTooltip: NSView {
     private let label = NSTextField(labelWithString: "")
     private let fill = NSView()
 
-    /// The pointer is on `view` and it wants `text` shown, or the tip should go.
-    static func pointer(on view: NSView, text: String?) {
+    /// The pointer is on `view` and it wants `text` shown (after `icon`, when there is one), or the tip should go.
+    static func pointer(on view: NSView, text: String?, icon: CustomIcon? = nil) {
         // The pointer leaving one control must not cancel the tip of the one it has just entered.
         if text == nil, let owner, owner !== view { return }
         owner = view
@@ -371,7 +371,7 @@ final class ArcTooltip: NSView {
         guard let text, !text.isEmpty else { return }
         let work = DispatchWorkItem { [weak view] in
             guard let view, let window = view.window, let root = window.contentView else { return }
-            show(text, near: anchor(view, window: window, root: root), in: root)
+            show(text, icon: icon, near: anchor(view, window: window, root: root), in: root)
         }
         pending = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Draw.tooltipDelay.value, execute: work)
@@ -384,16 +384,20 @@ final class ArcTooltip: NSView {
         return view.rootPoint(of: CGPoint(x: view.bounds.midX, y: view.bounds.midY))
     }
 
-    private static func show(_ text: String, near point: CGPoint, in root: NSView) {
-        let tip = ArcTooltip(text: text)
+    private static func show(_ text: String, icon: CustomIcon?, near point: CGPoint, in root: NSView) {
+        let tip = ArcTooltip(text: text, icon: icon)
         let size = tip.fittingSizeForText()
         let y = root.isFlipped ? point.y + Draw.tooltipOffsetY.value : point.y - Draw.tooltipOffsetY.value - size.height
-        tip.frame = CGRect(x: point.x + Draw.tooltipOffsetX.value, y: y, width: size.width, height: size.height)
+        // Kept inside the window: a control near its right edge (a row's trailing glyph with the sidebar on the right)
+        // has its tip end at the edge instead of past it.
+        let margin = Draw.tooltipOffsetX.value
+        let x = max(margin, min(point.x + Draw.tooltipOffsetX.value, root.bounds.maxX - size.width - margin))
+        tip.frame = CGRect(x: x, y: y, width: size.width, height: size.height)
         PopupLayer.present(tip, over: root)
         shown = tip
     }
 
-    private init(text: String) {
+    private init(text: String, icon: CustomIcon?) {
         super.init(frame: .zero)
         identify(.tabTool("arc-tooltip"))
         wantsLayer = true
@@ -402,9 +406,12 @@ final class ArcTooltip: NSView {
         fill.layer?.cornerCurve = .continuous
         fill.layer?.backgroundColor = NSColor(white: dark ? Draw.tooltipFillDark.value : Draw.tooltipFillLight.value, alpha: 1).cgColor
         addSubview(fill)
-        label.stringValue = text
-        label.font = .systemFont(ofSize: Draw.tooltipFont.value, weight: .medium)
-        label.textColor = NSColor(white: dark ? 1 : Draw.tooltipInkLight.value, alpha: 1)
+        let ink = NSColor(white: dark ? 1 : Draw.tooltipInkLight.value, alpha: 1)
+        let font = NSFont.systemFont(ofSize: Draw.tooltipFont.value, weight: .medium)
+        label.font = font
+        label.textColor = ink
+        label.attributedStringValue = Self.words(text, icon: icon, font: font, ink: ink)
+        label.setAccessibilityLabel(text)
         label.isSelectable = false
         addSubview(label)
         let shadow = NSShadow()
@@ -416,6 +423,32 @@ final class ArcTooltip: NSView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// The words, after the icon: an emoji as text, a named icon or symbol in the words' ink.
+    private static func words(_ text: String, icon: CustomIcon?, font: NSFont, ink: NSColor) -> NSAttributedString {
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: ink]
+        let out = NSMutableAttributedString()
+        switch icon {
+        case .emoji(let emoji)?: out.append(NSAttributedString(string: emoji + " ", attributes: attributes))
+        case .named(let named)?: out.append(symbol(named.symbol, font: font, ink: ink, attributes: attributes))
+        case .symbol(let name)?: out.append(symbol(name, font: font, ink: ink, attributes: attributes))
+        case nil: break
+        }
+        out.append(NSAttributedString(string: text, attributes: attributes))
+        return out
+    }
+
+    private static func symbol(_ name: String, font: NSFont, ink: NSColor, attributes: [NSAttributedString.Key: Any]) -> NSAttributedString {
+        let config = NSImage.SymbolConfiguration(pointSize: font.pointSize, weight: .medium).applying(.init(paletteColors: [ink]))
+        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config) else { return NSAttributedString() }
+        let attachment = NSTextAttachment()
+        attachment.image = image
+        // On the words' line: the image's middle at the capital letters' middle.
+        attachment.bounds = CGRect(x: 0, y: (font.capHeight - image.size.height) / 2, width: image.size.width, height: image.size.height)
+        let out = NSMutableAttributedString(attachment: attachment)
+        out.append(NSAttributedString(string: " ", attributes: attributes))
+        return out
+    }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 

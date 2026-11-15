@@ -9,7 +9,7 @@ import Foundation
 enum AIScenarios {
     static let all = [
         Scenario("AICommand", "Opt+Cmd+G asks with streaming, cancel and actionable failure", command),
-        Scenario("AIOrganize", "Today's divider Tidy groups Today, the undo toast restores order and restart preserves tabs", organize),
+        Scenario("AIOrganize", "Today's divider Tidy groups Today, the undo toast restores order and restart preserves tabs; a new tab's move arrow names the group on a real hover and moves it on a real click", organize),
         Scenario("AITranslateOffer", "a real click on the pill's Translation Available opens Arc's Translate this page popover (P50-g); its Translate translates", translateOffer),
     ]
     private static func enable(_ app: AppUnderTest, _ features: [AIFeature] = AIFeature.allCases) throws {
@@ -125,7 +125,10 @@ enum AIScenarios {
         try expect(try readersClosed(app), "unavailable reader remained")
     }
     /// Max's Tidy Tabs (Arc P46-b): with seven Today tabs the divider shows Tidy; a click groups Today (the fixture's
-    /// plan: one Reading group), Arc's undo toast undoes it, and the groups survive a restart.
+    /// plan: one Reading group), Arc's undo toast undoes it, and the groups survive a restart. Then Place New Tabs
+    /// (Brk's own) with real pointer events: a new tab's suggestion is a small arrow on its row; hovering it shows Arc's
+    /// tooltip naming the group, a click elsewhere on the row is an ordinary row click, and a click on the arrow moves the
+    /// tab into the group (the fixture answers the group question with its first choice and no probability).
     private static func organize(_ app: AppUnderTest) throws {
         try enable(app); try app.dispatch(.settings(.max(.tidyTabs(true))))
         // Nothing pinned: Arc draws the divider, with Clear and Tidy, over any Today that has tabs.
@@ -153,6 +156,32 @@ enum AIScenarios {
         try app.flush(); try app.restart()
         guard case .folder(let restored)? = try app.view().space.today.rows.first else { throw Check(description: "Today group not restored") }
         try expect(restored.children.map(\.id) == before, "group children changed on restart")
+
+        func row(_ id: ItemID) throws -> TabRow? {
+            try app.view().space.today.rows.lazy.compactMap { if case .tab(let t) = $0, t.id == id { t } else { nil } }.first
+        }
+        func screen(_ point: CGPoint) throws -> CGPoint {
+            let facts = try app.native()
+            return CGPoint(x: facts.windowFrame.minX + point.x, y: CGDisplayBounds(CGMainDisplayID()).height - facts.windowFrame.maxY + point.y)
+        }
+        let fresh = try app.load(app.site.url("ai-source.html?tab=new"))
+        try app.waitUntil("a move suggestion on the new tab", timeout: 20) { try row(fresh)?.aiSuggestion?.name == restored.title }
+        let rowFrame = try visible(app.native(), .row(fresh)).frame
+        try PhysicalPointer.click(app, at: try screen(CGPoint(x: rowFrame.minX + 60, y: rowFrame.midY)), window: app.window!)
+        app.sleep(0.5)
+        try expect(try row(fresh)?.aiSuggestion != nil, "a click on the row's title moved the tab or dropped its suggestion")
+        let arrow = try visible(app.native(), .tabTool("ai-suggestion-" + fresh.rawValue)).frame
+        try PhysicalPointer.move(app, to: CGPoint(x: arrow.midX, y: arrow.midY), window: app.window!)
+        try app.waitUntil("the arrow's tooltip", timeout: 3) { isShown(try app.native(), .tabTool("arc-tooltip")) }
+        let tip = try SidebarReviewScenarios.texts(app, in: visible(app.native(), .tabTool("arc-tooltip")).frame)
+        try expect(tip.contains { $0.contains("Move to \(restored.title)") }, "the tooltip reads \(tip)")
+        _ = try app.screenshot("AIOrganize-suggestion-hover")
+        try PhysicalPointer.click(app, at: try screen(CGPoint(x: arrow.midX, y: arrow.midY)), window: app.window!)
+        try app.waitUntil("the new tab in the group") {
+            guard case .folder(let group)? = try app.view().space.today.rows.first else { return false }
+            return group.children.contains { $0.id == fresh }
+        }
+        try expect(try row(fresh) == nil, "the tab is still a Today row of its own")
     }
     /// P50-g: the pill's Translation Available is the way to a translation a person sees first. Real clicks.
     private static func translateOffer(_ app: AppUnderTest) throws {

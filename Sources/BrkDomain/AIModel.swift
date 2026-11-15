@@ -56,7 +56,7 @@ public enum AIIntent: Hashable, Sendable, Codable {
     case renameDownload(DownloadID)
     /// A folder's or group's Name with AI (right click).
     case nameFolder(ItemID)
-    /// The suggestion under a new tab's title: its move, or its ×.
+    /// The suggestion icon on a new tab's row: its move (the icon's click), or dropping it (the row's menu).
     case acceptSuggestion(ItemID)
     case dismissSuggestion(ItemID)
     case cancel, dismiss
