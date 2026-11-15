@@ -235,6 +235,31 @@ enum PhysicalPointer {
         usleep(300_000)
     }
 
+    /// A click with modifier keys held, as a person Shift- or Command-clicks: the keys go down at the HID tap, the mouse
+    /// events carry their flags, and the keys go up without flags, so no flag stays set for later presses (`key clear`).
+    /// `point` in window content coordinates; refused like `click` unless this run's Brk is in front there.
+    static func click(_ app: AppUnderTest, at point: CGPoint, holding flags: CGEventFlags, window: WindowID) throws {
+        let at = try screen(app, point, window: window)
+        try checkFront(app, at: at, window: window)
+        let keys: [CGKeyCode] = [(CGEventFlags.maskShift, CGKeyCode(56)), (.maskCommand, 55), (.maskAlternate, 58), (.maskControl, 59)]
+            .filter { flags.contains($0.0) }.map(\.1)
+        let source = CGEventSource(stateID: .hidSystemState)
+        func key(_ code: CGKeyCode, down: Bool) {
+            guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { return }
+            event.flags = down ? flags : []
+            event.post(tap: .cghidEventTap)
+            usleep(40_000)
+        }
+        defer { for code in keys.reversed() { key(code, down: false) }; usleep(100_000) }
+        for code in keys { key(code, down: true) }
+        for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
+            guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: at, mouseButton: .left) else { throw Check(description: "mouse event") }
+            event.flags = flags
+            event.post(tap: .cghidEventTap)
+            usleep(type == .mouseMoved ? 150_000 : 70_000)
+        }
+    }
+
     /// A press with the button held while `held` runs. `point` in window content coordinates.
     static func press(_ app: AppUnderTest, at point: CGPoint, window: WindowID, held: () throws -> Void) throws {
         let at = try screen(app, point, window: window)

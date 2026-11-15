@@ -435,6 +435,11 @@ public enum TablistLayout {
     /// end of a list whose last row is an open folder with rows is below that folder's card, inside the card around it.
     /// Nil when the parent is not shown or has no place for a line (the caller then highlights the folder row).
     public static func dropLine(parent: ItemID, index: Int, dragging: ItemID?, rows: [RowFrame], space: SpaceSnapshot) -> DropLine? {
+        dropLine(parent: parent, index: index, dragging: dragging.map { [$0] } ?? [], rows: rows, space: space)
+    }
+
+    /// `dropLine` for a drag that carries several rows (a selection): `index` counts the list without all of them.
+    public static func dropLine(parent: ItemID, index: Int, dragging: Set<ItemID>, rows: [RowFrame], space: SpaceSnapshot) -> DropLine? {
         let t = Metrics.tablist
         let half = t.rowSpacing.value / 2
         var frames: [RowFrame.Kind: RowFrame] = [:]
@@ -446,7 +451,7 @@ public enum TablistLayout {
             children = folder.children
             depth = header.depth + 1
         } else { return nil }
-        let others = children.filter { $0.id != dragging }
+        let others = children.filter { !dragging.contains($0.id) }
         if index < others.count, let target = frames[.item(others[index].id)] {
             return DropLine(y: target.rect.minY - half, depth: depth)
         }

@@ -315,6 +315,11 @@ struct SidebarDrawMetrics: MetricGroup {
     let dragPreviewShadowOpacity = Metric(0.25, .anatomy("~/brk-arc-reference/Q13/Q13-c-arc.png: black at about 8% at the tile's edge, under the image's own 0.8"))
     let dragTileRingOpacity = Metric(0.5, .anatomy("~/brk-arc-reference/Q13/Q13-c-arc.png: the dragged tile's ring reads #EAEAEB against its #F6F7F9 fill"))
     let rowTitleOverButton = Metric(28.0, .anatomy("~/brk-arc-reference/Q15/Q15-e-arc.png: with the × showing the title may reach 28 from the row's right end"))
+    // A drag of several rows (Arc 1.170, 2026-11-15; the badge is AppKit's own count badge for a drag of several items).
+    let dragStackBadge = Metric([18.0, 0.0, 11.0], .anatomy("~/brk-evidence/multi-drag/README.md: the red count badge is 36 px across at 2x and its top left sits 0 pt right and 11 pt below the pointer in every capture (p2, p3, p4, p6)"))
+    let dragStackCard = Metric([24.0, 18.0], .anatomy("~/brk-evidence/multi-drag/README.md: the top card's top left is 24 pt right and 18 pt below the pointer (p3 b-held: card x 268 px, y 1180...1252 px, pointer at 220, 1144)"))
+    let dragStackStep = Metric([8.0, 6.0], .anatomy("~/brk-evidence/multi-drag/README.md: each card behind is 8 pt further right and 6 pt lower (p3 b-held: the third card's bottom 24 px under the top card's, its left 32 px right of it)"))
+    let dragStackCards = Metric(3, .anatomy("~/brk-evidence/multi-drag/README.md: three cards show for three and for five rows (p13, p16)"))
     let dragRowOverHeaderScale = Metric(0.875, .anatomy("~/brk-arc-reference/Q13/Q13-g-arc.png: the row image over the Space name strip is 186 x 31 for the 212 x 36 row"))
     let dropHintAlpha = Metric(0.475, .anatomy("2a96a9d7f0:verify/visual-pairs/run-20261103: a drop area is the theme's focus color at this strength: Q13-g's strip and Q15-e's band #A7ABAD over #F0F7FC with focus #575757, P23-e's slot #82A9A8 over #FCFCFC with focus #006362"))
     let splitJoinTitleTrailing = Metric(3.0, .anatomy("~/brk-arc-reference/Q15/Q15-a-arc.png and Q15-b-arc.png: the row's own title ends 3 pt before the end of its half"))

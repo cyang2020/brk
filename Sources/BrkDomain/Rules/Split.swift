@@ -145,6 +145,21 @@ extension Work {
             default:
                 return
             }
+        case .joinRows(let sources, let target, let index):
+            guard !sources.isEmpty, Set(sources).count == sources.count, !sources.contains(target),
+                  let tree = state.tree(of: window), let anchor = tree[target]?.kind == .split ? state.panes(of: target).first : target else { return }
+            let order = state.units(in: window)
+            let sorted = sources.sorted { (order.firstIndex(of: $0) ?? .max) < (order.firstIndex(of: $1) ?? .max) }
+            var draft = self
+            var onto = target
+            for (offset, source) in sorted.enumerated() {
+                draft.splits(.joinRow(source, onto: onto, at: index + offset), in: window)
+                // A join `joinRow` refused leaves the tab out of the target's split: then nothing changes at all.
+                guard let joined = draft.state.tree(of: window)?.splitContaining(anchor), draft.state.tree(of: window)?.splitContaining(source) == joined else { return }
+                onto = joined
+            }
+            draft.state.session.windows[window]?.tabSelection = TabSelection()
+            self = draft
         }
     }
 

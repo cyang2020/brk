@@ -115,6 +115,7 @@ sidebar SplitTools1
 sidebar TextLayout
 sidebar LibraryIcon-HoverReal
 sidebar R57-FolderMotion
+sidebar R58-SelectionDrag
 
 # spaces：新建 Space
 spaces SpaceTools-2

@@ -285,4 +285,32 @@ final class FavoritesDragTests: XCTestCase {
         let hint = try XCTUnwrap(first(in: live.root) { ($0 as? NSTextField)?.stringValue == "Double-click to rename" && !$0.isHidden }, "no hint line under the title")
         XCTAssertFalse(hint.isHidden)
     }
+
+    // MARK: Several rows (Arc 1.170, 2026-11-15, ~/brk-evidence/multi-drag/README.md)
+
+    /// The user's report: rows Cmd/Shift-selected could not be dragged together. Cmd-click Inbox (Visual is on screen, so
+    /// the selection is Visual and Inbox); a plain press on Inbox opens nothing; the drag shows the stack, not one row;
+    /// let go between Other and Visual, both land there in sidebar order, by one command, the selection ends and Visual
+    /// stays on screen.
+    func testADragOfASelectionMovesEveryRowByOneCommand() throws {
+        let (w, live) = try rig()
+        defer { w.close() }
+        let inbox = try row("Inbox", live), visual = try row("Visual", live), other = try row("Other", live)
+        let inboxID = try XCTUnwrap(inbox.row?.id), visualID = try XCTUnwrap(visual.row?.id), otherID = try XCTUnwrap(other.row?.id)
+        inbox.mouseDown(with: mouse(.leftMouseDown, centre(inbox), in: w, modifiers: .command))
+        inbox.mouseUp(with: mouse(.leftMouseUp, centre(inbox), in: w, modifiers: .command))
+        XCTAssertEqual(live.view.tabTools.selected, [visualID, inboxID])
+        let before = live.commands.count
+        let slot = CGPoint(x: 86, y: visual.convert(CGPoint(x: 0, y: 2), to: nil).y)
+        hold(inbox, from: CGPoint(x: 86, y: centre(inbox).y), at: slot, in: w)
+        XCTAssertEqual(live.commands.count, before, "the press or the drag sent \(live.commands.suffix(from: before))")
+        XCTAssertNotNil(ViewTreeSearch.find(ViewID.tabTool("drag-stack").identifier, in: live.root), "no stack follows the pointer")
+        XCTAssertNil(image(live), "a single row's image follows the pointer")
+        inbox.mouseUp(with: mouse(.leftMouseUp, slot, in: w))
+        XCTAssertEqual(Array(live.commands.suffix(from: before)).count, 1, "sent \(live.commands.suffix(from: before))")
+        XCTAssertEqual(live.view.space.today.rows.map(\.id), [otherID, inboxID, visualID])
+        XCTAssertEqual(live.view.tabTools.selected, [])
+        XCTAssertEqual(live.view.content.panes.first?.tab, visualID)
+        XCTAssertNil(ViewTreeSearch.find(ViewID.tabTool("drag-stack").identifier, in: live.root), "the stack stayed")
+    }
 }

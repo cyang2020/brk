@@ -149,6 +149,22 @@ final class TablistView: NSScrollView {
     /// The Cmd+click selection `id` belongs to, in its order, else `id` alone.
     func selectionGroup(containing id: ItemID) -> [ItemID] { multiselection.contains(id) ? multiselection : [id] }
 
+    /// What a drag of `ids` carries, in the same order: each row's kind and section, for the drop rules. Ids not drawn in
+    /// this list are left out.
+    func dragItems(_ ids: [ItemID]) -> [DragController.Item] {
+        guard let space = last?.space else { return [] }
+        var found: [ItemID: DragController.Item] = [:]
+        func index(_ rows: [Row], _ section: SectionKind) {
+            for row in rows {
+                found[row.id] = DragController.Item(id: row.id, kind: row.kind, section: section)
+                if case .folder(let folder) = row { index(folder.children, section) }
+            }
+        }
+        index(space.pinned.rows, .pinned)
+        index(space.today.rows, space.today.kind)
+        return ids.compactMap { found[$0] }
+    }
+
     /// `newTabCurrent`: the New Tab row draws as the current row (a blank window showing nothing, as Arc's does).
     /// `lit`: the rows an AI list row or chip under the pointer lights (docs/design/ai-right-panel.md).
     func render(_ space: SpaceSnapshot, renaming: ItemID?, frames f: SidebarFrames, palette: Palette, tools: TabToolsSnapshot,
@@ -403,6 +419,8 @@ final class TablistView: NSScrollView {
             guard let self, self.multiselection.contains(id) else { return [id] }
             return self.multiselection
         }
+        view.selection = { [weak self] in self?.multiselection ?? [] }
+        view.dragItems = { [weak self] ids in self?.dragItems(ids) ?? [] }
         rowViews[id] = view
         return view
     }
@@ -500,8 +518,9 @@ final class TablistView: NSScrollView {
     }
 
     /// Draws where `destination` lands: a line between rows (`TablistLayout.dropLine`), or the target folder row
-    /// highlighted; an open folder it lands in shows its card (Ardia). Nil clears it.
-    func showDrop(_ destination: Destination?, dragging: ItemID?, at point: CGPoint?, frames f: SidebarFrames, space: SpaceSnapshot) {
+    /// highlighted; an open folder it lands in shows its card (Ardia). Nil clears it. `dragging`: the rows the drag
+    /// carries; `index` counts the list without them.
+    func showDrop(_ destination: Destination?, dragging: Set<ItemID>, at point: CGPoint?, frames f: SidebarFrames, space: SpaceSnapshot) {
         setDropFolder(nil)
         dropLine.isHidden = true
         var into: ItemID?
@@ -509,12 +528,12 @@ final class TablistView: NSScrollView {
             cards.drop(into)
             showHoveredCard()
         }
-        guard case .into(let parent, let index)? = destination, let dragging else { return }
+        guard case .into(let parent, let index)? = destination, !dragging.isEmpty else { return }
         if case .folder(let folder)? = Self.find(parent, in: space.pinned.rows + space.today.rows),
            let folderRow = f.rows.first(where: { $0.kind == .item(parent) }) {
             if TablistLayout.showsContents(folder) { into = parent }
             let overFolder = point.map { folderRow.rect.contains($0) } ?? false
-            if overFolder || folder.collapsed || folder.children.allSatisfy({ $0.id == dragging }) {
+            if overFolder || folder.collapsed || folder.children.allSatisfy({ dragging.contains($0.id) }) {
                 setDropFolder(parent)
                 return
             }
@@ -773,6 +792,11 @@ final class RowView: HoverView {
     var onClearMultiselect: (() -> Void)?
     /// The tabs the hover × closes: this row, or the whole Cmd+click selection it belongs to.
     var closeTargets: ((ItemID) -> [ItemID])?
+    /// The window's Cmd/Shift-click selection, and the drag items for a list of ids (TablistView).
+    var selection: (() -> [ItemID])?
+    var dragItems: (([ItemID]) -> [DragController.Item])?
+    /// The selection at a plain press on one of its rows: the press opened nothing, so its release does unless it dragged.
+    private var deferredPress: [ItemID]?
 
     init(dispatch: @escaping Dispatch, drag: DragController) {
         self.dispatch = dispatch
@@ -1206,10 +1230,14 @@ final class RowView: HoverView {
             return
         }
         isPressed = true
-        // The press opens a tab or a split's pane right away (Arc, Q13-press-row); `press` first, it notes what the window shows.
-        drag.press(.init(id: row.id, kind: row.kind, section: section), source: self, event: event)
+        // The press opens a tab or a split's pane right away (Arc, Q13-press-row); `press` first, it notes what the window
+        // shows. On a row of a selection of several it opens nothing and the drag carries the whole selection.
+        let selected = selection?() ?? []
+        let carried = SidebarPress.carried(by: row.id, selection: selected)
+        deferredPress = carried.count > 1 ? selected : nil
+        drag.press(.init(id: row.id, kind: row.kind, section: section), group: carried.count > 1 ? dragItems?(carried) ?? [] : [], source: self, event: event)
         let point = local(event)
-        SidebarPress.commands(for: row, pane: segments.first { $0.frame.contains(point) }?.pane?.id, command: false, shift: false).forEach(dispatch)
+        SidebarPress.commands(for: row, pane: segments.first { $0.frame.contains(point) }?.pane?.id, command: false, shift: false, selection: selected).forEach(dispatch)
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -1218,8 +1246,14 @@ final class RowView: HoverView {
 
     override func mouseUp(with event: NSEvent) {
         isPressed = false
+        let deferred = deferredPress
+        deferredPress = nil
         if drag.release(event) { return }
         guard let row, !event.modifierFlags.contains(.command), !event.modifierFlags.contains(.shift), bounds.contains(local(event)) else { return }
+        if let deferred {
+            let point = local(event)
+            SidebarPress.releaseCommands(for: row, pane: segments.first { $0.frame.contains(point) }?.pane?.id, selection: deferred).forEach(dispatch)
+        }
         if case .folder = row { onSelect?(row.id) }
         if event.clickCount == 2, row.kind != .split {
             dispatch(.item(.beginRename(.item(row.id))))

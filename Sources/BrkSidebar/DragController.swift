@@ -26,6 +26,14 @@ import BrkUIKit
 ///
 /// While a drag is over the grid or a favorite is on the move the grid shows a `FavoritesDrag`: SidebarView lays the
 /// column out with it (`FavoritesGrid.applying`), and the hit tests read those same frames.
+///
+/// A press on a row of a Cmd/Shift-click selection of several rows carries them all (`SidebarPress.carried`; Arc 1.170,
+/// probed 2026-11-15, ~/brk-evidence/multi-drag/README.md). The image is a stack of their rows with a count badge
+/// (`DragStack`); the rows stay where they are; the same targets take the drop, each by one command: a list slot, a
+/// folder, the Favorites grid (one empty cell opens) and the Space name strip move them all there in sidebar order
+/// (`BulkTabAction.move`); a dock space moves them to that space; the middle of another tab row makes one split
+/// (`SplitCommand.joinRows`), tabs only and while the panes fit. The page takes none (Arc shows no slot); a drop nothing
+/// took ends the selection.
 @MainActor
 final class DragController {
     struct Item: Equatable {
@@ -66,6 +74,9 @@ final class DragController {
 
     private struct Press {
         let item: Item
+        /// Everything the drag carries when the press was on a row of a selection of several rows, in the selection's
+        /// order; empty for a drag of `item` alone.
+        let group: [Item]
         let source: NSView
         /// Where the press was, in window coordinates.
         let start: CGPoint
@@ -75,7 +86,7 @@ final class DragController {
 
     private final class Session {
         let press: Press
-        let preview: DragImage
+        let preview: any DragFollowing
         /// Arc's drag card over the content (P23-d, Q13-e); nil for anything but a tab.
         let card: ContentDragCard?
         /// The pointer's place in the card, as fractions: a drag keeps it when its image changes size. A row counts the
@@ -85,8 +96,9 @@ final class DragController {
         var target: Target?
         var overContent = false
         var item: Item { press.item }
+        var group: [Item]? { press.group.count > 1 ? press.group : nil }
 
-        init(press: Press, preview: DragImage, card: ContentDragCard?, cardGrab: CGPoint) {
+        init(press: Press, preview: any DragFollowing, card: ContentDragCard?, cardGrab: CGPoint) {
             self.press = press
             self.preview = preview
             self.card = card
@@ -116,11 +128,12 @@ final class DragController {
     var heldItem: ItemID? { session?.press.item.id ?? pressed?.item.id }
 
     /// Mouse down on a row or tile: remember it; it becomes a drag once the pointer travels far enough. Called before
-    /// the press opens the item, so `shownBefore` is still the tab it replaces.
-    func press(_ item: Item, source: NSView, event: NSEvent) {
+    /// the press opens the item, so `shownBefore` is still the tab it replaces. `group`: every item the drag carries
+    /// (`item` among them) when it is a selection of several rows.
+    func press(_ item: Item, group: [Item] = [], source: NSView, event: NSEvent) {
         endLanding()
         cancelledPress = false
-        pressed = Press(item: item, source: source, start: event.locationInWindow, shownBefore: context?.shown)
+        pressed = Press(item: item, group: group.count > 1 ? group : [], source: source, start: event.locationInWindow, shownBefore: context?.shown)
         session = nil
     }
 
@@ -139,14 +152,14 @@ final class DragController {
         updateShownTab(session, over: root, frames: context.frames)
         guard self.session === session, let current = self.context else { return true }
         let previous = session.target
-        session.target = target(at: root, item: session.item, context: current)
+        session.target = target(at: root, session: session, context: current)
         // The grid's new layout moves what is under the pointer: read the target again from the frames now drawn. A
         // grown tray still holds the pointer and a shrunk one still does not, so this settles at once.
         let grid = gridDrag(session.target, item: session.item, context: current)
         if grid != sidebar.favoritesDrag {
             sidebar.setFavoritesDrag(grid)
             guard self.session === session, let moved = self.context else { return true }
-            session.target = target(at: root, item: session.item, context: moved)
+            session.target = target(at: root, session: session, context: moved)
         }
         guard let latest = self.context else { return true }
         // Over the Max panel the row follows the pointer, as over the sidebar: the page's card would hide the input.
@@ -160,7 +173,7 @@ final class DragController {
         session.preview.isHidden = session.overContent && !overPanel
         session.preview.place(shape(session.target, item: session.item, context: latest), pointer: local)
         if hapticsEnabled, session.target?.destination != nil, session.target?.destination != previous?.destination { haptic() }
-        show(session.target, item: session.item, context: latest)
+        show(session.target, session: session, context: latest)
         return true
     }
 
@@ -170,7 +183,11 @@ final class DragController {
         if cancelledPress { cancelledPress = false; return true }
         guard let session else { return false }
         if let sidebar, let context {
-            session.target = target(at: sidebar.rootPoint(fromWindow: event.locationInWindow), item: session.item, context: context)
+            session.target = target(at: sidebar.rootPoint(fromWindow: event.locationInWindow), session: session, context: context)
+        }
+        if let group = session.group {
+            releaseGroup(session, group.map(\.id))
+            return true
         }
         var lands = false, settles = false
         if case .favorites? = session.target { lands = true }
@@ -190,9 +207,29 @@ final class DragController {
             break
         }
         sidebar?.renderAfterDrag()
-        if lands { land(session.preview, on: session.item.id) }
-        if settles { settle(session.preview, on: session.item.id) }
+        if lands, let image = session.preview as? DragImage { land(image, on: session.item.id) }
+        if settles, let image = session.preview as? DragImage { settle(image, on: session.item.id) }
         return true
+    }
+
+    /// The release of a drag of several rows: one command moves them all, so the change is one step; a drop nothing took
+    /// ends the selection, as Arc's does. The image goes at once.
+    private func releaseGroup(_ session: Session, _ ids: [ItemID]) {
+        finish(session)
+        let bulk = { (destination: Destination) in self.dispatch(.tabTools(.bulk(.items(ids), .move(destination)))) }
+        switch session.target {
+        case .content(let command)?: dispatch(command)
+        case .split(let join)?: dispatch(.split(.joinRows(ids, onto: join.target, at: join.paneIndex)))
+        case .favorites(let index)?:
+            if let root = context?.favorites.root { bulk(.into(parent: root, index: index)) }
+        case .spaceHeader?:
+            if let root = context?.space.pinned.root { bulk(.into(parent: root, index: 0)) }
+        case let target?:
+            if let destination = target.destination { bulk(destination) }
+        case nil:
+            dispatch(.tabTools(.clearSelection))
+        }
+        sidebar?.renderAfterDrag()
     }
 
     /// A drop in the tab list (Arc's dragging session slides its image to the destination, recorded 2026-11-13): the image
@@ -251,6 +288,7 @@ final class DragController {
 
     private func begin(_ press: Press) {
         guard let sidebar, let palette = sidebar.currentPalette else { return }
+        if press.group.count > 1 { return beginGroup(press, sidebar: sidebar, palette: palette) }
         let source = press.source, item = press.item
         sidebar.beginContentDrop?(item.id)
         // The image is the item at rest: no pressed fill.
@@ -279,11 +317,54 @@ final class DragController {
         if item.kind == .folder { row?.dragSource = true }
         // A favorite's own cell is empty for the whole drag (Q13-c, Q13-d).
         if row == nil { source.alphaValue = 0 }
+        watchEscape()
+    }
+
+    /// A drag of several rows: the rows stay as they are (Arc keeps them in place, still selected); the stack follows the
+    /// pointer with the tab that was current when the selection began on top (the selection's first), the others behind
+    /// it in sidebar order.
+    private func beginGroup(_ press: Press, sidebar: SidebarView, palette: Palette) {
+        let order = Self.sidebarOrder(context?.space)
+        let top = press.group.first { $0.id == context?.shown } ?? press.group[0]
+        let rest = press.group.filter { $0.id != top.id }.sorted { (order[$0.id] ?? .max) < (order[$1.id] ?? .max) }
+        let shown = context?.shown
+        let all = (context?.space.pinned.rows ?? []) + (context?.space.today.rows ?? [])
+        let cards = ([top] + rest).prefix(Draw.dragStackCards.value).map { item -> DragStack.Card in
+            // A row scrolled out of view has no view to picture: a tab's is drawn from its row, as a Favorite's is.
+            if let view = sidebar.tablist.rowView(item.id) {
+                return DragStack.Card(image: view.dragImage(), rowSize: view.bounds.size, current: item.id == shown)
+            }
+            let size = press.source.bounds.size
+            guard case .tab(let tab)? = TablistView.find(item.id, in: all) else { return DragStack.Card(image: nil, rowSize: nil, current: item.id == shown) }
+            return DragStack.Card(image: DragRowImage.make(tab: tab, size: size, in: press.source, palette: palette), rowSize: size, current: item.id == shown)
+        }
+        let listWidth = context.map { Double($0.frames.frame.width) } ?? Metrics.sidebar.resetWidth.value
+        let stack = DragStack(cards: Array(cards), count: press.group.count, listWidth: listWidth, palette: palette)
+        (sidebar.superview ?? sidebar).addSubview(stack)
+        session = Session(press: press, preview: stack, card: nil, cardGrab: .zero)
+        watchEscape()
+    }
+
+    private func watchEscape() {
         escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard event.keyCode == Key.escape.code, self?.isActive == true else { return event }
             self?.cancel()
             return nil
         }
+    }
+
+    /// Each row's place in the sidebar, top to bottom (folders' rows after their folder).
+    private static func sidebarOrder(_ space: SpaceSnapshot?) -> [ItemID: Int] {
+        var order: [ItemID: Int] = [:]
+        func walk(_ rows: [Row]) {
+            for row in rows {
+                order[row.id] = order.count
+                if case .folder(let folder) = row { walk(folder.children) }
+            }
+        }
+        walk(space?.pinned.rows ?? [])
+        walk(space?.today.rows ?? [])
+        return order
     }
 
     /// Clears everything the drag drew, but for the image when it goes on to a cell (`land`). The grid's drag layout goes
@@ -298,7 +379,7 @@ final class DragController {
         (source as? RowView)?.dragLifted = false
         source.alphaValue = 1
         sidebar?.clearFavoritesDrag()
-        if let context { show(nil, item: session.item, context: context) }
+        if let context { show(nil, session: session, context: context) }
         self.session = nil
     }
 
@@ -314,7 +395,9 @@ final class DragController {
 
     // MARK: Targets
 
-    private func target(at root: CGPoint, item: Item, context: Context) -> Target? {
+    private func target(at root: CGPoint, session: Session, context: Context) -> Target? {
+        if let group = session.group { return groupTarget(at: root, pressed: session.item, group: group, context: context) }
+        let item = session.item
         guard let sidebar else { return nil }
         // The Max panel lies over the page; nothing of Arc's drop rules changes where it is not.
         if let command = sidebar.panelDrop?(item.id, item.kind, root) { return .content(command) }
@@ -340,23 +423,89 @@ final class DragController {
         return .list(destination, point: point)
     }
 
+    /// Where a drag of several rows lands (Arc 1.170, 2026-11-15): the targets of a single row, each taking all of them
+    /// or none. The page takes none: Arc shows no slot there and the drop changes nothing.
+    private func groupTarget(at root: CGPoint, pressed: Item, group: [Item], context: Context) -> Target? {
+        guard let sidebar else { return nil }
+        // The Max panel takes the whole selection (WindowRootView reads it through `SidebarView.dragGroup`).
+        if let command = sidebar.panelDrop?(pressed.id, pressed.kind, root) { return .content(command) }
+        let f = context.frames
+        let kinds = Set(group.map(\.kind))
+        let wayIn = context.spaceHeaderDrops && FavoritesGrid.emptyDropZone(frames: f, favorites: context.favorites)?.contains(root) == true
+        if f.favoritesTray.contains(root) || wayIn {
+            guard kinds.allSatisfy({ Placement.canPlace($0, inSection: .favorites, parentKind: .section) }),
+                  case .into(_, let index)? = FavoritesGrid.dropTarget(at: root, frames: f, favorites: context.favorites, dragging: .tab, item: pressed.id) else { return nil }
+            return .favorites(index: index)
+        }
+        if f.spaceHeader.contains(root) {
+            return context.spaceHeaderDrops && kinds.allSatisfy({ Placement.canPlace($0, inSection: .pinned, parentKind: .section) }) ? .spaceHeader : nil
+        }
+        if let space = f.dockSpaces.first(where: { $0.value.contains(root) })?.key { return .dock(space) }
+        guard f.tablistViewport.contains(root) else { return nil }
+        let point = sidebar.tablist.documentPoint(fromRoot: root, frames: f)
+        let ids = Set(group.map(\.id))
+        if kinds == [.tab], let join = Self.groupSplitTarget(at: point, rows: f.rows, space: context.space, pressed: pressed.id, group: group, ids: ids) {
+            return .split(join)
+        }
+        var raw: Destination?
+        for kind in kinds {
+            guard let place = TablistLayout.dropTarget(at: point, rows: f.rows, space: context.space, dragging: kind), raw == nil || raw == place else { return nil }
+            raw = place
+        }
+        guard let raw, let destination = Self.detached(raw, dragging: ids, in: context.space) else { return nil }
+        return .list(destination, point: point)
+    }
+
+    /// The middle of another tab or split row takes several tabs when each could join it alone and the panes fit.
+    private static func groupSplitTarget(at point: CGPoint, rows: [RowFrame], space: SpaceSnapshot, pressed: ItemID, group: [Item], ids: Set<ItemID>) -> SplitJoin? {
+        var found: SplitJoin?
+        for section in Set(group.map(\.section)) {
+            guard let join = TablistLayout.splitTarget(at: point, rows: rows, space: space, dragging: .tab, from: section, item: pressed),
+                  found == nil || found == join else { return nil }
+            found = join
+        }
+        guard let join = found, !ids.contains(join.target) else { return nil }
+        let panes: Int
+        switch join {
+        case .tab: panes = 1
+        case .split(let id, _):
+            guard case .split(let split)? = TablistView.find(id, in: space.pinned.rows + space.today.rows) else { return nil }
+            panes = split.panes.count
+        }
+        return panes + group.count <= Metrics.content.maxPanes.value ? join : nil
+    }
+
     /// `TablistLayout.dropTarget`'s index counts the list as drawn, with the dragged item still in it; `Destination`
     /// counts after the item is detached. Nil for a drop into the dragged item or anything inside it.
     static func detached(_ destination: Destination, dragging id: ItemID, in space: SpaceSnapshot) -> Destination? {
+        detached(destination, dragging: [id], in: space)
+    }
+
+    /// The same for several rows: the index counts the parent's rows that are not dragged (`BulkTabAction.move` takes
+    /// them out first). Nil for a drop into any dragged row or anything inside one.
+    static func detached(_ destination: Destination, dragging ids: Set<ItemID>, in space: SpaceSnapshot) -> Destination? {
         guard case .into(let parent, var index) = destination else { return destination }
-        if parent == id || contains(parent, under: id, in: space.pinned.rows + space.today.rows) { return nil }
+        guard let path = path(to: parent, in: space), !path.contains(where: ids.contains) else { return nil }
         let siblings: [Row]? = if parent == space.pinned.root { space.pinned.rows }
             else if parent == space.today.root { space.today.rows }
             else if case .folder(let folder)? = TablistView.find(parent, in: space.pinned.rows + space.today.rows) { folder.children }
             else { nil }
-        if let at = siblings?.firstIndex(where: { $0.id == id }), at < index { index -= 1 }
+        if let siblings { index -= siblings.prefix(max(0, index)).filter { ids.contains($0.id) }.count }
         return .into(parent: parent, index: index)
     }
 
-    /// Whether `target` is somewhere inside the subtree of `root`.
-    private static func contains(_ target: ItemID, under root: ItemID, in rows: [Row]) -> Bool {
-        guard case .folder(let folder)? = TablistView.find(root, in: rows) else { return false }
-        return TablistView.find(target, in: folder.children) != nil
+    /// `parent` and the folders it sits in, innermost first; a section root alone. Nil when it is not in the space.
+    private static func path(to parent: ItemID, in space: SpaceSnapshot) -> [ItemID]? {
+        if parent == space.pinned.root || parent == space.today.root { return [parent] }
+        func search(_ rows: [Row], _ above: [ItemID]) -> [ItemID]? {
+            for row in rows {
+                guard case .folder(let folder) = row else { continue }
+                if folder.id == parent { return [parent] + above }
+                if let hit = search(folder.children, [folder.id] + above) { return hit }
+            }
+            return nil
+        }
+        return search(space.pinned.rows + space.today.rows, [])
     }
 
     /// What the grid shows for a drag at `target`: a new tile's or a reorder's empty cell over the tray; outside it a
@@ -379,15 +528,16 @@ final class DragController {
         }
     }
 
-    private func show(_ target: Target?, item: Item, context: Context) {
+    private func show(_ target: Target?, session: Session, context: Context) {
         guard let sidebar else { return }
         let f = context.frames
         if case .favorites? = target { sidebar.favorites.showEmptyDrop(true) } else { sidebar.favorites.showEmptyDrop(false) }
         sidebar.spaceHeader.dropHighlighted = target == .spaceHeader
         if case .list(let destination, let point)? = target {
-            sidebar.tablist.showDrop(destination, dragging: item.id, at: point, frames: f, space: context.space)
+            let dragging = Set((session.group ?? [session.item]).map(\.id))
+            sidebar.tablist.showDrop(destination, dragging: dragging, at: point, frames: f, space: context.space)
         } else {
-            sidebar.tablist.showDrop(nil, dragging: nil, at: nil, frames: f, space: context.space)
+            sidebar.tablist.showDrop(nil, dragging: [], at: nil, frames: f, space: context.space)
         }
         if case .dock(let space)? = target { sidebar.dock.showDrop(space: space) } else { sidebar.dock.showDrop(space: nil) }
         if case .split(let join)? = target { sidebar.tablist.showSplitJoin(join, frames: f) } else { sidebar.tablist.showSplitJoin(nil, frames: f) }
@@ -532,6 +682,121 @@ final class DragImage: NSView {
     }
 }
 
+/// What follows the pointer: `DragImage` for one item, `DragStack` for several.
+@MainActor
+protocol DragFollowing: NSView {
+    /// Takes `shape` with the pointer at `pointer` (the superview's coordinates).
+    func place(_ shape: DragImage.Shape, pointer: CGPoint)
+}
+
+extension DragImage: DragFollowing {}
+
+/// What follows the pointer in a drag of several rows (Arc 1.170, 2026-11-15, ~/brk-evidence/multi-drag/README.md): the
+/// first rows stacked, the first on top, each next one `Draw.dragStackStep` lower and further right, and a red badge with
+/// the count at the stack's top left. The stack hangs below and right of the pointer wherever the row was pressed. The top
+/// card is the current tab's white one; the others keep their selected rows' grey. Over the Favorites grid the cards are
+/// blank tiles of the grid's size; over the Space name strip, smaller rows.
+@MainActor
+final class DragStack: NSView, DragFollowing {
+    struct Card {
+        let image: NSImage?
+        /// The row the image was taken from; nil for a card with no image.
+        let rowSize: CGSize?
+        let current: Bool
+    }
+
+    private let cards: [Card]
+    private var views: [(card: NSView, shade: NSView, image: NSImageView)] = []
+    private let badge = NSView()
+    private let label = NSTextField(labelWithString: "")
+    private let rowCard: CGSize
+    private var shape: DragImage.Shape?
+
+    init(cards: [Card], count: Int, listWidth: Double, palette: Palette) {
+        self.cards = cards
+        rowCard = RowGeometry(bounds: CGRect(x: 0, y: 0, width: listWidth, height: Metrics.tablist.rowHeight.value), depth: 0).selection.size
+        super.init(frame: .zero)
+        wantsLayer = true
+        alphaValue = Draw.dragPreviewAlpha.value
+        // The last card first, so the first is drawn over the others.
+        for card in cards.reversed() {
+            let view = NSView(), shade = NSView(), image = NSImageView()
+            view.wantsLayer = true
+            // The theme's row fills are see-through (a dark theme's very much so): on an opaque card the rows behind do
+            // not show through the one in front.
+            view.layer?.backgroundColor = palette.dragCardBase.cgColor
+            view.layer?.cornerCurve = .continuous
+            view.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
+            let soft = NSShadow()
+            soft.shadowColor = NSColor.black.withAlphaComponent(Draw.dragPreviewShadowOpacity.value)
+            soft.shadowBlurRadius = Draw.dragPreviewShadow.value / 2
+            soft.shadowOffset = CGSize(width: 0, height: -Draw.dragPreviewShadowOffset.value)
+            view.shadow = soft
+            shade.wantsLayer = true
+            shade.layer?.backgroundColor = palette.color(card.current ? palette.tokens.tabCurrent : palette.tokens.itemHover).cgColor
+            shade.layer?.cornerCurve = .continuous
+            shade.layer?.cornerRadius = Metrics.tablist.selectionRadius.value
+            image.imageScaling = .scaleAxesIndependently
+            image.image = card.image
+            view.addSubview(shade)
+            view.addSubview(image)
+            addSubview(view)
+            views.insert((view, shade, image), at: 0)
+        }
+        badge.wantsLayer = true
+        badge.layer?.backgroundColor = NSColor.systemRed.cgColor
+        label.stringValue = String(count)
+        label.font = .systemFont(ofSize: Draw.dragStackBadge.value[0] * 0.65, weight: .bold)
+        label.textColor = .white
+        label.alignment = .center
+        badge.addSubview(label)
+        addSubview(badge)
+        identify(.tabTool("drag-stack"))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func place(_ shape: DragImage.Shape, pointer: CGPoint) {
+        let b = Draw.dragStackBadge.value, top = Draw.dragStackCard.value, step = Draw.dragStackStep.value
+        let size: CGSize
+        switch shape {
+        case .row(let scale): size = CGSize(width: rowCard.width * scale, height: rowCard.height * scale)
+        case .tile(let tile): size = tile
+        }
+        let behind = Double(max(cards.count - 1, 0))
+        let cardTop = top[1] - b[2]
+        setFrameSize(CGSize(width: top[0] + behind * step[0] + size.width, height: max(b[0], cardTop + behind * step[1] + size.height)))
+        setFrameOrigin(CGPoint(x: pointer.x + b[1], y: pointer.y + b[2]))
+        guard shape != self.shape else { return }
+        self.shape = shape
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (k, view) in views.enumerated() {
+            view.card.frame = CGRect(x: top[0] + Double(k) * step[0], y: cardTop + Double(k) * step[1], width: size.width, height: size.height)
+            view.shade.frame = view.card.bounds
+            let card = cards[k]
+            if case .row(let scale) = shape, let row = card.rowSize {
+                // The row's image keeps its place in the row, which is wider than its card.
+                let selection = RowGeometry(bounds: CGRect(origin: .zero, size: row), depth: 0).selection
+                view.image.frame = CGRect(x: -selection.minX * scale, y: -selection.minY * scale, width: row.width * scale, height: row.height * scale)
+                view.image.isHidden = false
+            } else {
+                view.image.isHidden = true
+            }
+        }
+        let text = label.intrinsicContentSize
+        let width = max(b[0], text.width + b[0] / 2)
+        badge.frame = CGRect(x: 0, y: 0, width: width, height: b[0])
+        badge.layer?.cornerRadius = b[0] / 2
+        label.frame = CGRect(x: 0, y: (b[0] - text.height) / 2, width: width, height: text.height)
+        CATransaction.commit()
+    }
+}
+
 /// A Favorite's row image (Q13-d): the row a tab would draw, its icon and title, with no hover button.
 @MainActor
 enum DragRowImage {
@@ -561,6 +826,11 @@ enum DragRowImage {
     }
 }
 
+extension Palette {
+    /// The opaque fill under a drag card: white, or a dark grey in a dark theme.
+    var dragCardBase: NSColor { scheme == .dark ? NSColor(white: 0.17, alpha: 1) : .white }
+}
+
 /// Arc's drag image while a tab is over the content (P23-d): a white rounded card centred on the pointer, the tab's
 /// icon above its title in bold, over a soft shadow (Draw.dragCard*).
 @MainActor
@@ -571,7 +841,7 @@ final class ContentDragCard: NSView {
     init(tab: TabRow, palette: Palette) {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = (palette.scheme == .dark ? NSColor(white: 0.17, alpha: 1) : .white).cgColor
+        layer?.backgroundColor = palette.dragCardBase.cgColor
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = Draw.dragCardRadius.value
         let soft = NSShadow()

@@ -15,6 +15,7 @@ enum FavoritesDragScenarios {
         Scenario("R53-Out", "a Favorite dragged out leaves its cell empty, shows a row and lands in Today or Pinned as the current tab; the grid rebalances after the release", out),
         Scenario("R53-SplitSides", "a tab held on another tab's middle shows a slot under the pointer's half and lands on that side, focused; 9.5 pt from the edge reorders, 11.5 pt is a slot; on a split row one band, and the left and right ends make it the first and the last pane", splitSides),
         Scenario("R54-Halves", "a tab released on the left half and on the right half of the page makes a split with it on that side and focused", halves),
+        Scenario("R58-SelectionDrag", "three Today rows Shift-clicked from the current tab and dragged by the middle one with the real mouse land together in Pinned in their order, the current tab still shown; a plain click on a row of a Command-click selection opens it only on the release", selectionDrag),
     ]
 
     private typealias S = SidebarReviewScenarios
@@ -93,6 +94,43 @@ enum FavoritesDragScenarios {
         try PhysicalPointer.doubleClick(app, at: row, window: app.window!)
         try app.waitUntil("a double click renames") { try app.view().renaming == f.a }
         try app.press("escape")
+    }
+
+    // MARK: Several rows (Arc 1.170, 2026-11-15, ~/brk-evidence/multi-drag/README.md)
+
+    /// The user's report (2026-11-15): Shift-selected tabs could not be dragged together.
+    @Sendable static func selectionDrag(_ app: AppUnderTest) throws {
+        let f = try fixture(app)
+        defer { PhysicalKeys.clearSystemModifiers(KeyChord([.shift, .command], .a)) }
+        // Today is c (shown), b, a. Shift-clicking a selects from the tab on screen down to a.
+        try PhysicalPointer.click(app, at: centre(frame(app, .row(f.a))), holding: .maskShift, window: app.window!)
+        try app.waitUntil("c, b and a selected") { try app.view().tabTools.selected == [f.c, f.b, f.a] }
+        try expect(try shown(app) == f.c, "the Shift click opened a row")
+        let line = CGPoint(x: 86, y: try frame(app, .row(f.home)).maxY)
+        try PhysicalPointer.drag(app, through: [CGPoint(x: 86, y: try frame(app, .row(f.b)).midY), line], window: app.window!) {
+            try expect(try shown(app) == f.c, "the press on a selected row opened it")
+            let stack = try frame(app, .tabTool("drag-stack"))
+            try expect(stack.width > 0 && stack.height > 0, "no stack follows the pointer: \(stack)")
+            try expect(try app.view().tabTools.selected == [f.c, f.b, f.a], "the press changed the selection")
+            _ = try app.screenshot("held")
+        }
+        try app.waitUntil("the three rows land between Home and Docs in their order") {
+            try app.view().space.pinned.rows.map(\.id) == [f.home, f.c, f.b, f.a, f.docs]
+        }
+        try expect(try app.view().space.today.rows.allSatisfy { ![f.a, f.b, f.c].contains($0.id) }, "a dragged row stayed in Today")
+        try expect(try app.view().tabTools.selected.isEmpty, "the selection outlived the drop")
+        try expect(try shown(app) == f.c, "the drop changed the tab on screen")
+        _ = try app.screenshot("dropped")
+        // A plain click on a row of a Command-click selection opens it on the release, and it alone stays selected.
+        try PhysicalPointer.click(app, at: centre(frame(app, .row(f.docs))), holding: .maskCommand, window: app.window!)
+        try app.waitUntil("c and Docs selected") { try app.view().tabTools.selected == [f.c, f.docs] }
+        try PhysicalPointer.press(app, at: centre(frame(app, .row(f.docs))), window: app.window!) {
+            app.sleep(0.3)
+            try expect(try shown(app) == f.c, "the press opened a selected row before the release")
+        }
+        try app.waitUntil("Docs open after the release") { try shown(app) == f.docs }
+        let after = try app.view().tabTools.selected
+        try expect(after == [f.docs], "the selection is \(after), not Docs alone")
     }
 
     // MARK: Rule 4

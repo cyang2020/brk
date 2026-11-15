@@ -127,7 +127,8 @@ public final class WindowRootView: NSView {
             if kind == .tab { _ = content?.dropCommand(item, at: CGPoint(x: -1, y: -1)) }
             aiAnswer.showDropTarget(true)
             switch kind {
-            case .tab, .split: return .assist(.attach([.tab(item.rawValue)]))
+            // A row of a Cmd+click selection brings the whole selection, as near the window's edge.
+            case .tab, .split: return .assist(.attach((self?.sidebar.dragGroup(for: item) ?? [item]).map { .tab($0.rawValue) }))
             case .folder: return .assist(.attach([.folder(item)]))
             case .section: return nil
             }

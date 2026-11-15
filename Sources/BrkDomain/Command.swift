@@ -285,6 +285,10 @@ public enum SplitCommand: Hashable, Sendable, Codable {
     /// A tab dropped on the middle of another row (Arc, Q15): the tab and the standalone tab become a split where the row
     /// was, or the tab joins the split row. `at` is its place among the panes (on a standalone tab: 0 left, 1 right).
     case joinRow(ItemID, onto: ItemID, at: Int = 0)
+    /// Several selected tabs dropped on the middle of another row: they join it one after another from `at`, in sidebar
+    /// order, as one change; the last is focused (Arc 1.170, 2026-11-15: two tabs on a tab's right half made a three-pane
+    /// split). Nothing changes when any of them cannot join.
+    case joinRows([ItemID], onto: ItemID, at: Int = 0)
 }
 
 public enum SidebarCommand: Hashable, Sendable, Codable {

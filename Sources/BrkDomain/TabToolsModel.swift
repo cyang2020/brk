@@ -22,6 +22,9 @@ public enum TabToolsCommand: Hashable, Sendable, Codable {
     case jumpItem(Int)
     case jumpSpace(Int)
     case select(ItemID, SelectionGesture)
+    /// The Cmd/Shift-click selection ends without acting on it: Arc drops it at the end of a drag of several rows that
+    /// nothing took (the page, a refused target).
+    case clearSelection
     case bulk(TabTargets, BulkTabAction)
     case reveal
     case sidebarStep(Step)

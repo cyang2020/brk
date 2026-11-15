@@ -187,6 +187,11 @@ extension Work {
             let rows = state.visibleRows(in: window)
             guard rows.contains(id) else { return }
             var selection = state.session.windows[window]?.tabSelection ?? TabSelection()
+            // Arc counts the tab on screen as selected: Cmd- or Shift-clicking a row after a drop (which drops the
+            // selection) still drags the current tab along (Arc 1.170, 2026-11-15: count badge 3 for two clicked rows).
+            if selection.items.isEmpty, gesture != .replace, let shown = state.shownItem(in: window), shown != id, rows.contains(shown) {
+                selection = TabSelection(items: [shown], anchor: shown)
+            }
             switch gesture {
             case .replace: selection = TabSelection(items: [id], anchor: id)
             case .toggle:
@@ -198,6 +203,8 @@ extension Work {
                 } else { selection = TabSelection(items: [id], anchor: id) }
             }
             state.session.windows[window]?.tabSelection = selection
+        case .clearSelection:
+            if state.session.windows[window]?.tabSelection != TabSelection() { state.session.windows[window]?.tabSelection = TabSelection() }
         case .bulk(let targets, let action): bulkTabs(targets, action, in: window)
         case .reveal:
             if let id = state.focusedPane(in: window) { reveal(id, in: window, focusSidebar: true) }

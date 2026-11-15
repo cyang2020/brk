@@ -50,7 +50,7 @@ enum CommandInventory {
         .tab(.focus(item)), .tab(.step(.next)), .tab(.cycleRecent(.next)), .tab(.close(.focused)), .tab(.archive(.item(item))),
         .tab(.togglePin(.focused)), .tab(.reset(.focused)), .tab(.clearToday), .tab(.newDocument),
         .tabTools(.site(.connectCalendar)), .tabTools(.resetPinned), .tabTools(.cycleLinear(.next)), .tabTools(.jumpItem(1)), .tabTools(.jumpSpace(1)),
-        .tabTools(.select(item, .range)), .tabTools(.bulk(.items([item]), .archive)), .tabTools(.reveal), .tabTools(.sidebarStep(.next)),
+        .tabTools(.select(item, .range)), .tabTools(.clearSelection), .tabTools(.bulk(.items([item]), .archive)), .tabTools(.reveal), .tabTools(.sidebarStep(.next)),
         .tabTools(.leaveSidebar), .tabTools(.folders(expanded: true)), .tabTools(.cancelRecent), .tabTools(.chooseIcon(item)),
         .tabTools(.dismissLittleTip), .tabTools(.iconPickerClosed), .tabTools(.mute(.focused)), .tabTools(.dismissToast), .tabTools(.quoteLinkCopied), .tabTools(.dismissArchiveEducation), .tabTools(.dismissFavoritesHint), .tabTools(.undoToast),
         .tabTools(.preferences(includeFavorites: true, previews: false)), .tabTools(.copyLinks(.items([item]))), .tabTools(.openInSplit(.items([item]))),
@@ -68,7 +68,7 @@ enum CommandInventory {
         .space(.inSpace(space, .newFolder)),
         .split(.addPane), .split(.addPaneBefore), .split(.movePane(.previous)), .split(.closePane), .split(.closePaneAt(item)), .split(.resize(item, fractions: [:])), .split(.setOrientation(item, .vertical)),
         .split(.orientCurrent(.vertical)), .split(.focusPane(1)), .split(.stepPane(.next)), .split(.separatePane(.focused)),
-        .split(.separateAll), .split(.toggleExpanded), .split(.restore), .split(.dropTab(splitOffer, edge: .left)), .split(.replacePane(splitOffer, pane: 0)), .split(.joinRow(item, onto: ItemID("target"))),
+        .split(.separateAll), .split(.toggleExpanded), .split(.restore), .split(.dropTab(splitOffer, edge: .left)), .split(.replacePane(splitOffer, pane: 0)), .split(.joinRow(item, onto: ItemID("target"))), .split(.joinRows([item], onto: ItemID("target"))),
         .sidebar(.toggleToolbar), .sidebar(.toggleSpaceHeader), .sidebar(.toggle), .sidebar(.resize(width: 300)), .sidebar(.peek(true)), .sidebar(.openDialog(.newSpace)),
         .app(.quit), .app(.hide), .app(.hideOthers), .app(.minimize), .app(.toggleFullScreen), .app(.exit),
         .app(.showAbout), .app(.setAsDefaultBrowser), .app(.export(.space(.current))), .app(.revealDataDirectory), .app(.standardEdit(.copy)),
@@ -360,6 +360,7 @@ enum CommandInventory {
             case .jumpItem: "jumpItem"
             case .jumpSpace: "jumpSpace"
             case .select: "select"
+            case .clearSelection: "clearSelection"
             case .bulk: "bulk"
             case .reveal: "reveal"
             case .sidebarStep: "sidebarStep"
@@ -441,7 +442,7 @@ enum CommandInventory {
             case .addPane: "addPane"; case .addPaneAt: "addPaneAt"; case .addPaneBefore: "addPaneBefore"; case .movePane: "movePane"; case .closePane: "closePane"; case .closePaneAt: "closePaneAt"; case .resize: "resize"; case .setOrientation: "setOrientation"
             case .orientCurrent: "orientCurrent"; case .focusPane: "focusPane"; case .stepPane: "stepPane"
             case .separatePane: "separatePane"; case .separateAll: "separateAll"; case .toggleExpanded: "toggleExpanded"
-            case .restore: "restore"; case .dropTab: "dropTab"; case .replacePane: "replacePane"; case .joinRow: "joinRow"
+            case .restore: "restore"; case .dropTab: "dropTab"; case .replacePane: "replacePane"; case .joinRow: "joinRow"; case .joinRows: "joinRows"
             }
         case .sidebar(let c):
             switch c {
