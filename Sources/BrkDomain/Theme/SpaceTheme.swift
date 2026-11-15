@@ -364,6 +364,43 @@ private func rgb(hue: Double, saturation s: Double, lightness l: Double) -> RGBA
     return RGBA(clamp01(r + m), clamp01(g + m), clamp01(b + m), 1)
 }
 
+/// Two shades of a theme color, Arc's `WindowTheme.PrimaryColorPalette` (bin:0x100d80500): the color, in Display P3, moved
+/// by HSL lightness steps until its relative luminance is in a band, `tintedLight` up into 0.85...0.95 and `shadedDark`
+/// down into 0...0.1 (a color already in the band stays). The luminance is read from the P3 components with sRGB's
+/// formula (bin:0x1009a7768). Arc's semantic palette takes its contrast colors from them: in a light theme
+/// `maxContrastColor` is the dark shade and `cutoutColor` the light one, in a dark theme the other way round.
+/// docs/checks/2026-11-15-space-edge-ring.md: this gives the three palettes Arc saved, to the third decimal.
+public struct ThemeShades: Hashable, Sendable {
+    public let tintedLight: RGBA
+    public let shadedDark: RGBA
+
+    public init(primary: RGBA) {
+        let m = Metrics.theme
+        let (h, s, l) = hsl(displayP3(fromSRGB: opaque(primary)))
+        func shade(into band: ClosedRange<Double>) -> RGBA {
+            var lightness = l
+            func color() -> RGBA { rgb(hue: h, saturation: s, lightness: lightness) }
+            while shadeLuminance(color()) < band.lowerBound, lightness < 1 { lightness = min(lightness + m.shadeStep.value, 1) }
+            while shadeLuminance(color()) > band.upperBound, lightness > 0 { lightness = max(lightness - m.shadeStep.value, 0) }
+            return sRGB(fromDisplayP3: color())
+        }
+        tintedLight = shade(into: m.tintedLightBand.value)
+        shadedDark = shade(into: m.shadedDarkBand.value)
+    }
+
+    /// Arc's `maxContrastColor` (`ink`) and `cutoutColor` in a theme of `scheme` (bin:0x100d80aac).
+    public func contrast(_ scheme: Scheme) -> (ink: RGBA, cutout: RGBA) {
+        scheme == .dark ? (tintedLight, shadedDark) : (shadedDark, tintedLight)
+    }
+}
+
+/// Arc's luminance for its palette (bin:0x1009a7768): sRGB's coefficients and the older 0.03928 threshold, applied to the
+/// color's own components.
+private func shadeLuminance(_ c: RGBA) -> Double {
+    func lin(_ v: Double) -> Double { v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+    return 0.2126 * lin(c.red) + 0.7152 * lin(c.green) + 0.0722 * lin(c.blue)
+}
+
 /// The light sidebar's title ink: the space's primary hue and saturation, as dark as #1A1A1A (relative luminance
 /// 0.0103). Measured on Arc 1.170 (2a96a9d7f0:verify/visual-pairs/run-20261103): the #F2EAE4 theme writes its rows in #221910
 /// (this gives #221811), a neutral theme in #1A1A1A, a teal one in #001E1D and a blank window's lavender in #090D4F;

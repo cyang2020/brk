@@ -152,10 +152,40 @@ public enum PageSwipeRule {
         (velocity >= 0) == (target < position) ? 0 : velocity
     }
 
-    /// What the pointer's edge feedback shows past the last page: `pressed` points past it (bin:0x100214f70).
-    public static func edgeFeedback(pressed: Double) -> (fade: Double, progress: Double) {
-        (min(max(pressed / m.edgeFade.value, 0), 1), min(max(pressed / m.edgeArm.value, 0), 1))
+    /// What the edge view shows `pressed` points past the last page, in its strip of `size` at the sidebar's trailing
+    /// edge (docs/checks/2026-11-15-space-edge-ring.md). The fingers set the presentation (pressed / 15) and the ring
+    /// (pressed / 22.5) directly, bin:0x100214f70; as the column settles they follow it out. The button slides in from
+    /// past the edge and fades in early, the glow slides in from the edge and fades in by half way (bin:0x1009cf1e0,
+    /// 0x1009cf790).
+    public static func edgeFeedback(pressed: Double, in size: CGSize) -> EdgeFeedback {
+        let presented = unit(pressed / m.edgeFade.value), progress = unit(pressed / m.edgeArm.value)
+        let side = m.edgeRing.value, w = Double(size.width), h = Double(size.height)
+        let hidden = w + m.edgeDiscStart.value, shown = w - m.edgeDiscInset.value - side
+        let glowHidden = w - m.edgeGlowStart.value
+        return EdgeFeedback(
+            disc: CGRect(x: hidden + (shown - hidden) * presented, y: (h - side) / 2, width: side, height: side),
+            discAlpha: unit(presented / m.edgeDiscFadeIn.value),
+            glow: CGRect(x: glowHidden - glowHidden * presented, y: 0, width: 2 * w, height: h),
+            glowOpacity: unit(presented / m.edgeGlowFadeIn.value),
+            progress: progress, ringOpacity: unit(progress / m.edgeRingFadeIn.value))
     }
+
+    private static func unit(_ v: Double) -> Double { min(max(v, 0), 1) }
+}
+
+/// One frame of the edge view past the last Space (`PageSwipeRule.edgeFeedback`), in the strip's coordinates.
+public struct EdgeFeedback: Equatable, Sendable {
+    /// The round button, 30 by 30.
+    public var disc: CGRect
+    public var discAlpha: Double
+    /// The radial glow's layer: twice the strip's width, centred on the trailing edge when fully in.
+    public var glow: CGRect
+    public var glowOpacity: Double
+    /// How much of the ring is drawn, 0...1; at 1 the button is full and lifting opens Create a Space.
+    public var progress: Double
+    public var ringOpacity: Double
+
+    public var full: Bool { progress >= 1 }
 }
 
 /// How fast the position is moving: the first and last samples of the last 0.1 s (bin:0x100b18774). No samples in that

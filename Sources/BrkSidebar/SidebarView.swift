@@ -277,7 +277,8 @@ public final class SidebarView: NSView {
         place(f.frame, slideIn: previous != nil && previous?.frames == nil && !pager.isActive)
         pagesClip.frame = bounds
         strip.frame.size = bounds.size
-        edgeFeedback.frame = bounds
+        let edgeWidth = Metrics.pageSwipe.edgeWidth.value
+        edgeFeedback.frame = CGRect(x: bounds.width - edgeWidth, y: 0, width: edgeWidth, height: bounds.height)
         backdrop.isHidden = !frames.sidebarFloats
         if frames.sidebarFloats { backdrop.render(snapshot.theme, palette: palette) }
         backdrop.frame = bounds
@@ -332,7 +333,8 @@ public final class SidebarView: NSView {
         let starts = library || bounds.contains(convert(event.locationInWindow, from: nil))
         return gesture.handle(event, starts: starts, pager: pager, window: window) { wheel in
             renderSidePages()
-            if !wheel { swipeHoldsLibrary = library }
+            // A new swipe starts unarmed, also after a gesture the system cancelled (no lift to clear it).
+            if !wheel { swipeHoldsLibrary = library; edgeArmedAt = nil }
         }
     }
 
@@ -423,6 +425,8 @@ public final class SidebarView: NSView {
     /// The fingers lifted: a full ring past the last Space opens Create a Space (bin:0x10021ca38).
     private func pagerLifted() {
         if let armed = edgeArmedAt, CACurrentMediaTime() - armed > Metrics.pageSwipe.edgeHold.value {
+            // Arc swaps Create a Space in with the ring gone in the same frame (its draft Space then follows this one).
+            edgeFeedback.hide()
             dispatch(.sidebar(.openDialog(.newSpace)))
         }
         edgeArmedAt = nil
@@ -475,17 +479,17 @@ public final class SidebarView: NSView {
         // Past the last Space.
         let pressed = position - (origins.last ?? 0)
         if here == origins.count - 1, pressed > 0, let palette = last?.palette {
-            let feedback = PageSwipeRule.edgeFeedback(pressed: pressed)
-            edgeFeedback.render(fade: feedback.fade, progress: feedback.progress, palette: palette)
+            let feedback = PageSwipeRule.edgeFeedback(pressed: pressed, in: edgeFeedback.bounds.size)
+            edgeFeedback.render(feedback, palette: palette)
             if pager.isTracking {
-                let full = feedback.progress >= 1
-                if full != (edgeArmedAt != nil), last?.sidebar.hapticsEnabled == true {
-                    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+                // Arc: a generic haptic each time the ring becomes full or stops being full (bin:0x1002152d8).
+                if feedback.full != (edgeArmedAt != nil), last?.sidebar.hapticsEnabled == true {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
                 }
-                edgeArmedAt = full ? (edgeArmedAt ?? CACurrentMediaTime()) : nil
+                edgeArmedAt = feedback.full ? (edgeArmedAt ?? CACurrentMediaTime()) : nil
             }
         } else {
-            edgeFeedback.isHidden = true
+            edgeFeedback.hide()
         }
         setLibraryProgress(position < firstSpace || libraryOpen(snapshot) ? min(max((firstSpace - position) / firstSpace, 0), 1) : nil)
     }
@@ -494,7 +498,7 @@ public final class SidebarView: NSView {
         strip.setFrameOrigin(.zero)
         previousPage.removeFromSuperview()
         nextPage.removeFromSuperview()
-        edgeFeedback.isHidden = true
+        edgeFeedback.hide()
         edgeArmedAt = nil
         if let tray = last?.frames.map({ $0.favoritesTray.offsetBy(dx: -$0.frame.minX, dy: -$0.frame.minY) }) { favorites.setFrameOrigin(tray.origin) }
         dock.showSelection(nil)

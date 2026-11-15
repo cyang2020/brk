@@ -119,6 +119,7 @@ sidebar R58-SelectionDrag
 
 # spaces：新建 Space
 spaces SpaceTools-2
+spaces R58-EdgeRingReal
 
 # commandbar：命令栏
 commandbar QuickBar-Answers

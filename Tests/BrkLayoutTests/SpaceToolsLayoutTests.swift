@@ -89,6 +89,31 @@ final class SpaceToolsLayoutTests: XCTestCase {
         XCTAssertEqual(target(600, -400, interrupted: true), 1)
     }
 
+    /// Past the last Space the button slides in from beyond the sidebar's edge as the column is pressed and is opaque
+    /// long before the glow; once in it stays put while the ring goes on filling, and only a full ring opens Create a
+    /// Space (Arc's `EdgeFeedbackView`, docs/checks/2026-11-15-space-edge-ring.md).
+    func testTheEdgeButtonSlidesInFromBeyondTheEdge() {
+        let strip = CGSize(width: 85, height: 776), m = Metrics.pageSwipe
+        let rest = PageSwipeRule.edgeFeedback(pressed: 0, in: strip)
+        XCTAssertGreaterThan(rest.disc.minX, strip.width, "not pressed: the button waits past the edge")
+        XCTAssertEqual(rest.discAlpha, 0)
+        XCTAssertEqual(rest.glowOpacity, 0)
+        let early = PageSwipeRule.edgeFeedback(pressed: m.edgeFade.value / 4, in: strip)
+        XCTAssertEqual(early.discAlpha, 1, "a quarter of the way in the button is opaque")
+        XCTAssertLessThan(early.glowOpacity, 1, "the glow is still coming")
+        XCTAssertLessThan(early.disc.minX, rest.disc.minX, "and the button on its way in")
+        let inside = PageSwipeRule.edgeFeedback(pressed: m.edgeFade.value, in: strip)
+        XCTAssertLessThan(inside.disc.maxX, strip.width, "fully in: clear of the edge")
+        XCTAssertEqual(inside.disc.midY, strip.height / 2, accuracy: 1e-9, "in the middle of the window's height")
+        XCTAssertEqual(inside.glow.midX, strip.width, accuracy: 1e-9, "the glow centred on the edge")
+        XCTAssertEqual(inside.glowOpacity, 1)
+        XCTAssertFalse(inside.full, "the ring is not round yet")
+        let further = PageSwipeRule.edgeFeedback(pressed: m.edgeArm.value, in: strip)
+        XCTAssertTrue(further.full)
+        XCTAssertEqual(further.disc, inside.disc, "past that only the ring moves on")
+        XCTAssertFalse(PageSwipeRule.edgeFeedback(pressed: m.edgeArm.value - 0.5, in: strip).full)
+    }
+
     func testTheSpeedIsOfTheLastTenthOfASecond() {
         var v = PageSwipeVelocity()
         for i in 0..<20 { v.add(645 - Double(i) * 7.5, at: Double(i) * 0.016) }

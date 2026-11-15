@@ -355,19 +355,40 @@ public struct PageSwipeMetrics: MetricGroup {
     public let librarySidebarScale = Metric(0.1, .anatomy("r5-7/REPORT.md, the Library page (measured)"))
     public let librarySidebarSlide = Metric(25.0, .anatomy("r5-7/REPORT.md, the Library page (measured)"))
     public let librarySidebarFade = Metric(2.15, .anatomy("r5-7/REPORT.md, the Library page (measured)"))
-    /// Past the last Space: Arc's `EdgeFeedbackView` fades in over 15 points of pressed travel, its ring fills over
+    /// Past the last Space: Arc's `EdgeFeedbackView` comes in over 15 points of pressed travel, its ring fills over
     /// 22.5, and lifting after it has been full for 0.1 s opens Create a Space (bin:0x100214f70, bin:0x10021ca38).
     public let edgeFade = Metric(15.0, .anatomy(PageSwipeMetrics.read))
     public let edgeArm = Metric(22.5, .anatomy(PageSwipeMetrics.read))
     public let edgeHold = Metric(0.1, .anatomy(PageSwipeMetrics.read))
-    /// `CircularProgressView.Configuration`: plus at 16 pt medium, line 2.5 (bin:0x100312fbc). Size and place measured (Q19/).
+    /// The edge view: the sidebar's trailing strip this wide, full height (bin:0x100311a54).
+    public let edgeWidth = Metric(85.0, .anatomy(PageSwipeMetrics.edge + "bin:0x100311a54, width 85"))
+    /// `CircularProgressView.Configuration`: plus at 16 pt medium, line 2.5 (bin:0x100312fbc); the button 30 by 30
+    /// (bin:0x1009cf2c4). Its left edge goes from `edgeDiscStart` past the trailing edge to `edgeDiscInset` + its width
+    /// inside it as the view comes in, and its alpha is presentation / `edgeDiscFadeIn` (bin:0x1009cf1e0, 0x1009cf790).
     public let edgeLine = Metric(2.5, .anatomy(PageSwipeMetrics.read))
     public let edgeGlyph = Metric(16.0, .anatomy(PageSwipeMetrics.read))
-    public let edgeRing = Metric(30.0, .anatomy("r5-7/REPORT.md, the edge feedback (measured)"))
-    public let edgeRingInset = Metric(27.5, .anatomy("r5-7/REPORT.md, the edge feedback (measured)"))
-    /// The gradient at the trailing edge: from no ink to this share of the foreground, this wide (measured, Q19/).
-    public let edgeGradientWidth = Metric(80.0, .anatomy("r5-7/REPORT.md, the edge feedback (measured)"))
-    public let edgeGradientAlpha = Metric(0.1, .anatomy("r5-7/REPORT.md, the edge feedback (measured)"))
+    public let edgeRing = Metric(30.0, .anatomy(PageSwipeMetrics.edge + "bin:0x1009cf2c4, 30 by 30"))
+    public let edgeDiscStart = Metric(5.0, .anatomy(PageSwipeMetrics.edge + "bin:0x1009cf264, width + 5"))
+    public let edgeDiscInset = Metric(12.0, .anatomy(PageSwipeMetrics.edge + "bin:0x1009cf278, width - 12 - 30"))
+    public let edgeDiscFadeIn = Metric(0.2, .anatomy(PageSwipeMetrics.edge + "bin:0x1009cf790, alpha = presentation / 0.2"))
+    /// The ring shows from progress 0 to this (opacity = progress / 0.05, bin:0x1009bc430).
+    public let edgeRingFadeIn = Metric(0.05, .anatomy(PageSwipeMetrics.edge + "bin:0x1009bc430, opacity = progress / 0.05"))
+    /// The glow: a radial gradient from `maxContrastColor` at this alpha to clear (bin:0x1003123f8), in a layer twice the
+    /// view's width whose left edge goes from `edgeGlowStart` inside the trailing edge to the view's left edge, at
+    /// opacity presentation / `edgeGlowFadeIn` (bin:0x1009cf320, 0x1009cf790).
+    public let edgeGlowAlpha = Metric(0.22, .anatomy(PageSwipeMetrics.edge + "bin:0x1003123f8, withAlphaComponent 0.22"))
+    public let edgeGlowStart = Metric(10.0, .anatomy(PageSwipeMetrics.edge + "bin:0x1009cf320, maxX - 10"))
+    public let edgeGlowFadeIn = Metric(0.5, .anatomy(PageSwipeMetrics.edge + "bin:0x1009cf790, opacity = 2 x presentation"))
+    /// Full: the ring's line widens to fill the disc with Core Animation's implicit animation (Arc sets it before its
+    /// animation group, bin:0x1009bd3c4: 0.25 s on the default curve, which fits the recorded frames), the plus changes
+    /// color in the group's 0.05 s (bin:0x1009bd3d4); then the disc scales to `edgeBounce[0]` and back, `[1]` each way,
+    /// `[2]` after the fill starts, ease-out (bin:0x1009bd55c). Emptying again runs the same way, without the bounce.
+    public let edgeFillWidth = Metric(0.25, .anatomy(PageSwipeMetrics.edge + "bin:0x1009bd3c4, implicit lineWidth animation; recorded fit"))
+    public let edgeFillTint = Metric(0.05, .anatomy(PageSwipeMetrics.edge + "bin:0x1009bd3d4, animation group 0.05 s"))
+    public let edgeBounce = Metric([1.15, 0.07, 0.05], .anatomy(PageSwipeMetrics.edge + "bin:0x1009bd55c to 0x1009bd5c4, bounceAnimation"))
+    /// The button's shadow: black at this opacity, this blur radius, this far down (bin:0x100312d70).
+    public let edgeShadow = Metric([0.3, 1.5, 1.0], .anatomy(PageSwipeMetrics.edge + "bin:0x100312d70, ShadowConfiguration"))
+    fileprivate static let edge = "docs/checks/2026-11-15-space-edge-ring.md: "
 }
 
 public struct MotionMetrics: MetricGroup {
@@ -419,6 +440,11 @@ public struct ThemeMetrics: MetricGroup {
     /// Arc's color wheel (bin 0x100d807dc): hue turns in Display P3 for the colors added after the primary.
     public let analogousTurn = Metric(40.0, .anatomy("docs/checks/2026-11-13-window-translucency.md: analogous +40, then -40"))
     public let complementaryTurns = Metric([180.0, 150.0, 210.0], .anatomy("docs/checks/2026-11-13-window-translucency.md: complementary 180 for two colors, 150 and 210 for three"))
+    /// Arc's `PrimaryColorPalette` (bin:0x100d80500): the theme color moved into a band of relative luminance by HSL
+    /// lightness steps (bin:0x1009a5fa8, 0x1009a60ac). Two of its four shades are Brk's (`ThemeShades`).
+    public let tintedLightBand = Metric(0.85...0.95, .anatomy("docs/checks/2026-11-15-space-edge-ring.md: bin:0x100d80500, tintedLight"))
+    public let shadedDarkBand = Metric(0.0...0.1, .anatomy("docs/checks/2026-11-15-space-edge-ring.md: bin:0x100d80500, shadedDark"))
+    public let shadeStep = Metric(0.01, .anatomy("docs/checks/2026-11-15-space-edge-ring.md: bin:0x1009a7ba4, steps of 0.01"))
 }
 
 public struct LittleArcMetrics: MetricGroup {

@@ -47,6 +47,13 @@ public struct Palette: Equatable {
         NSColor(srgbRed: rgba.red, green: rgba.green, blue: rgba.blue, alpha: rgba.alpha)
     }
 
+    /// Arc's `maxContrastColor` and `cutoutColor` (`ThemeShades`).
+    public var contrast: ContrastColors {
+        let shades = ThemeShades(primary: accent)
+        let (ink, cutout) = shades.contrast(scheme)
+        return ContrastColors(ink: color(ink), cutout: color(cutout), lightInk: color(shades.contrast(.light).ink))
+    }
+
     /// Arc's `focus` palette color, seen as its split focus ring (P23-a, P23-c): light, the theme's hue and saturation at
     /// relative luminance 0.097; dark, a lighter shade of the hue (the same numbers as `ThemeAccent.splitFocusRing`).
     /// Brk's own Space-colored marks use it too: a kept page's new-data dot and the AI panel's send button and links.
@@ -56,6 +63,15 @@ public struct Palette: Equatable {
         NSColor(srgbRed: accent.red, green: accent.green, blue: accent.blue, alpha: 1).getHue(&hue, saturation: &saturation, brightness: &value, alpha: &alpha)
         return NSColor(hue: hue, saturation: min(0.53, saturation * 9), brightness: 0.8, alpha: 1)
     }
+}
+
+/// `ink` is Arc's `maxContrastColor` for the palette's scheme (light: the dark shade; dark: the light one), `cutout` its
+/// `cutoutColor` (the other shade), `lightInk` the `maxContrastColor` of the light scheme, which is what Arc's colors
+/// resolved outside the view's own appearance give (the edge glow, docs/checks/2026-11-15-space-edge-ring.md).
+public struct ContrastColors: Equatable {
+    public let ink: NSColor
+    public let cutout: NSColor
+    public let lightInk: NSColor
 }
 
 /// Arc's English copy used by the core views (visual-and-copy.md section 3). One place, so views and e2e agree.

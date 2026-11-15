@@ -10,6 +10,7 @@ enum SpaceToolsScenarios {
     static let all = [
         Scenario("SpaceTools-2", "Create a Space flow with theme preset and profile, live theme panel, rename dialog, icon popover and manager", editor),
         Scenario("R56-SwipeReal", "two-finger swipes posted to the window server over the tab list switch Spaces (clean, slanted start, wobbly, flick with inertia, slow while moving), one whose fingers stop short of the middle does not, vertical ones scroll the list, and a swipe still works after the list scrolled", realSwipes),
+        Scenario("R58-EdgeRingReal", "past the last Space a real two-finger pull shows the ring; lifted before it is full nothing opens, held full it opens Create a Space and the ring is gone as it shows", edgeRing),
     ]
 
     private static func hover(_ app: AppUnderTest, at point: CGPoint) throws {
@@ -208,6 +209,37 @@ enum SpaceToolsScenarios {
         try app.click(.spaceToolsControl("cancel"))
         try expect(try app.view().dock.count == before + 1, "cancelled creation changed saved Spaces")
         try app.recordWindows("editor-final")
+    }
+
+    /// Past the last Space (Arc's edge ring, docs/checks/2026-11-15-space-edge-ring.md), through the window server: the
+    /// pull that shows the ring, a lift before it is full, a full ring held and lifted (Arc swaps Create a Space in with
+    /// the ring gone in the same frame), and the ring again on the next pull.
+    @Sendable static func edgeRing(_ app: AppUnderTest) throws {
+        let last = try createSpace(app, title: "Edge")
+        try expect(try app.view().dock.last?.id == last, "the new Space is not the last one")
+        try finishAnimation(app)
+        let window = app.window!, ring = ViewID.tabTool("space-edge-feedback")
+        func list() throws -> CGPoint { point(try app.native().computed.sidebar!.tablistViewport) }
+        func pull(_ count: Int, pause: Double, _ held: String) throws {
+            try PhysicalPointer.swipe(app, at: try list(), first: (-4, 0), steps: Array(repeating: (-6.0, 0.0), count: count), held: {
+                try expect(isShown(try app.native(), ring), "\(held): no ring with the fingers down")
+            }, pause: pause, window: window)
+        }
+        try pull(30, pause: 0.3, "a short pull")
+        app.sleep(0.8)
+        let dialog = try app.view().dialog
+        try expect(dialog == nil, "a pull lifted before the ring was full opened \(String(describing: dialog))")
+        try expect(!isShown(try app.native(), ring), "the ring stayed after the column came back")
+        try pull(70, pause: 0.4, "a long pull")
+        try app.waitUntil("the full ring opened Create a Space") { try app.view().dialog == .newSpace }
+        try expect(!isShown(try app.native(), ring), "the ring is still there over Create a Space")
+        _ = try app.screenshot("create-a-space")
+        // Not part of what is checked: the flow's Cancel is drawn offset from its frame (SwiftUI), so it is closed directly.
+        try app.dispatch(.sidebar(.openDialog(nil)))
+        try app.waitUntil("Create a Space closed") { try app.view().dialog == nil }
+        try expect(try app.view().dock.last?.id == last, "cancelling Create a Space changed the Spaces")
+        try finishAnimation(app)
+        try pull(30, pause: 0.3, "a pull after Create a Space was cancelled")
     }
 
     /// The user's report of 2026-11-05: the Space swipe was almost never recognised. With events injected in-process
