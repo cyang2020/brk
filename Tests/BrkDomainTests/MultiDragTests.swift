@@ -67,4 +67,28 @@ final class MultiDragTests: XCTestCase {
         let folder = try XCTUnwrap(d.view.space.pinned.rows.first?.id)
         assertUnchanged(d.state, d.user(.split(.joinRows([e, folder], onto: start, at: 1))))
     }
+
+    /// A selection dropped on a Space in the dock lands as its rows would one by one: Pinned rows at the end of that
+    /// Space's Pinned, the rest at the top of its Today, each section in sidebar order (found in review: the Today rows
+    /// were placed by their place in the whole selection, under the Space's first tab).
+    func testASelectionDroppedOnADockSpaceLandsAsSingleRowsWould() throws {
+        let d = Driver()
+        let other = d.newSpace("Other")
+        let otherFirst = d.open("https://fixture.example/first")
+        let otherPinned = d.open("https://fixture.example/kept")
+        d.user(.tab(.togglePin(.item(otherPinned))))
+        let home = try XCTUnwrap(d.state.doc.spaceOrder.first { $0 != other })
+        d.user(.space(.focus(home)))
+        let p = d.open("https://fixture.example/p")
+        d.user(.tab(.togglePin(.item(p))))
+        let a = d.open("https://fixture.example/a"), b = d.open("https://fixture.example/b")
+        d.user(.tab(.focus(p)))
+        d.user(.tabTools(.select(a, .toggle)))
+        d.user(.tabTools(.select(b, .toggle)))
+        XCTAssertEqual(Set(d.view.tabTools.selected), [p, a, b])
+        d.user(.tabTools(.bulk(.selected, .move(.space(other)))))
+        let space = try XCTUnwrap(d.state.doc.spaces[other])
+        XCTAssertEqual(d.state.doc.tree[space.pinnedRoot]?.children, [otherPinned, p])
+        XCTAssertEqual(Array(d.state.doc.tree[space.todayRoot]?.children.prefix(3) ?? []), [b, a, otherFirst])
+    }
 }

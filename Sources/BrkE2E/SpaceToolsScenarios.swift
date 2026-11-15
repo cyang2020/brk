@@ -232,12 +232,16 @@ enum SpaceToolsScenarios {
         try expect(!isShown(try app.native(), ring), "the ring stayed after the column came back")
         try pull(70, pause: 0.4, "a long pull")
         try app.waitUntil("the full ring opened Create a Space") { try app.view().dialog == .newSpace }
-        try expect(!isShown(try app.native(), ring), "the ring is still there over Create a Space")
+        // The column still settles back under the dialog: the ring stays gone on its way (it came back, replaying its fill).
+        for _ in 0..<12 {
+            try expect(!isShown(try app.native(), ring), "the ring is still there over Create a Space")
+            app.sleep(0.05)
+        }
         _ = try app.screenshot("create-a-space")
         // Not part of what is checked: the flow's Cancel is drawn offset from its frame (SwiftUI), so it is closed directly.
         try app.dispatch(.sidebar(.openDialog(nil)))
         try app.waitUntil("Create a Space closed") { try app.view().dialog == nil }
-        try expect(try app.view().dock.last?.id == last, "cancelling Create a Space changed the Spaces")
+        try expect(try app.view().dock.last?.id == last, "closing Create a Space changed the Spaces")
         try finishAnimation(app)
         try pull(30, pause: 0.3, "a pull after Create a Space was cancelled")
     }

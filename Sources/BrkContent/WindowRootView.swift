@@ -126,12 +126,9 @@ public final class WindowRootView: NSView {
             // The page under the panel shows no drop slot while the panel takes the drop.
             if kind == .tab { _ = content?.dropCommand(item, at: CGPoint(x: -1, y: -1)) }
             aiAnswer.showDropTarget(true)
-            switch kind {
-            // A row of a Cmd+click selection brings the whole selection, as near the window's edge.
-            case .tab, .split: return .assist(.attach((self?.sidebar.dragGroup(for: item) ?? [item]).map { .tab($0.rawValue) }))
-            case .folder: return .assist(.attach([.folder(item)]))
-            case .section: return nil
-            }
+            // A row of a Cmd+click selection brings the whole selection, each row as what it is, as near the window's edge.
+            guard kind != .section, let sources = self?.sidebar.attachmentSources(for: item) else { return nil }
+            return .assist(.attach(sources))
         }
         // A conversation's list row dragged onto a Space's dot in the dock moves it there.
         aiAnswer.list.dockSpace = { [weak sidebar] point in sidebar?.dockSpace(atWindowPoint: point) }
@@ -198,8 +195,7 @@ public final class WindowRootView: NSView {
         let inBand = point.x >= bounds.width - Metrics.ai.edgeDropBand.value
         guard inBand || (!edgeDrop.isHidden && area.contains(point)) else { edgeDrop.hide(); return nil }
         edgeDrop.show(in: area, theme: last.snapshot.theme, language: drop.language)
-        if kind == .folder { return [.folder(item)] }
-        return sidebar.dragGroup(for: item).map { .tab($0.rawValue) }
+        return sidebar.attachmentSources(for: item)
     }
 
     /// Gives keyboard focus to the native view a `FocusTarget` names. Returns false for `.page` and `.none` (the

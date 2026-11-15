@@ -212,13 +212,15 @@ final class DragController {
         return true
     }
 
-    /// The release of a drag of several rows: one command moves them all, so the change is one step; a drop nothing took
-    /// ends the selection, as Arc's does. The image goes at once.
+    /// The release of a drag of several rows: one command moves them all, so the change is one step, and the move ends
+    /// the selection. A drop on the Max panel or one nothing took ends it too, as Arc's does. The image goes at once.
     private func releaseGroup(_ session: Session, _ ids: [ItemID]) {
         finish(session)
         let bulk = { (destination: Destination) in self.dispatch(.tabTools(.bulk(.items(ids), .move(destination)))) }
         switch session.target {
-        case .content(let command)?: dispatch(command)
+        case .content(let command)?:
+            dispatch(command)
+            dispatch(.tabTools(.clearSelection))
         case .split(let join)?: dispatch(.split(.joinRows(ids, onto: join.target, at: join.paneIndex)))
         case .favorites(let index)?:
             if let root = context?.favorites.root { bulk(.into(parent: root, index: index)) }

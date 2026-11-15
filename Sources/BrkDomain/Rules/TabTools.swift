@@ -390,7 +390,7 @@ extension Work {
             for (offset, id) in ids.enumerated() {
                 guard let node = state.detached(id, in: window), let parent = tree[id]?.parent else { return }
                 let position: TreePosition
-                if let destination { guard let p = bulkPosition(destination, offset: offset, source: id, in: window) else { return }; position = p }
+                if let destination { guard let p = bulkPosition(destination, offset: offset, source: id, among: ids, in: window) else { return }; position = p }
                 else { position = .after(id) }
                 var result: (root: ItemID, tabs: [(ItemID, Tab)])?
                 do {
@@ -406,7 +406,7 @@ extension Work {
         case .move(let destination):
             var positions: [(ItemID, ItemID, Int)] = []
             for (offset, id) in ids.enumerated() {
-                guard case .into(let parent, let index)? = bulkPosition(destination, offset: offset, source: id, in: window),
+                guard case .into(let parent, let index)? = bulkPosition(destination, offset: offset, source: id, among: ids, in: window),
                       !ids.contains(parent), !ids.contains(where: { tree.isDescendant(parent, of: $0) }) else { return }
                 positions.append((id, parent, index))
             }
@@ -445,14 +445,18 @@ extension Work {
         self = draft
     }
 
-    private func bulkPosition(_ destination: Destination, offset: Int, source: ItemID, in window: WindowID) -> TreePosition? {
+    /// Where the `offset`-th of `ids` (sidebar order) goes. On a dock Space each lands as one row dropped there does
+    /// (Rules/Sidebar.swift): a Pinned item at the end of that Space's Pinned, anything else at the top of its Today, the
+    /// rows of each section in their order.
+    private func bulkPosition(_ destination: Destination, offset: Int, source: ItemID, among ids: [ItemID], in window: WindowID) -> TreePosition? {
         switch destination {
         case .into(let parent, let index):
             guard state.tree(of: window)?[parent] != nil else { return nil }
             return .into(parent: parent, index: index > Int.max - offset ? Int.max : index + offset)
         case .space(let target):
             guard state.doc.windows[window]?.kind == .standard, let space = state.doc.spaces[target] else { return nil }
-            return .into(parent: state.role(of: source)?.kind == .pinned ? space.pinnedRoot : space.todayRoot, index: offset)
+            if state.role(of: source)?.kind == .pinned { return .into(parent: space.pinnedRoot, index: Int.max) }
+            return .into(parent: space.todayRoot, index: ids.prefix(offset).filter { state.role(of: $0)?.kind != .pinned }.count)
         }
     }
 }

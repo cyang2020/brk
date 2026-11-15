@@ -69,6 +69,8 @@ public final class SidebarView: NSView {
     private let edgeFeedback = SpaceEdgeFeedbackView(frame: .zero)
     /// The ring is full, since when: lifting 0.1 s after that opens Create a Space.
     private var edgeArmedAt: CFTimeInterval?
+    /// The lift opened Create a Space: the ring stays gone while the column settles back under it.
+    private var edgeCommitted = false
     /// The page left by a Space switch, until the move ends; `jumpFrom` says on which side it stands when it is not the
     /// new Space's neighbour in the dock.
     private var outgoing: SpacePage?
@@ -334,7 +336,7 @@ public final class SidebarView: NSView {
         return gesture.handle(event, starts: starts, pager: pager, window: window) { wheel in
             renderSidePages()
             // A new swipe starts unarmed, also after a gesture the system cancelled (no lift to clear it).
-            if !wheel { swipeHoldsLibrary = library; edgeArmedAt = nil }
+            if !wheel { swipeHoldsLibrary = library; edgeArmedAt = nil; edgeCommitted = false }
         }
     }
 
@@ -427,6 +429,7 @@ public final class SidebarView: NSView {
         if let armed = edgeArmedAt, CACurrentMediaTime() - armed > Metrics.pageSwipe.edgeHold.value {
             // Arc swaps Create a Space in with the ring gone in the same frame (its draft Space then follows this one).
             edgeFeedback.hide()
+            edgeCommitted = true
             dispatch(.sidebar(.openDialog(.newSpace)))
         }
         edgeArmedAt = nil
@@ -478,7 +481,7 @@ public final class SidebarView: NSView {
         }
         // Past the last Space.
         let pressed = position - (origins.last ?? 0)
-        if here == origins.count - 1, pressed > 0, let palette = last?.palette {
+        if here == origins.count - 1, pressed > 0, !edgeCommitted, let palette = last?.palette {
             let feedback = PageSwipeRule.edgeFeedback(pressed: pressed, in: edgeFeedback.bounds.size)
             edgeFeedback.render(feedback, palette: palette)
             if pager.isTracking {
@@ -500,6 +503,7 @@ public final class SidebarView: NSView {
         nextPage.removeFromSuperview()
         edgeFeedback.hide()
         edgeArmedAt = nil
+        edgeCommitted = false
         if let tray = last?.frames.map({ $0.favoritesTray.offsetBy(dx: -$0.frame.minX, dy: -$0.frame.minY) }) { favorites.setFrameOrigin(tray.origin) }
         dock.showSelection(nil)
         if themeBlending {
@@ -563,6 +567,14 @@ public final class SidebarView: NSView {
 
     /// What a dragged row stands for: the whole Cmd+click selection it belongs to, else the row itself.
     public func dragGroup(for item: ItemID) -> [ItemID] { tablist.selectionGroup(containing: item) }
+
+    /// What a drag of `item` brings to the Max panel: every row of its selection by its own kind (a folder as a folder),
+    /// whichever row was pressed.
+    public func attachmentSources(for item: ItemID) -> [AIAttachmentSource] {
+        let ids = dragGroup(for: item)
+        let kinds = Dictionary(tablist.dragItems(ids).map { ($0.id, $0.kind) }, uniquingKeysWith: { a, _ in a })
+        return ids.map { kinds[$0] == .folder ? .folder($0) : .tab($0.rawValue) }
+    }
 
     /// Coming back from hidden, the column slides in from its parked position (x = -(width + 10)) over Arc's
     /// show/hide duration and curve. Otherwise frames apply at once.

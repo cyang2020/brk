@@ -247,10 +247,11 @@ final class EdgeProgressButton: NSView {
 
     /// Back to an empty ring with no animation, for the next swipe.
     func reset() {
-        guard full else { return }
-        full = false
+        // A ring pulled back from full may still be narrowing or bouncing: those go too, full or not.
         ring.removeAllAnimations()
         face.layer?.removeAllAnimations()
+        guard full else { return }
+        full = false
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         ring.lineWidth = Metrics.pageSwipe.edgeLine.value
