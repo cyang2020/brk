@@ -282,7 +282,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             store.confirmQuit(on: NSApp.keyWindow ?? NSApp.mainWindow) { [weak self] go in
                 guard let self else { return }
                 self.askingQuit = false
-                if go { Quit.confirmed = true; self.beginOrderedQuit(); return }
+                if go { Quit.confirmed = true; self.askPagesThenQuit(); return }
                 // Declined: a quit asked for meanwhile (Restart Brk Now, Restore Data) is declined with it, so a later
                 // ordinary quit neither skips the question, nor starts the app again, nor restores a backup.
                 Quit.declined()
@@ -291,8 +291,24 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             }
             return .terminateLater
         }
-        beginOrderedQuit()
+        askPagesThenQuit()
         return .terminateLater
+    }
+
+    /// As Chrome before it quits: a page on screen whose beforeunload asks shows Leave this page?, and Stay keeps Brk running.
+    /// A logout, restart or shut down does not wait for it; every page still runs its handlers as it closes.
+    private func askPagesThenQuit() {
+        guard !Self.isSystemQuit(), let store else { beginOrderedQuit(); return }
+        askingQuit = true
+        let asked = store.askPagesOnScreen { [weak self] go in
+            guard let self else { return }
+            self.askingQuit = false
+            if go { self.beginOrderedQuit(); return }
+            Quit.declined()
+            self.pendingRestore = nil
+            NSApp.reply(toApplicationShouldTerminate: false)
+        }
+        if !asked { askingQuit = false; beginOrderedQuit() }
     }
 
     /// The quit Apple event of a logout, restart or shut down carries a reason (`kAEQuitReason`, 'why?').

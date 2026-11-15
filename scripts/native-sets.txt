@@ -23,6 +23,7 @@ core R7b
 core R8
 core R9
 core R10
+core PageUnload-Close
 
 # keys：按键路由、快捷键重映射、扩展快捷键
 keys N1
