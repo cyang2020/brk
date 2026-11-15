@@ -489,6 +489,8 @@ public enum PaneContent: Sendable, Equatable, Codable {
     case blank
     /// The page crashed and is being recovered; the card shows Arc's sad-tab placeholder.
     case crashed(PageID)
+    /// Brk quit unexpectedly last time and did not reopen this page (`Session.held`); the card offers Reload.
+    case held(PageID)
     /// The History page (`HistoryPage`): no browser; the card draws `WindowSnapshot.history`.
     case history(PageID)
     /// An Easel's board (`EaselPage`): no browser; the card draws `WindowSnapshot.easels`.

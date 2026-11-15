@@ -25,7 +25,11 @@ extension Work {
         }
         select(shown, in: window, space: space)
         if let split { state.doc.windows[window]!.splitFocus[split] = item }
-        for pane in state.panes(of: shown) { state.demand(PageID(window: window, item: pane)) }
+        // A pane held after an unfinished quit (`Session.held`) loads when it is the one picked, not because its split
+        // neighbour was: the held page may be the one that quit Brk.
+        for pane in state.panes(of: shown) where pane == item || !state.session.held.contains(PageID(window: window, item: pane)) {
+            state.demand(PageID(window: window, item: pane))
+        }
     }
 
     mutating func showSpace(_ space: SpaceID, in window: WindowID) {
@@ -137,7 +141,10 @@ extension Work {
         case .today, .scratch:
             archiveTabs([tab], reason: .manual, in: window)
         case .pinned, .favorites:
-            guard state.session.loaded.contains(where: { $0.item == tab }) else { return }
+            // A held page (`Session.held`) is not loaded but is shown: closing it moves the window on, like any other.
+            let held = state.session.held.contains { $0.item == tab }
+            guard held || state.session.loaded.contains(where: { $0.item == tab }) else { return }
+            state.session.held = state.session.held.filter { $0.item != tab }
             unload(tab)
         }
         replaceShown(tab)

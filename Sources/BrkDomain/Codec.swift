@@ -38,9 +38,14 @@ public struct RestoreSeed: Sendable {
     /// The single tab of a fresh profile; nil opens a fresh window with the command bar.
     public var startURL: URL?
     public var contentSize: CGSize
-    public init(startURL: URL?, contentSize: CGSize) {
+    /// Brk did not finish its last quit (it crashed, was force quit or lost power): the pages that would be on screen
+    /// stay unloaded (`Session.held`) until the person asks for them, so a page that crashes Brk as it loads cannot
+    /// make every launch crash again (issue #10).
+    public var holdShownPages: Bool
+    public init(startURL: URL?, contentSize: CGSize, holdShownPages: Bool = false) {
         self.startURL = startURL
         self.contentSize = contentSize
+        self.holdShownPages = holdShownPages
     }
 }
 
@@ -153,7 +158,19 @@ public enum StateCodec {
             state.session.windows[window]?.overlayOpens = 1
         }
         let normalized = normalize(&state)
+        if seed.holdShownPages { holdShownPages(&state) }
         return (state, repairs + normalized)
+    }
+
+    /// The pages a launch would load at once, held instead (`RestoreSeed.holdShownPages`). Brk's own pages (History,
+    /// an Easel, a conversation, a kept AI page) have no browser to crash and are left alone.
+    static func holdShownPages(_ state: inout AppState) {
+        for page in state.onScreenPages().sorted() where state.session.loaded.contains(page) {
+            guard let url = state.address(of: page.item, in: page.window, for: .savedDocument), !NativePages.shows(url) else { continue }
+            state.session.held.insert(page)
+            state.session.loaded.remove(page)
+            state.session.live[page] = nil
+        }
     }
 
     private static func readEnvelope(_ data: Data) throws(CodecError) -> StoredFile {

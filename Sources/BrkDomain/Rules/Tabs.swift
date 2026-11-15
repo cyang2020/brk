@@ -115,7 +115,9 @@ extension Work {
         case .back(let ref): emit(ref, .goBack)
         case .forward(let ref): emit(ref, .goForward)
         case .reload(let ref, let ignoringCache):
-            if let tab = state.resolveTab(ref, in: window), state.session.live[PageID(window: window, item: tab)]?.crashed == true {
+            if let tab = state.resolveTab(ref, in: window), state.session.held.contains(PageID(window: window, item: tab)) {
+                state.demand(PageID(window: window, item: tab))
+            } else if let tab = state.resolveTab(ref, in: window), state.session.live[PageID(window: window, item: tab)]?.crashed == true {
                 effects.append(.page(PageID(window: window, item: tab), .recover))
             } else { emit(ref, .reload(ignoringCache: ignoringCache)) }
         case .stop(let ref):

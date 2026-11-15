@@ -123,6 +123,7 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
 
     private func applyDemand(_ pages: [PageSpec]) {
         guard running else { return }
+        attachBrowserWindows()
         let pages = pages.filter { contexts.permitsWork($0.context) }
         let ids = Set(pages.map(\.id))
         focusRequests = focusRequests.filter { $0.value.window != nil && ids.contains($0.value.page) }
@@ -224,6 +225,15 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
         page.applyWebsitePolicy(spec.websitePolicy)
         page.applyBoostPolicy(spec.boostPolicy)
         return true
+    }
+
+    /// A window's first page can be made before its NSWindow exists (launch restores pages before the windows are
+    /// up), and that Browser then had no window until a later page was made in it: Chromium's dialogs, activation
+    /// and window bounds for it had nothing to go on. Each demand gives every Browser its window once there is one.
+    private func attachBrowserWindows() {
+        for (key, browser) in browsers where browser.isAlive {
+            if let native = delegate?.engine(self, ownerWindow: key.window), browser.window !== native { browser.window = native }
+        }
     }
 
     /// The `Browser` of this window and context; nil while its profile loads, and the demand replays when it has.

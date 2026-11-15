@@ -166,7 +166,9 @@ final class FixtureServer: @unchecked Sendable {
         }
         if path == "/" { path = "/index.html" }
         let response: Data
-        if let siteResponse = SitePolicyFixture.response(path, request: request) {
+        if let dialogResponse = PageDialogFixture.response(path, request: request) {
+            response = dialogResponse
+        } else if let siteResponse = SitePolicyFixture.response(path, request: request) {
             response = siteResponse
         } else if path == "/repos/fixture/repo/notifications" {
             let round = requestCount(path)

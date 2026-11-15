@@ -218,7 +218,10 @@ private func repairLoaded(_ state: inout AppState) {
         state.doc.windows[id]!.emptySelections = state.doc.windows[id]!.emptySelections.filter { state.doc.spaces[$0] != nil }
         for space in state.doc.windows[id]!.emptySelections { state.doc.windows[id]!.activeBySpace[space] = nil }
     }
-    for page in state.onScreenPages() { state.demand(page) }
+    // A held page stays held only while it is on screen; shown again later, it loads like any other.
+    let onScreen = state.onScreenPages()
+    state.session.held.formIntersection(onScreen)
+    for page in onScreen where !state.session.held.contains(page) { state.demand(page) }
     state.session.live = state.session.live.filter { state.session.loaded.contains($0.key) }
     for page in state.session.loaded {
         if state.session.live[page]?.requestContext != nil,

@@ -346,7 +346,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     let contentPanes = zip(panes, fractions).map { p, fraction -> Pane in
         let content: PaneContent
         let address = state.address(of: p, in: id, for: .visible)
-        if address != nil, state.session.loaded.contains(PageID(window: id, item: p)) {
+        if state.session.held.contains(PageID(window: id, item: p)) {
+            content = .held(PageID(window: id, item: p))
+        } else if address != nil, state.session.loaded.contains(PageID(window: id, item: p)) {
             let page = PageID(window: id, item: p)
             if HistoryPage.shows(address) { content = .history(page) }
             else if let easel = EaselPage.id(of: address), state.doc.easels[easel] != nil { content = .easel(page, easel) }
@@ -665,6 +667,8 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
     let pageActions: [ActionID] = [.capturePage, .captureFullPage, .capturePrettyScreenshot, .videoPictureInPicture, .documentPictureInPicture, .closePictureInPicture, .stopLoading, .reloadPage, .forceReloadPage, .resetZoom, .zoomIn, .zoomOut, .zoomOutAlternate, .developerTools, .developerToolsAlternate, .cast, .savePageAs, .savePageAsPDF, .printPage, .viewSource, .inspectElements, .javaScriptConsole, .networkInspector, .goBack, .goBackAlternate, .goForward, .goForwardAlternate]
     if let (id, tab) = focused {
         if !state.session.loaded.contains(PageID(window: window, item: id)) || tab.url == nil { enabled.subtract(pageActions) }
+        // A page held after an unfinished quit offers Reload on its card; Cmd+R and the menu item do the same.
+        if state.session.held.contains(PageID(window: window, item: id)), tab.url != nil { enabled.formUnion([.reloadPage, .forceReloadPage]) }
         if state.session.live[PageID(window: window, item: id)]?.canGoBack != true { enabled.subtract([.goBack, .goBackAlternate]) }
         if state.session.live[PageID(window: window, item: id)]?.canGoForward != true { enabled.subtract([.goForward, .goForwardAlternate]) }
         // Arc greys Stop Loading on a page that is not loading and Zoom to Actual Size at 100% (P19-a).

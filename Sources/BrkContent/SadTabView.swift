@@ -4,8 +4,13 @@ import BrkBase
 @MainActor
 final class SadTabView: NSView {
     private let illustration = SadTabIllustration(frame: .zero)
-    private let title = NSTextField(labelWithString: "This tab has crashed")
-    private let message = NSTextField(wrappingLabelWithString: "Something went wrong while displaying this page. Reload to try again.")
+    static let crashedTitle = "This tab has crashed"
+    static let crashedMessage = "Something went wrong while displaying this page. Reload to try again."
+    /// A page held after Brk quit unexpectedly (`PaneContent.held`).
+    static let heldTitle = "\(Product.name) quit while this page was open"
+    static let heldMessage = "So it can't happen again on its own, \(Product.name) didn't reopen this page. Reload to try again."
+    private let title = NSTextField(labelWithString: crashedTitle)
+    private let message = NSTextField(wrappingLabelWithString: crashedMessage)
     private let reload = NSButton(title: "Reload", target: nil, action: nil)
     var reloadAction: (() -> Void)?
 
@@ -36,6 +41,10 @@ final class SadTabView: NSView {
         title.frame = NSRect(x: bounds.midX - width / 2, y: top + 124, width: width, height: 30)
         message.frame = NSRect(x: bounds.midX - width / 2, y: top + 166, width: width, height: 52)
         reload.frame = NSRect(x: bounds.midX - 52, y: top + 232, width: 104, height: 32)
+    }
+    func show(title text: String, message body: String) {
+        if title.stringValue != text { title.stringValue = text }
+        if message.stringValue != body { message.stringValue = body }
     }
     @objc private func retry() { reloadAction?() }
 }

@@ -101,6 +101,7 @@ sites SiteSecurity-invalid
 sites Extension-install
 sites Core-popup
 sites SiteControls-Real
+sites PageDialogs
 
 # sidebar：侧栏拖拽、Favorites、重命名、Toast、标签工具、分屏工具、文字截断
 sidebar R53-TabIn

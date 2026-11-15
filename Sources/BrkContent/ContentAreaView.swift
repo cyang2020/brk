@@ -66,7 +66,8 @@ public final class ContentAreaView: NSView {
     }
 
     /// Cards are in window coordinates, so this view spans the window. Cards grow and shrink to `frames.cards`; card
-    /// i hosts the surface for pane i (`.page`), a white card (`.blank`, `.history`) or the sad-tab placeholder (`.crashed`).
+    /// i hosts the surface for pane i (`.page`), a white card (`.blank`, `.history`) or the sad-tab placeholder (`.crashed`,
+    /// and `.held` after Brk quit unexpectedly).
     /// Surfaces no longer shown are removed from their card; the engine hides the page when its view leaves the window.
     /// An empty card in light is Arc's opaque #FCFCFC card with the usual shadow, whatever the theme (Q02 b, P24 e).
     static let blankLight = NSColor(srgbRed: 0xFC / 255.0, green: 0xFC / 255.0, blue: 0xFC / 255.0, alpha: 1)
@@ -132,7 +133,11 @@ public final class ContentAreaView: NSView {
                 // Arc's empty content area is a #FCFCFC card, not the theme (Q02 b); dark keeps the empty color above.
                 if palette.scheme == .light { card.setFill(Self.blankLight) }
             case .crashed(let page):
-                card.host(nil, placeholder: "This tab has crashed")
+                card.host(nil, placeholder: SadTabView.crashedTitle)
+                card.dragStrip(nil)
+                card.retryAction = { [dispatch] in dispatch(.page(.reload(.item(page.item), ignoringCache: false))) }
+            case .held(let page):
+                card.host(nil, placeholder: SadTabView.heldTitle, message: SadTabView.heldMessage)
                 card.dragStrip(nil)
                 card.retryAction = { [dispatch] in dispatch(.page(.reload(.item(page.item), ignoringCache: false))) }
             }
@@ -436,7 +441,7 @@ final class CardView: NSView {
     /// Puts `surface` in the card (moving it here from another card if needed) or shows `placeholder` text.
     /// `coveredAbove`: a view over the card draws its face (an Easel, a kept AI page, the History page), so the card's
     /// own color stays inside the edge as it does under a page.
-    func host(_ surface: NSView?, placeholder text: String?, coveredAbove: Bool = false) {
+    func host(_ surface: NSView?, placeholder text: String?, message: String = SadTabView.crashedMessage, coveredAbove: Bool = false) {
         if let surface {
             if surface.superview !== self {
                 if hosted?.superview === self { hosted?.removeFromSuperview() }
@@ -451,6 +456,7 @@ final class CardView: NSView {
             hosted = nil
         }
         sad.isHidden = text == nil
+        if let text { sad.show(title: text, message: message) }
         sad.frame = pageBounds
         fill.color = text == nil ? emptyColor : NSColor.windowBackgroundColor
         fill.inset = text == nil && (surface != nil || coveredAbove)

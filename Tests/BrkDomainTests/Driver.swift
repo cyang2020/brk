@@ -34,8 +34,8 @@ final class Driver {
     static let startURL = start
     static let contentSize = CGSize(width: 1280, height: 776)
 
-    init(file: Data? = nil, startURL: URL? = Driver.startURL) {
-        let restored = StateCodec.restore(file, seed: RestoreSeed(startURL: startURL, contentSize: Driver.contentSize),
+    init(file: Data? = nil, startURL: URL? = Driver.startURL, holdShownPages: Bool = false) {
+        let restored = StateCodec.restore(file, seed: RestoreSeed(startURL: startURL, contentSize: Driver.contentSize, holdShownPages: holdShownPages),
                                           ctx: Context(now: now, newID: ids.next))
         state = restored.state
         outcome = restored.outcome

@@ -113,7 +113,10 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         let stateFile = StateFile(directory: directory)
         let clock: any Clock = options.testClock ? OffsetClock() : SystemClock()
         let ctx = Context(now: clock.now(), newID: { UUID().uuidString })
-        let seed = RestoreSeed(startURL: options.startURL, contentSize: Metrics.window.defaultSize.value)
+        // A run that never finished its quit may have been ended by the page it was showing: hold those pages.
+        let unfinishedRun = RunMarker.begin(dataDirectory: directory)
+        if unfinishedRun { log.notice("the previous run did not quit normally; the pages it showed stay unloaded until asked for") }
+        let seed = RestoreSeed(startURL: options.startURL, contentSize: Metrics.window.defaultSize.value, holdShownPages: unfinishedRun)
 
         var data: Data?
         switch stateFile.read() {
@@ -384,6 +387,7 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         let outcome = await engine.shutdown()
         store?.flush()
         try? FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+        RunMarker.end(dataDirectory: dataDirectory)
         let pageLog = engine.pageLog.map {
             String(format: "%.3f %@ page=%@ generation=%llu browser=%@", $0.uptime, $0.kind.rawValue, $0.page.description, $0.generation,
                    $0.browserID.map(String.init) ?? "-")

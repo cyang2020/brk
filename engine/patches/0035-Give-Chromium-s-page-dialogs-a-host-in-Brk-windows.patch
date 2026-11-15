@@ -1,0 +1,688 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Sun, 15 Nov 2026 11:38:10 +0800
+Subject: [PATCH] Give Chromium's page dialogs a host in Brk windows
+
+Chromium attaches passkey, HTTP sign-in, print preview, FedCM and other
+tab-modal dialogs to the browser window's dialog host. Brk's window
+returned no host, so constrained_window CHECKed and TabDialogManager
+dereferenced null: opening such a dialog quit Brk (issue #10).
+
+Each Brk window now owns a transparent, click-through Views widget that
+becomes a child of the window while a dialog uses it (once the window is
+on screen in the current Space) and registers as the browser's primary
+window widget. Each page keeps one host for its life, bound to the
+window that shows it, so a moved tab takes its dialog along; dialogs
+centre on their page and follow window moves, resizes and page resizes.
+---
+ brk/BUILD.gn                      |   4 +
+ brk/browser/brk_browser_window.h  |   4 +
+ brk/browser/brk_browser_window.mm |  19 +-
+ brk/browser/brk_dialog_host.h     |  92 +++++++
+ brk/browser/brk_dialog_host.mm    | 440 ++++++++++++++++++++++++++++++
+ 5 files changed, 555 insertions(+), 4 deletions(-)
+ create mode 100644 brk/browser/brk_dialog_host.h
+ create mode 100644 brk/browser/brk_dialog_host.mm
+
+diff --git a/brk/BUILD.gn b/brk/BUILD.gn
+index f52c2fbad62884b8692215a3328b663388a2e978..c80cd53e01ba7675f00cdafb3944b9abf0bd26e2 100644
+--- a/brk/BUILD.gn
++++ b/brk/BUILD.gn
+@@ -25,6 +25,8 @@ source_set("browser") {
+     "browser/brk_browser_window.mm",
+     "browser/brk_context_menu.h",
+     "browser/brk_context_menu.mm",
++    "browser/brk_dialog_host.h",
++    "browser/brk_dialog_host.mm",
+     "browser/brk_devtools_session.cc",
+     "browser/brk_devtools_session.h",
+     "browser/brk_downloads.h",
+@@ -70,12 +72,14 @@ source_set("browser") {
+     "//components/renderer_context_menu",
+     "//ui/content_accelerators",
+     "//components/url_formatter",
++    "//components/web_modal",
+     "//components/sessions",
+     "//components/zoom",
+     "//content/public/browser",
+     "//extensions/browser",
+     "//extensions/common",
+     "//net",
++    "//ui/views",
+   ]
+   frameworks = [ "AppKit.framework" ]
+   data_deps = [ ":BrkCoreEarly" ]
+diff --git a/brk/browser/brk_browser_window.h b/brk/browser/brk_browser_window.h
+index 62acfcc9c94aea031f1dc56181d286b2dc3a60ba..513d1a7be14cd9d3514cb43b7b1d4977c78241b6 100644
+--- a/brk/browser/brk_browser_window.h
++++ b/brk/browser/brk_browser_window.h
+@@ -16,6 +16,7 @@
+ 
+ namespace brkcore {
+ 
++class BrkDialogHosts;
+ class BrkLocationBar;
+ class BrkExclusiveAccessContext;
+ 
+@@ -160,6 +161,9 @@ class BrkBrowserWindow : public BrowserWindow {
+   __weak NSWindow* window_ = nil;
+   std::unique_ptr<BrkLocationBar> location_bar_;
+   std::unique_ptr<BrkExclusiveAccessContext> exclusive_access_context_;
++  // Where Chromium's page dialogs (passkeys, HTTP sign-in, print preview, FedCM…) hang. Destroyed after the destructor
++  // tears down the Browser's features, which hold its view.
++  std::unique_ptr<BrkDialogHosts> dialog_hosts_;
+   // Made on the first key that reaches it, once the Browser has its tab list.
+   std::unique_ptr<BrkExtensionKeybindings> extension_keybindings_;
+   id key_observer_ = nil;
+diff --git a/brk/browser/brk_browser_window.mm b/brk/browser/brk_browser_window.mm
+index efdb2014c939164c5e32614d2ffb93908551a06f..a63e46d1758c8e96ce7c83905cac809feafd285f 100644
+--- a/brk/browser/brk_browser_window.mm
++++ b/brk/browser/brk_browser_window.mm
+@@ -10,6 +10,7 @@
+ #include "base/functional/bind.h"
+ #include "base/task/single_thread_task_runner.h"
+ #import "brk/browser/brk_browser.h"
++#import "brk/browser/brk_dialog_host.h"
+ #include "brk/browser/brk_location_bar.h"
+ #import "brk/browser/brk_web_contents.h"
+ #include "chrome/browser/profiles/profile.h"
+@@ -84,7 +85,8 @@ BrkBrowserWindow::BrkBrowserWindow(BrowserWindowInterface* browser, BrkBrowser*
+     : browser_(browser),
+       owner_(owner),
+       location_bar_(std::make_unique<BrkLocationBar>(browser)),
+-      exclusive_access_context_(std::make_unique<BrkExclusiveAccessContext>(browser, this)) {}
++      exclusive_access_context_(std::make_unique<BrkExclusiveAccessContext>(browser, this)),
++      dialog_hosts_(std::make_unique<BrkDialogHosts>(browser)) {}
+ 
+ BrkBrowserWindow::~BrkBrowserWindow() {
+   SetNativeWindow(nil);
+@@ -100,6 +102,7 @@ void BrkBrowserWindow::SetNativeWindow(NSWindow* window) {
+     resign_observer_ = nil;
+   }
+   window_ = window;
++  dialog_hosts_->SetNativeWindow(window);
+   if (!window) {
+     return;
+   }
+@@ -108,6 +111,9 @@ void BrkBrowserWindow::SetNativeWindow(NSWindow* window) {
+                                       object:window
+                                        queue:nil
+                                   usingBlock:^(NSNotification*) {
++                                    if (weak) {
++                                      weak->dialog_hosts_->WindowDidBecomeKey();
++                                    }
+                                     if (weak && !weak->closing_) {
+                                       BrowserActiveStateManager::From(weak->browser_)->DidBecomeActive();
+                                     }
+@@ -116,6 +122,9 @@ void BrkBrowserWindow::SetNativeWindow(NSWindow* window) {
+                                          object:window
+                                           queue:nil
+                                      usingBlock:^(NSNotification*) {
++                                       if (weak) {
++                                         weak->dialog_hosts_->WindowDidResignKey();
++                                       }
+                                        if (weak && !weak->closing_) {
+                                          BrowserActiveStateManager::From(weak->browser_)->DidBecomeInactive();
+                                        }
+@@ -353,12 +362,14 @@ bool BrkBrowserWindow::HandleKeyboardEvent(const input::NativeWebKeyboardEvent&
+ std::unique_ptr<FindBar> BrkBrowserWindow::CreateFindBar() {
+   return nullptr;
+ }
++// Never null: Chromium's page dialogs dereference it (constrained_window::CreateWebModalDialogViews CHECKs it,
++// TabDialogManager observes it). A null here made passkeys, HTTP sign-in, window.print() and FedCM quit Brk (issue #10).
+ web_modal::WebContentsModalDialogHost* BrkBrowserWindow::GetWebContentsModalDialogHost() {
+-  return nullptr;
++  return dialog_hosts_->HostFor(nullptr);
+ }
+ web_modal::WebContentsModalDialogHost* BrkBrowserWindow::GetWebContentsModalDialogHostFor(
+-    content::WebContents*) {
+-  return nullptr;
++    content::WebContents* contents) {
++  return dialog_hosts_->HostFor(contents);
+ }
+ void BrkBrowserWindow::ShowAvatarBubbleFromAvatarButton(bool) {}
+ void BrkBrowserWindow::MaybeShowProfileSwitchIPH() {}
+diff --git a/brk/browser/brk_dialog_host.h b/brk/browser/brk_dialog_host.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..400dc24dcb1b05cbd388d14097f3bada4c1f5462
+--- /dev/null
++++ b/brk/browser/brk_dialog_host.h
+@@ -0,0 +1,92 @@
++#ifndef BRK_BROWSER_BRK_DIALOG_HOST_H_
++#define BRK_BROWSER_BRK_DIALOG_HOST_H_
++
++#import <AppKit/AppKit.h>
++
++#include <memory>
++#include <set>
++
++#include "base/memory/raw_ptr.h"
++#include "base/memory/weak_ptr.h"
++#include "components/web_modal/web_contents_modal_dialog_host.h"
++#include "ui/views/widget/widget.h"
++
++class BrowserWindowInterface;
++
++namespace content {
++class WebContents;
++}
++
++namespace brkcore {
++
++class BrkDialogHost;
++
++// Where Chromium puts the dialogs it attaches to a page: passkeys, HTTP sign-in, print preview, "Page unresponsive",
++// FedCM, payment and certificate pickers. Chrome hangs them on its Views browser window; a Brk window is a plain
++// NSWindow, so each Brk window gets one Views widget for them to hang on: a transparent window over the Brk window
++// that takes no clicks, made its child only while a dialog uses it (and only once that window is on screen in the
++// current Space), so it moves with the window and is otherwise off screen. It is also the window's "primary window
++// widget" (BrowserElementsViews), which Chromium's tab dialogs (TabDialogManager) require.
++//
++// Each page has one host for its whole life (BrkPageDialogHost, kept on the WebContents), bound to the window it is
++// in: a tab moved to another window takes its host and its dialogs along, as Chrome's do. Dialogs centre on their
++// page, as Chrome centres them on its contents area.
++class BrkDialogHosts {
++ public:
++  explicit BrkDialogHosts(BrowserWindowInterface* browser);
++  BrkDialogHosts(const BrkDialogHosts&) = delete;
++  BrkDialogHosts& operator=(const BrkDialogHosts&) = delete;
++  ~BrkDialogHosts();
++
++  // The Brk window the dialogs belong to; nil while the window is going.
++  void SetNativeWindow(NSWindow* window);
++  void WindowDidBecomeKey();
++  void WindowDidResignKey();
++
++  // Never null: Chromium dereferences what it gets. `contents` nil means the window as a whole. A page's host is
++  // bound to this window from now on.
++  web_modal::WebContentsModalDialogHost* HostFor(content::WebContents* contents);
++
++  // For the hosts.
++  views::Widget* widget() const { return widget_.get(); }
++  NSWindow* native_window() const { return window_; }
++  base::WeakPtr<BrkDialogHosts> GetWeakPtr() { return weak_factory_.GetWeakPtr(); }
++  void Bind(BrkDialogHost* host);
++  void Unbind(BrkDialogHost* host);
++  // `window`: the window of the page whose dialog is coming; the widget becomes its child.
++  void ObserversAdded(int count, NSWindow* window);
++  void ObserversRemoved(int count);
++
++ private:
++  void Attach(NSWindow* parent);
++  void WaitFor(NSWindow* parent);
++  void Detach();
++  void DetachIfUnused();
++  void PlaceWidget();
++  void StopWatchingParent();
++  void NotifyPositionsChanged();
++
++  const raw_ptr<BrowserWindowInterface> browser_;
++  __weak NSWindow* window_ = nil;
++  // The window the widget is a child of while shown.
++  __weak NSWindow* parent_ = nil;
++  std::unique_ptr<views::Widget> widget_;
++  std::unique_ptr<BrkDialogHost> window_host_;
++  // The hosts bound to this window; each unbinds itself before it goes or moves.
++  std::set<raw_ptr<BrkDialogHost>> bound_;
++  // Watchers across the bound hosts; the widget is shown while any exist.
++  int observers_ = 0;
++  bool shown_ = false;
++  bool destroying_ = false;
++  // Notification tokens for the parent (resize, move, close) or the window waited for (WaitFor).
++  NSMutableArray* parent_watchers_ = [[NSMutableArray alloc] init];
++  NSMutableArray* workspace_watchers_ = [[NSMutableArray alloc] init];
++  // Held while the Brk window is key: Chromium shows a tab dialog as the key window only when its host widget paints
++  // as active (TabDialogManager::ShowDialog), as Chrome's browser widget does while its window is key.
++  std::unique_ptr<views::Widget::PaintAsActiveLock> paint_as_active_;
++  base::WeakPtrFactory<BrkDialogHosts> weak_factory_{this};
++};
++
++}  // namespace brkcore
++
++#endif  // BRK_BROWSER_BRK_DIALOG_HOST_H_
+diff --git a/brk/browser/brk_dialog_host.mm b/brk/browser/brk_dialog_host.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..1888ee402c4f9442ed892aba0e455f697099f66b
+--- /dev/null
++++ b/brk/browser/brk_dialog_host.mm
+@@ -0,0 +1,440 @@
++#import "brk/browser/brk_dialog_host.h"
++
++#include <algorithm>
++#include <utility>
++#include <vector>
++
++#include "base/check.h"
++#include "base/check_op.h"
++#include "base/functional/bind.h"
++#include "base/observer_list.h"
++#include "base/task/single_thread_task_runner.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/views/interaction/browser_elements_views.h"
++#include "chrome/browser/ui/views/interaction/browser_elements_views_impl.h"
++#include "components/web_modal/modal_dialog_host.h"
++#include "content/public/browser/web_contents.h"
++#include "content/public/browser/web_contents_user_data.h"
++#import "ui/gfx/mac/coordinate_conversion.h"
++#include "ui/gfx/geometry/point.h"
++#include "ui/gfx/geometry/rect.h"
++#include "ui/gfx/geometry/size.h"
++#include "ui/gfx/native_ui_types.h"
++#include "ui/views/view.h"
++#include "ui/views/widget/widget.h"
++
++namespace brkcore {
++
++// A dialog host bound to one window's BrkDialogHosts. Dialogs centre on the page (`PageView`), their top at its top
++// edge, as Chrome centres a tab dialog on its contents area below the toolbar; the window-level host has no page.
++class BrkDialogHost : public web_modal::WebContentsModalDialogHost {
++ public:
++  BrkDialogHost() = default;
++  BrkDialogHost(const BrkDialogHost&) = delete;
++  BrkDialogHost& operator=(const BrkDialogHost&) = delete;
++  ~BrkDialogHost() override { Shutdown(); }
++
++  // The host now serves `hosts`' window; its watchers, and the dialogs they place, move with it.
++  void BindTo(BrkDialogHosts* hosts) {
++    if (hosts_.get() == hosts) {
++      return;
++    }
++    if (BrkDialogHosts* old = hosts_.get()) {
++      old->ObserversRemoved(observer_count_);
++      old->Unbind(this);
++    }
++    hosts_ = hosts ? hosts->GetWeakPtr() : nullptr;
++    if (hosts) {
++      hosts->Bind(this);
++      if (observer_count_ > 0) {
++        hosts->ObserversAdded(observer_count_, Window());
++      }
++    }
++  }
++
++  // web_modal::ModalDialogHost:
++  gfx::NativeView GetHostView() const override {
++    views::Widget* widget = hosts_ ? hosts_->widget() : nullptr;
++    return widget ? widget->GetNativeView() : gfx::NativeView();
++  }
++  gfx::Point GetDialogPosition(const gfx::Size& size) override {
++    const gfx::Rect window = WindowBoundsInScreen();
++    const gfx::Rect page = PageBoundsInScreen();
++    int x = page.x() + (page.width() - size.width()) / 2;
++    x = std::max(window.x(), std::min(x, window.right() - size.width()));
++    // Chromium adds the host widget's screen origin back (constrained_window's and TabDialogManager's
++    // GetModalDialogBounds), so the answer is relative to it.
++    views::Widget* widget = hosts_ ? hosts_->widget() : nullptr;
++    const gfx::Point origin = widget ? widget->GetClientAreaBoundsInScreen().origin() : window.origin();
++    return gfx::Point(x - origin.x(), page.y() - origin.y());
++  }
++  bool ShouldActivateDialog() const override {
++    NSWindow* window = Window();
++    return window && NSApp.active && (window.keyWindow || window.mainWindow);
++  }
++  void AddObserver(web_modal::ModalDialogHostObserver* observer) override {
++    observers_.AddObserver(observer);
++    ++observer_count_;
++    FollowPage();
++    if (hosts_) {
++      hosts_->ObserversAdded(1, Window());
++    }
++  }
++  void RemoveObserver(web_modal::ModalDialogHostObserver* observer) override {
++    if (!observers_.HasObserver(observer)) {
++      return;
++    }
++    observers_.RemoveObserver(observer);
++    --observer_count_;
++    if (observer_count_ == 0) {
++      StopFollowingPage();
++    }
++    if (hosts_) {
++      hosts_->ObserversRemoved(1);
++    }
++  }
++  void NotifyPositionRequiresUpdate() override {
++    observers_.Notify(&web_modal::ModalDialogHostObserver::OnPositionRequiresUpdate);
++  }
++
++  // web_modal::WebContentsModalDialogHost: the window's width (Chrome allows the whole contents container) and the
++  // height from the dialog's top to the window's bottom.
++  gfx::Size GetMaximumDialogSize() override {
++    const gfx::Rect window = WindowBoundsInScreen();
++    const gfx::Rect page = PageBoundsInScreen();
++    return gfx::Size(window.width(), std::max(0, window.bottom() - page.y()));
++  }
++
++ protected:
++  virtual NSView* PageView() const { return nil; }
++
++  // The ModalDialogHost contract: every watcher hears OnHostDestroying before the host goes; they remove themselves.
++  // A subclass calls this first in its destructor, while its page is still reachable.
++  void Shutdown() {
++    if (shut_down_) {
++      return;
++    }
++    shut_down_ = true;
++    StopFollowingPage();
++    observers_.Notify(&web_modal::ModalDialogHostObserver::OnHostDestroying);
++    BindTo(nullptr);
++  }
++
++ private:
++  // The Brk window this host's Browser belongs to. A page moving to another window still sits in the old window's
++  // view tree for a moment (CoreEngine's handoff), so its view's window is only the fallback, for a Browser not told
++  // its window yet.
++  NSWindow* Window() const {
++    if (NSWindow* window = hosts_ ? hosts_->native_window() : nil) {
++      return window;
++    }
++    return PageView().window;
++  }
++
++  gfx::Rect WindowBoundsInScreen() const {
++    NSWindow* window = Window();
++    if (!window) {
++      return gfx::Rect(0, 0, 800, 600);
++    }
++    return gfx::ScreenRectFromNSRect([window convertRectToScreen:window.contentLayoutRect]);
++  }
++
++  // The page's view where the shell shows it; the window when the page is not on screen in this window.
++  gfx::Rect PageBoundsInScreen() const {
++    NSWindow* window = Window();
++    NSView* view = PageView();
++    if (!window || !view || view.window != window || view.hiddenOrHasHiddenAncestor || NSIsEmptyRect(view.bounds)) {
++      return WindowBoundsInScreen();
++    }
++    return gfx::ScreenRectFromNSRect([window convertRectToScreen:[view convertRect:view.bounds toView:nil]]);
++  }
++
++  // While a dialog uses this host, a page resized by the shell (the sidebar shown or hidden, a split changing) moves
++  // its dialog back to the page's centre. Window moves and resizes are the hosts' (NotifyPositionsChanged).
++  void FollowPage() {
++    NSView* view = PageView();
++    if (frame_observer_ || !view) {
++      return;
++    }
++    view.postsFrameChangedNotifications = YES;
++    BrkDialogHost* host = this;
++    frame_observer_ = [NSNotificationCenter.defaultCenter addObserverForName:NSViewFrameDidChangeNotification
++                                                                      object:view
++                                                                       queue:nil
++                                                                  usingBlock:^(NSNotification*) {
++                                                                    host->NotifyPositionRequiresUpdate();
++                                                                  }];
++  }
++
++  void StopFollowingPage() {
++    if (frame_observer_) {
++      [NSNotificationCenter.defaultCenter removeObserver:frame_observer_];
++      frame_observer_ = nil;
++    }
++  }
++
++  base::WeakPtr<BrkDialogHosts> hosts_;
++  base::ObserverList<web_modal::ModalDialogHostObserver> observers_;
++  int observer_count_ = 0;
++  bool shut_down_ = false;
++  // Removed before this host goes (Shutdown), so the block's raw `this` never outlives it.
++  id frame_observer_ = nil;
++};
++
++// A page's host lives as long as its WebContents, whichever window shows it.
++class BrkPageDialogHost : public BrkDialogHost, public content::WebContentsUserData<BrkPageDialogHost> {
++ public:
++  ~BrkPageDialogHost() override { Shutdown(); }
++
++ protected:
++  // WebContents::GetNativeView is not const; reading the view changes nothing.
++  NSView* PageView() const override {
++    return const_cast<BrkPageDialogHost*>(this)->GetWebContents().GetNativeView().GetNativeNSView();
++  }
++
++ private:
++  friend class content::WebContentsUserData<BrkPageDialogHost>;
++  explicit BrkPageDialogHost(content::WebContents* contents)
++      : content::WebContentsUserData<BrkPageDialogHost>(*contents) {}
++  WEB_CONTENTS_USER_DATA_KEY_DECL();
++};
++
++WEB_CONTENTS_USER_DATA_KEY_IMPL(BrkPageDialogHost);
++
++BrkDialogHosts::BrkDialogHosts(BrowserWindowInterface* browser) : browser_(browser) {
++  widget_ = std::make_unique<views::Widget>();
++  views::Widget::InitParams params(views::Widget::InitParams::CLIENT_OWNS_WIDGET,
++                                   views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
++  params.name = "BrkDialogHost";
++  params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
++  params.activatable = views::Widget::InitParams::Activatable::kNo;
++  params.accept_events = false;
++  params.shadow_type = views::Widget::InitParams::ShadowType::kNone;
++  params.bounds = gfx::Rect(0, 0, 1, 1);
++  widget_->Init(std::move(params));
++  views::View* root = widget_->SetContentsView(std::make_unique<views::View>());
++  NSWindow* ns_window = widget_->GetNativeWindow().GetNativeNSWindow();
++  // Never a window of its own to the person: not in Mission Control, the Window menu or Cmd+`.
++  ns_window.collectionBehavior |= NSWindowCollectionBehaviorTransient | NSWindowCollectionBehaviorIgnoresCycle;
++  ns_window.excludedFromWindowsMenu = YES;
++  ns_window.hasShadow = NO;
++  ns_window.ignoresMouseEvents = YES;
++  // Chromium's tab dialogs take the host from the browser's primary window widget; Chrome's BrowserView registers it.
++  if (BrowserElementsViews* elements = BrowserElementsViews::From(browser)) {
++    if (auto* impl = elements->AsA<BrowserElementsViewsImpl>()) {
++      impl->Init(root);
++    }
++  }
++}
++
++BrkDialogHosts::~BrkDialogHosts() {
++  destroying_ = true;
++  // Pages still bound (their tabs closed after this, or moving) lose this window; their next window binds them again.
++  weak_factory_.InvalidateWeakPtrs();
++  bound_.clear();
++  // The window-level host's watchers hear OnHostDestroying before the widget they hang on goes.
++  std::unique_ptr<BrkDialogHost> window_host = std::move(window_host_);
++  window_host.reset();
++  paint_as_active_.reset();
++  StopWatchingParent();
++  if (widget_) {
++    widget_->CloseNow();
++    widget_.reset();
++  }
++}
++
++void BrkDialogHosts::SetNativeWindow(NSWindow* window) {
++  if (window == window_) {
++    return;
++  }
++  window_ = window;
++  paint_as_active_.reset();
++  if (window && window.isKeyWindow) {
++    WindowDidBecomeKey();
++  }
++  // A dialog that came before the window, or one whose Browser moved, goes to this window. With no window left the
++  // widget leaves the old one now, before that window closes.
++  if (!window) {
++    Detach();
++  } else if (observers_ > 0) {
++    Attach(window);
++  }
++}
++
++void BrkDialogHosts::WindowDidBecomeKey() {
++  if (widget_ && !paint_as_active_) {
++    paint_as_active_ = widget_->LockPaintAsActive();
++  }
++}
++
++void BrkDialogHosts::WindowDidResignKey() {
++  paint_as_active_.reset();
++}
++
++web_modal::WebContentsModalDialogHost* BrkDialogHosts::HostFor(content::WebContents* contents) {
++  BrkDialogHost* host = nullptr;
++  if (!contents) {
++    if (!window_host_) {
++      window_host_ = std::make_unique<BrkDialogHost>();
++    }
++    host = window_host_.get();
++  } else {
++    host = BrkPageDialogHost::GetOrCreateForWebContents(contents);
++  }
++  host->BindTo(this);
++  return host;
++}
++
++void BrkDialogHosts::Bind(BrkDialogHost* host) {
++  bound_.insert(host);
++}
++
++void BrkDialogHosts::Unbind(BrkDialogHost* host) {
++  bound_.erase(host);
++}
++
++void BrkDialogHosts::NotifyPositionsChanged() {
++  // A copy: a watcher placing its dialog may bind or unbind a host.
++  std::vector<BrkDialogHost*> hosts;
++  for (const raw_ptr<BrkDialogHost>& host : bound_) {
++    hosts.push_back(host.get());
++  }
++  for (BrkDialogHost* host : hosts) {
++    if (bound_.contains(host)) {
++      host->NotifyPositionRequiresUpdate();
++    }
++  }
++}
++
++void BrkDialogHosts::ObserversAdded(int count, NSWindow* window) {
++  observers_ += count;
++  Attach(window ?: window_);
++}
++
++void BrkDialogHosts::ObserversRemoved(int count) {
++  CHECK_GE(observers_, count);
++  observers_ -= count;
++  if (observers_ > 0 || destroying_) {
++    return;
++  }
++  // Later, not now: Chromium often drops a watcher and adds the next one in the same call (a tab changing windows,
++  // TabDialogManager re-reading its host), and the widget should not blink off and on between them.
++  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
++      FROM_HERE, base::BindOnce(&BrkDialogHosts::DetachIfUnused, weak_factory_.GetWeakPtr()));
++}
++
++void BrkDialogHosts::DetachIfUnused() {
++  if (observers_ == 0) {
++    Detach();
++  }
++}
++
++// The widget becomes a child of `parent`, so the dialogs on it move, hide and go into full screen with the window.
++// A window that is not on screen in the current Space waits: making it a parent now would switch Spaces under the
++// person (Chromium's own child windows wait the same way, NativeWidgetNSWindowBridge::OrderChildren).
++void BrkDialogHosts::Attach(NSWindow* parent) {
++  if (!parent || !widget_ || destroying_ || observers_ == 0) {
++    return;
++  }
++  if (shown_ && parent_ == parent) {
++    return;
++  }
++  Detach();
++  if (!parent.visible || !parent.onActiveSpace) {
++    WaitFor(parent);
++    return;
++  }
++  shown_ = true;
++  parent_ = parent;
++  PlaceWidget();
++  widget_->ShowInactive();
++  // Views orders a widget with no Views parent against the app's main window. addChildWindow then moves the parent
++  // to where the child is, so the child goes right above its parent first: no Brk window changes place on screen.
++  NSWindow* ns_window = widget_->GetNativeWindow().GetNativeNSWindow();
++  [ns_window orderWindow:NSWindowAbove relativeTo:parent.windowNumber];
++  [parent addChildWindow:ns_window ordered:NSWindowAbove];
++  base::WeakPtr<BrkDialogHosts> weak = weak_factory_.GetWeakPtr();
++  void (^follow)(NSNotification*) = ^(NSNotification*) {
++    if (weak) {
++      weak->PlaceWidget();
++      weak->NotifyPositionsChanged();
++    }
++  };
++  NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
++  [parent_watchers_ addObject:[center addObserverForName:NSWindowDidResizeNotification object:parent queue:nil usingBlock:follow]];
++  [parent_watchers_ addObject:[center addObserverForName:NSWindowDidMoveNotification object:parent queue:nil usingBlock:follow]];
++  // AppKit leaves a closing window's children on screen as windows of their own.
++  [parent_watchers_ addObject:[center addObserverForName:NSWindowWillCloseNotification
++                                                  object:parent
++                                                   queue:nil
++                                              usingBlock:^(NSNotification*) {
++                                                if (weak) {
++                                                  weak->Detach();
++                                                }
++                                              }]];
++  // Dialogs placed while the widget was detached were placed against its old frame and display.
++  NotifyPositionsChanged();
++}
++
++// Attach once `parent` is on screen in the current Space: the person switched to it, or it came forward.
++void BrkDialogHosts::WaitFor(NSWindow* parent) {
++  base::WeakPtr<BrkDialogHosts> weak = weak_factory_.GetWeakPtr();
++  __weak NSWindow* waiting = parent;
++  void (^retry)(NSNotification*) = ^(NSNotification*) {
++    NSWindow* window = waiting;
++    if (weak && window && !weak->shown_ && weak->observers_ > 0 && window.visible && window.onActiveSpace) {
++      weak->Attach(window);
++    }
++  };
++  NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
++  [parent_watchers_ addObject:[center addObserverForName:NSWindowDidChangeOcclusionStateNotification
++                                                  object:parent
++                                                   queue:nil
++                                              usingBlock:retry]];
++  [parent_watchers_ addObject:[center addObserverForName:NSWindowDidBecomeKeyNotification
++                                                  object:parent
++                                                   queue:nil
++                                              usingBlock:retry]];
++  NSNotificationCenter* workspace = NSWorkspace.sharedWorkspace.notificationCenter;
++  [workspace_watchers_ addObject:[workspace addObserverForName:NSWorkspaceActiveSpaceDidChangeNotification
++                                                        object:nil
++                                                         queue:nil
++                                                    usingBlock:retry]];
++}
++
++void BrkDialogHosts::StopWatchingParent() {
++  for (id token in parent_watchers_) {
++    [NSNotificationCenter.defaultCenter removeObserver:token];
++  }
++  [parent_watchers_ removeAllObjects];
++  for (id token in workspace_watchers_) {
++    [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:token];
++  }
++  [workspace_watchers_ removeAllObjects];
++}
++
++void BrkDialogHosts::Detach() {
++  StopWatchingParent();
++  if (!shown_) {
++    return;
++  }
++  shown_ = false;
++  parent_ = nil;
++  if (!widget_) {
++    return;
++  }
++  NSWindow* ns_window = widget_->GetNativeWindow().GetNativeNSWindow();
++  [ns_window.parentWindow removeChildWindow:ns_window];
++  widget_->Hide();
++}
++
++// The widget covers its parent, transparent and click-through: Chromium checks that a dialog overlaps its host and
++// keeps it on the host's display.
++void BrkDialogHosts::PlaceWidget() {
++  if (!parent_ || !widget_) {
++    return;
++  }
++  widget_->SetBounds(gfx::ScreenRectFromNSRect(parent_.frame));
++}
++
++}  // namespace brkcore

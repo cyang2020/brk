@@ -290,6 +290,9 @@ struct Session: Sendable, Equatable {
     /// Window/tab slots that demand a page. Every visible slot is loaded. A tab leaves the set
     /// when archived, removed, or closed-and-kept (Cmd+W on Pinned or Favorites); only focusing it puts it back.
     var loaded: Set<PageID>
+    /// Shown pages not loaded because Brk quit unexpectedly last time (`RestoreSeed.holdShownPages`). The card says so
+    /// and offers Reload; anything that asks for the page (Reload, picking its tab, a new address) loads it.
+    var held: Set<PageID> = []
     /// The tab each tab was opened from by a page (window.open, a link), while both may live. Not saved: the pages'
     /// relationship ends with them. A page closing itself hands the window back to its opener (`closePage`).
     var pageOpeners: [ItemID: ItemID] = [:]

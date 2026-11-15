@@ -67,6 +67,7 @@ extension AppState {
     mutating func demand(_ page: PageID) {
         // The closed window has no host to show a page in (`Session.closedWindow`).
         guard owns(page), page.window != session.closedWindow else { return }
+        session.held.remove(page)
         if doc.windows[page.window]!.slots[page.item] == nil {
             doc.windows[page.window]!.slots[page.item] = SavedSlot(committedURL: tab(page.item)?.url, observedTitle: nil, favicon: tab(page.item)?.favicon)
         }
