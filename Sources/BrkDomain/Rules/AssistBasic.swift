@@ -44,6 +44,8 @@ public struct AISuggestion: Hashable, Sendable, Codable {
     public let target: Target
     /// The Space whose Today the tab was in when it was asked about.
     let from: SpaceID
+    /// The site the tab was on when it was asked about: the suggestion holds only while the tab stays on it.
+    var host: String? = nil
     let at: Instant
 }
 
@@ -142,12 +144,7 @@ extension Work {
 
     /// Where the tab is now: its address in the first window that shows it (a commit changes the window's slot, not
     /// the tree's first address).
-    private func currentURL(_ tab: ItemID) -> URL? {
-        for window in state.doc.windows.keys.sorted() where state.doc.windows[window]?.slots[tab] != nil || state.session.live[PageID(window: window, item: tab)] != nil {
-            if let url = state.displayedTab(tab, in: window)?.url { return url }
-        }
-        return state.tab(tab)?.url
-    }
+    private func currentURL(_ tab: ItemID) -> URL? { state.currentURL(of: tab) }
 
     /// Named once after its page loads and again when it moves to another site; never a title the user set.
     private mutating func considerNaming(_ tab: ItemID) {
@@ -362,7 +359,7 @@ extension Work {
         if case .choice(let name, _)? = answers["space"], let target = ask.spaces[name], state.canPlace(into: .space(target), from: ask.space),
            DecisionBand(answers["space"]?.probability) != .ignore {
             // Another space is only ever suggested.
-            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .space(target), from: ask.space, at: ctx.now)
+            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .space(target), from: ask.space, host: ask.url.host, at: ctx.now)
             return
         }
         // The group is checked again: its header may have been removed, or the group emptied, while the request ran.
@@ -374,7 +371,7 @@ extension Work {
             _ = moveItem(ask.tab, to: .into(parent: folder, index: Int.max))
             undoToast("Moved to “\(value.title)”! Use", undo: .placement(ask.tab, parent: space.todayRoot, index: index), in: ask.window)
         case .suggest:
-            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .folder(folder), from: ask.space, at: ctx.now)
+            state.session.ai.basic.suggestions[ask.tab] = AISuggestion(target: .folder(folder), from: ask.space, host: ask.url.host, at: ctx.now)
         case .ignore: break
         }
     }
@@ -542,12 +539,22 @@ extension AppState {
         }
     }
 
-    /// The tab's suggestion while it still holds: Place New Tabs on, the tab directly in the Today it was asked about,
-    /// and the target still one `canPlace` allows.
+    /// The tab's suggestion while it still holds: Place New Tabs on, the tab directly in the Today it was asked about and
+    /// still on the site it was asked about, and the target still one `canPlace` allows.
     func liveSuggestion(_ tab: ItemID) -> AISuggestion? {
         guard let suggestion = session.ai.basic.suggestions[tab], doc.settings.max.enabled(.tabPlacement), let space = doc.spaces[suggestion.from],
-              doc.tree[tab]?.kind == .tab, doc.tree[tab]?.parent == space.todayRoot, canPlace(into: suggestion.target, from: suggestion.from) else { return nil }
+              doc.tree[tab]?.kind == .tab, doc.tree[tab]?.parent == space.todayRoot, canPlace(into: suggestion.target, from: suggestion.from),
+              suggestion.host == nil || currentURL(of: tab)?.host == suggestion.host else { return nil }
         return suggestion
+    }
+
+    /// Where the tab is now: its address in the first window that shows it (a commit changes the window's slot, not
+    /// the tree's first address).
+    func currentURL(of tab: ItemID) -> URL? {
+        for window in doc.windows.keys.sorted() where doc.windows[window]?.slots[tab] != nil || session.live[PageID(window: window, item: tab)] != nil {
+            if let url = displayedTab(tab, in: window)?.url { return url }
+        }
+        return self.tab(tab)?.url
     }
 
     /// The suggestion's words and the destination's icon as they are now (a group renamed since keeps up).

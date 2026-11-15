@@ -342,6 +342,10 @@ final class AIBasicLayerTests: XCTestCase {
         d.user(try XCTUnwrap(command(menu, AICopy.dismissSuggestion)))
         XCTAssertNil(d.row(kept)?.aiSuggestion)
 
+        let wandered = try suggested("https://recipes.example/curry")
+        d.page(wandered, .committed(URL(string: "https://bank.example/login")!))
+        XCTAssertNil(d.row(wandered)?.aiSuggestion, "the tab left the site it was asked about")
+
         let orphan = try suggested("https://recipes.example/pie")
         d.user(.tabTools(.removeGroupHeader(group)))
         XCTAssertNil(d.row(orphan)?.aiSuggestion)

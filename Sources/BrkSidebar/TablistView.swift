@@ -1104,6 +1104,11 @@ final class RowView: HoverView {
             renderSpeakerButton(muted: speakerGlyph.muted, ink: ink, palette: palette)
             undo.append { [self] in speakerGlyph.isHidden = false; renderSpeakerButton(muted: speakerGlyph.muted, ink: .clear, palette: palette) }
         }
+        // The suggestion's arrow is a control on the row in the list, not part of the tab being carried.
+        if !suggestion.isHidden {
+            suggestion.isHidden = true
+            undo.append { [self] in suggestion.isHidden = false }
+        }
         if !crossOrHyphen.isHidden, case .tab(let tab)? = row {
             crossOrHyphen.isHidden = true
             button.render(keepsPinned(tab) ? .closeKeepPinned : .archiveTab, size: Draw.rowCloseGlyph.value, weight: .semibold, palette: palette,
