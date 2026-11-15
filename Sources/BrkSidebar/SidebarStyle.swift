@@ -131,6 +131,14 @@ struct SidebarDrawMetrics: MetricGroup {
     let tablistFolderCloseCurve = Metric([0.25, 0.1, 0.25, 1.0], .anatomy("those frames fit Core Animation's default curve at 0.25 s (squared error 0.0001)"))
     /// Arc's folder glyph (`FolderIcon.FolderIconView`): the paths of bin:0x10166cc40, the
     /// open state of bin:0x10166c6a8, run as an implicit animation from the representable's update (bin:0x10166e22c).
+    /// The card around a folder or tab group (Ardia's group box, the user's choice, docs/checks/2026-11-15-folder-card.md):
+    /// its fill and border on a dark and a light theme, and how it fades in and out.
+    let folderCardFillDark = Metric(RGBA(1, 1, 1, 0.1), .anatomy("docs/checks/2026-11-15-folder-card.md: Ardia's dark groupFill rgba(255,255,255,0.1)"))
+    let folderCardFillLight = Metric(RGBA(0, 0, 0, 0.05), .anatomy("docs/checks/2026-11-15-folder-card.md: Ardia's light groupFill rgba(0,0,0,0.05)"))
+    let folderCardStrokeDark = Metric(RGBA(1, 1, 1, 0.1), .anatomy("docs/checks/2026-11-15-folder-card.md: Ardia's dark groupStroke rgba(255,255,255,0.1)"))
+    let folderCardStrokeLight = Metric(RGBA(0, 0, 0, 0.1), .anatomy("docs/checks/2026-11-15-folder-card.md: Ardia's light groupStroke rgba(0,0,0,0.1)"))
+    let folderCardFade = Metric(0.1, .anatomy("docs/checks/2026-11-15-folder-card.md: Ardia's hoverCardFade 100 ms"))
+    let folderCardFadeCurve = Metric([0.25, 0.46, 0.45, 0.94], .anatomy("docs/checks/2026-11-15-folder-card.md: Ardia's curve.fade bezier"))
     /// The divider's Clear, Tidy and cleanup buttons appear while the pointer is over the sidebar or the divider.
     let dividerFade = Metric(0.1, .anatomy("bin:0x1001aca1c: setDuration 0.1 before animator().alphaValue; recorded, Clear reads 32, 54, 75, 100 percent in successive 1/60 s frames"))
     let dividerFadeCurve = Metric([0.0, 0.0, 0.58, 1.0], .anatomy("bin:0x1001ac9e4: functionWithName kCAMediaTimingFunctionEaseOut"))

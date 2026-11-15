@@ -171,7 +171,15 @@ public struct TablistMetrics: MetricGroup {
     public let selectionInset = Metric(8.0, .arc("Row selection background", .medium, note: "inset 8"))
     public let selectionRadius = Metric(12.0, .arc("Row selection background", .medium, note: "corner radius 12"))
     public let hoverButtonRadius = Metric(12.0, .arc("Tab row hover-button background corner radius", .low))
-    public let folderIndent = Metric(16.0, .guess("folder indent was not recovered (layout-constants.md, Not recovered); cra measures 18 at L142"))
+    /// How far a folder's or tab group's rows sit in from its header, on the left (the user's choice of Ardia's folder card,
+    /// 2026-11-15; Arc's own indent was not recovered and cra measures 18 at L142).
+    public let folderIndent = Metric(16.0, .anatomy("docs/checks/2026-11-15-folder-card.md: Ardia's SIDEBAR_GROUP indent 16"))
+    /// The card around an open folder or tab group (Ardia's group box): its corner radius, its border's width, and how far
+    /// the rows inside stay from its right edge and its last row from its bottom edge. The list leaves that bottom inset
+    /// free after every open folder with rows, so the next row keeps its usual distance from the card.
+    public let folderCardRadius = Metric(12.0, .anatomy("docs/checks/2026-11-15-folder-card.md: Ardia's SIDEBAR_GROUP radius 12"))
+    public let folderCardBorder = Metric(0.5, .anatomy("docs/checks/2026-11-15-folder-card.md: Ardia's SIDEBAR_GROUP border 0.5"))
+    public let folderCardInset = Metric(3.0, .anatomy("docs/checks/2026-11-15-folder-card.md: Ardia's SIDEBAR_GROUP inset 3"))
     public let favicon = Metric(16.0, .guess("favicon size was not recovered; cra L142 measures rows only"))
     /// The part of a tab row, as fractions of its height from the top, where a dragged tab joins it in a split; the
     /// quarters above and below still reorder.

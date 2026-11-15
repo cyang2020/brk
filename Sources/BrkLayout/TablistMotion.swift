@@ -66,11 +66,13 @@ public enum TablistMotion {
         let newRect = Dictionary(newRows.map { ($0.kind, $0.rect) }, uniquingKeysWith: { a, _ in a })
         let oldFolders = folders(oldSpace), newFolders = folders(newSpace)
 
-        /// The height a folder's shown contents take in a layout (0 while closed or absent).
-        func block(_ kinds: [RowFrame.Kind], in rects: [RowFrame.Kind: CGRect]) -> Double {
-            let shown = kinds.compactMap { rects[$0] }
-            guard let first = shown.map(\.minY).min(), let last = shown.map(\.maxY).max() else { return 0 }
-            return last + spacing - first
+        let oldCards = Dictionary(TablistLayout.folderCards(old, space: oldSpace).map { ($0.folder, $0) }, uniquingKeysWith: { a, _ in a })
+        let newCards = Dictionary(TablistLayout.folderCards(new, space: newSpace).map { ($0.folder, $0) }, uniquingKeysWith: { a, _ in a })
+        /// The height a folder's shown contents take in a layout (0 while closed or absent): from under its row to the next
+        /// row after them, the card's bottom inset included (its card's bottom less its header's selection bottom).
+        func block(_ folder: ItemID, rows rects: [RowFrame.Kind: CGRect], cards: [ItemID: FolderCard]) -> Double {
+            guard let card = cards[folder], card.open, let row = rects[.item(folder)] else { return 0 }
+            return card.rect.maxY - (row.midY + Metrics.tablist.selectionHeight.value / 2)
         }
 
         // Folders that open or close, and open folders that arrive with their rows: their contents slide under their row.
@@ -86,7 +88,7 @@ public enum TablistMotion {
                 plan.toggled[id] = !now.collapsed
                 if now.collapsed {
                     let gone = before.contents.filter { newRect[$0] == nil && oldRect[$0] != nil }
-                    let height = block(before.contents, in: oldRect)
+                    let height = block(id, rows: oldRect, cards: oldCards)
                     for k in gone {
                         plan.departures[k] = .slideUp(by: height, clip: rect.maxY, fades: false, timing: .folderClose)
                         handled.insert(k)
@@ -99,7 +101,7 @@ public enum TablistMotion {
             }
             // Opened, or arrived open on its own (a section expanding): its new contents come out from under it.
             let coming = now.contents.filter { oldRect[$0] == nil && newRect[$0] != nil && !handled.contains($0) }
-            let height = block(now.contents, in: newRect)
+            let height = block(id, rows: newRect, cards: newCards)
             for k in coming {
                 plan.arrivals[k] = .underFolder(clip: rect.maxY)
                 plan.slides[k, default: []].append(.init(.folderOpen, -height))

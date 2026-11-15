@@ -5,10 +5,11 @@ import CoreGraphics
 import Foundation
 import XCTest
 
-/// R3-6: a tab group's tabs sit under its header without a folder indent; an open Live Folder without rows has its
-/// one-line note, which takes drops into the folder.
+/// R3-6: a tab group's tabs sit one level in under its header like a folder's (the user's choice of Ardia's folder card,
+/// 2026-11-15; Arc draws them unindented); an open Live Folder without rows has its one-line note, which takes drops
+/// into the folder.
 final class TabsLittleBarLayoutTests: XCTestCase {
-    func testGroupTabsAreNotIndentedAndAnEmptyLiveFolderHasANote() throws {
+    func testGroupTabsAreIndentedAndAnEmptyLiveFolderHasANote() throws {
         let d = LayoutDriver()
         d.user(.item(.newFolder))
         let folder = d.view.space.pinned.rows[0].id
@@ -19,7 +20,7 @@ final class TabsLittleBarLayoutTests: XCTestCase {
         XCTAssertEqual(TablistLayout.rows(space, width: 228).first { $0.kind == .item(inside) }?.depth, 1, "a folder indents")
         row.group = true
         space.pinned.rows[0] = .folder(row)
-        XCTAssertEqual(TablistLayout.rows(space, width: 228).first { $0.kind == .item(inside) }?.depth, 0, "a group does not")
+        XCTAssertEqual(TablistLayout.rows(space, width: 228).first { $0.kind == .item(inside) }?.depth, 1, "a group too")
 
         row.group = false
         row.children = []

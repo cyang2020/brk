@@ -330,6 +330,11 @@ private extension Comparable {
 /// Arc puts New Tab right under Pinned, Q02 b, P24 e; with Pinned empty it is there, as in Arc), Today's New Tab row,
 /// then Today's rows. Rows are 40 tall on a 41 pitch (1 pt between
 /// rows); a split is one row; `depth` is the folder nesting for the indent.
+///
+/// Folders and tab groups (Tidy's among them) are drawn as Ardia draws its groups, the user's choice over Arc's look
+/// (2026-11-15, docs/checks/2026-11-15-folder-card.md): the rows inside an open one sit one level in, 16 from the left
+/// and 3 from the right of the header, and a card (`folderCards`) can wrap the header and its rows. After an open folder
+/// with rows the list leaves the card's 3 pt bottom inset free, so the row after it keeps its usual distance from the card.
 public enum TablistLayout {
     public static func rows(_ space: SpaceSnapshot, width: Double, divider: Bool = true) -> [RowFrame] {
         let t = Metrics.tablist
@@ -342,12 +347,12 @@ public enum TablistLayout {
         func addRows(_ rows: [Row], depth: Int) {
             for row in rows {
                 add(.item(row.id), height: t.rowHeight.value, depth: depth)
-                // A tab group's tabs sit under its header unindented (Arc's `TabGroupHeaderCellView` is a header, not a
-                // folder level).
-                if case .folder(let folder) = row, !folder.collapsed { addRows(folder.children, depth: folder.group ? depth : depth + 1) }
-                if case .folder(let folder) = row, !folder.collapsed, folder.live != nil, folder.children.isEmpty {
+                guard case .folder(let folder) = row, !folder.collapsed else { continue }
+                addRows(folder.children, depth: depth + 1)
+                if folder.live != nil, folder.children.isEmpty {
                     add(.livePlaceholder(folder.id), height: t.rowHeight.value, depth: depth + 1)
                 }
+                if showsContents(folder) { y += t.folderCardInset.value }
             }
         }
         add(.topSpacer, height: t.topSpacerHeight.value)
@@ -359,6 +364,106 @@ public enum TablistLayout {
         add(.newTab, height: t.rowHeight.value)
         addRows(space.today.rows, depth: 0)
         return out
+    }
+
+    /// An open folder that draws rows under its header: its children, or an empty Live Folder's note.
+    public static func showsContents(_ folder: FolderRow) -> Bool {
+        !folder.collapsed && (!folder.children.isEmpty || folder.live != nil)
+    }
+
+    /// The selection (the row's background, hover and current-tab card) of a row laid out at `row` with `depth`: 36 tall,
+    /// centred, 8 in from the list's sides, and for each folder level 16 further in on the left and the card's inset 3 on
+    /// the right. Coordinates are `row`'s own.
+    public static func selection(row: CGRect, depth: Int) -> CGRect {
+        let t = Metrics.tablist
+        let left = row.minX + t.selectionInset.value + Double(depth) * t.folderIndent.value
+        let right = row.maxX - t.selectionInset.value - Double(depth) * t.folderCardInset.value
+        return CGRect(x: left, y: row.midY - t.selectionHeight.value / 2, width: max(0, right - left), height: t.selectionHeight.value)
+    }
+
+    /// The card of every folder and tab group the list shows (document coordinates), outer before inner. It spans the
+    /// header's selection from side to side; its top is the border's width above the header's selection; an open folder's
+    /// card ends the card's inset below what it holds last (its last row's selection, or the card of an open folder that
+    /// is its last row), and a closed or empty one's the border's width below the header. A folder whose header is not
+    /// laid out (Pinned collapsed) has none.
+    public static func folderCards(_ rows: [RowFrame], space: SpaceSnapshot) -> [FolderCard] {
+        let t = Metrics.tablist
+        let border = t.folderCardBorder.value
+        var frames: [RowFrame.Kind: RowFrame] = [:]
+        for row in rows { frames[row.kind] = row }
+        var out: [FolderCard] = []
+        /// The bottom of what `row` draws in the list: its selection's, or its card's when it is an open folder with rows.
+        func visit(_ row: Row) -> Double? {
+            guard let frame = frames[.item(row.id)] else { return nil }
+            let header = selection(row: frame.rect, depth: frame.depth)
+            guard case .folder(let folder) = row else { return header.maxY }
+            let index = out.count
+            out.append(FolderCard(folder: row.id, rect: .zero, depth: frame.depth, open: false))
+            var end: Double?
+            if !folder.collapsed {
+                for child in folder.children { end = visit(child) ?? end }
+                if let note = frames[.livePlaceholder(folder.id)] { end = selection(row: note.rect, depth: note.depth).maxY }
+            }
+            let top = header.minY - border
+            let bottom = end.map { $0 + t.folderCardInset.value } ?? header.maxY + border
+            out[index] = FolderCard(folder: row.id, rect: CGRect(x: header.minX, y: top, width: header.width, height: bottom - top),
+                                    depth: frame.depth, open: end != nil)
+            return end == nil ? header.maxY : bottom
+        }
+        for row in space.pinned.rows + space.today.rows { _ = visit(row) }
+        return out
+    }
+
+    /// The card a pointer at `point` (document coordinates) is inside: the innermost card whose height spans it. Only the
+    /// height counts, as the rows take the pointer across the list's whole width.
+    public static func card(at point: CGPoint, in cards: [FolderCard]) -> FolderCard? {
+        cards.filter { point.y >= $0.rect.minY && point.y < $0.rect.maxY }.max { $0.depth < $1.depth }
+    }
+
+    /// Where the line for a drop `.into(parent, index)` goes while `dragging` is held (document coordinates): `y` is the
+    /// line's middle, `depth` the level of the rows it is drawn between, so it starts where their selection does. The
+    /// end of a list whose last row is an open folder with rows is below that folder's card, inside the card around it.
+    /// Nil when the parent is not shown or has no place for a line (the caller then highlights the folder row).
+    public static func dropLine(parent: ItemID, index: Int, dragging: ItemID?, rows: [RowFrame], space: SpaceSnapshot) -> DropLine? {
+        let t = Metrics.tablist
+        let half = t.rowSpacing.value / 2
+        var frames: [RowFrame.Kind: RowFrame] = [:]
+        for row in rows { frames[row.kind] = row }
+        let children: [Row], depth: Int
+        if parent == space.pinned.root { children = space.pinned.rows; depth = 0 }
+        else if parent == space.today.root { children = space.today.rows; depth = 0 }
+        else if case .folder(let folder)? = find(parent, in: space.pinned.rows + space.today.rows), let header = frames[.item(parent)] {
+            children = folder.children
+            depth = header.depth + 1
+        } else { return nil }
+        let others = children.filter { $0.id != dragging }
+        if index < others.count, let target = frames[.item(others[index].id)] {
+            return DropLine(y: target.rect.minY - half, depth: depth)
+        }
+        if let last = others.last {
+            if case .folder(let folder) = last, showsContents(folder),
+               let card = folderCards(rows, space: space).first(where: { $0.folder == last.id }) {
+                return DropLine(y: card.rect.maxY + t.folderCardInset.value / 2, depth: depth)
+            }
+            if let end = frames[.item(lastShown(last))] { return DropLine(y: end.rect.maxY + half, depth: depth) }
+        }
+        if parent == space.pinned.root, let spacer = frames[.topSpacer] { return DropLine(y: spacer.rect.maxY + half, depth: 0) }
+        if parent == space.today.root, let newTab = frames[.newTab] { return DropLine(y: newTab.rect.maxY + half, depth: 0) }
+        return nil
+    }
+
+    static func find(_ id: ItemID, in rows: [Row]) -> Row? {
+        for row in rows {
+            if row.id == id { return row }
+            if case .folder(let folder) = row, let hit = find(id, in: folder.children) { return hit }
+        }
+        return nil
+    }
+
+    /// The last row drawn for `row`'s subtree: itself, or the last shown descendant of an open folder.
+    static func lastShown(_ row: Row) -> ItemID {
+        if case .folder(let folder) = row, !folder.collapsed, let child = folder.children.last { return lastShown(child) }
+        return row.id
     }
 
     /// Which way the current row lies when it is scrolled out of the list's `visible` rect (document coordinates): Arc's
@@ -396,6 +501,8 @@ public enum TablistLayout {
     ///   quarter into it at the top when it is open with children (its first child sits right below), else after it.
     /// - The top spacer: top of Pinned. The divider: end of Pinned in its upper half, top of Today in its lower half.
     ///   The New Tab row and anything below the last row: top and end of Today.
+    /// - The free inset under an open folder's card: after the row above's subtree, at the level of the card around the
+    ///   pointer (the section's when none is), so the drop lands in the card the pointer is in.
     /// `item`, the dragged item, makes the index count after it is detached (as `Destination.into` requires) and
     /// refuses dropping a folder into itself or its own children.
     public static func dropTarget(at point: CGPoint, rows: [RowFrame], space: SpaceSnapshot, dragging kind: ItemKind,
@@ -440,7 +547,19 @@ public enum TablistLayout {
             }
         case nil:
             if let first = rows.first, point.y < first.rect.minY { target = (space.pinned.root, 0, .pinned, .section) }
-            else { target = (space.today.root, space.today.rows.count, space.today.kind, .section) }
+            else if rows.contains(where: { $0.rect.minY > point.y }), let above = rows.last(where: { $0.rect.maxY + spacing <= point.y }) {
+                // The inset left free under an open folder's card: after the subtree above, in the card the pointer is in.
+                let start: ItemID
+                switch above.kind {
+                case .item(let id), .livePlaceholder(let id): start = id
+                case .topSpacer, .divider, .newTab: return nil
+                }
+                let around = card(at: point, in: folderCards(rows, space: space).filter(\.open))?.folder
+                var child = start
+                while let place = places[child], place.parentKind == .folder, place.parent != around { child = place.parent }
+                guard let place = places[child] else { return nil }
+                target = (place.parent, place.index + 1, place.section, place.parentKind)
+            } else { target = (space.today.root, space.today.rows.count, space.today.kind, .section) }
         }
         guard var t = target, Placement.canPlace(kind, inSection: t.section, parentKind: t.parentKind) else { return nil }
         if let item {
@@ -482,14 +601,37 @@ public enum TablistLayout {
             return .tab(id, leading: point.x < hit.rect.midX)
         case .split(let split):
             guard split.panes.count < Metrics.content.maxPanes.value else { return nil }
-            let t = Metrics.tablist
-            let start = hit.rect.minX + t.selectionInset.value + Double(hit.depth) * t.folderIndent.value
-            let pane = max(1, hit.rect.maxX - t.selectionInset.value - start) / Double(split.panes.count)
-            return .split(id, index: min(max(0, Int(((point.x - start) / pane).rounded())), split.panes.count))
+            let shown = selection(row: hit.rect, depth: hit.depth)
+            let pane = max(1, shown.width) / Double(split.panes.count)
+            return .split(id, index: min(max(0, Int(((point.x - shown.minX) / pane).rounded())), split.panes.count))
         case .folder:
             return nil
         }
     }
+}
+
+/// The card around a folder or tab group in the tab list (`TablistLayout.folderCards`), in document coordinates.
+public struct FolderCard: Sendable, Equatable {
+    public var folder: ItemID
+    public var rect: CGRect
+    /// The header's folder level.
+    public var depth: Int
+    /// It wraps rows under its header (an open folder with rows), not the header alone.
+    public var open: Bool
+    public init(folder: ItemID, rect: CGRect, depth: Int, open: Bool) {
+        self.folder = folder
+        self.rect = rect
+        self.depth = depth
+        self.open = open
+    }
+}
+
+/// Where the tab list draws a drop line (`TablistLayout.dropLine`): its middle in document coordinates, and the folder
+/// level of the rows it goes between.
+public struct DropLine: Sendable, Equatable {
+    public var y: Double
+    public var depth: Int
+    public init(y: Double, depth: Int) { self.y = y; self.depth = depth }
 }
 
 /// Which way Arc's round button at the list's edge points (`TablistLayout.currentRowArrow`).

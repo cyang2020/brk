@@ -201,7 +201,7 @@ final class DragController {
     private func settle(_ image: DragImage, on id: ItemID) {
         landing = image
         guard let tablist = sidebar?.tablist, let row = tablist.rowView(id), let host = image.superview else { return endLanding() }
-        let card = RowGeometry(bounds: row.bounds, depth: 0).selection
+        let card = RowGeometry(bounds: row.bounds, depth: row.depth).selection
         let end = host.convert(card, from: row)
         tablist.arriving = id
         NSAnimationContext.runAnimationGroup({ context in
@@ -264,7 +264,7 @@ final class DragController {
         let host = sidebar.superview ?? sidebar
         let preview = DragImage(source: source, tab: tab, listWidth: context.map { Double($0.frames.frame.width) } ?? Metrics.sidebar.resetWidth.value, palette: palette)
         host.addSubview(preview)
-        let cardRect = row.map { RowGeometry(bounds: $0.bounds, depth: 0).selection } ?? source.bounds
+        let cardRect = row.map { RowGeometry(bounds: $0.bounds, depth: $0.depth).selection } ?? source.bounds
         let at = source.convert(press.start, from: nil)
         preview.grab = CGPoint(x: (at.x - cardRect.minX) / max(cardRect.width, 1), y: (at.y - cardRect.minY) / max(cardRect.height, 1))
         var card: ContentDragCard?
@@ -428,7 +428,8 @@ final class DragImage: NSView {
     init(source: NSView, tab: TabRow?, listWidth: Double, palette: Palette) {
         let row = source as? RowView
         let bounds = row?.bounds ?? CGRect(x: 0, y: 0, width: listWidth, height: Metrics.tablist.rowHeight.value)
-        let card = RowGeometry(bounds: bounds, depth: 0).selection
+        // An indented row (inside a folder or group) lifts as the card it draws, its own selection.
+        let card = RowGeometry(bounds: bounds, depth: row?.depth ?? 0).selection
         rowSize = card.size
         rowImageFrame = bounds.offsetBy(dx: -card.minX, dy: -card.minY)
         let tile = source as? FavoriteTileView

@@ -73,7 +73,7 @@ final class DropTargetTests: XCTestCase {
         let (d, p, folder, f1, t1, t2, _) = makeSidebar()
         let space = d.view.space
         let rows = TablistLayout.rows(space, width: 228)
-        // spacer 0, p 3, folder 44, f1 85, divider 126, new tab 143, t2 184, t1 225.
+        // spacer 0, p 3, folder 44, f1 85, the folder card's inset 126, divider 129, new tab 146, t2 187, t1 228.
         XCTAssertEqual(rows.map(\.kind), [.topSpacer, .item(p), .item(folder), .item(f1), .divider, .newTab, .item(t2), .item(t1)])
         let pinned = space.pinned.root, today = space.today.root
         func drop(_ y: Double, _ kind: ItemKind = .tab, item: ItemID? = nil) -> Destination? {
@@ -108,30 +108,30 @@ final class DropTargetTests: XCTestCase {
         let (d, p, folder, f1, t1, t2, v) = makeSidebar()
         let space = d.view.space
         let rows = TablistLayout.rows(space, width: 228)
-        // p 3...43, folder 44...84, f1 85...125, t2 184...224, t1 225...265.
+        // p 3...43, folder 44...84, f1 85...125, the folder card's inset, t2 187...227, t1 228...268.
         func join(_ y: Double, _ kind: ItemKind = .tab, from section: SectionKind = .today, item: ItemID) -> ItemID? {
             TablistLayout.splitTarget(at: CGPoint(x: 50, y: y), rows: rows, space: space, dragging: kind, from: section, item: item)?.target
         }
-        XCTAssertNil(join(190, item: t1), "top quarter of t2: reorder")
-        XCTAssertEqual(join(194, item: t1), t2, "a quarter down t2")
-        XCTAssertEqual(join(204, item: t1), t2, "middle of t2")
-        XCTAssertEqual(join(214, item: t1), t2, "three quarters down t2")
-        XCTAssertNil(join(220, item: t1), "bottom quarter of t2: reorder")
-        XCTAssertNil(join(245, item: t1), "its own row")
+        XCTAssertNil(join(193, item: t1), "top quarter of t2: reorder")
+        XCTAssertEqual(join(197, item: t1), t2, "a quarter down t2")
+        XCTAssertEqual(join(207, item: t1), t2, "middle of t2")
+        XCTAssertEqual(join(217, item: t1), t2, "three quarters down t2")
+        XCTAssertNil(join(223, item: t1), "bottom quarter of t2: reorder")
+        XCTAssertNil(join(248, item: t1), "its own row")
         XCTAssertEqual(join(23, item: t1), p, "a Today tab onto a pinned tab")
         XCTAssertEqual(join(105, from: .pinned, item: p), f1, "a pinned tab onto a pinned folder's tab")
-        XCTAssertEqual(join(245, from: .pinned, item: f1), t1, "a pinned folder's tab onto a Today tab")
+        XCTAssertEqual(join(248, from: .pinned, item: f1), t1, "a pinned folder's tab onto a Today tab")
         XCTAssertNil(join(64, item: t1), "the folder's middle stays a drop into it")
-        XCTAssertNil(join(204, .folder, item: folder), "a folder never joins")
-        XCTAssertNil(join(204, from: .favorites, item: v[0]), "a Favorites tile never joins")
+        XCTAssertNil(join(207, .folder, item: folder), "a folder never joins")
+        XCTAssertNil(join(207, from: .favorites, item: v[0]), "a Favorites tile never joins")
         XCTAssertNil(join(150, item: t1), "the New Tab row")
         // Where the feedback says join, the reducer makes the split there.
-        d.user(.split(.joinRow(t1, onto: try XCTUnwrap(join(204, item: t1)))))
+        d.user(.split(.joinRow(t1, onto: try XCTUnwrap(join(207, item: t1)))))
         let split = try XCTUnwrap(d.view.content.split)
         XCTAssertEqual(d.view.space.today.rows.map(\.id), [split])
         XCTAssertEqual(d.view.content.panes.map(\.tab), [t1, t2])
         // Left or right is the pointer against the row's midpoint (Q15: 428 and 434 on screen are 108 and 114 in the window).
-        func side(_ x: Double, _ y: Double = 204, rows: [RowFrame]? = nil, space: SpaceSnapshot? = nil, item: ItemID) -> SplitJoin? {
+        func side(_ x: Double, _ y: Double = 207, rows: [RowFrame]? = nil, space: SpaceSnapshot? = nil, item: ItemID) -> SplitJoin? {
             TablistLayout.splitTarget(at: CGPoint(x: x, y: y), rows: rows ?? TablistLayout.rows(space ?? d.view.space, width: 228), space: space ?? d.view.space,
                                       dragging: .tab, from: .today, item: item)
         }

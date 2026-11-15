@@ -64,6 +64,11 @@ final class TablistView: NSScrollView {
     /// points, so a row that comes back half-way keeps its view and its motion.
     private let animator = TablistAnimator()
     private var departing: [ItemID: (view: DepartingRowView, top: Double)] = [:]
+    /// The cards around folders and tab groups (Ardia's, the user's choice): where each would go, and the ones showing.
+    private let cards = FolderCards()
+    private var folderCards: [FolderCard] = []
+    /// Where the pointer is over the list (document coordinates), nil while it is elsewhere.
+    private var pointer: CGPoint?
 
     init(dispatch: @escaping Dispatch, drag: DragController) {
         self.dispatch = dispatch
@@ -74,6 +79,10 @@ final class TablistView: NSScrollView {
         super.init(frame: .zero)
         document.onKey = { [weak self] command in self?.dispatch(.tabTools(command)) }
         document.onRightClick = { [weak self] event in self?.spaceMenu(event) }
+        document.onPointer = { [weak self] point in
+            self?.pointer = point
+            self?.showHoveredCard()
+        }
         drawsBackground = false
         hasVerticalScroller = true
         autohidesScrollers = true
@@ -177,9 +186,14 @@ final class TablistView: NSScrollView {
             case .item, .divider, .newTab, .livePlaceholder: todayRect = todayRect?.union(frame.rect) ?? frame.rect
             }
         }
+        // A card reaches its inset below its last row: the section and the list's content include it.
+        folderCards = TablistLayout.folderCards(f.rows, space: space)
+        for card in folderCards {
+            if rows[card.folder]?.section == .pinned { pinnedRect = pinnedRect?.union(card.rect) } else { todayRect = todayRect?.union(card.rect) }
+        }
         pinnedSection.frame = pinnedRect ?? CGRect(x: 0, y: spacer.maxY, width: width, height: 0)
         todaySection.frame = todayRect ?? CGRect(x: 0, y: spacer.maxY, width: width, height: 0)
-        contentBottom = Double(f.rows.last?.rect.maxY ?? 0)
+        contentBottom = max(Double(f.rows.last?.rect.maxY ?? 0), folderCards.map { Double($0.rect.maxY) }.max() ?? 0)
         education.isHidden = tools.archiveEducation == nil
         education.render(tools.archiveEducation, palette: palette)
         // Arc's banners are cards at the bottom of the sidebar, under the list, not in it: the rows scroll clear of it.
@@ -205,6 +219,9 @@ final class TablistView: NSScrollView {
         let plan = motionPlan(from: previous, to: space, frames: f)
         if let plan { animator.begin(plan, at: moment) }
         placeRows(refresh: true, plan: plan, before: previous?.frames, now: moment)
+        cards.update(folderCards, palette: palette, container: { [pinnedSection, todaySection] id in rows[id]?.section == .pinned ? pinnedSection : todaySection },
+                     plan: plan, animator: animator, now: moment)
+        showHoveredCard()
         var seen: Set<ItemID> = []
         for frame in f.rows {
             switch frame.kind {
@@ -416,7 +433,18 @@ final class TablistView: NSScrollView {
         if let placedAt, abs(visible.minY - placedAt.minY) > max(visible.height, 1) / 2 || abs(visible.height - placedAt.height) > 1 {
             placeRows(refresh: false)
         }
+        // The list moved under a pointer that stayed put: it may be in another folder's card now.
+        if pointer != nil, let window {
+            pointer = document.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+            showHoveredCard()
+        }
         updateEdges()
+    }
+
+    /// The card of the innermost folder under the pointer shows (Ardia's hover); none while a drag is on.
+    private func showHoveredCard() {
+        let point = drag.isActive ? nil : pointer
+        cards.hover(point.flatMap { TablistLayout.card(at: $0, in: folderCards)?.folder })
     }
 
     private func updateEdges() {
@@ -469,41 +497,33 @@ final class TablistView: NSScrollView {
         reflectScrolledClipView(contentView)
     }
 
-    /// Draws where `destination` lands: a line between rows, or the target folder row highlighted. Nil clears it.
+    /// Draws where `destination` lands: a line between rows (`TablistLayout.dropLine`), or the target folder row
+    /// highlighted; an open folder it lands in shows its card (Ardia). Nil clears it.
     func showDrop(_ destination: Destination?, dragging: ItemID?, at point: CGPoint?, frames f: SidebarFrames, space: SpaceSnapshot) {
         setDropFolder(nil)
         dropLine.isHidden = true
+        var into: ItemID?
+        defer {
+            cards.drop(into)
+            showHoveredCard()
+        }
         guard case .into(let parent, let index)? = destination, let dragging else { return }
-        let rect = { (id: ItemID) in f.rows.first { $0.kind == .item(id) } }
-        let t = Metrics.tablist
-        let half = t.rowSpacing.value / 2
-        let children: [Row]
-        var depth = 0
-        if parent == space.pinned.root { children = space.pinned.rows }
-        else if parent == space.today.root { children = space.today.rows }
-        else if case .folder(let folder)? = Self.find(parent, in: space.pinned.rows + space.today.rows), let folderRow = rect(parent) {
-            children = folder.children
-            depth = folderRow.depth + 1
+        if case .folder(let folder)? = Self.find(parent, in: space.pinned.rows + space.today.rows),
+           let folderRow = f.rows.first(where: { $0.kind == .item(parent) }) {
+            if TablistLayout.showsContents(folder) { into = parent }
             let overFolder = point.map { folderRow.rect.contains($0) } ?? false
             if overFolder || folder.collapsed || folder.children.allSatisfy({ $0.id == dragging }) {
                 setDropFolder(parent)
                 return
             }
-        } else { return }
-        let others = children.filter { $0.id != dragging }
-        let y: Double
-        if index < others.count, let target = rect(others[index].id) {
-            y = target.rect.minY - half
-        } else if let lastChild = others.last, let end = Self.lastVisible(lastChild).flatMap(rect) {
-            y = end.rect.maxY + half
-        } else if parent == space.pinned.root, let spacer = f.rows.first(where: { $0.kind == .topSpacer }) {
-            y = spacer.rect.maxY + half
-        } else if parent == space.today.root, let newTabRow = f.rows.first(where: { $0.kind == .newTab }) {
-            y = newTabRow.rect.maxY + half
-        } else { return }
-        let indent = Draw.dropRingLeading.value + Double(depth) * t.folderIndent.value
+        }
+        guard let line = TablistLayout.dropLine(parent: parent, index: index, dragging: dragging, rows: f.rows, space: space) else { return }
+        // The line starts and ends where the selections of the rows it goes between do (in by their folder level).
+        let t = Metrics.tablist
+        let indent = Draw.dropRingLeading.value + Double(line.depth) * t.folderIndent.value
+        let end = document.bounds.width - Draw.dropLineTrailing.value - Double(line.depth) * t.folderCardInset.value
         let ring = Draw.dropRingSide.value
-        dropLine.frame = CGRect(x: indent, y: y - ring / 2, width: max(ring, document.bounds.width - indent - Draw.dropLineTrailing.value), height: ring)
+        dropLine.frame = CGRect(x: indent, y: line.y - ring / 2, width: max(ring, end - indent), height: ring)
         dropLine.isHidden = false
     }
 
@@ -552,12 +572,6 @@ final class TablistView: NSScrollView {
             if case .folder(let folder) = row, let hit = find(id, in: folder.children) { return hit }
         }
         return nil
-    }
-
-    /// The last row drawn for `row`'s subtree: itself, or the last visible descendant of an expanded folder.
-    static func lastVisible(_ row: Row) -> ItemID? {
-        if case .folder(let folder) = row, !folder.collapsed, let child = folder.children.last { return lastVisible(child) }
-        return row.id
     }
 }
 
@@ -628,6 +642,25 @@ final class ListDocumentView: NSView {
     /// A right-click that no row took (the sections' gaps and the space below the last row).
     var onRightClick: ((NSEvent) -> Void)?
     override func rightMouseDown(with event: NSEvent) { onRightClick?(event) }
+    /// The pointer over the list, in this view's coordinates; nil when it leaves (folder cards follow it).
+    var onPointer: ((CGPoint?) -> Void)?
+    private var pointerArea: NSTrackingArea?
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if pointerArea == nil {
+            let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeInActiveApp, .inVisibleRect], owner: self)
+            addTrackingArea(area)
+            pointerArea = area
+        }
+    }
+    override func mouseEntered(with event: NSEvent) { pointerMoved(event) }
+    /// Also the window's own mouse-moved events while the list has the keyboard: only a point on the list counts.
+    override func mouseMoved(with event: NSEvent) { pointerMoved(event) }
+    override func mouseExited(with event: NSEvent) { onPointer?(nil) }
+    private func pointerMoved(_ event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        onPointer?(visibleRect.contains(point) ? point : nil)
+    }
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
         case 125: onKey?(.sidebarStep(.next))
@@ -638,8 +671,9 @@ final class ListDocumentView: NSView {
     }
 }
 
-/// Geometry inside one 40 pt row: the 36 pt selection inset 8 (and indented by depth), the 16 pt icon centred 26
-/// from the sidebar edge, the title from x 45, the 24 pt hover button at the right.
+/// Geometry inside one 40 pt row: the 36 pt selection inset 8 (and, inside folders, in by depth on both sides:
+/// `TablistLayout.selection`), the 16 pt icon centred 26 from the sidebar edge, the title from x 45, the 24 pt hover
+/// button at the right.
 struct RowGeometry {
     let selection: CGRect
     let icon: CGRect
@@ -650,9 +684,7 @@ struct RowGeometry {
 
     init(bounds: CGRect, depth: Int, speaker hasSpeaker: Bool = false) {
         let t = Metrics.tablist
-        let indent = Double(depth) * t.folderIndent.value
-        selection = CGRect(x: t.selectionInset.value + indent, y: (bounds.height - t.selectionHeight.value) / 2,
-                           width: max(0, bounds.width - 2 * t.selectionInset.value - indent), height: t.selectionHeight.value)
+        selection = TablistLayout.selection(row: CGRect(origin: .zero, size: bounds.size), depth: depth)
         icon = CGRect(x: selection.minX + Draw.faviconLeading.value, y: bounds.midY - t.favicon.value / 2, width: t.favicon.value, height: t.favicon.value)
         titleX = selection.minX + TablistLayout.titleStart(leading: Draw.titleLeading.value, speaker: hasSpeaker)
         speaker = TablistLayout.speakerButton(selection: selection)
@@ -679,7 +711,8 @@ final class RowView: HoverView {
     private var reportedHover = false
     private(set) var row: Row?
     private var section: SectionKind = .today
-    private var depth = 0
+    /// The row's folder level: its selection is in by this many levels (`TablistLayout.selection`).
+    private(set) var depth = 0
     private var palette: Palette?
     private let background = NSView()
     /// Brk's own: the outline and tint in the Space's color while the AI conversation under the pointer used this row's tab.
@@ -1059,15 +1092,20 @@ final class RowView: HoverView {
         case .split(let split): split.status
         case .folder: nil
         }
+        let header: Bool = if case .folder = row { true } else { false }
         let fill: RGBA?
         if dropInto { fill = tokens.itemHover }
         else if dragLifted || status == .current { fill = tokens.tabCurrent }
         else if status == .visible { fill = tokens.tabVisible }
         else if isPressed { fill = tokens.tabPressed }
         // Q18-navy-row-hover-arc.png: a hovered row reads white 0.11 over a dark theme (the 0.15 of the other hovers is too much).
-        else if multiselected || isHovered { fill = !multiselected && palette.scheme == .dark ? tokens.tabPreviousHover : tokens.itemHover }
+        // A folder's or group's header has no hover fill of its own: the card around it is its hover (Ardia, TablistView).
+        else if multiselected || (isHovered && !header) { fill = !multiselected && palette.scheme == .dark ? tokens.tabPreviousHover : tokens.itemHover }
         else { fill = nil }
         let layer = background.layer
+        // Inside its card a header's fill keeps clear of the card's border at the corners (Ardia's inner radius).
+        let t = Metrics.tablist
+        layer?.cornerRadius = header ? t.folderCardRadius.value - t.folderCardBorder.value : t.selectionRadius.value
         layer?.backgroundColor = fill.map { palette.color($0).cgColor }
         layer?.borderColor = palette.color(tokens.dragHintStrong).cgColor
         layer?.borderWidth = dropInto ? Draw.hairline.value : 0

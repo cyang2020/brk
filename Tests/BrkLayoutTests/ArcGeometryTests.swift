@@ -29,12 +29,13 @@ final class ArcGeometryTests: XCTestCase {
         }
         XCTAssertEqual(rows, [row(.topSpacer, 0, 2), row(.item(a), 3, 40), row(.item(b), 44, 40), row(.divider, 85, 16),
                               row(.newTab, 102, 40), row(.item(e), 143, 40), row(.item(c), 184, 40)])
-        // A folder's children are one level deeper while it is open, and gone while it is closed or Pinned is.
+        // A folder's children are one level deeper while it is open, and gone while it is closed or Pinned is; the row after
+        // an open folder leaves its card's 3 pt bottom inset free.
         d.user(.item(.newFolder))
         let folder = d.view.space.pinned.rows[0].id
         d.user(.item(.move(a, to: .into(parent: folder, index: 0))))
         let nested = TablistLayout.rows(d.view.space, width: 228)
-        XCTAssertEqual(Array(nested.prefix(4)), [row(.topSpacer, 0, 2), row(.item(folder), 3, 40), row(.item(a), 44, 40, depth: 1), row(.item(b), 85, 40)])
+        XCTAssertEqual(Array(nested.prefix(4)), [row(.topSpacer, 0, 2), row(.item(folder), 3, 40), row(.item(a), 44, 40, depth: 1), row(.item(b), 88, 40)])
         d.user(.item(.toggleFolder(folder)))
         XCTAssertEqual(TablistLayout.rows(d.view.space, width: 228).map(\.kind), [.topSpacer, .item(folder), .item(b), .divider, .newTab, .item(e), .item(c)])
         d.user(.space(.togglePinnedSection(.current)))

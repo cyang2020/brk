@@ -82,7 +82,10 @@ enum SidebarMotionScenarios {
         try expect(try frame(app, .row(a)) == nil && frame(app, .row(b)) == nil, "a row on its way out is still reported as a row")
         try expect(try glyph(app, folder) == "closed", "the glyph did not close")
         let closedToday = try frame(app, .row(today)).unwrap("the Today row after closing")
-        try expect(abs((openToday.minY - closedToday.minY) - 82) < 0.5, "the Today row's frame moved \(openToday.minY - closedToday.minY), not two rows")
+        // Two rows, and the free inset under the open folder's card (TablistLayout.rows).
+        let t = Metrics.tablist, closedBy = 2 * (t.rowHeight.value + t.rowSpacing.value) + t.folderCardInset.value
+        try expect(abs((openToday.minY - closedToday.minY) - closedBy) < 0.5,
+                   "the Today row's frame moved \(openToday.minY - closedToday.minY), not two rows and the card's inset")
         app.sleep(0.5)
         _ = try app.screenshot("closed")
 

@@ -259,6 +259,9 @@ final class PointerSweepTests: XCTestCase {
         rig.run(.tabTools(.select(today[0], .toggle)))
         rig.run(.tabTools(.select(today[1], .toggle)))
         rig.render { rig.decorate(&$0, sidebar) }
+        // The row is near the list's end, partly below the visible part (open folders leave their cards' insets): in view first.
+        let selected = try view(.row(today[1]))
+        selected.scrollToVisible(selected.bounds)
         XCTAssertEqual(try menus(try sends { SurfaceChecks.click(try view(.row(today[1])), .right) }).map { request -> Set<ItemID> in
             if case .selection(let items) = request { Set(items) } else { [] }
         }, [Set([today[0], today[1]])])

@@ -31,23 +31,23 @@ final class TablistMotionTests: XCTestCase {
         return (d, folder, [a, b], below)
     }
 
-    /// Closing: the children slide up under the folder's row, titles gone, 82 pt (two rows on a 41 pitch), and what is
-    /// below follows over the same 0.25 s; nothing fades.
+    /// Closing: the children slide up under the folder's row, titles gone, 85 pt (two rows on a 41 pitch and the folder
+    /// card's 3 pt bottom inset), and what is below follows over the same 0.25 s; nothing fades.
     func testAClosingFolderSlidesItsRowsUpUnderItsRowOnTheCloseTiming() throws {
         let (d, folder, children, below) = folderOfTwo()
         let folderRow = try XCTUnwrap(layout(d).rows.first { $0.kind == .item(folder) })
         let p = plan(d) { d.user(.item(.toggleFolder(folder))) }
         XCTAssertEqual(p.toggled, [folder: false])
         for child in children {
-            XCTAssertEqual(p.departures[.item(child)], .slideUp(by: 82, clip: folderRow.rect.maxY, fades: false, timing: .folderClose))
+            XCTAssertEqual(p.departures[.item(child)], .slideUp(by: 85, clip: folderRow.rect.maxY, fades: false, timing: .folderClose))
         }
-        XCTAssertEqual(p.slides[.item(below)], [.init(.folderClose, 82)])
-        XCTAssertEqual(p.slides[.newTab], [.init(.folderClose, 82)])
+        XCTAssertEqual(p.slides[.item(below)], [.init(.folderClose, 85)])
+        XCTAssertEqual(p.slides[.newTab], [.init(.folderClose, 85)])
         XCTAssertNil(p.slides[.item(folder)], "the folder's own row stays put")
         XCTAssertTrue(p.arrivals.isEmpty)
     }
 
-    /// Opening: the children come out from under the folder's row, starting 82 pt higher, together with the rows below,
+    /// Opening: the children come out from under the folder's row, starting 85 pt higher, together with the rows below,
     /// on the 0.2 s ease-out; a second click half-way is the same plan the other way.
     func testAnOpeningFolderBringsItsRowsOutFromUnderItsRow() throws {
         let (d, folder, children, below) = folderOfTwo()
@@ -57,9 +57,9 @@ final class TablistMotionTests: XCTestCase {
         XCTAssertEqual(p.toggled, [folder: true])
         for child in children {
             XCTAssertEqual(p.arrivals[.item(child)], .underFolder(clip: folderRow.rect.maxY))
-            XCTAssertEqual(p.slides[.item(child)], [.init(.folderOpen, -82)])
+            XCTAssertEqual(p.slides[.item(child)], [.init(.folderOpen, -85)])
         }
-        XCTAssertEqual(p.slides[.item(below)], [.init(.folderOpen, -82)])
+        XCTAssertEqual(p.slides[.item(below)], [.init(.folderOpen, -85)])
         XCTAssertTrue(p.departures.isEmpty)
     }
 
