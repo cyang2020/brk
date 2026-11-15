@@ -434,17 +434,19 @@ final class TablistView: NSScrollView {
             placeRows(refresh: false)
         }
         // The list moved under a pointer that stayed put: it may be in another folder's card now.
-        if pointer != nil, let window {
-            pointer = document.convert(window.mouseLocationOutsideOfEventStream, from: nil)
-            showHoveredCard()
-        }
+        if pointer != nil { showHoveredCard() }
         updateEdges()
     }
 
     /// The card of the innermost folder under the pointer shows (Ardia's hover); none while a drag is on.
     private func showHoveredCard() {
+        // Read again where the pointer is: a drag, a scroll or a hidden list leaves the last tracked point behind.
+        if pointer != nil {
+            let now = window.map { document.convert($0.mouseLocationOutsideOfEventStream, from: nil) }
+            pointer = now.flatMap { !isHiddenOrHasHiddenAncestor && document.visibleRect.contains($0) ? $0 : nil }
+        }
         let point = drag.isActive ? nil : pointer
-        cards.hover(point.flatMap { TablistLayout.card(at: $0, in: folderCards)?.folder })
+        cards.hover(point.flatMap { TablistLayout.hoverCard(at: $0, in: folderCards)?.folder })
     }
 
     private func updateEdges() {

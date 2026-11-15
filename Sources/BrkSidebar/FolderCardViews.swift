@@ -129,6 +129,8 @@ final class FolderCardView: NSView {
         layer?.cornerCurve = .continuous
         layer?.cornerRadius = Metrics.tablist.folderCardRadius.value
         layer?.borderWidth = Metrics.tablist.folderCardBorder.value
+        // Under the pictures of rows on their way out of the list (TablistAnimator.depart puts them at -1).
+        layer?.zPosition = -2
     }
 
     @available(*, unavailable)

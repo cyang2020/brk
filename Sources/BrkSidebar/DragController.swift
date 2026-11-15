@@ -347,7 +347,7 @@ final class DragController {
         if parent == id || contains(parent, under: id, in: space.pinned.rows + space.today.rows) { return nil }
         let siblings: [Row]? = if parent == space.pinned.root { space.pinned.rows }
             else if parent == space.today.root { space.today.rows }
-            else if case .folder(let folder)? = TablistView.find(parent, in: space.pinned.rows) { folder.children }
+            else if case .folder(let folder)? = TablistView.find(parent, in: space.pinned.rows + space.today.rows) { folder.children }
             else { nil }
         if let at = siblings?.firstIndex(where: { $0.id == id }), at < index { index -= 1 }
         return .into(parent: parent, index: index)

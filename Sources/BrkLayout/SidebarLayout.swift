@@ -420,6 +420,16 @@ public enum TablistLayout {
         cards.filter { point.y >= $0.rect.minY && point.y < $0.rect.maxY }.max { $0.depth < $1.depth }
     }
 
+    /// The card the pointer's hover shows: as `card(at:)`, but a header takes the pointer over its row's whole height, past
+    /// the selection its card is drawn around (above every card, and below a closed folder's), so the pointer crossing
+    /// from one closed folder to the next is never in neither. Drops keep `card(at:)`: the free inset under an open card
+    /// drops after it.
+    public static func hoverCard(at point: CGPoint, in cards: [FolderCard]) -> FolderCard? {
+        let t = Metrics.tablist
+        let reach = (t.rowHeight.value - t.selectionHeight.value) / 2 - t.folderCardBorder.value
+        return cards.filter { point.y >= $0.rect.minY - reach && point.y < $0.rect.maxY + ($0.open ? 0 : reach) }.max { $0.depth < $1.depth }
+    }
+
     /// Where the line for a drop `.into(parent, index)` goes while `dragging` is held (document coordinates): `y` is the
     /// line's middle, `depth` the level of the rows it is drawn between, so it starts where their selection does. The
     /// end of a list whose last row is an open folder with rows is below that folder's card, inside the card around it.
@@ -598,7 +608,7 @@ public enum TablistLayout {
         guard let row = pinned ?? today, Placement.canJoinSplit(section, with: pinned != nil ? .pinned : space.today.kind) else { return nil }
         switch row {
         case .tab:
-            return .tab(id, leading: point.x < hit.rect.midX)
+            return .tab(id, leading: point.x < selection(row: hit.rect, depth: hit.depth).midX)
         case .split(let split):
             guard split.panes.count < Metrics.content.maxPanes.value else { return nil }
             let shown = selection(row: hit.rect, depth: hit.depth)

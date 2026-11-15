@@ -62,6 +62,12 @@ final class FolderCardLayoutTests: XCTestCase {
         XCTAssertFalse(closedInner.open)
         XCTAssertEqual(closedInner.rect, try selection(closedRows, inner).insetBy(dx: 0, dy: -0.5))
         XCTAssertEqual(try XCTUnwrap(closed.first { $0.folder == outer }).rect.maxY, closedInner.rect.maxY - 0.5 + 3, accuracy: 1e-9)
+        // The header's row takes the pointer 2 pt past its selection: its hover card reaches as far, so between two
+        // headers the pointer is always in one (it showed no card there, and the card blinked while crossing).
+        let innerRow = try XCTUnwrap(closedRows.first { $0.kind == .item(inner) }).rect
+        XCTAssertNil(TablistLayout.card(at: CGPoint(x: 0, y: innerRow.maxY - 0.5), in: [closedInner]))
+        XCTAssertEqual(TablistLayout.hoverCard(at: CGPoint(x: 0, y: innerRow.maxY - 0.5), in: [closedInner])?.folder, inner)
+        XCTAssertEqual(TablistLayout.hoverCard(at: CGPoint(x: 0, y: innerRow.minY + 0.5), in: [closedInner])?.folder, inner)
 
         d.user(.space(.togglePinnedSection(.current)))
         XCTAssertTrue(TablistLayout.folderCards(TablistLayout.rows(d.view.space, width: 228), space: d.view.space).isEmpty)
