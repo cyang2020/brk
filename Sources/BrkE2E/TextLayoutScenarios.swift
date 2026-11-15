@@ -22,6 +22,7 @@ enum TextLayoutScenarios {
     ]
     private static let longTitle = "Long title for truncation and readable sidebar ellipsis"
     private static let longSpace = "Research and Development Notes"
+    private static let folderChildTitle = "Folder notes"
 
     private final class Sweep {
         let app: AppUnderTest
@@ -124,6 +125,11 @@ enum TextLayoutScenarios {
         let pinnedTab = try app.load(app.site.url("page2.html?pinned=1"))
         try app.dispatch(.item(.move(pinnedTab, to: .into(parent: try app.view().space.pinned.root, index: 0))))
         let folderChild = try app.load(app.site.url("index.html?folder=1"))
+        // A title well inside the narrowest folder row: "Fixture Home" (90.2 pt with the cell's inset) sat on the edge of
+        // the row's 87 to 90 pt, inside the band where the audit reads an ellipsis as a forgotten inset. The folder's
+        // own long name and the long Today title cover the ellipsis.
+        try app.evaluate(PageID(window: standard, item: folderChild), "document.title=\(jsString(folderChildTitle))")
+        try waitForTitle(app, folderChild, folderChildTitle)
         let folder = try E.newFolder(app, "Reading list with a rather long name")
         try app.dispatch(.item(.move(folderChild, to: .into(parent: folder, index: 0))))
         let favorite = try app.load(app.site.url("index.html?favorite=1"))
