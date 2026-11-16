@@ -320,8 +320,18 @@ NS_SWIFT_UI_ACTOR
 - (void)developerOperation:(NSString*)operation;
 - (void)showCastDialog;
 
-/// Closes it now, without unload handlers. -webContentsDidClose: follows, possibly before this returns.
+/// Closes it as Chrome closes a tab: its beforeunload handlers run (a question one asks for is answered Leave: the shell has
+/// let the page go), then its pagehide and unload handlers, within Chromium's timeouts. A page with no handlers goes at once.
+/// Called from inside the completion of a -confirmLeaving: that answered YES, only the unload handlers are left to run; every
+/// other close runs beforeunload again. -webContentsDidClose: follows, possibly before this returns.
 - (void)close;
+/// A frame of the page has a beforeunload handler: closing it should ask the page first (-confirmLeaving:).
+@property(nonatomic, readonly) BOOL hasBeforeUnloadHandler;
+/// Runs the page's beforeunload handlers as Chrome does before it closes a tab, without closing it. A handler that asks to
+/// confirm leaving shows Chromium's question through -webContents:runDialog:. YES: the page may go (nothing asked, or Leave);
+/// NO: the person chose Stay, or the page closed another way meanwhile. Answers at once when there is no handler. A page that
+/// never answers is let go after 2 s; its close then runs beforeunload again.
+- (void)confirmLeaving:(void (^)(BOOL leave))completion;
 /// The visible entry's connection now.
 @property(nonatomic, readonly) BrkCoreSecurity security;
 /// Plays, pauses ("play", "pause"), sets the volume of ("setVolume", 0 to 1) or moves into or out of picture in picture
@@ -439,6 +449,7 @@ NS_SWIFT_UI_ACTOR
 
 NS_SWIFT_UI_ACTOR
 @protocol BrkCoreApplication <NSObject>
+/// 4: -confirmLeaving: and hasBeforeUnloadHandler exist. The app refuses an engine below the version it was built for.
 @property(nonatomic, readonly) NSUInteger embeddingInterfaceVersion;
 /// Chromium's version, 154.0.8037.98.
 @property(nonatomic, readonly, copy) NSString* version;

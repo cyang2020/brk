@@ -63,6 +63,10 @@ final class CorePage: NSObject, BrkCoreWebContentsDelegate {
     var boostPickerWorld: (target: SiteTarget, id: Int, token: String)?
     /// The JavaScript dialog shown as a sheet for this page.
     var openDialog: (dialog: any BrkCoreDialog, alert: NSAlert)?
+    /// The app is asking whether the page may go (`CoreEngine.confirmLeaving`): a person closed it, its window or Brk.
+    var askingToLeave: Bool { leaveQuestion != nil }
+    var leaveQuestion: UInt64?
+    var leaveQuestions: UInt64 = 0
     var mainDocument: MainDocumentState
     private var reloadSequence = ReloadSequence()
     private var expectedReloadBrowse: URL?

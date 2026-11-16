@@ -268,6 +268,18 @@ public class WindowController: NSObject, NSWindowDelegate {
     public func windowDidMove(_ notification: Notification) { reportGeometry() }
     /// An AI page in this window first commits what is being typed (`PageSandboxView.commitEdits`), then the window closes.
     public func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // As Chrome closing a window: a page on screen whose beforeunload asks shows Leave this page?, and Stay keeps the window.
+        if !pagesLetGo, let ask = askBeforeClosing {
+            let asking = ask { [weak self] go in
+                guard let self, go else { return }
+                self.pagesLetGo = true
+                self.window.performClose(nil)
+                // Still open: an AI page commits its edits first and closes the window itself after (below).
+                if self.window.isVisible, !self.committingPageEdits { self.pagesLetGo = false }
+            }
+            // Asking now, or a question is open for one of its pages already (that one decides): the window stays meanwhile.
+            if asking != .none { return false }
+        }
         if pageEditsCommitted || !PageSandboxView.anyCanSave(in: window) { return true }
         guard !committingPageEdits else { return false }
         committingPageEdits = true
@@ -277,12 +289,15 @@ public class WindowController: NSObject, NSWindowDelegate {
             self.committingPageEdits = false
             self.pageEditsCommitted = true
             self.window.performClose(nil)
-            if self.window.isVisible { self.pageEditsCommitted = false }
+            if self.window.isVisible { self.pageEditsCommitted = false; self.pagesLetGo = false }
         }
         return false
     }
     private var committingPageEdits = false
     private var pageEditsCommitted = false
+    /// Set by the store: asks the pages on screen in this window whether they may go (`AppStore.askPagesOnScreen`).
+    var askBeforeClosing: (@MainActor (@escaping @MainActor (Bool) -> Void) -> AppStore.LeaveAsking)?
+    private var pagesLetGo = false
 
     public func windowWillClose(_ notification: Notification) {
         root.cancelDrag()

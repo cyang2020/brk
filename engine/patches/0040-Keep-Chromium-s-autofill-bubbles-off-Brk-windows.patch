@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Mon, 16 Nov 2026 04:13:51 +0800
+Subject: [PATCH] Keep Chromium's autofill bubbles off Brk windows
+
+Chromium's autofill and payments bubbles (the offer to protect saved
+cards with Touch ID after a card fill, Autofill AI, filled-card
+information, virtual card enrollment, offers, the omnibox bubble) ask
+the browser window for its AutofillBubbleHandler and dereference it.
+Brk windows have none, so filling a saved card and submitting the form
+could quit Brk. Brk offers the saves it supports with its own cards.
+
+AutofillBubbleControllerBase::ShowBubble, which every one of them goes
+through, now shows nothing when the window has no handler.
+---
+ .../ui/autofill/autofill_bubble_controller_base.cc | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/chrome/browser/ui/autofill/autofill_bubble_controller_base.cc b/chrome/browser/ui/autofill/autofill_bubble_controller_base.cc
+index 1149d5ce8f4749a81392a8beb1b87257883210d7..051f8150247e27b44914b127eb76bfed9035b66a 100644
+--- a/chrome/browser/ui/autofill/autofill_bubble_controller_base.cc
++++ b/chrome/browser/ui/autofill/autofill_bubble_controller_base.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "chrome/browser/ui/autofill/autofill_bubble_controller_base.h"
+ 
++#include "brk/embedding/embedding.h"
+ #include "chrome/browser/ui/autofill/autofill_bubble_base.h"
+ #include "chrome/browser/ui/autofill/bubble_manager.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+@@ -140,6 +141,19 @@ void AutofillBubbleControllerBase::UpdatePageActionIcon() {
+ }
+ 
+ void AutofillBubbleControllerBase::ShowBubble() {
++  // A Brk window has no Views for Chromium's autofill bubbles: its
++  // AutofillBubbleHandler is null and every DoShowBubble() dereferences it.
++  // Brk offers the saves it supports with its own cards.
++  if (brkcore::IsEmbedded()) {
++    BrowserWindowInterface* browser =
++        GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(
++            web_contents());
++    BrowserWindow* window =
++        browser ? BrowserWindow::FromBrowser(browser) : nullptr;
++    if (!window || !window->GetAutofillBubbleHandler()) {
++      return;
++    }
++  }
+   was_bubble_shown_ = true;
+   UpdatePageActionIcon();
+   DoShowBubble();
