@@ -207,17 +207,63 @@ public struct DockMetrics: MetricGroup {
     public let libraryBottom = Metric(9.0, .arc("\"+\" and Library buttons", .low, note: "Library 9 from the bottom"))
 }
 
+/// Arc's update banner (`ARC_SidebarBanner`, `UpdateAvailableV2State`): a pill at rest that opens, under a resting
+/// pointer, into a card growing upward from the pill. The card sits in the banner panel between the list and the dock
+/// (SidebarViewController's stack, bin:0x100294d74: list, media controls, banner, dock, no spacing), so the open card
+/// takes its height from the list: the list ends at the card's top and its rows stay where they were. Captures:
+/// ~/brk-evidence/update-panel/README.md (arc-hover.png, a 228 pt sidebar of a 1280 by 776 window, 2x).
 public struct UpdateBannerMetrics: MetricGroup {
-    public let actionRadius = Metric(7.0, .guess("rounded gradient update action, fitted to the expanded Arc update card"))
     public let height = Metric(24.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: P01-a pill spans y 694...718 pt"))
-    public let sideInset = Metric(8.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: P01-a pill spans x 8...220 in a 228 pt sidebar"))
-    public let bottomGap = Metric(8.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: 24 pt pill in a 32 pt hosting region above the dock"))
-    public let fontSize = Metric(12.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: NSFont system regular 12 measures 146.56 by 15 pt, matching Arc AX text"))
+    /// Arc pads the update banner on the sides and the bottom only (bin:0x10257e4dc: `.padding([.horizontal, .bottom], 8)`),
+    /// so the list ends at the pill's top edge; its other banners take 8 on every side.
+    public let sideInset = Metric(8.0, .anatomy("~/brk-evidence/update-panel/README.md, bin:0x10257e4dc: padding([.horizontal, .bottom], 8) around the update banner; P01-a pill spans x 8...220 in a 228 pt sidebar"))
+    public let bottomGap = Metric(8.0, .anatomy("~/brk-evidence/update-panel/README.md, bin:0x10257e4dc: padding([.horizontal, .bottom], 8); P01-a pill ends 8 above the dock"))
+    public let fontSize = Metric(12.0, .anatomy("docs/arc-anatomy/visual-and-copy.md updater references, supplemented by 2026-11-14 arc-update-reference.txt: NSFont system regular 12 measures 146.56 by 15 pt, matching Arc AX text; the open card's title, checkbox label and button title measure the same size (~/brk-evidence/update-panel/README.md)"))
     public let strokeWidth = Metric(0.5, .guess("one device pixel at 2x; exact sidebar outline thickness has not been isolated from antialiasing"))
-    public let fillAlpha = Metric([0.025, 0.13], .guess("black in light themes, white in dark themes; initial compositing fit to P01-a, P28-a and Q18-navy-window, not recovered material opacity"))
-    public let strokeAlpha = Metric([0.09, 0.24], .guess("initial black/white outline compositing fit to P01-a, P28-a and Q18-navy-window; exact material opacity is unknown"))
-    public let hoverAlpha = Metric(0.025, .guess("Brk hover feedback; Arc updater hover has not been observed"))
-    public let pressedAlpha = Metric(0.05, .guess("Brk pressed feedback; Arc updater pressed state has not been observed"))
+    public let fillAlpha = Metric([0.025, 0.13], .guess("the pill at rest: black in light themes, white in dark themes; compositing fit to P01-a, P28-a and Q18-navy-window, not recovered material opacity"))
+    public let strokeAlpha = Metric([0.09, 0.24], .guess("the pill at rest: black/white outline compositing fit to P01-a, P28-a and Q18-navy-window; exact material opacity is unknown"))
+    /// The open card (arc-hover.png): a 24 pt title row, a hairline at its foot, the Automatic Updates row 8 below,
+    /// the button 8 below that and 8 above the card's foot: 24 + 8 + 16 + 8 + 24 + 8.
+    public let cardHeight = Metric(88.0, .anatomy("~/brk-evidence/update-panel/README.md, arc-hover.png: the card spans y 630...718 pt, the pill's foot stays"))
+    public let titleRowHeight = Metric(24.0, .anatomy("~/brk-evidence/update-panel/README.md, arc-hover.png: hairline at y 653.5...654.5, 24 below the card's top; the title keeps the pill's row"))
+    public let checkboxRowHeight = Metric(16.0, .anatomy("~/brk-evidence/update-panel/README.md, arc-hover.png: the Automatic Updates row's ink spans y 664...676, centred 40 below the card's top"))
+    public let rowGap = Metric(8.0, .anatomy("~/brk-evidence/update-panel/README.md, bin:0x1025855a0: the Automatic Updates row is padded titleHeight + 8 from the top and 8 on the sides"))
+    public let contentInset = Metric(8.0, .anatomy("~/brk-evidence/update-panel/README.md, arc-hover.png: the button spans x 16...212 in a card at x 8...220, and ends 8 above the card's foot"))
+    /// The panel's other banners (the auto-archive education card): 8 on every side, then 2 more around the card.
+    public let bannerInset = Metric(10.0, .anatomy("bin:0x10256c7f4: the education banner's .padding(8) in the panel around bin:0x10256cb34 .padding(2); de345fe719:verify/visual-pairs/run-20261103/r5-2/REPORT.md"))
+    public let buttonHeight = Metric(24.0, .anatomy("~/brk-evidence/update-panel/README.md, arc-hover.png: the button spans y 686...710 pt"))
+    public let actionRadius = Metric(6.0, .guess("the button's corner fitted to arc-hover.png (the curve reaches the straight edge 4 to 5 pt in), continuous corners"))
+    public let cardRadius = Metric(12.0, .anatomy("~/brk-evidence/update-panel/README.md, bin:0x102585c14: RoundedRectangle(cornerRadius: 12, style: .continuous) for the pill and the card"))
+    /// The open card's fill: white in light themes, black in dark ones, at this opacity.
+    public let cardFillAlpha = Metric(0.9, .anatomy("~/brk-evidence/update-panel/README.md, bin:0x102585c88: (colorScheme == .dark ? black : white).opacity(0.9), shown only while open"))
+    /// The open card's 1 pt outline, just outside its edge, in dark themes only (white); light themes have none.
+    public let cardStrokeAlpha = Metric(0.1, .anatomy("~/brk-evidence/update-panel/README.md, bin:0x102585d0c: stroke white.opacity(dark ? 0.1 : 0), lineWidth 1, padded -0.5 while open"))
+    public let cardStrokeWidth = Metric(1.0, .anatomy("~/brk-evidence/update-panel/README.md, bin:0x102585e9c: StrokeStyle(lineWidth: 1)"))
+    /// Black shadow under the open card, [light, dark], radius 2, 2 down.
+    public let cardShadowAlpha = Metric([0.05, 0.15], .anatomy("~/brk-evidence/update-panel/README.md, bin:0x102585d84: black.opacity(dark ? 0.15 : 0.05), radius 2, offset (0, 2) (bin:0x10369d050)"))
+    public let cardShadowRadius = Metric(2.0, .anatomy("~/brk-evidence/update-panel/README.md, bin:0x10369d050: shadow radius 2"))
+    public let cardShadowOffset = Metric(2.0, .anatomy("~/brk-evidence/update-panel/README.md, bin:0x10369d050: shadow offset y 2"))
+    /// The hairline under the title row, [light, dark] (black in light themes, white in dark ones), 1 pt, edge to edge.
+    public let dividerAlpha = Metric([0.06, 0.1], .guess("light fitted to arc-hover.png (238 on the 253 card, 2 px rows); dark mirrors it, not observed"))
+    public let dividerWidth = Metric(1.0, .anatomy("~/brk-evidence/update-panel/README.md, arc-hover.png: two device rows at y 1307...1308"))
+    /// The checkbox is an SF Symbol (`square`, `checkmark.square`) before the label, in the label's colour.
+    public let checkboxSymbolSize = Metric(11.0, .anatomy("~/brk-evidence/update-panel/README.md, bin:0x102585424: Image(systemName: enabled ? \"checkmark.square\" : \"square\"); arc-hover.png: the square's ink is 12 by 12 pt"))
+    public let checkboxGap = Metric(5.0, .anatomy("~/brk-evidence/update-panel/README.md, arc-hover.png: 6.5 pt of ink gap between the square and the label"))
+    /// The button: Arc's blue under a violet glow that drifts across it.
+    public let actionBlue = Metric([0.188, 0.22, 1.0], .anatomy("~/brk-evidence/update-panel/README.md, arc-hover.png: the button's base reads #3038FF at both ends"))
+    public let actionGlow = Metric([0.46, 0.22, 1.0], .anatomy("~/brk-evidence/update-panel/README.md, arc-hover.png and arc-hover-above.png: the glow peaks near #7438FF and moves between the two frames"))
+    public let actionGlowCycle = Metric(3.5, .guess("Arc's glow repeats with easeIn(duration:).delay(_:) read from view fields (bin:0x102587684), values not recovered"))
+    /// Brk's own row under the button: the release's version and its notes (Arc's card has no notes link).
+    public let notesRowHeight = Metric(16.0, .guess("Brk extra: one 11 pt line, the Automatic Updates row's height"))
+    public let notesGap = Metric(4.0, .guess("Brk extra: half the card's row gap, so the line reads as part of the button's group"))
+    public let notesFontSize = Metric(11.0, .guess("Brk extra: one size under the card's 12 pt text, in its secondary colour"))
+    /// The post-update summary (Arc: SoftwareUpdateBannerUpdateSummaryView, not captured): heart, title, version, button.
+    public let summaryHeight = Metric(130.0, .guess("Brk's summary card from PR #9: the 32 pt heart, two text lines and the button"))
+    /// A pointer resting on the pill opens the card after this long; leaving closes it at once.
+    public let openDelay = Metric(0.3, .anatomy("~/brk-evidence/update-panel/README.md, bin:0x1025847d0: hover changes pass through debounce(for: .milliseconds(300)); bin:0x1025859e4: leaving sets expanded = false at once"))
+    /// spring(response, dampingFraction) for opening and for closing.
+    public let openSpring = Metric([0.35, 0.7], .anatomy("~/brk-evidence/update-panel/README.md, bin:0x102585ab8: withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { expanded = true }"))
+    public let closeSpring = Metric([0.2, 0.9], .anatomy("~/brk-evidence/update-panel/README.md, bin:0x1025859e8, bin:0x102585ad0: .spring(response: 0.2, dampingFraction: 0.9) on closing"))
 }
 
 /// Arc's mini player at the bottom of the sidebar (`MediaControlsFeature.MediaControlsView`, read from the binary and

@@ -29,7 +29,6 @@ final class TablistView: NSScrollView {
     private let pinnedSection = FlippedView()
     private let todaySection = FlippedView()
     private let divider: DividerRowView
-    private let education: ArchiveEducationView
     private let newTab: NewTabRowView
     private let dropLine = DropLineView()
     private let topEdge = NSView()
@@ -74,7 +73,6 @@ final class TablistView: NSScrollView {
         self.dispatch = dispatch
         self.drag = drag
         divider = DividerRowView(dispatch: dispatch)
-        education = ArchiveEducationView(dispatch: dispatch)
         newTab = NewTabRowView(dispatch: dispatch)
         super.init(frame: .zero)
         document.onKey = { [weak self] command in self?.dispatch(.tabTools(command)) }
@@ -105,7 +103,6 @@ final class TablistView: NSScrollView {
             edge.isHidden = true
             addSubview(edge)
         }
-        addSubview(education)
         addSubview(currentArrow)
         currentArrow.isHidden = true
         currentArrow.action = { [weak self] in self?.scrollToCurrentRow() }
@@ -210,15 +207,8 @@ final class TablistView: NSScrollView {
         pinnedSection.frame = pinnedRect ?? CGRect(x: 0, y: spacer.maxY, width: width, height: 0)
         todaySection.frame = todayRect ?? CGRect(x: 0, y: spacer.maxY, width: width, height: 0)
         contentBottom = max(Double(f.rows.last?.rect.maxY ?? 0), folderCards.map { Double($0.rect.maxY) }.max() ?? 0)
-        education.isHidden = tools.archiveEducation == nil
-        education.render(tools.archiveEducation, palette: palette)
-        // Arc's banners are cards at the bottom of the sidebar, under the list, not in it: the rows scroll clear of it.
-        if tools.archiveEducation != nil {
-            let margin = Draw.educationMargin.value, cardWidth = max(0, width - 2 * margin)
-            let height = education.height(forWidth: cardWidth)
-            education.frame = NSRect(x: margin, y: isFlipped ? f.tablistViewport.height - margin - height : margin, width: cardWidth, height: height)
-            contentBottom += height + 2 * margin
-        }
+        // Arc's banners (the auto-archive education card) are not in the list: they stand in the sidebar's banner panel
+        // under it (SidebarView, `BannerPanelLayout`), and the list ends above them.
         document.frame = CGRect(x: 0, y: 0, width: width, height: max(contentBottom, f.tablistViewport.height))
 
         multiselection.removeAll { rows[$0] == nil }

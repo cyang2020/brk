@@ -212,7 +212,8 @@ final class LibraryFooterButton: NSButton {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         for area in trackingAreas { removeTrackingArea(area) }
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
+        // Its own bounds: an unclipped view's visible rect is the whole window (it would light whenever the pointer is in it).
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeInKeyWindow], owner: self))
     }
 
     override func mouseEntered(with event: NSEvent) { hovered = true; paint() }
@@ -334,7 +335,8 @@ final class LibraryNavCell: NSButton {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         for area in trackingAreas { removeTrackingArea(area) }
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
+        // Its own bounds: the cell does not clip, and its visible rect is the whole window (every cell would count as hovered).
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeInKeyWindow], owner: self))
     }
 
     override func mouseEntered(with event: NSEvent) {

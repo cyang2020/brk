@@ -72,6 +72,67 @@ final class UpdateBannerViewTests: XCTestCase {
         XCTAssertEqual(commands.last, .app(.help(.updateReleaseNotes)))
     }
 
+    /// Arc: a pointer resting 0.3 s on the pill opens the card upward from the pill; the list then ends at the card's top
+    /// (rows stay put); leaving closes it at once and gives the list its height back. A pointer passing over opens nothing.
+    /// About 2.3 s: a real window (1.2 s, as the other tests here) and Arc's 0.3 s hover delay waited out twice.
+    func testRestingPointerOpensTheCardOverTheListAndLeavingClosesIt() throws {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: true)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let root = WindowRootView(dispatch: { _ in })
+        window.contentView = root
+        var view = snapshot()
+        view.sidebar.update = .available(release)
+        root.render(view, frames: WindowLayout.compute(view, contentSize: size), surface: { _ in nil })
+        let banner = root.sidebar.updateBanner, list = root.sidebar.tablist
+        banner.reduceMotion = { true }
+        let pill = banner.frame, restList = list.convert(list.bounds, to: root.sidebar)
+        // The banner does not clip (the card's shadow reaches past it), so a visible-rect area would be the whole window.
+        func trackedRegions() -> [CGRect] {
+            banner.updateTrackingAreas()
+            return banner.trackingAreas.filter { $0.owner === banner }.map { $0.options.contains(.inVisibleRect) ? banner.visibleRect : $0.rect }
+        }
+        XCTAssertEqual(trackedRegions(), [banner.bounds], "the pointer is on the pill only inside it")
+        XCTAssertEqual(restList.maxY, pill.minY, accuracy: 0.5, "at rest the list ends at the pill's top (Arc pads the pill only on the sides and below)")
+        func pointer(_ type: NSEvent.EventType) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.enterExitEvent(with: type, location: banner.convert(CGPoint(x: banner.bounds.midX, y: banner.bounds.midY), to: nil),
+                                                 modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                                                 eventNumber: 0, trackingNumber: 0, userData: nil))
+        }
+        // XCTest's wait keeps the run loop turning for the whole time (a bare run(until:) returns at once when nothing
+        // is scheduled), so the hover delay's task and the sidebar's deferred layout get to run.
+        func spin(_ seconds: Double) {
+            let elapsed = expectation(description: "\(seconds) s")
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { elapsed.fulfill() }
+            wait(for: [elapsed], timeout: seconds + 2)
+        }
+        /// Turns the run loop until `done` holds (the hover delay's task and the sidebar's deferred layout run late on a busy Mac).
+        func spin(until done: () -> Bool) {
+            for _ in 0..<60 where !done() { spin(0.05) }
+        }
+        banner.mouseEntered(with: try pointer(.mouseEntered))
+        spin(0.1)
+        banner.mouseExited(with: try pointer(.mouseExited))
+        spin(0.25)
+        XCTAssertFalse(banner.expanded, "a pointer passing over the pill does not open it")
+        banner.mouseEntered(with: try pointer(.mouseEntered))
+        XCTAssertFalse(banner.expanded)
+        spin { banner.expanded && list.convert(list.bounds, to: root.sidebar).maxY < pill.minY }
+        XCTAssertTrue(banner.expanded)
+        let card = banner.frame, openList = list.convert(list.bounds, to: root.sidebar)
+        XCTAssertEqual(card.height, UpdateBannerView.openHeight(for: .available(release)))
+        XCTAssertEqual(card.maxY, pill.maxY)
+        XCTAssertEqual(openList.maxY, card.minY, accuracy: 0.5, "the open card takes its height from the list")
+        XCTAssertEqual(openList.minY, restList.minY, accuracy: 0.5, "rows stay where they were")
+        XCTAssertEqual(trackedRegions(), [banner.bounds], "the open card is hovered over its whole height, not beyond")
+        banner.mouseExited(with: try pointer(.mouseExited))
+        XCTAssertFalse(banner.expanded, "leaving closes the card at once")
+        spin { list.convert(list.bounds, to: root.sidebar).maxY >= pill.minY - 0.5 }
+        XCTAssertEqual(banner.frame, pill)
+        XCTAssertEqual(list.convert(list.bounds, to: root.sidebar).maxY, restList.maxY, accuracy: 0.5)
+    }
+
     func testProgressInvalidatesTheSidebarAndBusyStatesCannotStartAnotherInstall() {
         _ = NSApplication.shared
         var commands: [Command] = []

@@ -44,6 +44,8 @@ public final class SidebarView: NSView {
     /// Arc's mini players, between the list and the dock.
     let miniPlayers: MiniPlayerStackView
     let updateBanner: UpdateBannerView
+    /// Arc's auto-archive education banner, in the banner panel above the update pill (bin:0x10256c7f4).
+    let education: ArchiveEducationView
     /// The Library button's flyout over the bottom of the column and its badge in the dock (Arc: `HomeBadging`).
     let libraryFlyout: LibraryFlyoutView
     /// The edge views straddle or sit outside the column, so they live beside it in the root (installed when this
@@ -53,6 +55,8 @@ public final class SidebarView: NSView {
     private var last: Slice?
     /// The last render's input: a drag's grid layout renders the column again from it.
     private var lastRender: (snapshot: WindowSnapshot, frames: WindowFrames, palette: Palette)?
+    /// The banner panel of the last render; the neighbouring pages end their lists at the same place.
+    private var lastPanel = BannerPanel()
     /// The grid's layout while a drag holds one (DragController). Not in the document.
     private(set) var favoritesDrag: FavoritesDrag?
     private var floatingWatch: FloatingSidebarTracking?
@@ -130,6 +134,8 @@ public final class SidebarView: NSView {
         var aiToggle: AIToggleSnapshot?
         var libraryFlyout: LibraryFlyoutSnapshot?
         var update: UpdatePresentation?
+        /// The update card is open: the list ends at its top.
+        var updateOpen: Bool
     }
 
     public init(dispatch: @escaping Dispatch) {
@@ -143,14 +149,15 @@ public final class SidebarView: NSView {
         dock = DockView(dispatch: dispatch)
         miniPlayers = MiniPlayerStackView(dispatch: dispatch)
         updateBanner = UpdateBannerView(dispatch: dispatch)
+        education = ArchiveEducationView(dispatch: dispatch)
         libraryFlyout = LibraryFlyoutView(dispatch: dispatch)
         resizeHandle = ResizeHandleView(dispatch: dispatch)
         revealStrip = RevealStripView(dispatch: dispatch)
         super.init(frame: .zero)
         wantsLayer = true
-        for view in [backdrop, header, urlPill, pagesClip, dock, miniPlayers, updateBanner, libraryFlyout, edgeFeedback] as [NSView] { addSubview(view) }
+        for view in [backdrop, header, urlPill, pagesClip, dock, miniPlayers, education, updateBanner, libraryFlyout, edgeFeedback] as [NSView] { addSubview(view) }
         dock.addSubview(libraryFlyout.badge)
-        libraryFlyout.faded = [pagesClip, miniPlayers, updateBanner]
+        libraryFlyout.faded = [pagesClip, miniPlayers, education, updateBanner]
         libraryFlyout.host = self
         pagesClip.clipsToBounds = true
         pagesClip.addSubview(strip)
@@ -167,6 +174,8 @@ public final class SidebarView: NSView {
         }
         pager.onSettled = { [weak self] in self?.pagerSettled() }
         miniPlayers.onHoverChange = { [weak self] _ in self?.renderAfterDrag() }
+        // The card may open or close inside a render (a new presentation, the summary opening by itself): lay out after it.
+        updateBanner.onExpandedChange = { [weak self] in DispatchQueue.main.async { self?.renderAfterDrag() } }
         dock.plusMenuChanged = { [weak self] open in self?.plusMenuOpen = open }
         dock.spaceDrop = { [weak self] space, point in self?.panelSpaceDrop?(space, point) }
         dock.spaceDropEnded = { [weak self] in self?.panelDropEnded?() }
@@ -253,7 +262,7 @@ public final class SidebarView: NSView {
                           floats: frames.sidebarFloats, resizeHandle: frames.resizeHandle, revealStrip: frames.revealStrip, palette: palette,
                           newTabCurrent: newTabCurrent, creatingSpace: snapshot.dialog == .newSpace, favoritesDrag: favoritesDrag,
                           miniPlayers: snapshot.miniPlayers, miniPlayerHover: miniPlayers.hover, aiToggle: snapshot.aiToggle,
-                          libraryFlyout: snapshot.libraryFlyout, update: snapshot.sidebar.update)
+                          libraryFlyout: snapshot.libraryFlyout, update: snapshot.sidebar.update, updateOpen: updateBanner.expanded)
         // The Library opening (a swipe holds it mid-move) or Create a Space switches the flyout off without rendering the
         // column again: a full render in the middle of a page move would put the pages back where they rest.
         let flyoutOn = !libraryOpen(snapshot) && snapshot.dialog != .newSpace
@@ -274,6 +283,11 @@ public final class SidebarView: NSView {
         }
         var f = FavoritesGrid.applying(favoritesDrag, to: rest, favorites: snapshot.favorites)
         if let hover = miniPlayers.hover { f = MiniPlayerLayout.applying(snapshot.miniPlayers.map(\.tab), hover: hover, to: f) }
+        // Arc's banner panel: the open update card and the education card take their height from the list.
+        let updatePill = f.updateBanner
+        let panel = bannerPanel(snapshot, frames: f, palette: palette)
+        lastPanel = panel
+        if panel != BannerPanel() { f = BannerPanelLayout.applying(panel, to: f, players: snapshot.miniPlayers.map(\.tab), hover: miniPlayers.hover) }
         isHidden = false
         identify(frames.sidebarFloats ? .floatingSidebar : .sidebar)
         place(f.frame, slideIn: previous != nil && previous?.frames == nil && !pager.isActive)
@@ -307,7 +321,12 @@ public final class SidebarView: NSView {
         miniPlayers.isHidden = slice.creatingSpace || snapshot.miniPlayers.isEmpty
         miniPlayers.render(snapshot.miniPlayers, frames: f.miniPlayers, origin: f.frame.origin, palette: palette,
                            animated: previous != nil && previous?.miniPlayerHover != miniPlayers.hover)
-        updateBanner.place(at: f.updateBanner.map(local) ?? .zero)
+        education.isHidden = f.banner == nil
+        if let banner = f.banner {
+            education.render(snapshot.tabTools.archiveEducation, palette: palette)
+            education.frame = local(banner)
+        }
+        updateBanner.place(at: updatePill.map(local) ?? .zero)
         updateBanner.render(f.updateBanner == nil ? nil : slice.update, palette: palette, automaticUpdates: snapshot.sidebar.automaticUpdates)
         dock.frame = local(f.dock)
         dock.hapticsEnabled = snapshot.sidebar.hapticsEnabled
@@ -399,7 +418,7 @@ public final class SidebarView: NSView {
             let width = f.frame.width
             view.frame = CGRect(x: previous ? -width : width, y: 0, width: width, height: f.frame.height)
             view.render(page, sharesFavorites: page.favorites.root == snapshot.favorites.root, column: f.frame, snapshot: snapshot, now: snapshot.now,
-                        miniPlayerHover: miniPlayers.hover)
+                        miniPlayerHover: miniPlayers.hover, panel: lastPanel)
         }
     }
 
@@ -527,6 +546,18 @@ public final class SidebarView: NSView {
 
     /// The drag is over: nothing renders until `renderAfterDrag`, so its command reaches the grid first.
     func clearFavoritesDrag() { favoritesDrag = nil }
+
+    /// What the banner panel holds beyond the update pill at rest: the open card, the education card (not while Create a
+    /// Space takes the column).
+    private func bannerPanel(_ snapshot: WindowSnapshot, frames: SidebarFrames, palette: Palette) -> BannerPanel {
+        var panel = BannerPanel()
+        if updateBanner.expanded, frames.updateBanner != nil { panel.updateCard = UpdateBannerView.openHeight(for: snapshot.sidebar.update) }
+        if snapshot.tabTools.archiveEducation != nil, snapshot.dialog != .newSpace, !SidebarLayout.listsOwnTabs(snapshot.kind) {
+            education.render(snapshot.tabTools.archiveEducation, palette: palette)
+            panel.banner = education.height(forWidth: max(0, frames.frame.width - 2 * Metrics.updateBanner.bannerInset.value))
+        }
+        return panel
+    }
 
     func renderAfterDrag() {
         if let lastRender { render(lastRender.snapshot, frames: lastRender.frames, palette: lastRender.palette) }
