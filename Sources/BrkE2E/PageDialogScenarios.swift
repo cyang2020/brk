@@ -5,12 +5,14 @@ import CoreGraphics
 import Foundation
 
 /// Chromium's own dialogs that hang on a page: the passkey dialog, the HTTP sign-in prompt and print preview
-/// (constrained_window), and FedCM's account chooser (TabDialogManager). Until 0.0.52 Brk's window gave Chromium no
-/// place to hang them and each one quit Brk (issue #10: ChatGPT's passkey and "Sign in with Google"). Real keys and
-/// clicks answer them, as a person would; Brk must still be running after each.
+/// (constrained_window), FedCM's account chooser (TabDialogManager), FedCM's button-flow chooser and a device picker.
+/// Until 0.0.52 Brk's window gave Chromium no place to hang the first ones and each quit Brk (issue #10: ChatGPT's
+/// passkey and "Sign in with Google"); the button-flow chooser and the device pickers still quit 0.0.53, because they
+/// looked for Chrome's own Views window and toolbar. Real keys and clicks answer them, as a person would; Brk must
+/// still be running after each.
 enum PageDialogScenarios {
     static let all = [
-        Scenario("PageDialogs", "passkey, HTTP sign-in, FedCM and print dialogs open over their page without quitting Brk; real keys and clicks answer them, closing the tab under one takes it along, and one follows its page to another window",
+        Scenario("PageDialogs", "passkey, HTTP sign-in, FedCM (prompt and button flow), USB picker and print dialogs open over their page without quitting Brk; real keys and clicks answer them, closing the tab under one takes it along, and one follows its page to another window",
                  dialogs),
     ]
 
@@ -45,6 +47,18 @@ enum PageDialogScenarios {
         }
         func waitClosed(_ what: String) throws {
             try app.waitUntil("\(what) closes", timeout: 8) { try dialogWindow(app, pid: pid, window: window) == nil }
+        }
+        // A real click on the page at a fraction of its card (the fixture pages' button fills the top half).
+        func clickPage(_ fx: Double, _ fy: Double) throws {
+            let card = try cardOnScreen(app, window)
+            let point = CGPoint(x: card.minX + card.width * fx, y: card.minY + card.height * fy)
+            guard PhysicalPointer.frontmost(at: point)?.pid == pid else { throw Check(description: "another window covers the page at \(point)") }
+            try PhysicalPointer.post(clickAt: point)
+        }
+        func clickDialog(_ dialog: CGRect, _ fx: Double, _ fy: Double, _ what: String) throws {
+            let point = CGPoint(x: dialog.minX + dialog.width * fx, y: dialog.minY + dialog.height * fy)
+            guard PhysicalPointer.frontmost(at: point)?.pid == pid else { throw Check(description: "another window covers \(what) at \(point)") }
+            try PhysicalPointer.post(clickAt: point)
         }
         // A person clicks the dialog before typing into it. The click lands well inside its frame (the window's edge
         // is a transparent border), on no control, and the dialog then has the keyboard, not the Brk window.
@@ -96,6 +110,36 @@ enum PageDialogScenarios {
         try PhysicalPointer.post(clickAt: continueButton)
         try app.waitUntil("Continue signs the page in through FedCM (\(try title()))", timeout: 10) { try title() == "result: token fixture-token" }
         try waitClosed("the account chooser")
+
+        // 3b. FedCM's button flow (a page's own "Sign in with ..." button, identity mode "active"): its modal chooser hung
+        // on the Views widget of the page's window, which a Brk window does not have, and quit 0.0.53. A real click on the
+        // page's button opens it over the page; its Cancel (bottom right) ends the request.
+        _ = try open("/dialog-fedcm-button.html")
+        try clickPage(0.5, 0.25)
+        _ = try waitForDialog("FedCM's button-flow chooser")
+        // It opens on a loading step and turns into the chooser in the same window once the accounts arrive.
+        app.sleep(1)
+        guard let modal = try dialogWindow(app, pid: pid, window: window) else { throw Check(description: "the button flow's chooser closed by itself") }
+        _ = try app.screenshot("3b-fedcm-button")
+        try clickDialog(modal, 0.87, 0.89, "the chooser's Cancel")
+        try app.waitUntil("Cancel ends the button flow's request (\(try title()))", timeout: 10) {
+            let now = try title()
+            return now.hasPrefix("result: ") && !now.hasPrefix("result: token")
+        }
+        try waitClosed("the button flow's chooser")
+
+        // 3c. A device picker (WebUSB here; WebHID, Web Serial and Web Bluetooth share it): it looked for Chrome's toolbar
+        // to point at and quit 0.0.53. It opens at the page's top left; its Cancel rejects the request.
+        _ = try open("/dialog-usb.html")
+        try clickPage(0.5, 0.25)
+        let picker = try waitForDialog("the USB device picker")
+        let pickerPage = try cardOnScreen(app, window)
+        try expect(abs(picker.minX - (pickerPage.minX + 40)) < 30 && abs(picker.minY - pickerPage.minY) < 40,
+                   "the device picker opens at the page's top left: picker \(picker), page \(pickerPage)")
+        _ = try app.screenshot("3c-usb-picker")
+        try clickDialog(picker, 0.65, 0.91, "the picker's Cancel")
+        try app.waitUntil("Cancel rejects the device request (\(try title()))", timeout: 10) { try title() == "result: NotFoundError" }
+        try waitClosed("the device picker")
 
         // 4. window.print(): Chromium's print preview, closed with Escape.
         _ = try open("/dialog-print.html")
@@ -210,6 +254,10 @@ enum PageDialogFixture {
         func page(_ name: String, _ script: String) -> Data {
             reply("<!doctype html><meta charset=\"utf-8\"><title>\(name): waiting</title><h1>\(name)</h1><script>\(script)</script>")
         }
+        // A page whose request starts from a click on a button filling its top half (a user gesture is required).
+        func buttonPage(_ name: String, _ script: String) -> Data {
+            reply("<!doctype html><meta charset=\"utf-8\"><title>\(name): waiting</title><button id=\"go\" style=\"position:fixed;left:0;top:0;width:100%;height:50%;font-size:32px\">\(name)</button><script>document.getElementById('go').onclick = () => { \(script) };</script>")
+        }
         func settle(_ call: String, _ result: String) -> String {
             "(async () => { try { \(call); document.title = 'result: ' + \(result); } catch (e) { document.title = 'result: ' + e.name; } })();"
         }
@@ -223,6 +271,11 @@ enum PageDialogFixture {
             return reply("<!doctype html><title>sign-in: refused</title>", status: "401 Unauthorized", extra: "WWW-Authenticate: Basic realm=\"Brk fixture\"\r\n")
         case "/dialog-fedcm.html":
             return page("fedcm", settle("await navigator.login.setStatus('logged-in'); const credential = await navigator.credentials.get({identity: {providers: [{configURL: location.origin + '/fedcm/config.json', clientId: 'brk-test'}]}})", "'token ' + credential.token"))
+        case "/dialog-fedcm-button.html":
+            // Its own account: step 3 signed the first one in, and a returning account gets a different chooser.
+            return buttonPage("fedcm-button", settle("await navigator.login.setStatus('logged-in'); const credential = await navigator.credentials.get({identity: {mode: 'active', providers: [{configURL: location.origin + '/fedcm-button/config.json', clientId: 'brk-test'}]}})", "'token ' + credential.token"))
+        case "/dialog-usb.html":
+            return buttonPage("usb", settle("await navigator.usb.requestDevice({filters: []})", "'resolved'"))
         case "/dialog-print.html":
             return page("print", "setTimeout(() => { window.print(); document.title = 'result: print returned'; }, 300);")
         case "/.well-known/web-identity":
@@ -230,6 +283,11 @@ enum PageDialogFixture {
         case "/fedcm/config.json":
             return json(["accounts_endpoint": "/fedcm/accounts", "client_metadata_endpoint": "/fedcm/client_metadata",
                          "id_assertion_endpoint": "/fedcm/assert", "login_url": "/fedcm/login"])
+        case "/fedcm-button/config.json":
+            return json(["accounts_endpoint": "/fedcm-button/accounts", "client_metadata_endpoint": "/fedcm/client_metadata",
+                         "id_assertion_endpoint": "/fedcm/assert", "login_url": "/fedcm/login"])
+        case "/fedcm-button/accounts":
+            return json(["accounts": [["id": "2", "email": "button@example.com", "name": "Brk Button", "given_name": "Brk", "approved_clients": [String]()]]])
         case "/fedcm/accounts":
             return json(["accounts": [["id": "1", "email": "test@example.com", "name": "Brk Test", "given_name": "Brk", "approved_clients": [String]()]]])
         case "/fedcm/client_metadata":

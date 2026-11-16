@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Mon, 16 Nov 2026 03:35:29 +0800
+Subject: [PATCH] Give FedCM's sign-in dialog a parent in Brk windows
+
+FedCM's button flow (identity mode "active") and its loading step open
+a tab-modal dialog parented to the Views widget of the page's top-level
+window. A Brk window is a plain NSWindow, so that widget was null and
+Brk quit as soon as a page's "Sign in with ..." button called
+navigator.credentials.get() in active mode (issue #10, after 0.0.52).
+
+When the window has no Views widget, use the tab's dialog host widget
+(TabDialogManager::GetHostWidget), which in Chrome is that same browser
+widget and in Brk is the window's dialog host from patch 0035.
+---
+ chrome/browser/ui/views/webid/BUILD.gn                    | 1 +
+ .../views/webid/fedcm_account_selection_view_desktop.cc   | 8 ++++++++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/chrome/browser/ui/views/webid/BUILD.gn b/chrome/browser/ui/views/webid/BUILD.gn
+index 948f34e2a6e66ac983aae8c9c5ea8ec6433180a4..79521e96b3439c0a15ee3103b87ee3aa1f1cb30d 100644
+--- a/chrome/browser/ui/views/webid/BUILD.gn
++++ b/chrome/browser/ui/views/webid/BUILD.gn
+@@ -42,6 +42,7 @@ source_set("webid") {
+ 
+   deps = [
+     "//base",
++    "//brk:embedding",
+     "//chrome/browser/actor",
+     "//chrome/browser/image_fetcher",
+     "//chrome/browser/net",
+diff --git a/chrome/browser/ui/views/webid/fedcm_account_selection_view_desktop.cc b/chrome/browser/ui/views/webid/fedcm_account_selection_view_desktop.cc
+index 7e0fb256dc8299cb8fd30935e0ffe31c5e739abf..40962bad30af0c848b3742b45ffdcf4c8d006fa8 100644
+--- a/chrome/browser/ui/views/webid/fedcm_account_selection_view_desktop.cc
++++ b/chrome/browser/ui/views/webid/fedcm_account_selection_view_desktop.cc
+@@ -13,6 +13,7 @@
+ #include "base/metrics/histogram_functions.h"
+ #include "base/metrics/histogram_macros.h"
+ #include "base/strings/utf_string_conversions.h"
++#include "brk/embedding/embedding.h"
+ #include "chrome/browser/actor/actor_util.h"
+ #include "chrome/browser/net/system_network_context_manager.h"
+ #include "chrome/browser/ui/actions/chrome_action_id.h"
+@@ -1175,6 +1176,13 @@ std::unique_ptr<views::Widget> FedCmAccountSelectionView::CreateDialogWidget() {
+         web_contents()->GetTopLevelNativeWindow();
+     views::Widget* top_level_widget =
+         views::Widget::GetWidgetForNativeWindow(top_level_native_window);
++    // A Brk window is a plain NSWindow, not a Views widget. Its page dialogs
++    // hang on the tab's dialog host, which in Chrome is this same browser
++    // widget. A null here quit Brk on FedCM's button flow (issue #10).
++    if (brkcore::IsEmbedded() && !top_level_widget) {
++      top_level_widget =
++          tab_->GetTabFeatures()->tab_dialog_manager()->GetHostWidget();
++    }
+     dialog_widget = base::WrapUnique(views::DialogDelegate::CreateDialogWidget(
+         widget_delegate_.get()->AsDialogDelegate(),
+         /*context=*/gfx::NativeWindow(),

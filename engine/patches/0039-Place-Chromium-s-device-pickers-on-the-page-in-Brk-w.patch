@@ -1,0 +1,130 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Mon, 16 Nov 2026 04:13:17 +0800
+Subject: [PATCH] Place Chromium's device pickers on the page in Brk windows
+
+WebUSB, WebHID, Web Serial and Web Bluetooth pickers (and the File
+System Access restore-permission prompt and look-alike-domain safety
+tips) look for their anchor on Chrome's BrowserView: the location
+icon, the custom tab bar, the app menu button. A Brk window has no
+BrowserView, so GetPageInfoAnchorConfiguration dereferenced null and
+navigator.usb/hid/serial/bluetooth.requestDevice() quit Brk.
+
+With no BrowserView, return no anchor and place the bubble at the top
+left of the page it is for (GetPageInfoAnchorRect), as Chrome places
+it at the top left of its contents when there is no toolbar. The
+WebAuthn ambient sign-in bubble, which reads the toolbar the same
+way, is not shown in Brk windows.
+---
+ chrome/browser/ui/views/BUILD.gn              |  3 +++
+ .../ui/views/bubble_anchor_util_views.cc      | 21 +++++++++++++++++++
+ chrome/browser/ui/webauthn/BUILD.gn           |  1 +
+ .../ambient/ambient_signin_controller.cc      |  8 ++++++-
+ 4 files changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/chrome/browser/ui/views/BUILD.gn b/chrome/browser/ui/views/BUILD.gn
+index 3125abc0c367ef575694473a5d098adc1b1c64f0..6ca03606ec8696368c8c484ab0e6209077dd7429 100644
+--- a/chrome/browser/ui/views/BUILD.gn
++++ b/chrome/browser/ui/views/BUILD.gn
+@@ -102,6 +102,9 @@ source_set("bubble_anchor_util_views_impl") {
+   ]
+   deps = [
+     "//base",
++    "//brk:embedding",
++    "//components/tabs:public",
++    "//content/public/browser",
+     "//build:buildflag_header_h",
+     "//chrome/browser/ui:browser_element_identifiers",
+     "//chrome/browser/ui:browser_window_header",
+diff --git a/chrome/browser/ui/views/bubble_anchor_util_views.cc b/chrome/browser/ui/views/bubble_anchor_util_views.cc
+index bd418d544526cbb657425b8788c3f999d065f228..6915155b78f40b0e253e6d2922de2fec3e773db0 100644
+--- a/chrome/browser/ui/views/bubble_anchor_util_views.cc
++++ b/chrome/browser/ui/views/bubble_anchor_util_views.cc
+@@ -5,6 +5,7 @@
+ #include "chrome/browser/ui/views/bubble_anchor_util_views.h"
+ 
+ #include "base/feature_list.h"
++#include "brk/embedding/embedding.h"
+ #include "build/build_config.h"
+ #include "chrome/browser/ui/browser_element_identifiers.h"
+ #include "chrome/browser/ui/browser_window.h"
+@@ -23,6 +24,8 @@
+ #include "chrome/browser/ui/webui/webui_embedding_context.h"
+ #include "components/content_settings/core/common/features.h"
+ #include "components/payments/core/features.h"
++#include "components/tabs/public/tab_interface.h"
++#include "content/public/browser/web_contents.h"
+ #include "ui/base/interaction/element_highlighter.h"
+ #include "ui/views/bubble/bubble_border.h"
+ #include "ui/views/interaction/element_tracker_views.h"
+@@ -77,6 +80,13 @@ AnchorConfiguration GetPageInfoAnchorConfiguration(
+     }
+   }
+ 
++  // A Brk window has no BrowserView: no location icon, custom tab bar or app
++  // menu button to point at. Callers then place the bubble at
++  // GetPageInfoAnchorRect(). Dereferencing it quit Brk on every device picker.
++  if (brkcore::IsEmbedded() && !browser_view) {
++    return {};
++  }
++
+   if (anchor == Anchor::kLocationBar &&
+       browser_view->GetIsPictureInPictureType()) {
+     auto* frame_view = static_cast<PictureInPictureBrowserFrameView*>(
+@@ -183,6 +193,17 @@ gfx::Rect GetPageInfoAnchorRect(BrowserWindowInterface* browser) {
+   DCHECK(GetPageInfoAnchorConfiguration(browser).anchor.IsNull());
+ 
+   BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);
++  // A Brk window: the top left of the page the bubble is for, as Chrome uses
++  // the top left of its contents when there is no toolbar.
++  if (brkcore::IsEmbedded() && !browser_view) {
++    tabs::TabInterface* tab = browser->GetActiveTabInterface();
++    const gfx::Rect page =
++        tab && tab->GetContents()
++            ? tab->GetContents()->GetContainerBounds()
++            : BrowserWindow::FromBrowser(browser)->GetBounds();
++    return gfx::Rect(page.origin() + gfx::Vector2d(kNoToolbarLeftOffset, 0),
++                     gfx::Size());
++  }
+   // Get position in view (taking RTL UI into account).
+   int x_within_browser_view = browser_view->GetMirroredXInView(
+       bubble_anchor_util::kNoToolbarLeftOffset);
+diff --git a/chrome/browser/ui/webauthn/BUILD.gn b/chrome/browser/ui/webauthn/BUILD.gn
+index 578956648523df73d65cde60ecadcf931076ae48..3753cb61d8f378326246643c323dde53f14046ab 100644
+--- a/chrome/browser/ui/webauthn/BUILD.gn
++++ b/chrome/browser/ui/webauthn/BUILD.gn
+@@ -68,6 +68,7 @@ source_set("impl") {
+     deps = [
+       ":webauthn",
+       "//base",
++      "//brk:embedding",
+       "//chrome/app:generated_resources",
+       "//chrome/app/vector_icons",
+       "//chrome/browser:resources",
+diff --git a/chrome/browser/ui/webauthn/ambient/ambient_signin_controller.cc b/chrome/browser/ui/webauthn/ambient/ambient_signin_controller.cc
+index 5d10952685ab6d7e051304dee3d8fe683b9ace2d..fc3b0aafd62d91ca8d943fed1a72af4c5465cfba 100644
+--- a/chrome/browser/ui/webauthn/ambient/ambient_signin_controller.cc
++++ b/chrome/browser/ui/webauthn/ambient/ambient_signin_controller.cc
+@@ -14,6 +14,7 @@
+ #include "base/functional/bind.h"
+ #include "base/functional/callback.h"
+ #include "base/memory/weak_ptr.h"
++#include "brk/embedding/embedding.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+ #include "chrome/browser/ui/page_action/action_ids.h"
+@@ -116,8 +117,13 @@ void AmbientSigninController::ShowBubbleView() {
+   }
+   BrowserWindowInterface* browser =
+       GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(web_contents);
++  BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);
++  // A Brk window has no toolbar to anchor the bubble to.
++  if (brkcore::IsEmbedded() && !browser_view) {
++    return;
++  }
+   ToolbarButtonProvider* button_provider =
+-      BrowserView::GetBrowserViewForBrowser(browser)->toolbar_button_provider();
++      browser_view->toolbar_button_provider();
+   auto anchor = button_provider->GetBubbleAnchor(std::nullopt);
+ 
+   if (!ambient_signin_bubble_view_) {
