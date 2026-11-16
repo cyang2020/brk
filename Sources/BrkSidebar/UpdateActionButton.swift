@@ -1,28 +1,32 @@
 import AppKit
 import BrkBase
 
+/// The card's button: Arc's blue (#3038FF) under a violet glow that drifts across it while the card is open
+/// (arc-hover.png, arc-hover-above.png), 24 pt tall, white 12 pt title.
 @MainActor
 final class UpdateActionButton: NSButton {
     private let gradient = CAGradientLayer()
     var reduceMotion = false
     var animates = false { didSet { updateMotion() } }
+    override var isEnabled: Bool { didSet { alphaValue = isEnabled ? 1 : 0.55 } }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         isBordered = false
         wantsLayer = true
-        layer?.cornerRadius = Metrics.updateBanner.actionRadius.value
+        let u = Metrics.updateBanner
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = u.actionRadius.value
         layer?.masksToBounds = true
-        layer?.borderWidth = 0.75
-        layer?.borderColor = NSColor(white: 1, alpha: 0.25).cgColor
-        gradient.colors = [NSColor(red: 0.16, green: 0.02, blue: 0.22, alpha: 1).cgColor,
-                           NSColor(red: 0.42, green: 0.24, blue: 0.48, alpha: 1).cgColor,
-                           NSColor(red: 0.18, green: 0.04, blue: 0.25, alpha: 1).cgColor]
-        gradient.locations = [0, 0.5, 1]
-        gradient.startPoint = CGPoint(x: 0, y: 0)
-        gradient.endPoint = CGPoint(x: 1, y: 1)
+        let blue = u.actionBlue.value, glow = u.actionGlow.value
+        let base = NSColor(srgbRed: blue[0], green: blue[1], blue: blue[2], alpha: 1).cgColor
+        layer?.backgroundColor = base
+        gradient.colors = [base, NSColor(srgbRed: glow[0], green: glow[1], blue: glow[2], alpha: 1).cgColor, base]
+        gradient.locations = [0.1, 0.5, 0.9]
+        gradient.startPoint = CGPoint(x: 0, y: 0.5)
+        gradient.endPoint = CGPoint(x: 1, y: 0.5)
         layer?.insertSublayer(gradient, at: 0)
-        font = .systemFont(ofSize: 12, weight: .semibold)
+        font = .systemFont(ofSize: u.fontSize.value)
         contentTintColor = .white
     }
     @available(*, unavailable)
@@ -37,9 +41,9 @@ final class UpdateActionButton: NSButton {
         guard animates, !reduceMotion, window != nil else { gradient.removeAllAnimations(); return }
         guard gradient.animation(forKey: "glow") == nil else { return }
         let animation = CABasicAnimation(keyPath: "locations")
-        animation.fromValue = [-0.3, 0.1, 0.9]
-        animation.toValue = [0.1, 0.9, 1.3]
-        animation.duration = 3.5
+        animation.fromValue = [-0.3, 0.1, 0.5]
+        animation.toValue = [0.5, 0.9, 1.3]
+        animation.duration = Metrics.updateBanner.actionGlowCycle.value
         animation.autoreverses = true
         animation.repeatCount = .infinity
         animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
@@ -48,8 +52,52 @@ final class UpdateActionButton: NSButton {
     override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); updateMotion() }
     override func highlight(_ flag: Bool) {
         super.highlight(flag)
-        alphaValue = flag ? 0.75 : 1
+        alphaValue = flag ? 0.75 : (isEnabled ? 1 : 0.55)
     }
+}
+
+/// Arc's Automatic Updates row: an SF Symbol square (`checkmark.square` when on) before the label, both in the card's
+/// secondary colour (bin:0x102585424). A toggle button, so a click, Space and VoiceOver flip it like a checkbox.
+@MainActor
+final class UpdateCheckbox: NSButton {
+    var ink: NSColor = .secondaryLabelColor { didSet { needsDisplay = true } }
+
+    init(title: String) {
+        super.init(frame: .zero)
+        self.title = title
+        setButtonType(.toggle)
+        isBordered = false
+        font = .systemFont(ofSize: Metrics.updateBanner.fontSize.value)
+        setAccessibilityRole(.checkBox)
+    }
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    private var symbol: NSImage? {
+        let name = state == .on ? "checkmark.square" : "square"
+        let config = NSImage.SymbolConfiguration(pointSize: Metrics.updateBanner.checkboxSymbolSize.value, weight: .regular)
+            .applying(.init(paletteColors: [ink]))
+        return NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config)
+    }
+    private var label: NSAttributedString {
+        NSAttributedString(string: title, attributes: [.font: font ?? .systemFont(ofSize: Metrics.updateBanner.fontSize.value), .foregroundColor: ink])
+    }
+    override var intrinsicContentSize: NSSize {
+        let image = symbol?.size ?? .zero, text = label.size()
+        return NSSize(width: ceil(image.width + Metrics.updateBanner.checkboxGap.value + text.width), height: ceil(max(image.height, text.height)))
+    }
+    override var state: NSControl.StateValue { didSet { needsDisplay = true; setAccessibilityValue(state == .on) } }
+    override func draw(_ dirtyRect: NSRect) {
+        let text = label, size = text.size()
+        var x = 0.0
+        if let image = symbol {
+            image.draw(in: CGRect(x: 0, y: (bounds.height - image.size.height) / 2, width: image.size.width, height: image.size.height))
+            x = image.size.width + Metrics.updateBanner.checkboxGap.value
+        }
+        text.draw(at: CGPoint(x: x, y: (bounds.height - size.height) / 2))
+    }
+    override var focusRingMaskBounds: NSRect { bounds }
+    override func drawFocusRingMask() { NSBezierPath(roundedRect: bounds, xRadius: 3, yRadius: 3).fill() }
 }
 
 @MainActor
