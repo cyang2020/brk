@@ -1,0 +1,138 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Mon, 16 Nov 2026 13:05:34 +0800
+Subject: [PATCH] Honour a Leave only for the close it leads to, and keep
+ closed Brk pages out of tab restore
+
+-confirmLeaving:'s YES let every later -close skip beforeunload until the next cross-document commit or question. When the shell
+asked two pages (a window close, a quit) and the second said Stay, nothing closed and the first kept that YES: a later close of
+it, off screen, skipped its beforeunload, the data loss issue #11 is about. Brk's 2 s limit for a page that never answered also
+counted as a finished beforeunload. Now the YES covers only a -close made inside its completion, and the limit's YES covers none.
+
+After its unload handlers ran, Chrome's CloseContents closed a Brk page with add_to_history, so Chromium's tab restore service
+wrote every closed page's navigation entries to Sessions/Tabs_* in normal profiles. Brk has its own archive of closed tabs and no
+way to clear Chromium's, so Brk's Clear History never reached them.
+
+The embedding interface is version 4: the app calls -confirmLeaving: and hasBeforeUnloadHandler without checking for them.
+---
+ brk/browser/brk_application.mm                |  3 +-
+ brk/browser/brk_web_contents.mm               | 34 +++++++++++--------
+ .../browser_web_contents_delegate.cc          |  4 ++-
+ 3 files changed, 24 insertions(+), 17 deletions(-)
+
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index 9fb6ae0f734d996e97f444c5aa4a7c4f8a887eee..1cdffa0d4bc99441a2c53a757f13701ecfc09708 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -87,7 +87,8 @@ NSString* TaskKind(task_manager::Task::Type type) {
+   return base::SysUTF8ToNSString(std::string(version_info::GetVersionNumber()));
+ }
+ 
+-- (NSUInteger)embeddingInterfaceVersion { return 3; }
++// 4: -[BrkCoreWebContents confirmLeaving:] and hasBeforeUnloadHandler, which the app calls without checking for them.
++- (NSUInteger)embeddingInterfaceVersion { return 4; }
+ 
+ - (void)setArgc:(int)argc argv:(const char* const*)argv {
+   // SAFETY: argv has argc entries, as for main().
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index 5375215e8241bc0b2a3d4034c6915159b7ff1f38..ef3e0a1f7c2838be2080162e5d1c224954f1245c 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -163,20 +163,26 @@ class BrkPage : public content::WebContentsObserver,
+   bool closing_by_shell() const { return closing_by_shell_; }
+   void set_closing_by_shell() { closing_by_shell_ = true; }
+   // -confirmLeaving: ran the page's beforeunload: Chromium's answer comes back through BeforeUnloadAnsweredHook, which keeps it
+-  // from going on to the page's unload. A YES lets the -close that follows skip beforeunload, as Chrome's close after Leave does.
++  // from going on to the page's unload. A YES whose beforeunload finished lets a -close made inside the answer skip beforeunload,
++  // as Chrome's close after Leave does. Only that close: when the shell closes the page later, or not at all (another page it
++  // asked with this one said Stay), the next close runs the page's beforeunload again, so its handlers never miss a close.
+   bool asking_to_leave() const { return leave_answer_ != nil; }
+-  void AskToLeave(void (^answer)(BOOL)) {
+-    leave_answer_ = [answer copy];
+-    leave_confirmed_ = false;
+-  }
+-  bool AnswerLeave(bool proceed) {
++  void AskToLeave(void (^answer)(BOOL)) { leave_answer_ = [answer copy]; }
++  // `finished`: Chromium answered (the handlers ran, or its own timeout let the page go). NO for Brk's limit on a page that never
++  // answered, whose close then runs the whole of Chrome's close.
++  bool AnswerLeave(bool proceed, bool finished) {
+     if (!leave_answer_) {
+       return false;
+     }
+     void (^answer)(BOOL) = leave_answer_;
+     leave_answer_ = nil;
+-    leave_confirmed_ = proceed;
++    base::WeakPtr<BrkPage> alive = weak_factory_.GetWeakPtr();
++    leave_confirmed_ = proceed && finished;
+     answer(proceed);
++    // The answer may have closed the page, and with it this object.
++    if (alive) {
++      alive->leave_confirmed_ = false;
++    }
+     return true;
+   }
+   // The page goes another way while it is being asked: the question is answered NO, and Chromium's answer, when it comes, takes
+@@ -215,10 +221,6 @@ class BrkPage : public content::WebContentsObserver,
+     if (!handle->IsInPrimaryMainFrame()) {
+       return;
+     }
+-    if (handle->HasCommitted() && !handle->IsSameDocument()) {
+-      // A Leave answered for the previous document does not cover this one.
+-      leave_confirmed_ = false;
+-    }
+     id<BrkCoreWebContentsDelegate> delegate = owner_.delegate;
+     NSURL* url = NSURLFromGURL(handle->GetURL());
+     if (handle->HasCommitted() && !handle->IsErrorPage()) {
+@@ -391,7 +393,7 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+ 
+ bool BeforeUnloadAnsweredHook(content::WebContents* contents, bool proceed) {
+   BrkPage* page = BrkPage::FromWebContents(contents);
+-  return page && page->AnswerLeave(proceed);
++  return page && page->AnswerLeave(proceed, /*finished=*/true);
+ }
+ }  // namespace brkcore
+ 
+@@ -924,7 +926,8 @@ bool BeforeUnloadAnsweredHook(content::WebContents* contents, bool proceed) {
+   page->set_closing_by_shell();
+   page->DropLeaveQuestion();
+   if (page->leave_confirmed()) {
+-    // Its beforeunload ran for this close already (-confirmLeaving:): only the unload handlers are left, as after Leave in Chrome.
++    // Asked inside -confirmLeaving:'s YES: its beforeunload ran for this close, only the unload handlers are left, as after Leave in
++    // Chrome.
+     _contents->ClosePage();
+   } else {
+     [_browser closeContents:_contents];
+@@ -968,7 +971,8 @@ bool BeforeUnloadAnsweredHook(content::WebContents* contents, bool proceed) {
+ }
+ 
+ // A page that does not answer (hung, or its timeout skipped as -close explains) may go, as Chromium's timeout would let it; while
+-// its question is on screen the person is answering, and the limit starts again after.
++// its question is on screen the person is answering, and the limit starts again after. Its beforeunload never finished, so the
++// close that follows runs the whole of Chrome's close.
+ - (void)answerLeaveIfStuck:(base::TimeTicks)limit {
+   __weak BrkWebContents* weakSelf = self;
+   base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(FROM_HERE, base::BindOnce(^{
+@@ -980,7 +984,7 @@ bool BeforeUnloadAnsweredHook(content::WebContents* contents, bool proceed) {
+     if (asked.openDialog) {
+       [asked answerLeaveIfStuck:base::TimeTicks::Now() + kCloseLimit];
+     } else if (base::TimeTicks::Now() >= limit) {
+-      page->AnswerLeave(true);
++      page->AnswerLeave(true, /*finished=*/false);
+     } else {
+       [asked answerLeaveIfStuck:limit];
+     }
+diff --git a/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc b/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
+index 99a256adeda5927800ecc08b2a395948a8ba86b0..c05b1ac32da98394bc652e478e702426335451fe 100644
+--- a/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
++++ b/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
+@@ -774,7 +774,9 @@ void BrowserWebContentsDelegate::LoadingStateChanged(
+ 
+ void BrowserWebContentsDelegate::CloseContents(content::WebContents* source) {
+   if (unload_controller_->CanCloseContents(source)) {
+-    chrome::CloseWebContents(&browser_.get(), source, true);
++    // Brk keeps its own record of closed tabs: Chromium's tab restore entry for one of its pages would be a second one on disk that
++    // Brk's Clear History never reaches.
++    chrome::CloseWebContents(&browser_.get(), source, !(brkcore::GetHooks().is_brk_page && brkcore::GetHooks().is_brk_page(source)));
+   }
+ }
+ 

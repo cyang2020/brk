@@ -10,6 +10,9 @@ public final class BrkCoreRuntime {
         public let description: String
     }
 
+    /// The lowest `embeddingInterfaceVersion` (BrkCore.h) this app runs on.
+    static let requiredInterfaceVersion = 4
+
     public let application: any BrkCoreApplication
     /// Chromium's user data folder; a profile's data is `Profile-<id>` in it (`ProfileDirectories.directoryName`).
     let userDataDirectory: URL
@@ -36,8 +39,11 @@ public final class BrkCoreRuntime {
         guard let application = object as? any BrkCoreApplication else {
             throw Unavailable(description: "BrkCore.framework's application has another interface")
         }
-        guard application.responds(to: NSSelectorFromString("embeddingInterfaceVersion")), application.embeddingInterfaceVersion >= 3 else {
-            throw Unavailable(description: "BrkCore.framework predates embedded extension options and resource management. Rebuild the engine before bundling this app.")
+        // 4: pages that ask before they close (-confirmLeaving:, hasBeforeUnloadHandler), which the app calls without checking for
+        // them: an older engine would stop the app at the first close of a tab or window.
+        guard application.responds(to: NSSelectorFromString("embeddingInterfaceVersion")),
+              application.embeddingInterfaceVersion >= Self.requiredInterfaceVersion else {
+            throw Unavailable(description: "BrkCore.framework predates pages that ask before they close (interface \(Self.requiredInterfaceVersion)). Rebuild the engine before bundling this app.")
         }
         self.application = application
     }

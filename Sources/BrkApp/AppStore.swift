@@ -403,12 +403,29 @@ public final class AppStore {
     static var askQuit: @MainActor (NSAlert, NSWindow?, @escaping @MainActor (QuitWarning.Answer) -> Void) -> Void = QuitWarning.present
 
     private func quitNow() {
-        // AppKit can defer termination while a save sheet remains attached.
-        sidebarPanels.cancelForQuit()
-        onboarding.close()
-        exports.cancelAll()
-        spacePanels.cancelAll()
-        Quit.request()
+        // The pages on screen first (`askPagesBeforeQuit`): nothing is torn down until they let go, so Stay leaves Brk as it was.
+        askPagesBeforeQuit { [weak self] go in
+            guard let self, !self.isTerminating else { return }
+            guard go else { Quit.declined(); return }
+            // AppKit can defer termination while a save sheet remains attached.
+            self.sidebarPanels.cancelForQuit()
+            self.onboarding.close()
+            self.exports.cancelAll()
+            self.spacePanels.cancelAll()
+            Quit.request()
+        }
+    }
+
+    /// What `Quit.request()` runs (SIGTERM, Restart, Restore Data, an update's restart, and Cmd+Q once its pages let go): the
+    /// pages on screen first, then the teardown, then `terminate` (AppKit's quit). Stay keeps Brk as it was and declines what
+    /// the request carried; `declined` then clears what the caller holds for it (Restore Data's backup).
+    func quitAfterAskingPages(terminate: @escaping @MainActor () -> Void, declined: @escaping @MainActor () -> Void) {
+        askPagesBeforeQuit { [weak self] go in
+            guard let self, !self.isTerminating else { return }
+            guard go else { Quit.declined(); declined(); return }
+            self.prepareForTermination()
+            terminate()
+        }
     }
 
     func cancelExports() { exports.cancelAll() }
@@ -481,8 +498,19 @@ public final class AppStore {
 
     /// The pages whose Leave this page? question is open now.
     private var leaveQuestion: Set<PageID> = []
-    /// The command a person let its pages go for, applied once more: it passes `holdForLeaving` for those pages.
-    private var leaveConfirmed: (input: Input, pages: Set<PageID>)?
+    /// The command a person let its pages go for, applied once more, and the pages on screen it ended when it was asked.
+    private var leaveConfirmed: (input: Input, ended: Set<PageID>)?
+    /// While the quit's question is open: what waits for its answer (`askPagesBeforeQuit`).
+    private var quitQuestion: [@MainActor (Bool) -> Void]?
+    /// The pages on screen let go for the quit under way: its later steps do not ask them again.
+    private var pagesLetGoForQuit = false
+    /// Quits asked for while another question was open (a tab's, a window's): asked once no question is open.
+    private var quitsAfterQuestion: [@MainActor () -> Void] = []
+
+    /// A question is open for a page in `window`, or in any window.
+    func isAskingToLeave(in window: WindowID? = nil) -> Bool { leaveQuestion.contains { window == nil || $0.window == window } }
+    /// A quit is waiting for its question: Warn before quitting, or its pages' Leave this page?.
+    var isAskingToQuit: Bool { askingQuit || quitQuestion != nil }
 
     /// A person's command that ends a page on screen whose page has a beforeunload handler waits, as a tab close does in Chrome:
     /// the page's beforeunload runs and, when it asks, Leave this page? shows over it. Leave applies the command again; Stay
@@ -494,12 +522,18 @@ public final class AppStore {
         case .user(let id, _), .key(let id, _): window = id
         case .system: return nil
         }
-        var confirmed: Set<PageID> = []
-        if let pass = leaveConfirmed, pass.input == input { confirmed = pass.pages; leaveConfirmed = nil }
+        let pass = leaveConfirmed.flatMap { $0.input == input ? $0 : nil }
+        if pass != nil { leaveConfirmed = nil }
         guard t.changed else { return nil }
-        let ended = state.shownPagesEnded(by: t.state).filter { !confirmed.contains($0) }
-        guard !ended.isEmpty else { return nil }
         let handling = KeyHandling(handled: t.keyHandled, shortcut: t.keyShortcut, action: t.keyAction?.rawValue)
+        let ended = state.shownPagesEnded(by: t.state)
+        // Leave answered for the pages this command ended when it was asked. Focus may have moved since (a link from another app),
+        // and then the same command ends another page: it goes on only if it ends the same pages.
+        if let pass { return Set(ended) == pass.ended ? nil : handling }
+        // The question is a sheet on its window: until it is answered, no other page takes the asked one's place there (a menu
+        // shortcut for another tab or Space, a new tab).
+        if isAskingToLeave(in: window), state.shownLoadedPages(in: window) != t.state.shownLoadedPages(in: window) { return handling }
+        guard !ended.isEmpty else { return nil }
         // The same command again while its page is being asked (Cmd+W pressed twice) waits for the same answer.
         if !leaveQuestion.isDisjoint(with: ended) { return handling }
         let asking = engine.pagesAskingBeforeLeaving(ended)
@@ -513,38 +547,78 @@ public final class AppStore {
         } else {
             again = input
         }
+        let asked = Set(ended)
         leaveQuestion.formUnion(asking)
         askLeaving(asking[...]) { [weak self] leave in
             guard let self else { return }
-            self.leaveQuestion.subtract(asking)
+            defer { self.questionEnded(asking) }
             guard leave else { return }
-            self.leaveConfirmed = (again, Set(asking))
+            self.leaveConfirmed = (again, asked)
             self.dispatch(again)
         }
         return handling
     }
 
-    /// Asks each page in turn; `answer` gets true once every one may go, false at the first Stay.
+    /// Asks each page in turn; `answer` gets true once every one may go, false at the first Stay. Once Brk is quitting (a
+    /// logout overtook the question) the rest go without one.
     private func askLeaving(_ pages: ArraySlice<PageID>, answer: @escaping @MainActor (Bool) -> Void) {
-        guard let page = pages.first else { answer(true); return }
+        guard let page = pages.first, !isTerminating else { answer(true); return }
         engine.confirmLeaving(page) { [weak self] leave in
             guard leave, let self else { answer(leave); return }
             self.askLeaving(pages.dropFirst(), answer: answer)
         }
     }
 
-    /// Before Brk quits, or a window closes by its close button: the pages on screen (in `window`, or in every window) whose
-    /// beforeunload asks are asked in turn, and `answer` gets whether all may go. False when no page asks; `answer` is then not
-    /// called.
-    func askPagesOnScreen(in window: WindowID? = nil, answer: @escaping @MainActor (Bool) -> Void) -> Bool {
+    private func questionEnded(_ pages: [PageID]) {
+        leaveQuestion.subtract(pages)
+        guard leaveQuestion.isEmpty, !quitsAfterQuestion.isEmpty else { return }
+        let quits = quitsAfterQuestion
+        quitsAfterQuestion = []
+        // On the next pass of the run loop: after the command a Leave applies again, so a page it closed is not asked for the
+        // quit. A run-loop block, not the main queue: this can run inside a main-queue callout (Quit explains).
+        Quit.enqueue { for quit in quits { quit() } }
+    }
+
+    enum LeaveAsking: Equatable {
+        /// No page on screen asks: go on.
+        case none
+        /// Pages are being asked; the answer follows.
+        case asking
+        /// A question is open for a page there already: nothing was asked, and the answer to that question decides.
+        case busy
+    }
+
+    /// Before a window closes by its close button, or Brk quits: the pages on screen (in `window`, or in every window) whose
+    /// beforeunload asks are asked in turn, and `answer` gets whether all may go. Called only for `.asking`.
+    func askPagesOnScreen(in window: WindowID? = nil, answer: @escaping @MainActor (Bool) -> Void) -> LeaveAsking {
+        if isAskingToLeave(in: window) { return .busy }
         let asking = engine.pagesAskingBeforeLeaving(state.shownLoadedPages(in: window))
-        guard !asking.isEmpty else { return false }
+        guard !asking.isEmpty else { return .none }
         leaveQuestion.formUnion(asking)
         askLeaving(asking[...]) { [weak self] leave in
-            self?.leaveQuestion.subtract(asking)
+            self?.questionEnded(asking)
             answer(leave)
         }
-        return true
+        return .asking
+    }
+
+    /// As Chrome before it quits: the pages on screen whose beforeunload asks are asked, before anything is torn down, so Stay
+    /// leaves Brk as it was. `answer` gets true when every page may go (nothing asked, or Leave), false for Stay. Every way of
+    /// quitting comes here first (Cmd+Q, the Dock, SIGTERM, Restart; not a logout): one asked for while the quit's question is
+    /// open gets the same answer, one asked for while another question is open is asked once that one is answered.
+    func askPagesBeforeQuit(answer: @escaping @MainActor (Bool) -> Void) {
+        if pagesLetGoForQuit || isTerminating { answer(true); return }
+        if quitQuestion != nil { quitQuestion!.append(answer); return }
+        if isAskingToLeave() { quitsAfterQuestion.append { [weak self] in self?.askPagesBeforeQuit(answer: answer) }; return }
+        quitQuestion = [answer]
+        if askPagesOnScreen(answer: { [weak self] go in self?.quitQuestionAnswered(go) }) == .none { quitQuestionAnswered(true) }
+    }
+
+    private func quitQuestionAnswered(_ go: Bool) {
+        let waiting = quitQuestion ?? []
+        quitQuestion = nil
+        pagesLetGoForQuit = go
+        for answer in waiting { answer(go) }
     }
 
     /// Project, save, reconcile pages, then windows: closed ones go, new ones are placed and
@@ -605,7 +679,7 @@ public final class AppStore {
                 ? LittleWindowController(id: id, engine: engine, send: send, routeKey: routeKey)
                 : WindowController(id: id, kind: kind, engine: engine, send: send, routeKey: routeKey)
             windows[id] = controller
-            controller.askBeforeClosing = { [weak self] answer in self?.askPagesOnScreen(in: id, answer: answer) ?? false }
+            controller.askBeforeClosing = { [weak self] answer in self?.askPagesOnScreen(in: id, answer: answer) ?? .none }
             controller.place(snapshot.windows[id]!)
             // On first run the onboarding window comes first (Arc's Unboxing); the browser window shows when it finishes.
             if !(snapshot.sidebarData.needsOnboarding && windows.count == 1) { controller.window.makeKeyAndOrderFront(nil) }
@@ -778,11 +852,14 @@ public final class AppStore {
                     // this window (no nested run loop: the key press that asked returns, and the ordered quit that
                     // follows does not run inside a modal session). While it is open another quit is ignored,
                     // except an already confirmed one (the control socket's), which quits.
+                    // Its pages are asked after it, still before anything is torn down (`quitNow`); while they are, the
+                    // quit already under way decides, Leave or Stay.
+                    if quitQuestion != nil { break }
                     if askingQuit { if Quit.confirmed { quitNow() }; break }
                     if Quit.confirmed || !snapshot.settings.general.warnBeforeQuitting { quitNow(); break }
                     askingQuit = true
                     confirmQuit(on: NSApp.keyWindow ?? windowController(nil)?.window) { [weak self] go in
-                        guard let self else { return }
+                        guard let self, !self.isTerminating else { return }
                         self.askingQuit = false
                         if go || Quit.confirmed { self.quitNow() }
                     }

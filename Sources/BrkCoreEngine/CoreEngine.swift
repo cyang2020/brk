@@ -521,7 +521,23 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
 
     public func confirmLeaving(_ id: PageID, answer: @escaping @MainActor (Bool) -> Void) {
         guard let page = live[id], isLive(page) else { answer(true); return }
-        page.contents.confirmLeaving { leave in MainActor.assumeIsolated { answer(leave) } }
+        page.leaveQuestions &+= 1
+        let question = page.leaveQuestions
+        page.leaveQuestion = question
+        page.contents.confirmLeaving { [weak self, weak page] leave in
+            MainActor.assumeIsolated {
+                if page?.leaveQuestion == question { page?.leaveQuestion = nil }
+                // At once: the engine lets only a close made inside this YES skip the page's beforeunload (BrkCore.h -close).
+                if leave { answer(true); return }
+                guard let self, let page, self.isLive(page) else {
+                    // The page went another way while it was asked (closed, retired): nothing holds the close up any more. Told on
+                    // the next pass of the run loop, because this runs inside that close.
+                    RunLoop.main.perform(inModes: [.common, .modalPanel, .eventTracking]) { MainActor.assumeIsolated { answer(true) } }
+                    return
+                }
+                answer(false)
+            }
+        }
     }
 
     public func disposeContext(_ request: ContextDisposal) {

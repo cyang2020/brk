@@ -270,19 +270,15 @@ public class WindowController: NSObject, NSWindowDelegate {
     public func windowShouldClose(_ sender: NSWindow) -> Bool {
         // As Chrome closing a window: a page on screen whose beforeunload asks shows Leave this page?, and Stay keeps the window.
         if !pagesLetGo, let ask = askBeforeClosing {
-            if askingPages { return false }
-            askingPages = true
-            let asked = ask { [weak self] go in
-                guard let self else { return }
-                self.askingPages = false
-                guard go else { return }
+            let asking = ask { [weak self] go in
+                guard let self, go else { return }
                 self.pagesLetGo = true
                 self.window.performClose(nil)
                 // Still open: an AI page commits its edits first and closes the window itself after (below).
                 if self.window.isVisible, !self.committingPageEdits { self.pagesLetGo = false }
             }
-            if asked { return false }
-            askingPages = false
+            // Asking now, or a question is open for one of its pages already (that one decides): the window stays meanwhile.
+            if asking != .none { return false }
         }
         if pageEditsCommitted || !PageSandboxView.anyCanSave(in: window) { return true }
         guard !committingPageEdits else { return false }
@@ -300,8 +296,7 @@ public class WindowController: NSObject, NSWindowDelegate {
     private var committingPageEdits = false
     private var pageEditsCommitted = false
     /// Set by the store: asks the pages on screen in this window whether they may go (`AppStore.askPagesOnScreen`).
-    var askBeforeClosing: (@MainActor (@escaping @MainActor (Bool) -> Void) -> Bool)?
-    private var askingPages = false
+    var askBeforeClosing: (@MainActor (@escaping @MainActor (Bool) -> Void) -> AppStore.LeaveAsking)?
     private var pagesLetGo = false
 
     public func windowWillClose(_ notification: Notification) {

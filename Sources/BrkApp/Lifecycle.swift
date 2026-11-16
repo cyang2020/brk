@@ -274,20 +274,22 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             Quit.enqueue { NSApp.terminate(nil) }
             return .terminateCancel
         }
-        guard !quitting, !askingQuit else { return .terminateLater }
+        if quitting { return .terminateLater }
+        // A logout, restart or shut down waits for no question of Brk's: one still being asked goes with the teardown (a page's
+        // Leave this page? is answered Leave), and every page runs its handlers as it closes. AppKit itself turns a logout down,
+        // before it asks here, while any sheet is attached (measured 2026-11-16: the quit event's reply is userCanceledErr).
+        if Self.isSystemQuit() { beginOrderedQuit(); return .terminateLater }
+        // A quit asked for earlier is waiting for its question (Warn before quitting, Leave this page?): that answer decides.
+        if askingQuit || store?.isAskingToQuit == true { return .terminateCancel }
         // A quit that did not come through `AppEffect.quit` (the Dock menu, a quit Apple event) asks "Warn before
-        // quitting" here; a logout, restart or shut down does not.
-        if !Quit.confirmed, !Self.isSystemQuit(), let store, store.snapshot.settings.general.warnBeforeQuitting {
+        // quitting" here.
+        if !Quit.confirmed, let store, store.snapshot.settings.general.warnBeforeQuitting {
             askingQuit = true
             store.confirmQuit(on: NSApp.keyWindow ?? NSApp.mainWindow) { [weak self] go in
-                guard let self else { return }
+                guard let self, !self.quitting else { return }
                 self.askingQuit = false
                 if go { Quit.confirmed = true; self.askPagesThenQuit(); return }
-                // Declined: a quit asked for meanwhile (Restart Brk Now, Restore Data) is declined with it, so a later
-                // ordinary quit neither skips the question, nor starts the app again, nor restores a backup.
-                Quit.declined()
-                self.pendingRestore = nil
-                NSApp.reply(toApplicationShouldTerminate: false)
+                self.declineQuit()
             }
             return .terminateLater
         }
@@ -295,20 +297,31 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
-    /// As Chrome before it quits: a page on screen whose beforeunload asks shows Leave this page?, and Stay keeps Brk running.
-    /// A logout, restart or shut down does not wait for it; every page still runs its handlers as it closes.
+    /// As Chrome before it quits: a page on screen whose beforeunload asks shows Leave this page?, and Stay keeps Brk running
+    /// (`AppStore.askPagesBeforeQuit`, which every quit passes before anything is torn down).
     private func askPagesThenQuit() {
-        guard !Self.isSystemQuit(), let store else { beginOrderedQuit(); return }
+        guard let store else { beginOrderedQuit(); return }
         askingQuit = true
-        let asked = store.askPagesOnScreen { [weak self] go in
-            guard let self else { return }
+        store.askPagesBeforeQuit { [weak self] go in
+            guard let self, !self.quitting else { return }
             self.askingQuit = false
-            if go { self.beginOrderedQuit(); return }
-            Quit.declined()
-            self.pendingRestore = nil
-            NSApp.reply(toApplicationShouldTerminate: false)
+            if go { self.beginOrderedQuit() } else { self.declineQuit() }
         }
-        if !asked { askingQuit = false; beginOrderedQuit() }
+    }
+
+    /// A question was answered Cancel or Stay: a quit asked for meanwhile (Restart Brk Now, Restore Data) is declined with it,
+    /// so a later ordinary quit neither skips the question, nor starts the app again, nor restores a backup.
+    private func declineQuit() {
+        Quit.declined()
+        pendingRestore = nil
+        NSApp.reply(toApplicationShouldTerminate: false)
+    }
+
+    /// `Quit.request()`'s real work: the pages first, then the teardown and AppKit's quit (`AppStore.quitAfterAskingPages`).
+    func quitRequested() {
+        guard let store else { NSApp.terminate(nil); return }
+        store.quitAfterAskingPages(terminate: { Quit.enqueue { NSApp.terminate(nil) } },
+                                   declined: { [weak self] in self?.pendingRestore = nil })
     }
 
     /// The quit Apple event of a logout, restart or shut down carries a reason (`kAEQuitReason`, 'why?').
@@ -457,8 +470,8 @@ public enum Quit {
     /// What `request()` does. The default is the real quit; tests replace it to observe that a quit was asked for
     /// without terminating the test process.
     public static var perform: @MainActor () -> Void = { enqueue {
-        (NSApp.delegate as? Lifecycle)?.store?.prepareForTermination()
-        enqueue { NSApp.terminate(nil) }
+        guard let lifecycle = NSApp.delegate as? Lifecycle else { NSApp.terminate(nil); return }
+        lifecycle.quitRequested()
     } }
 
     static func fixtureTrace(_ message: String) {
