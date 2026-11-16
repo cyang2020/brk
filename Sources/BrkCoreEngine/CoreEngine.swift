@@ -514,6 +514,16 @@ public final class CoreEngine: NSObject, WebEngine, BrkCoreBrowserDelegate {
 
     // MARK: Closing
 
+    public func pagesAskingBeforeLeaving(_ pages: [PageID]) -> [PageID] {
+        let shown = self.live
+        return pages.filter { id in shown[id].map { isLive($0) && $0.contents.hasBeforeUnloadHandler } ?? false }
+    }
+
+    public func confirmLeaving(_ id: PageID, answer: @escaping @MainActor (Bool) -> Void) {
+        guard let page = live[id], isLive(page) else { answer(true); return }
+        page.contents.confirmLeaving { leave in MainActor.assumeIsolated { answer(leave) } }
+    }
+
     public func disposeContext(_ request: ContextDisposal) {
         contexts.revoke(request.context)
         wanted.removeAll { $0.context == request.context }

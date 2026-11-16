@@ -456,6 +456,7 @@ public final class AppStore {
             return KeyHandling(handled: false, shortcut: false)
         }
         let t = reduce(state, input, Context(now: clock.now(), newID: { UUID().uuidString }, systemLanguage: Locale.preferredLanguages.first ?? "en"))
+        if let held = holdForLeaving(input, t) { return held }
         var checkpointed = false
         if t.docChanged, let failure = t.checkpointFailure {
             do { try stateFile.writeNow(StateCodec.encode(t.state)); checkpointed = true }
@@ -474,6 +475,76 @@ public final class AppStore {
         }
         run(t.effects)
         return KeyHandling(handled: t.keyHandled, shortcut: t.keyShortcut, action: t.keyAction?.rawValue)
+    }
+
+    // MARK: Pages that ask before they go
+
+    /// The pages whose Leave this page? question is open now.
+    private var leaveQuestion: Set<PageID> = []
+    /// The command a person let its pages go for, applied once more: it passes `holdForLeaving` for those pages.
+    private var leaveConfirmed: (input: Input, pages: Set<PageID>)?
+
+    /// A person's command that ends a page on screen whose page has a beforeunload handler waits, as a tab close does in Chrome:
+    /// the page's beforeunload runs and, when it asks, Leave this page? shows over it. Leave applies the command again; Stay
+    /// drops it and the page stays. A page off screen, and every end no one asked for here (auto-archive, a window gone), still
+    /// runs its handlers as Chromium closes it, with no question (`CorePage.close`). Nil: apply `t` now.
+    private func holdForLeaving(_ input: Input, _ t: Transition) -> KeyHandling? {
+        let window: WindowID
+        switch input {
+        case .user(let id, _), .key(let id, _): window = id
+        case .system: return nil
+        }
+        var confirmed: Set<PageID> = []
+        if let pass = leaveConfirmed, pass.input == input { confirmed = pass.pages; leaveConfirmed = nil }
+        guard t.changed else { return nil }
+        let ended = state.shownPagesEnded(by: t.state).filter { !confirmed.contains($0) }
+        guard !ended.isEmpty else { return nil }
+        let handling = KeyHandling(handled: t.keyHandled, shortcut: t.keyShortcut, action: t.keyAction?.rawValue)
+        // The same command again while its page is being asked (Cmd+W pressed twice) waits for the same answer.
+        if !leaveQuestion.isDisjoint(with: ended) { return handling }
+        let asking = engine.pagesAskingBeforeLeaving(ended)
+        guard !asking.isEmpty else { return nil }
+        // After Leave the key's command runs, not the key: the press stays routed, so its other delivery paths do nothing.
+        let again: Input
+        if case .key = input {
+            guard let action = t.keyAction else { return nil }
+            state = state.keepingKeyRouting(of: t.state, in: window)
+            again = .user(window, action.spec.command)
+        } else {
+            again = input
+        }
+        leaveQuestion.formUnion(asking)
+        askLeaving(asking[...]) { [weak self] leave in
+            guard let self else { return }
+            self.leaveQuestion.subtract(asking)
+            guard leave else { return }
+            self.leaveConfirmed = (again, Set(asking))
+            self.dispatch(again)
+        }
+        return handling
+    }
+
+    /// Asks each page in turn; `answer` gets true once every one may go, false at the first Stay.
+    private func askLeaving(_ pages: ArraySlice<PageID>, answer: @escaping @MainActor (Bool) -> Void) {
+        guard let page = pages.first else { answer(true); return }
+        engine.confirmLeaving(page) { [weak self] leave in
+            guard leave, let self else { answer(leave); return }
+            self.askLeaving(pages.dropFirst(), answer: answer)
+        }
+    }
+
+    /// Before Brk quits, or a window closes by its close button: the pages on screen (in `window`, or in every window) whose
+    /// beforeunload asks are asked in turn, and `answer` gets whether all may go. False when no page asks; `answer` is then not
+    /// called.
+    func askPagesOnScreen(in window: WindowID? = nil, answer: @escaping @MainActor (Bool) -> Void) -> Bool {
+        let asking = engine.pagesAskingBeforeLeaving(state.shownLoadedPages(in: window))
+        guard !asking.isEmpty else { return false }
+        leaveQuestion.formUnion(asking)
+        askLeaving(asking[...]) { [weak self] leave in
+            self?.leaveQuestion.subtract(asking)
+            answer(leave)
+        }
+        return true
     }
 
     /// Project, save, reconcile pages, then windows: closed ones go, new ones are placed and
@@ -534,6 +605,7 @@ public final class AppStore {
                 ? LittleWindowController(id: id, engine: engine, send: send, routeKey: routeKey)
                 : WindowController(id: id, kind: kind, engine: engine, send: send, routeKey: routeKey)
             windows[id] = controller
+            controller.askBeforeClosing = { [weak self] answer in self?.askPagesOnScreen(in: id, answer: answer) ?? false }
             controller.place(snapshot.windows[id]!)
             // On first run the onboarding window comes first (Arc's Unboxing); the browser window shows when it finishes.
             if !(snapshot.sidebarData.needsOnboarding && windows.count == 1) { controller.window.makeKeyAndOrderFront(nil) }

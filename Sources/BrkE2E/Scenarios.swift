@@ -100,6 +100,7 @@ enum Scenarios {
         HelpReportScenarios.all,
         AutofillScenarios.all,
         PageDialogScenarios.all,
+        PageUnloadScenarios.all,
         SidebarMotionScenarios.all,
         KeySweepScenarios.all,
         SitesSettingsRealScenarios.all,

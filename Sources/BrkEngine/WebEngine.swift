@@ -105,6 +105,13 @@ public protocol WebEngine: AnyObject {
     /// The Task Manager's End Process. False when the task cannot be ended.
     func endTask(_ id: Int64) -> Bool
 
+    /// The live pages among `pages` with a beforeunload handler: closing one should ask it first (`confirmLeaving`).
+    func pagesAskingBeforeLeaving(_ pages: [PageID]) -> [PageID]
+    /// Runs `page`'s beforeunload handlers without closing it; when one asks, Leave this page? shows over the page. `answer`
+    /// gets true when it may go (nothing asked, Leave, or the page is gone), false for Stay. The close that follows a true runs
+    /// only the page's unload handlers.
+    func confirmLeaving(_ page: PageID, answer: @escaping @MainActor (Bool) -> Void)
+
     /// Ordered teardown, idempotent: after it returns no browser is alive and every borrowed view is back where it
     /// came from. `.clean` means the runtime is shut down too and the process may exit; `.timedOut` means some
     /// browsers never answered and the runtime was left running (never `cef_shutdown` with browsers alive): the
@@ -157,6 +164,8 @@ public protocol WebEngineDelegate: AnyObject {
 }
 
 extension WebEngine {
+    public func pagesAskingBeforeLeaving(_ pages: [PageID]) -> [PageID] { [] }
+    public func confirmLeaving(_ page: PageID, answer: @escaping @MainActor (Bool) -> Void) { answer(true) }
     public func selectedText(_ page: PageID) async -> String? { nil }
     public func checkSelection(_ page: PageID) {}
     public func cancelBoostPick(_ target: SiteTarget) {}

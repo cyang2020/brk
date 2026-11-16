@@ -247,14 +247,19 @@ enum PageRealScenarios {
         try scheme(app, .dark)
         try drawnDark(app, page, start)
         try translate(app)
-        // The current tab-close path does not ask a guarded page (the two-phase close is tracked separately). Its
-        // browser must still close; another is left for the quit after this scenario, which must not wait on it either.
+        // Closing a guarded page on screen asks first, as Chrome does (issue #11): ⌘W shows Leave this page? over it, and
+        // Leave (Return) closes the tab and its browser.
         let closing = try guardedTab(app, "close=1")
         try key(app, .command, .w)
+        try app.waitUntil("Leave this page? after ⌘W on a guarded page") { try sheet(app) }
+        try key(app, [], .returnKey)
         try app.waitUntil("the guarded tab gone") { !allTabs(try app.view()).contains { $0.id == closing.item } }
         try app.waitUntil("the guarded tab's browser closed", timeout: 6) { try app.pageLog().contains { $0.page == closing && $0.kind == .closed } }
+        // A guarded page off screen is not asked: the quit after this scenario must not wait on it.
         _ = try guardedTab(app, "quit=1")
-        app.passed("⌘W closed a guarded page's browser")
+        let other = app.site.url("page2.html")
+        try app.waitForPageInput(PageID(window: try XCTUnwrapValue(app.window), item: try app.load(other)), at: other)
+        app.passed("⌘W on a guarded page asked Leave this page?; Leave closed it and its browser")
     }
 
     /// A new tab on the guarded fixture, with a real click in it so Chromium would ask before it goes.

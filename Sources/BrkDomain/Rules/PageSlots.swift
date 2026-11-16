@@ -57,6 +57,31 @@ extension AppState {
         return panes.first
     }
 
+    /// The loaded pages on screen now (in a pane of a window or its Peek card), in id order; `window` limits them to one window.
+    public func shownLoadedPages(in window: WindowID? = nil) -> [PageID] {
+        onScreenPages().filter { session.loaded.contains($0) && owns($0) && (window == nil || $0.window == window) }.sorted()
+    }
+
+    /// The pages on screen now that `next` ends: their tab closed, archived or unloaded, or their window closed. A tab that only
+    /// moves to another window keeps its page (Chromium hands it over), so it is not one of them. A person's command that ends one
+    /// asks the page first whether it may go, as Chrome does before it closes a tab (`AppStore`).
+    public func shownPagesEnded(by next: AppState) -> [PageID] {
+        // Runs for every input a person makes: only the few pages on screen are looked up, never every loaded page.
+        shownLoadedPages().filter { page in
+            let context = browsingContext(of: page.item)
+            return !next.session.loaded.contains { $0.item == page.item && next.owns($0) && next.browsingContext(of: $0.item) == context }
+        }
+    }
+
+    /// This state with `next`'s key memory for `window`: a press held back while its page is asked still counts as routed, so
+    /// the same press arriving by another path does not run its command again (KeyRouting.swift).
+    public func keepingKeyRouting(of next: AppState, in window: WindowID) -> AppState {
+        guard let memory = next.session.windows[window]?.keyRouting, session.windows[window] != nil else { return self }
+        var state = self
+        state.session.windows[window]!.keyRouting = memory
+        return state
+    }
+
     func onScreenPages() -> Set<PageID> {
         Set(doc.windows.keys.filter { $0 != session.closedWindow }.flatMap { window in
             let panes = shownItem(in: window).map { self.panes(of: $0) } ?? []

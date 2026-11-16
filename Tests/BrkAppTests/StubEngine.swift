@@ -90,6 +90,13 @@ public final class StubEngine: WebEngine {
                          hasKeyboardFocus: surface.window?.firstResponder === surface)
     }
 
+    /// Pages whose page has a beforeunload handler; each question waits in `leaveQuestions` for the test to answer it.
+    public var beforeUnloadPages: Set<PageID> = []
+    public private(set) var leaveQuestions: [(page: PageID, answer: @MainActor (Bool) -> Void)] = []
+    public func pagesAskingBeforeLeaving(_ ids: [PageID]) -> [PageID] { ids.filter { beforeUnloadPages.contains($0) && pages[$0] != nil } }
+    public func confirmLeaving(_ page: PageID, answer: @escaping @MainActor (Bool) -> Void) { leaveQuestions.append((page, answer)) }
+    public func answerLeaving(_ leave: Bool) { if !leaveQuestions.isEmpty { leaveQuestions.removeFirst().answer(leave) } }
+
     public func shutdown() async -> ShutdownOutcome {
         if let shutdownOutcome { return shutdownOutcome }
         for (id, surface) in pages {

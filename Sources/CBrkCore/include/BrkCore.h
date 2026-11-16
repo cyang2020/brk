@@ -320,8 +320,17 @@ NS_SWIFT_UI_ACTOR
 - (void)developerOperation:(NSString*)operation;
 - (void)showCastDialog;
 
-/// Closes it now, without unload handlers. -webContentsDidClose: follows, possibly before this returns.
+/// Closes it as Chrome closes a tab: its beforeunload handlers run (a question one asks for is answered Leave: the shell has
+/// let the page go), then its pagehide and unload handlers, within Chromium's timeouts. A page with no handlers goes at once.
+/// After a YES from -confirmLeaving: only the unload handlers are left to run. -webContentsDidClose: follows, possibly before
+/// this returns.
 - (void)close;
+/// A frame of the page has a beforeunload handler: closing it should ask the page first (-confirmLeaving:).
+@property(nonatomic, readonly) BOOL hasBeforeUnloadHandler;
+/// Runs the page's beforeunload handlers as Chrome does before it closes a tab, without closing it. A handler that asks to
+/// confirm leaving shows Chromium's question through -webContents:runDialog:. YES: the page may go (nothing asked, or Leave);
+/// NO: the person chose Stay, or the page closed another way meanwhile. Answers at once when there is no handler.
+- (void)confirmLeaving:(void (^)(BOOL leave))completion;
 /// The visible entry's connection now.
 @property(nonatomic, readonly) BrkCoreSecurity security;
 /// Plays, pauses ("play", "pause"), sets the volume of ("setVolume", 0 to 1) or moves into or out of picture in picture

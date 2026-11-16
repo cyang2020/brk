@@ -1,0 +1,302 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Casper Yang <casperyang2020@gmail.com>
+Date: Mon, 16 Nov 2026 03:04:05 +0800
+Subject: [PATCH] Close Brk's pages the way Chrome closes a tab
+
+Brk deleted a page's WebContents directly, so its beforeunload, pagehide and unload handlers never ran: Discord, which keeps
+its session token out of localStorage while it thinks DevTools are open and writes it back from beforeunload, signed the user
+out every time its pinned tab's page was closed (issue #11). -close now goes through TabStripModel::CloseWebContentsAt, as
+Chrome's tab close does, with a 2 s limit after which the page is deleted anyway. -confirmLeaving: runs beforeunload alone, so
+the shell can ask Leave this page? before it lets a page go; a hook in BrowserWebContentsDelegate::BeforeUnloadFired keeps
+that answer from going on to unload, and the close that follows runs only the unload handlers.
+---
+ brk/browser/brk_application.mm                |   2 +
+ brk/browser/brk_browser.h                     |   3 +
+ brk/browser/brk_browser.mm                    |  11 ++
+ brk/browser/brk_web_contents.h                |   2 +
+ brk/browser/brk_web_contents.mm               | 111 +++++++++++++++++-
+ brk/embedding/embedding.h                     |   3 +
+ .../browser_web_contents_delegate.cc          |   1 +
+ 7 files changed, 131 insertions(+), 2 deletions(-)
+
+diff --git a/brk/browser/brk_application.mm b/brk/browser/brk_application.mm
+index e23302c99782e0ff01cd35207e818de991dd8916..9fb6ae0f734d996e97f444c5aa4a7c4f8a887eee 100644
+--- a/brk/browser/brk_application.mm
++++ b/brk/browser/brk_application.mm
+@@ -23,6 +23,7 @@
+ #include "brk/browser/brk_save_prompts.h"
+ #include "brk/browser/brk_javascript_dialogs.h"
+ #import "brk/browser/brk_profile.h"
++#import "brk/browser/brk_web_contents.h"
+ #include "brk/embedding/embedding.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/chrome_browser_application_mac.h"
+@@ -235,6 +236,7 @@ __attribute__((visibility("default"))) void BrkCoreApplicationPrepare(int argc,
+   hooks.offer_password_save = &brkcore::OfferPasswordSaveHook;
+   hooks.is_brk_page = &brkcore::IsBrkPageHook;
+   hooks.offer_autofill_save = &brkcore::OfferAutofillSaveHook;
++  hooks.before_unload_answered = &brkcore::BeforeUnloadAnsweredHook;
+   chrome_browser_application_mac::RegisterBrowserCrApp();
+ }
+ 
+diff --git a/brk/browser/brk_browser.h b/brk/browser/brk_browser.h
+index 7ac3039b33b2804d491a557125622d3732f59fe6..727e9e25cbc177cd79971bd2e16798c2670eb33e 100644
+--- a/brk/browser/brk_browser.h
++++ b/brk/browser/brk_browser.h
+@@ -25,7 +25,10 @@ NS_ASSUME_NONNULL_BEGIN
+                          window:(nullable NSWindow*)window
+                        delegate:(nullable id<BrkCoreBrowserDelegate>)delegate;
+ @property(nonatomic, readonly, nullable) BrkWebContents* focusedPage;
++// Closes the tab as Chrome does (TabStripModel::CloseWebContentsAt): beforeunload and unload handlers first.
+ - (void)closeContents:(content::WebContents*)contents;
++// Deletes the tab now, without its handlers.
++- (void)deleteContents:(content::WebContents*)contents;
+ - (void)pageDidGo:(BrkWebContents*)page;
+ - (void)browserWillGo;
+ @end
+diff --git a/brk/browser/brk_browser.mm b/brk/browser/brk_browser.mm
+index 88fe102041ec83a824802c3d625b5deeda58ee7e..de98502a2a48732c7e2916d87b4c35fb44c4e115 100644
+--- a/brk/browser/brk_browser.mm
++++ b/brk/browser/brk_browser.mm
+@@ -370,6 +370,17 @@ bool OpenExtensionOptionsHook(BrowserWindowInterface* browser, const char* exten
+ }
+ 
+ - (void)closeContents:(content::WebContents*)contents {
++  if (!_browser) {
++    return;
++  }
++  TabStripModel* strip = _browser->GetTabStripModel();
++  const int index = strip->GetIndexOfWebContents(contents);
++  if (index != TabStripModel::kNoTab) {
++    strip->CloseWebContentsAt(index, TabCloseTypes::CLOSE_NONE);
++  }
++}
++
++- (void)deleteContents:(content::WebContents*)contents {
+   if (!_browser) {
+     return;
+   }
+diff --git a/brk/browser/brk_web_contents.h b/brk/browser/brk_web_contents.h
+index b687c1a786207ed3033c18e7a1d74441e9ba8ea3..337de66fb79aeb4ab21c08ccf684668d52bf9c1f 100644
+--- a/brk/browser/brk_web_contents.h
++++ b/brk/browser/brk_web_contents.h
+@@ -38,6 +38,8 @@ struct NativeWebKeyboardEvent;
+ namespace brkcore {
+ // The BrkWebContents of a WebContents, nil when Brk did not wrap it.
+ BrkWebContents* PageForContents(content::WebContents* contents);
++// Installed in brkcore::Hooks: the answer to the page's beforeunload when -confirmLeaving: asked it.
++bool BeforeUnloadAnsweredHook(content::WebContents* contents, bool proceed);
+ }  // namespace brkcore
+ 
+ #endif  // BRK_BROWSER_BRK_WEB_CONTENTS_H_
+diff --git a/brk/browser/brk_web_contents.mm b/brk/browser/brk_web_contents.mm
+index 0726709b7cb61ec93b47d9f32d70a25688295f37..5375215e8241bc0b2a3d4034c6915159b7ff1f38 100644
+--- a/brk/browser/brk_web_contents.mm
++++ b/brk/browser/brk_web_contents.mm
+@@ -16,6 +16,7 @@
+ #include "base/token.h"
+ #include "base/strings/sys_string_conversions.h"
+ #include "base/task/single_thread_task_runner.h"
++#include "base/time/time.h"
+ #include "base/strings/utf_string_conversions.h"
+ #include "base/values.h"
+ #import "brk/browser/brk_browser.h"
+@@ -57,6 +58,7 @@
+ #include "content/public/common/isolated_world_ids.h"
+ #include "net/base/apple/url_conversions.h"
+ #include "third_party/blink/public/common/input/web_input_event.h"
++#include "third_party/blink/public/mojom/frame/sudden_termination_disabler_type.mojom-shared.h"
+ #include "third_party/blink/public/mojom/favicon/favicon_url.mojom.h"
+ #include "ui/gfx/native_ui_types.h"
+ #include "url/gurl.h"
+@@ -75,6 +77,9 @@
+ 
+ namespace {
+ 
++// How long a closing page, or one asked whether it may go, may take before Brk stops waiting for its handlers.
++constexpr base::TimeDelta kCloseLimit = base::Seconds(2);
++
+ NSURL* NSURLFromGURL(const GURL& url) {
+   return url.is_valid() ? net::NSURLWithGURL(url) : nil;
+ }
+@@ -157,6 +162,32 @@ class BrkPage : public content::WebContentsObserver,
+   }
+   bool closing_by_shell() const { return closing_by_shell_; }
+   void set_closing_by_shell() { closing_by_shell_ = true; }
++  // -confirmLeaving: ran the page's beforeunload: Chromium's answer comes back through BeforeUnloadAnsweredHook, which keeps it
++  // from going on to the page's unload. A YES lets the -close that follows skip beforeunload, as Chrome's close after Leave does.
++  bool asking_to_leave() const { return leave_answer_ != nil; }
++  void AskToLeave(void (^answer)(BOOL)) {
++    leave_answer_ = [answer copy];
++    leave_confirmed_ = false;
++  }
++  bool AnswerLeave(bool proceed) {
++    if (!leave_answer_) {
++      return false;
++    }
++    void (^answer)(BOOL) = leave_answer_;
++    leave_answer_ = nil;
++    leave_confirmed_ = proceed;
++    answer(proceed);
++    return true;
++  }
++  // The page goes another way while it is being asked: the question is answered NO, and Chromium's answer, when it comes, takes
++  // Chrome's own path.
++  void DropLeaveQuestion() {
++    if (void (^answer)(BOOL) = leave_answer_) {
++      leave_answer_ = nil;
++      answer(NO);
++    }
++  }
++  bool leave_confirmed() const { return leave_confirmed_; }
+   void DetachOwner() { owner_ = nil; freezing_vote_.reset(); }
+   void SetFreezingVote(bool enabled) {
+     if (!enabled) freezing_vote_.reset();
+@@ -184,6 +215,10 @@ class BrkPage : public content::WebContentsObserver,
+     if (!handle->IsInPrimaryMainFrame()) {
+       return;
+     }
++    if (handle->HasCommitted() && !handle->IsSameDocument()) {
++      // A Leave answered for the previous document does not cover this one.
++      leave_confirmed_ = false;
++    }
+     id<BrkCoreWebContentsDelegate> delegate = owner_.delegate;
+     NSURL* url = NSURLFromGURL(handle->GetURL());
+     if (handle->HasCommitted() && !handle->IsErrorPage()) {
+@@ -335,6 +370,8 @@ class BrkPage : public content::WebContentsObserver,
+   std::unique_ptr<brkcore::BrkDevToolsSession> devtools_;
+   std::unique_ptr<performance_manager::freezing::FreezingVote> freezing_vote_;
+   bool closing_by_shell_ = false;
++  void (^leave_answer_)(BOOL) = nil;
++  bool leave_confirmed_ = false;
+   bool frames_report_posted_ = false;
+   base::ScopedObservation<find_in_page::FindTabHelper, find_in_page::FindResultObserver> find_observation_{this};
+   base::WeakPtrFactory<BrkPage> weak_factory_{this};
+@@ -351,6 +388,11 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   BrkPage* page = BrkPage::FromWebContents(contents);
+   return page ? page->owner() : nil;
+ }
++
++bool BeforeUnloadAnsweredHook(content::WebContents* contents, bool proceed) {
++  BrkPage* page = BrkPage::FromWebContents(contents);
++  return page && page->AnswerLeave(proceed);
++}
+ }  // namespace brkcore
+ 
+ @interface BrkWebContents ()
+@@ -358,6 +400,7 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+ - (content::RenderFrameHost*)liveFrame:(NSString*)frame;
+ - (void)replaceDiscardedContents:(content::WebContents*)contents;
+ - (void)didDiscardContents;
++- (void)answerLeaveIfStuck:(base::TimeTicks)limit;
+ @end
+ 
+ @implementation BrkWebContents {
+@@ -877,8 +920,71 @@ BrkWebContents* PageForContents(content::WebContents* contents) {
+   if (!_contents) {
+     return;
+   }
+-  BrkPage::FromWebContents(_contents)->set_closing_by_shell();
+-  [_browser closeContents:_contents];
++  BrkPage* page = BrkPage::FromWebContents(_contents);
++  page->set_closing_by_shell();
++  page->DropLeaveQuestion();
++  if (page->leave_confirmed()) {
++    // Its beforeunload ran for this close already (-confirmLeaving:): only the unload handlers are left, as after Leave in Chrome.
++    _contents->ClosePage();
++  } else {
++    [_browser closeContents:_contents];
++  }
++  if (!_contents) {
++    return;
++  }
++  // Chromium bounds both steps (500 ms for beforeunload, 500 ms for unload) but skips its timeouts while a debugger is attached,
++  // which Brk's own protocol session can count as: past this the page is deleted, whatever its handlers are doing.
++  __weak BrkWebContents* weakSelf = self;
++  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(FROM_HERE, base::BindOnce(^{
++    BrkWebContents* closing = weakSelf;
++    if (closing.contents) {
++      [closing.browser deleteContents:closing.contents];
++    }
++  }), kCloseLimit);
++}
++
++- (BOOL)hasBeforeUnloadHandler {
++  if (!_contents) {
++    return NO;
++  }
++  bool found = false;
++  _contents->GetPrimaryMainFrame()->ForEachRenderFrameHost([&found](content::RenderFrameHost* frame) {
++    found = found || (frame->IsRenderFrameLive() && frame->GetSuddenTerminationDisablerState(
++                                                        blink::mojom::SuddenTerminationDisablerType::kBeforeUnloadHandler));
++  });
++  return found;
++}
++
++- (void)confirmLeaving:(void (^)(BOOL leave))completion {
++  if (!_contents || !self.hasBeforeUnloadHandler) {
++    completion(YES);
++    return;
++  }
++  BrkPage* page = BrkPage::FromWebContents(_contents);
++  page->DropLeaveQuestion();
++  page->AskToLeave(completion);
++  _contents->DispatchBeforeUnload(/*auto_cancel=*/false);
++  [self answerLeaveIfStuck:base::TimeTicks::Now() + kCloseLimit];
++}
++
++// A page that does not answer (hung, or its timeout skipped as -close explains) may go, as Chromium's timeout would let it; while
++// its question is on screen the person is answering, and the limit starts again after.
++- (void)answerLeaveIfStuck:(base::TimeTicks)limit {
++  __weak BrkWebContents* weakSelf = self;
++  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(FROM_HERE, base::BindOnce(^{
++    BrkWebContents* asked = weakSelf;
++    BrkPage* page = asked.contents ? BrkPage::FromWebContents(asked.contents) : nullptr;
++    if (!page || !page->asking_to_leave()) {
++      return;
++    }
++    if (asked.openDialog) {
++      [asked answerLeaveIfStuck:base::TimeTicks::Now() + kCloseLimit];
++    } else if (base::TimeTicks::Now() >= limit) {
++      page->AnswerLeave(true);
++    } else {
++      [asked answerLeaveIfStuck:limit];
++    }
++  }), base::Milliseconds(250));
+ }
+ 
+ - (BOOL)decideNavigationTo:(const GURL&)url isRedirect:(BOOL)isRedirect userGesture:(BOOL)userGesture {
+@@ -971,6 +1077,7 @@ void BrkPage::WasDiscarded() {
+   [owner_ didDiscardContents];
+ }
+ void BrkPage::WebContentsDestroyed() {
++  DropLeaveQuestion();
+   [owner_ contentsWillGo:closing_by_shell_];
+ }
+ }  // namespace
+diff --git a/brk/embedding/embedding.h b/brk/embedding/embedding.h
+index 4eb2cfb519bf9966fc2a8d2e7131e43e05616aa6..46d78e2204cc654406802a971c900c3ee5485da7 100644
+--- a/brk/embedding/embedding.h
++++ b/brk/embedding/embedding.h
+@@ -63,6 +63,9 @@ struct Hooks {
+   bool (*is_brk_page)(content::WebContents* contents) = nullptr;
+   // Brk asks itself whether to save the address (kind 1) or the card (kind 2) one of its pages sent, and runs `answer`.
+   void (*offer_autofill_save)(content::WebContents* contents, int kind, BrkSaveAnswerCallback answer) = nullptr;
++  // True when Brk ran this page's beforeunload itself to ask whether it may go (-confirmLeaving:) and took `proceed` as the answer:
++  // Chrome then neither closes the page nor runs its unload handlers.
++  bool (*before_unload_answered)(content::WebContents* contents, bool proceed) = nullptr;
+ };
+ 
+ // True when BrkCore.framework was started by Brk's shell: the shell owns NSApp's delegate, the menu and the quit.
+diff --git a/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc b/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
+index 4de8f49d9fe7b9f718450f09244ffbea8bd682b0..99a256adeda5927800ecc08b2a395948a8ba86b0 100644
+--- a/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
++++ b/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
+@@ -878,6 +878,7 @@ void BrowserWebContentsDelegate::BeforeUnloadFired(
+     content::WebContents* web_contents,
+     bool proceed,
+     bool* proceed_to_fire_unload) {
++  if (auto* asked = brkcore::GetHooks().before_unload_answered; asked && asked(web_contents, proceed)) { *proceed_to_fire_unload = false; return; }
+   unload_controller_->BeforeUnloadFired(web_contents, proceed,
+                                         proceed_to_fire_unload);
+ }

@@ -15,7 +15,7 @@ extension CorePage {
             alert.messageText = dialog.isReload ? "Reload this page?" : "Leave this page?"
             alert.informativeText = "Changes you made may not be saved."
             alert.addButton(withTitle: dialog.isReload ? "Reload" : "Leave")
-            alert.addButton(withTitle: "Stay")
+            alert.addButton(withTitle: "Stay").keyEquivalent = "\u{1b}"
         case .alert:
             alert.messageText = dialog.originTitle
             alert.informativeText = dialog.message

@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>unload-store</title>
+<style>textarea { position: fixed; inset: 0; width: 100%; height: 100%; box-sizing: border-box; font: 16px system-ui; }</style>
+<textarea id="draft" placeholder="Saved only while the page goes"></textarea>
+<script>
+// The pattern of web apps such as Discord's: the session token lives in memory while the page runs and is written back to
+// storage only from beforeunload, pagehide and unload. A browser that ends the page without running those handlers loses it.
+const params = new URLSearchParams(location.search);
+const token = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const events = ['beforeunload', 'pagehide', 'unload'];
+const saved = {};
+for (const name of events) {
+  saved[name] = localStorage.getItem(name);
+  saved['cookie-' + name] = (document.cookie.split('; ').find(c => c.startsWith(name + '=')) || '').split('=')[1] || null;
+  localStorage.removeItem(name);
+  document.cookie = name + '=; max-age=0; path=/';
+}
+window.brkUnloadStore = { token, saved };
+for (const name of events) {
+  addEventListener(name, event => {
+    localStorage.setItem(name, token);
+    document.cookie = name + '=' + token + '; max-age=86400; path=/';
+    // ?ask: the page also asks to confirm leaving, as an editor with unsaved input does.
+    if (name === 'beforeunload' && params.has('ask')) { event.preventDefault(); event.returnValue = ''; }
+  });
+}
+document.title = 'unload-store ' + token;
+</script>
