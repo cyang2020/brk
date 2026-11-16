@@ -82,6 +82,24 @@ final class LeavePageTests: XCTestCase {
         XCTAssertEqual(quits.count, 1, "Leave goes on to quit")
     }
 
+    /// Second review of #11: with Warn before quitting open, a confirmed quit (SIGTERM, the control socket, Restart) tore Brk down,
+    /// and the Warn sheet still counted as open, so AppKit's quit that followed was cancelled: Brk ran on without input. Once the
+    /// teardown ran, no quit question may still be counted as open.
+    func testAConfirmedQuitOvertakingWarnBeforeQuittingLeavesNoQuestionOpen() throws {
+        let h = LeaveHarness(), quits = QuitCounter()
+        let previousAsk = AppStore.askQuit
+        AppStore.askQuit = { _, _, _ in }
+        defer { h.close(); quits.restore(); AppStore.askQuit = previousAsk }
+        h.store.dispatch(.user(h.window, .settings(.general(.warnBeforeQuitting(true)))))
+        h.store.dispatch(.user(h.window, .app(.quit)))
+        XCTAssertTrue(h.store.isAskingToQuit, "Warn before quitting is open")
+        var terminated = 0
+        h.store.quitAfterAskingPages(terminate: { terminated += 1 }, declined: {})
+        XCTAssertEqual(terminated, 1, "the confirmed quit goes on (no page asks)")
+        XCTAssertTrue(h.store.isTerminating)
+        XCTAssertFalse(h.store.isAskingToQuit, "the overtaken Warn sheet no longer holds the quit back")
+    }
+
     /// Review of #11: Leave applied Cmd+W's command again to whatever was focused by then, closing another tab and keeping the
     /// asked one. It now goes on only if it ends the same pages; while asked, no other page takes the asked one's place.
     func testLeaveDoesNotCloseAnotherPageWhenFocusMoved() throws {

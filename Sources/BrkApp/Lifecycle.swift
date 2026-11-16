@@ -279,6 +279,9 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
         // Leave this page? is answered Leave), and every page runs its handlers as it closes. AppKit itself turns a logout down,
         // before it asks here, while any sheet is attached (measured 2026-11-16: the quit event's reply is userCanceledErr).
         if Self.isSystemQuit() { beginOrderedQuit(); return .terminateLater }
+        // A quit whose pages let go and whose teardown already ran (`AppStore.quitAfterAskingPages`: SIGTERM, the control socket,
+        // Restart, Restore Data) is decided: cancelling or asking again now would leave Brk running without input.
+        if store?.isTerminating == true { beginOrderedQuit(); return .terminateLater }
         // A quit asked for earlier is waiting for its question (Warn before quitting, Leave this page?): that answer decides.
         if askingQuit || store?.isAskingToQuit == true { return .terminateCancel }
         // A quit that did not come through `AppEffect.quit` (the Dock menu, a quit Apple event) asks "Warn before
@@ -288,6 +291,10 @@ public final class Lifecycle: NSObject, NSApplicationDelegate {
             store.confirmQuit(on: NSApp.keyWindow ?? NSApp.mainWindow) { [weak self] go in
                 guard let self, !self.quitting else { return }
                 self.askingQuit = false
+                // A confirmed quit (SIGTERM, the control socket, Restart) overtook this sheet and its teardown ended it: that
+                // quit goes on and answers this pending one, rather than reading the ended sheet as Cancel (which would also
+                // drop a Restart's relaunch or a Restore Data).
+                if self.store?.isTerminating == true { self.beginOrderedQuit(); return }
                 if go { Quit.confirmed = true; self.askPagesThenQuit(); return }
                 self.declineQuit()
             }

@@ -370,6 +370,9 @@ public final class AppStore {
         settingsWindow?.endSheets()
         // An open Warn before quitting sheet (a quit that did not ask, SIGTERM or the control socket, overtook it).
         for controller in windows.values { if let sheet = controller.window.attachedSheet, sheet.className.contains("Alert") { controller.window.endSheet(sheet) } }
+        // That sheet's answer is moot now (its closure returns once Brk is terminating): the quit is decided, and a Warn
+        // before quitting still counted as open would make `applicationShouldTerminate` cancel the quit after the teardown.
+        askingQuit = false
         aiServices.cancelAll()
         cancelExports()
         for window in snapshot.windows.keys { destinations.ownerGone(window); outputSheets.ownerGone(window) }
@@ -498,6 +501,9 @@ public final class AppStore {
 
     /// The pages whose Leave this page? question is open now.
     private var leaveQuestion: Set<PageID> = []
+    /// The page whose beforeunload is being run right now (`askLeaving` asks a quit's or a window's pages one at a time): only its
+    /// window can show the sheet, so only there does a person's input wait for the answer.
+    private var askingNow: Set<PageID> = []
     /// The command a person let its pages go for, applied once more, and the pages on screen it ended when it was asked.
     private var leaveConfirmed: (input: Input, ended: Set<PageID>)?
     /// While the quit's question is open: what waits for its answer (`askPagesBeforeQuit`).
@@ -532,7 +538,8 @@ public final class AppStore {
         if let pass { return Set(ended) == pass.ended ? nil : handling }
         // The question is a sheet on its window: until it is answered, no other page takes the asked one's place there (a menu
         // shortcut for another tab or Space, a new tab).
-        if isAskingToLeave(in: window), state.shownLoadedPages(in: window) != t.state.shownLoadedPages(in: window) { return handling }
+        if askingNow.contains(where: { $0.window == window }),
+           state.shownLoadedPages(in: window) != t.state.shownLoadedPages(in: window) { return handling }
         guard !ended.isEmpty else { return nil }
         // The same command again while its page is being asked (Cmd+W pressed twice) waits for the same answer.
         if !leaveQuestion.isDisjoint(with: ended) { return handling }
@@ -563,7 +570,9 @@ public final class AppStore {
     /// logout overtook the question) the rest go without one.
     private func askLeaving(_ pages: ArraySlice<PageID>, answer: @escaping @MainActor (Bool) -> Void) {
         guard let page = pages.first, !isTerminating else { answer(true); return }
+        askingNow.insert(page)
         engine.confirmLeaving(page) { [weak self] leave in
+            self?.askingNow.remove(page)
             guard leave, let self else { answer(leave); return }
             self.askLeaving(pages.dropFirst(), answer: answer)
         }
