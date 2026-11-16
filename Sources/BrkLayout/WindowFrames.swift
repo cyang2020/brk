@@ -114,8 +114,12 @@ public struct SidebarFrames: Sendable, Equatable, Codable {
     public var dockSpaces: [SpaceID: CGRect]
     public var libraryButton: CGRect
     public var plusButton: CGRect
-    /// The update pill above the dock; its bottom gap is reserved by `SidebarLayout`.
+    /// The update pill above the dock; its bottom gap is reserved by `SidebarLayout`. The open card's frame while the
+    /// pointer holds it open (`BannerPanelLayout`).
     public var updateBanner: CGRect? = nil
+    /// Another of Arc's sidebar banners (the auto-archive education card) in the banner panel above the update pill;
+    /// the list and the mini players end above it (`BannerPanelLayout`).
+    public var banner: CGRect? = nil
     /// The mini player cards above the dock, oldest first; `tablistViewport` ends above them (`MiniPlayerLayout`).
     public var miniPlayers: [MiniPlayerFrame] = []
 }

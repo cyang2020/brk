@@ -92,7 +92,6 @@ struct SidebarDrawMetrics: MetricGroup {
     let tidyGaps = Metric([9.0, 6.5, 6.5, 9.5], .anatomy("~/brk-arc-reference/P46/P46-b-arc.png: hairline to broom, broom to Tidy, Tidy to the separator, the separator to Clear"))
     /// The auto-archive banner, from Arc's `AutoArchiveEducationView` (bin 0x10256c910 to 0x10256e720), as no Arc capture
     /// of it exists: a card 2 + 8 in from its surroundings, radius 12, with a band, the message and a filled button.
-    let educationMargin = Metric(10.0, .anatomy("de345fe719:verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256c7f0 padding 8 around bin:0x10256cb34 padding 2"))
     let educationCorner = Metric(12.0, .anatomy("de345fe719:verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256ca88 clipShape radius 12, all four corners"))
     let educationPadding = Metric(12.0, .anatomy("de345fe719:verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256d190 the band, bin:0x10256d3a8 the message (top and sides), bin:0x10256e5f0 around the button"))
     let educationTitleFont = Metric(13.0, .anatomy("de345fe719:verify/visual-pairs/run-20261103/r5-2/REPORT.md, bin:0x10256cfcc Font.body (13 pt on macOS) weight medium"))

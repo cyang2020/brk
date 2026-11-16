@@ -65,6 +65,48 @@ public enum SidebarLayout {
     }
 }
 
+/// What stands in the sidebar's banner panel beyond the pill at rest: view state the snapshot does not hold.
+public struct BannerPanel: Sendable, Equatable {
+    /// The open update card's height.
+    public var updateCard: Double?
+    /// The height of another banner's card (the auto-archive education card), above the update pill.
+    public var banner: Double?
+
+    public init(updateCard: Double? = nil, banner: Double? = nil) { self.updateCard = updateCard; self.banner = banner }
+}
+
+/// Arc keeps its sidebar banners in a panel of the sidebar's bottom stack, between the media controls and the dock
+/// (SidebarViewController, bin:0x100294d74: list, media controls, banner panel, dock, no spacing). What the panel holds
+/// takes its height from the list instead of lying over the rows: the list ends at the panel's top, the mini players
+/// stand on it, and the rows stay where they were. The update banner is padded on the sides and below only
+/// (bin:0x10257e4dc), so the list ends at its pill or open card; the other banners (the auto-archive education card,
+/// bin:0x10256c7f4) are padded on every side.
+public enum BannerPanelLayout {
+    public static func applying(_ panel: BannerPanel, to frames: SidebarFrames, players: [ItemID], hover: MiniPlayerHover? = nil) -> SidebarFrames {
+        var f = frames
+        if let height = panel.updateCard, let pill = f.updateBanner, height > pill.height {
+            f.updateBanner = CGRect(x: pill.minX, y: pill.maxY - height, width: pill.width, height: height)
+        }
+        if let height = panel.banner, height > 0 {
+            let inset = Metrics.updateBanner.bannerInset.value
+            let base = f.updateBanner?.minY ?? f.dock.minY
+            f.banner = CGRect(x: f.frame.minX + inset, y: base - inset - height, width: max(0, f.frame.width - 2 * inset), height: height)
+        } else {
+            f.banner = nil
+        }
+        return MiniPlayerLayout.applying(players, hover: hover, to: f)
+    }
+}
+
+/// The update banner's card while it is open: it keeps the pill's foot and sides and grows upward to `height`, and the
+/// list ends above it (`BannerPanelLayout`). Unchanged without a banner or with a card no taller than the pill.
+public enum UpdateCardLayout {
+    public static func opening(_ frames: SidebarFrames, to height: Double, players: [ItemID], hover: MiniPlayerHover? = nil) -> SidebarFrames {
+        guard let pill = frames.updateBanner, height > pill.height else { return frames }
+        return BannerPanelLayout.applying(BannerPanel(updateCard: height, banner: frames.banner.map { Double($0.height) }), to: frames, players: players, hover: hover)
+    }
+}
+
 /// What the pointer does to the mini player stack: view state, never in the document or the snapshot.
 public struct MiniPlayerHover: Sendable, Equatable {
     /// The pointer is on the stack: the cards come apart and each shows its title.
@@ -105,7 +147,8 @@ public enum MiniPlayerLayout {
     /// `frames` with the cards of `tabs` in place and the list ending above them.
     public static func applying(_ tabs: [ItemID], hover: MiniPlayerHover? = nil, to frames: SidebarFrames) -> SidebarFrames {
         var f = frames
-        let bottom = f.updateBanner?.minY ?? f.dock.minY
+        // The panel's top: above another banner's card and its padding, else the update pill (no padding above), else the dock.
+        let bottom = f.banner.map { $0.minY - Metrics.updateBanner.bannerInset.value } ?? f.updateBanner?.minY ?? f.dock.minY
         let cards = self.frames(tabs, minX: f.frame.minX, width: f.frame.width, bottom: bottom - Metrics.miniPlayer.bottomGap.value, hover: hover)
         f.miniPlayers = cards
         let end = (cards.map(\.rect.minY).min().map { $0 - Metrics.miniPlayer.listGap.value }) ?? bottom
