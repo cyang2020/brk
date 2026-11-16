@@ -29,11 +29,12 @@ enum PageUnloadScenarios {
 
         var failures: [String] = []
         func title() throws -> String { tab(item, in: try app.view(window))?.title ?? "" }
-        func token() throws -> String {
+        /// The token of the page loaded now; `previous` is the one before it, which the tab's title may still show for a moment.
+        func token(after previous: String? = nil) throws -> String {
             var found = ""
             try app.waitUntil("the page shows its token") {
                 found = try title()
-                return found.hasPrefix("unload-store t")
+                return found.hasPrefix("unload-store t") && found != "unload-store \(previous ?? "")"
             }
             return String(found.dropFirst("unload-store ".count))
         }
@@ -63,14 +64,13 @@ enum PageUnloadScenarios {
             }
             try app.dispatch(.page(.reload(.item(item), ignoringCache: false)))
             try app.waitForPageInput(page, at: url)
-            return try token()
+            return try token(after: previous)
         }
         /// Step 4: a real click on the pinned row loads the page again.
         func reopenAndCheck(_ how: String, previous: String) throws -> String {
             try PhysicalPointer.click(app, at: try rowPoint(.row(item)), window: window)
             try app.waitForPageInput(page, at: url)
-            let next = try token()
-            try expect(next != previous, "\(how): the page did not load again (same token \(next))")
+            _ = try token(after: previous)
             return try checkSaved(how, previous: previous)
         }
 
@@ -94,7 +94,7 @@ enum PageUnloadScenarios {
         try WindowServerKeys.ensureFrontmost(app, window)
         if try app.native(window).ownedPages?[page] != nil {
             try app.waitForPageInput(page, at: url)
-            try expect(try token() != current, "the relaunched page shows the token of the quit one")
+            _ = try token(after: current)
             current = try checkSaved("ended by quitting", previous: current)
         } else {
             current = try reopenAndCheck("ended by quitting", previous: current)
@@ -104,7 +104,7 @@ enum PageUnloadScenarios {
         try app.dispatch(.page(.navigate(.item(item), app.site.url("unload-store.html?ask"))))
         let asking = app.site.url("unload-store.html?ask")
         try app.waitForPageInput(page, at: asking)
-        let askingToken = try token()
+        let askingToken = try token(after: current)
         try PhysicalPointer.click(app, at: try rowPoint(.card(0)), window: window)
         PhysicalKeys.type("draft", pid: try pid(app))
         func sheet() throws -> String? { try app.native(window).sheetClass }
