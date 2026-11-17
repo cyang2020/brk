@@ -46,7 +46,7 @@ public struct ProjectionContext: Sendable {
 public func project(_ state: AppState, _ ctx: ProjectionContext) -> AppSnapshot {
     var windows: [WindowID: WindowSnapshot] = [:]
     for id in state.doc.windows.keys where id != state.session.closedWindow {
-        if var window = projectWindow(id, state, ctx) { window.linkStatus = state.session.windows[id]?.linkStatus; window.ai = state.session.ai.answers[id].map(state.withPages); window.aiPanel = state.panelSnapshot(in: id, now: ctx.now, calendar: ctx.calendar, system: ctx.systemLanguage); window.pendingConversationDeletion = state.session.ai.pendingConversationDeletion[id]; window.aiAgents = state.agentMenu; window.aiPages = state.aiPageCards(in: id, system: ctx.systemLanguage); state.projectPanelEntries(into: &window, id, system: ctx.systemLanguage); window.pageLinkPrompt = state.session.ai.linkPrompts[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; if window.kind == .little { window.openInSpace = state.mostRecentStandardWindow().flatMap { state.doc.windows[$0]?.space } }; windows[id] = window }
+        if var window = projectWindow(id, state, ctx) { window.linkStatus = state.session.windows[id]?.linkStatus; window.ai = state.session.ai.answers[id].map(state.withPages); window.aiPanel = state.panelSnapshot(in: id, now: ctx.now, calendar: ctx.calendar, system: ctx.systemLanguage); window.pendingConversationDeletion = state.session.ai.pendingConversationDeletion[id]; window.aiAgents = state.agentMenu; window.aiPages = state.aiPageCards(in: id, system: ctx.systemLanguage); state.projectPanelEntries(into: &window, id, system: ctx.systemLanguage); window.pageLinkPrompt = state.session.ai.linkPrompts[id]; window.aiPreview = state.session.ai.previews[id]; window.exportOutcome = state.session.windows[id]?.exportOutcome; window.openInFolders = openInFolders(state); window.output = state.session.windows[id]?.output; window.stayOnTop = state.doc.windows[id]?.stayOnTop ?? false; if window.kind == .little { window.openInSpace = state.littleDestination() }; windows[id] = window }
     }
     return AppSnapshot(sidebarData: state.sidebarDataSnapshot, rev: state.session.rev, now: ctx.now, windows: windows, pages: projectPages(state, systemScheme: ctx.systemScheme) + state.session.ai.requests.values.flatMap(\.hidden), settings: projectSettings(state),
                        sites: state.siteSnapshots(),
@@ -578,15 +578,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     case nil: nil
     }
 
-    // Incognito has its own dark chrome: Arc's near-black (the 2026-11-03 capture Q03 reads #0D0F14 under the dark
-    // wash; this color washes to it). It never edits the space's saved theme or the appearance of its standard windows.
-    // A blank window and a Little Arc belong to no space's sidebar: Arc draws them in its own lavender-to-pink
-    // gradient (the 2026-11-03 captures P20a and P21b read #DADBF5 to #ECE2E6 under the wash; these colors wash to them).
-    let theme = doc.kind == .incognito
-        ? SpaceTheme(colors: [RGBA(hex: "#14171E")], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .dark)
-        : doc.kind == .blank || doc.kind == .little
-        ? SpaceTheme(colors: [RGBA(hex: "#C7C9F0"), RGBA(hex: "#E2D3D9")], texture: .grain, intensity: SpaceTheme.default.intensity, appearance: .light)
-        : space.theme
+    // Incognito has its own dark chrome (`ResolvedTheme.incognito`). Every other window wears a Space's saved theme,
+    // its colors, slider, noise and light/dark rule (`themeSpace`).
+    let theme = state.doc.spaces[state.themeSpace(of: id) ?? space.id]?.theme ?? space.theme
     // Owner: F5. The History card's visits: the window's profile's (none in incognito), only while a card shows it.
     let historyShown = content.panes.contains { if case .history = $0.content { true } else { false } }
     let historyProfile: ProfileID? = if case .profile(let p) = state.libraryContext(in: id) { p } else { nil }
@@ -628,6 +622,19 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
     snapshot.libraryFlyout = state.libraryFlyout(in: id)
     snapshot.littleDownloads = state.littleDownloads(in: id)
     return snapshot
+}
+
+extension AppState {
+    /// The Space a Little Arc's "Open in" names and ⌘O moves its tab to: the space of the standard window used last.
+    func littleDestination() -> SpaceID? { mostRecentStandardWindow().flatMap { doc.windows[$0]?.space } }
+
+    /// The Space whose theme a window wears. A Little Arc wears its "Open in" Space's, the place its tab goes (issue
+    /// #17: a fixed light lavender-to-pink theme with the default noise matched none of the user's Spaces and ignored
+    /// dark mode); a blank window the Space it was opened from; any other window its own.
+    func themeSpace(of window: WindowID) -> SpaceID? {
+        guard let doc = doc.windows[window] else { return nil }
+        return doc.kind == .little ? littleDestination() ?? doc.space : doc.space
+    }
 }
 
 /// Every profile as the dialogs list it: default first, then by name.
