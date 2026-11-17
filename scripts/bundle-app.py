@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from release import Release, build_number, updater_metadata
+from release import Release, build_number, language_metadata, updater_metadata
 
 p = argparse.ArgumentParser(description=__doc__)
 for name in ('bin', 'core', 'arch', 'product', 'bundle-id'):
@@ -44,7 +44,8 @@ with tempfile.TemporaryDirectory(prefix='brk-bundle-', dir=dest.parent) as tmp:
                 CFBundleVersion=build, LSMinimumSystemVersion='14.0',
                 NSHighResolutionCapable=True, NSSupportsAutomaticGraphicsSwitching=True,
                 NSPrincipalClass='NSApplication', LSEnvironment={'MallocNanoZone': '0'},
-                BrkChromiumVersion=engine_info['CFBundleShortVersionString'], **updater_metadata(root, a.arch))
+                BrkChromiumVersion=engine_info['CFBundleShortVersionString'], **language_metadata(framework),
+                **updater_metadata(root, a.arch))
     with (contents / 'Info.plist').open('wb') as f:
         plistlib.dump(info, f)
     (contents / 'PkgInfo').write_bytes(b'APPL????')

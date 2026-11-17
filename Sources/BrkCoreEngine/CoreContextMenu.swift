@@ -7,7 +7,7 @@ import CBrkCore
 /// The framework waits for the answer, as Chrome's own menu does, and runs a Chrome row's command itself.
 @MainActor
 final class CoreContextMenu: NSObject, NSMenuDelegate {
-    private struct Item {
+    struct Item {
         let title: String
         let command: Int
         let separator: Bool
@@ -24,18 +24,21 @@ final class CoreContextMenu: NSObject, NSMenuDelegate {
     /// Outside Chromium's command ids, as on CEF.
     static let translateCommand = 28_400
     static let splitLinkCommand = 28_401, littleLinkCommand = 28_402
-    static let removed: Set<String> = ["Create QR Code for this Page", "Create QR Code for this Image"]
-    /// No Open Link in Incognito Window yet: the bridge forwards only new-window opens (OpenURLFromTabHook), so an
-    /// off-the-record open takes Chrome's own path, toward a Chrome window of its own, not a Brk incognito window.
-    /// CEF's menu has the row.
-    static let linkRows: Set<String> = ["Open Link in New Tab", "Open Link in New Window",
-                                        "Save Link As…", "Copy Link Address", "Copy", "Copy Link to Highlight", "Print…", "Inspect", "Speech"]
-    static func isLinkRow(_ title: String) -> Bool { linkRows.contains(title) || (title.hasPrefix("Search ") && title.contains(" for ")) }
+    /// Chrome's rows are told apart by command id (chrome/app/chrome_command_ids.h; Speech is ui/menus/cocoa/text_services_context_menu.h),
+    /// never by title: Chromium titles them in the app's language, which follows macOS.
+    static let openLinkInNewWindow = 50_101, cast = 35_011
+    /// Create QR Code for this Page and for this Image.
+    static let removed: Set<Int> = [51_034]
+    /// Open Link in New Tab, Open Link in New Window, Save Link As…, Copy Link Address, Copy, Copy Link to Highlight, Inspect,
+    /// Search … for …, its new-tab form, Print… and Speech. No Open Link in Incognito Window yet: the bridge forwards only new-window
+    /// opens (OpenURLFromTabHook), so an off-the-record open takes Chrome's own path, toward a Chrome window of its own, not a Brk
+    /// incognito window. CEF's menu has the row.
+    static let linkRows: Set<Int> = [50_100, openLinkInNewWindow, 50_103, 50_104, 50_150, 50_158, 50_162, 50_191, 50_192, 35_003, 100]
 
     /// The chosen Chrome command, or -1 (nothing, or one of Brk's own rows, which `onTranslate` and `onLink` handle).
     func run(_ raw: [[String: Any]], at point: CGPoint, in surface: NSView, link: Bool, translateTo: String?,
              onTranslate: () -> Void, onLink: (PageLinkTarget) -> Void) -> Int {
-        let items = Self.withLinkRows(Self.withTranslate(Self.trimmed(Self.parse(raw), link: link), translateTo), link: link)
+        let items = Self.shown(raw, link: link, translateTo: translateTo)
         guard !items.isEmpty, surface.window?.isVisible == true, !surface.isHiddenOrHasHiddenAncestor else { return -1 }
         let choice = Choice()
         let menu = makeMenu(items, target: choice)
@@ -53,6 +56,10 @@ final class CoreContextMenu: NSObject, NSMenuDelegate {
 
     func cancel() { open?.cancelTracking() }
 
+    static func shown(_ raw: [[String: Any]], link: Bool, translateTo: String?) -> [Item] {
+        withLinkRows(withTranslate(trimmed(parse(raw), link: link), translateTo), link: link)
+    }
+
     private static func parse(_ raw: [[String: Any]]) -> [Item] {
         raw.map { row in
             if row["separator"] as? Bool == true { return Item(title: "", command: -1, separator: true, enabled: false, checked: false, children: nil) }
@@ -66,14 +73,14 @@ final class CoreContextMenu: NSObject, NSMenuDelegate {
         guard let language else { return items }
         let row = Item(title: "Translate to \(language)", command: translateCommand, separator: false, enabled: true, checked: false, children: nil)
         var out = items
-        if let cast = out.firstIndex(where: { $0.title.replacingOccurrences(of: "...", with: "…") == "Cast…" }) { out.insert(row, at: cast + 1) }
+        if let index = out.firstIndex(where: { $0.command == cast }) { out.insert(row, at: index + 1) }
         else if let separator = out.lastIndex(where: \.separator) { out.insert(row, at: separator) }
         else { out.append(row) }
         return out
     }
 
     private static func withLinkRows(_ items: [Item], link: Bool) -> [Item] {
-        guard link, let window = items.firstIndex(where: { $0.title == "Open Link in New Window" }) else { return items }
+        guard link, let window = items.firstIndex(where: { $0.command == openLinkInNewWindow }) else { return items }
         func row(_ title: String, _ command: Int) -> Item { Item(title: title, command: command, separator: false, enabled: true, checked: false, children: nil) }
         var out = items
         out.insert(contentsOf: [row("Open Link in Split View", splitLinkCommand), row("Open Link in Little \(Product.name)", littleLinkCommand)], at: window + 1)
@@ -81,10 +88,7 @@ final class CoreContextMenu: NSObject, NSMenuDelegate {
     }
 
     private static func trimmed(_ items: [Item], link: Bool) -> [Item] {
-        let kept = items.filter { item in
-            let title = item.title.replacingOccurrences(of: "...", with: "…")
-            return item.separator || (!removed.contains(title) && (!link || isLinkRow(title)))
-        }
+        let kept = items.filter { $0.separator || (!removed.contains($0.command) && (!link || linkRows.contains($0.command))) }
         var out: [Item] = []
         for item in kept {
             if item.separator, out.last?.separator ?? true { continue }
