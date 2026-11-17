@@ -158,9 +158,9 @@ enum BrowserBasicScenarios {
         try expect(try app.native(owner).windowLevel == 0, "Stay on top was not reversible")
         try dispatch(app, owner, .window(.newLittle(app.site.url("page2.html"))))
         guard case .hello(let withLittle) = try app.send(.hello), let little = withLittle.windows.first(where: { (try? app.view($0).kind) == .little }) else { throw Check(description: "Little window missing") }
-        try expect(try app.native(little).windowLevel > 0, "Little window is not floating")
+        try expect(try app.native(little).windowLevel == 0, "Little window floats without Stay on Top")
         try app.screenshot("blank-sidebar", window: blank)
-        try app.screenshot("little-floating", window: little)
+        try app.screenshot("little", window: little)
         _ = try app.send(.activate(window: owner))
         try dispatch(app, owner, .app(.minimize))
         try app.waitUntil("native minimize") { try app.native(owner).miniaturized }
