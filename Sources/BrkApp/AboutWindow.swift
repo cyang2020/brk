@@ -21,7 +21,7 @@ final class AboutWindow: NSObject, NSTextViewDelegate {
     func show(icon: AppIconChoice) {
         let panel = self.panel ?? makePanel()
         self.panel = panel
-        (panel.contentView?.viewWithTag(Tag.icon) as? NSImageView)?.image = AppIconArt.image(icon, side: About.icon.value)
+        (panel.contentView?.viewWithTag(Tag.icon) as? NSImageView)?.image = AppIconArt.appImage(icon, side: About.icon.value)
         if !panel.isVisible { panel.center() }
         panel.makeKeyAndOrderFront(nil)
     }

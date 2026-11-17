@@ -706,7 +706,7 @@ public final class AppStore {
         let icon = snapshot.settings.general.appIcon ?? .original
         if icon != shownIcon {
             shownIcon = icon
-            NSApp.applicationIconImage = AppIconArt.image(icon, side: Self.dockIconSide)
+            NSApp.applicationIconImage = AppIconArt.appImage(icon, side: Self.dockIconSide)
             DockTile.publishIcon(icon.rawValue)
         }
         if settingsWindow == nil, snapshot.settings.pane == nil { return }

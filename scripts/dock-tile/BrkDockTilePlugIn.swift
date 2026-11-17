@@ -1,6 +1,7 @@
 // Brk's Dock tile plug-in (A131), the counterpart of Arc's Contents/PlugIns/DockTilePlugIn.plugin: macOS loads it
 // into the Dock's helper process for Brk's tile, so a Brk kept in the Dock shows the icon chosen in Settings > Icon
-// while Brk is not running (the bundle's .icns is always "The Original"). While Brk runs, the app's own
+// while Brk is not running (the bundle's .icns is always "The Original"; a custom icon pasted in Finder's Get Info
+// replaces The Original here and in the running app). While Brk runs, the app's own
 // `NSApp.applicationIconImage` takes the tile and this plug-in is not drawn.
 //
 // Brk writes its choice to `<data directory>/dock-tile.json` ({"icon": "neon", "dataDirectory": "<path>"}) at launch
@@ -52,11 +53,16 @@ final class BrkDockTilePlugIn: NSObject, NSDockTilePlugIn {
         let variant = name.flatMap(AppIconArt.Variant.init(rawValue:)) ?? .original
         UserDefaults.standard.set(variant.rawValue, forKey: cacheKey)
         MainActor.assumeIsolated {
-            let view = NSImageView(frame: NSRect(origin: .zero, size: tile.size))
-            view.imageScaling = .scaleProportionallyUpOrDown
-            view.image = AppIconArt.image(variant, side: max(tile.size.width, 128))
-            view.identifier = NSUserInterfaceItemIdentifier("brk-dock-tile-" + variant.rawValue)
-            tile.contentView = view
+            if variant == .original, let host, AppIconArt.hasFinderIcon(host.bundleURL) {
+                // A Finder custom icon on the bundle (issue #15): no view, so the Dock draws the icon Finder shows.
+                tile.contentView = nil
+            } else {
+                let view = NSImageView(frame: NSRect(origin: .zero, size: tile.size))
+                view.imageScaling = .scaleProportionallyUpOrDown
+                view.image = AppIconArt.image(variant, side: max(tile.size.width, 128))
+                view.identifier = NSUserInterfaceItemIdentifier("brk-dock-tile-" + variant.rawValue)
+                tile.contentView = view
+            }
             tile.display()
         }
         log.notice("tile shows \(variant.rawValue, privacy: .public) for \(self.hostID, privacy: .public)")
