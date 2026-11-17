@@ -1,6 +1,7 @@
 import AppKit
 
-/// The same approved artwork is used by the bundle, Dock, About window and icon picker.
+/// The same approved artwork is used by the bundle, Dock, About window and icon picker (the Dock and About window
+/// show a Finder custom icon instead of The Original, `appImage`).
 /// This file also compiles with the standalone icon exporter and Dock plug-in.
 public enum AppIconArt {
     public enum Variant: String, CaseIterable, Sendable {
@@ -9,6 +10,24 @@ public enum AppIconArt {
 
     @MainActor public static func image(_ variant: Variant, side: CGFloat) -> NSImage {
         image(variant, side: side, resources: resourceDirectory)
+    }
+
+    /// The app's icon as the Dock and the About window show it: the artwork for `variant`, except that The Original
+    /// is the icon Finder shows for the app when someone gave the bundle another one in Get Info (issue #15), as the
+    /// Dock shows for an app that draws no icon of its own.
+    @MainActor public static func appImage(_ variant: Variant, side: CGFloat, bundle: URL = Bundle.main.bundleURL) -> NSImage {
+        guard variant == .original, hasFinderIcon(bundle) else { return image(variant, side: side) }
+        let icon = NSWorkspace.shared.icon(forFile: bundle.path).copy() as! NSImage
+        icon.size = NSSize(width: side, height: side)
+        return icon
+    }
+
+    /// Whether Finder shows a custom icon for `bundle`: Get Info's pasted icon sets kHasCustomIcon in the folder's
+    /// FinderInfo and keeps the picture in its "Icon\r" file.
+    public static func hasFinderIcon(_ bundle: URL) -> Bool {
+        var info = [UInt8](repeating: 0, count: 32)
+        guard getxattr(bundle.path, "com.apple.FinderInfo", &info, info.count, 0, 0) == info.count else { return false }
+        return info[8] & 0x04 != 0 && FileManager.default.fileExists(atPath: bundle.appendingPathComponent("Icon\r").path)
     }
 
     @MainActor public static func png(_ variant: Variant, pixels: Int, resources: URL? = nil) -> Data? {

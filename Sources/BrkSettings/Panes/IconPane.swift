@@ -103,6 +103,7 @@ struct IconPaneMetricsTable: MetricGroup {
 extension AppIconArt {
     /// The drawing for the Icon pane's choice (one to one, by name).
     @MainActor public static func image(_ choice: AppIconChoice, side: CGFloat) -> NSImage { image(Variant(rawValue: choice.rawValue) ?? .original, side: side) }
+    @MainActor public static func appImage(_ choice: AppIconChoice, side: CGFloat) -> NSImage { appImage(Variant(rawValue: choice.rawValue) ?? .original, side: side) }
 
     /// The pane's names. Arc calls its first two "The Original Arc" and "Candy Arc" (P38-h); Brk's carry its name.
     public static func name(_ choice: AppIconChoice) -> String {
