@@ -10,7 +10,7 @@ import Foundation
 /// with Return, as a user would.
 enum CommandBarEvidenceScenarios {
     static let all = [
-        Scenario("R49-Suggestions", "history, bookmark, top-domain, calculator and engine rows are listed and Return runs them", suggestions),
+        Scenario("R49-Suggestions", "history, closed pinned tab, top-domain, calculator and engine rows are listed and Return runs them", suggestions),
     ]
 
     private typealias S = SidebarReviewScenarios
@@ -73,7 +73,7 @@ enum CommandBarEvidenceScenarios {
         try expect(index > 0, "the history row should rank under the typed row: \(rows)")
         try run(app, row: index)
         try app.waitUntil("Return on the history row reopened the page") { try currentTab(app.view())?.url == app.site.url("page2.html?hist=alpha") }
-        // Bookmark: a pinned tab of another space of this profile, titled by the user.
+        // A pinned tab of another space of this profile, titled by the user.
         let first = try app.view().space.id
         let marks = try createSpace(app, title: "Marks")
         let pinned = try E.loadReady(app, "page2.html?bm=beta")
@@ -88,16 +88,14 @@ enum CommandBarEvidenceScenarios {
         (index, rows) = try type(app, "bookmark be", until: "Bookmark Beta")
         record += "bookmark be rows: \(rows)\n"
         S.log(app, "rows.txt", record)
-        // The saved page ranks as the saved tab it is (Arc's ranking); its row is the one reading its title.
-        if let tabRow = rows.firstIndex(where: { $0.contains("Bookmark Beta") && $0.contains("Switch to Tab") }) {
-            app.note("Bookmark Beta is listed as a tab row (Switch to Tab), not a bookmark row: \(rows)")
-            try run(app, row: tabRow)
-        } else {
-            let saved = rows.firstIndex { $0.contains("Bookmark Beta") }
-            try expect(saved != nil, "no bookmark row: \(rows)")
-            try run(app, row: saved!)
+        // The closed pinned page is still the tab it is (Arc, issue #18): Switch to Tab, and Return loads it in its pinned row.
+        let tabRow = rows.firstIndex { $0.contains("Bookmark Beta") && $0.contains("Switch to Tab") }
+        try expect(tabRow != nil, "the closed pinned tab should be a Switch to Tab row: \(rows)")
+        try run(app, row: tabRow!)
+        try app.waitUntil("Return showed the pinned tab itself") {
+            let current = try currentTab(app.view())
+            return current?.id == pinned && current?.url == app.site.url("page2.html?bm=beta")
         }
-        try app.waitUntil("Return showed the saved page") { try currentTab(app.view())?.url == app.site.url("page2.html?bm=beta") }
         try app.dispatch(.space(.focus(first)))
         try app.waitUntil("first space") { try app.view().space.id == first }
         // A top domain (not run: it is a remote site) and the calculator.

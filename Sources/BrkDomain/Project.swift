@@ -449,7 +449,9 @@ func projectWindow(_ id: WindowID, _ state: AppState, _ ctx: ProjectionContext) 
             openID: openID, aiMode: { if case .ai(let mode) = target { mode } else { nil } }(), placement: placement, initialQuery: initialQuery,
             tabs: switchCandidates(state, window: id, tree: tree, space: space, focused: focusedPane),
             history: learned?.pages ?? [],
-            bookmarks: doc.kind == .incognito ? [] : state.doc.tree.allTabs().compactMap { tab in
+            // Only a Little window, which cannot show a sidebar tab, lists saved Pinned and Favorites as addresses; a standard
+            // window lists them among its tabs, and a private window lists nothing of the user's.
+            bookmarks: doc.kind != .little ? [] : state.doc.tree.allTabs().compactMap { tab in
                 guard state.browsingContext(of: tab) == .profile(profile),
                       state.role(of: tab)?.kind == .pinned || state.role(of: tab)?.kind == .favorites,
                       let value = state.displayedTab(tab, in: id, for: .savedDocument), let url = value.url else { return nil }
@@ -707,28 +709,29 @@ private func enabledActions(_ state: AppState, window: WindowID, tree: SidebarTr
     return enabled
 }
 
-/// Open tabs for the command bar: every tab with a url in the container (every space's Pinned and Today, then
-/// Favorites), the focused one first, then by recency, ties in that order.
+/// The command bar's tabs: every tab with a url in the container (every space's Pinned and Today, then Favorites), the
+/// focused one first, then by recency, ties in that order. A Pinned or Favorites tab whose page is closed is still the
+/// tab it is (Arc's saved tabs, issue #18): choosing it loads it in its place, never in a new tab.
 private func switchCandidates(_ state: AppState, window: WindowID, tree: SidebarTree, space: Space, focused: ItemID?) -> [SwitchCandidate] {
     var out: [(SwitchCandidate, Instant)] = []
     for s in state.doc.spaceOrder.compactMap({ state.doc.spaces[$0] }) {
         for root in [s.pinnedRoot, s.todayRoot] {
             for tab in tree.tabs(under: root) {
-                if root == s.pinnedRoot, !state.session.loaded.contains(where: { $0.item == tab }) { continue }
                 guard let t = state.displayedTab(tab, in: window), let url = t.url else { continue }
                 out.append((SwitchCandidate(tab: tab, title: t.displayTitle, url: url, favicon: t.favicon, spaceTitle: state.displayTitle(of: s.id),
                                             inCurrentSpace: s.id == space.id, isFocused: tab == focused,
-                                            saveLevel: root == s.pinnedRoot ? saveLevel(tree, tab) : nil, customTitle: t.customTitle), t.lastActiveAt))
+                                            saveLevel: root == s.pinnedRoot ? saveLevel(tree, tab) : nil, customTitle: t.customTitle,
+                                            isOpen: root != s.pinnedRoot || state.session.loaded.contains(where: { $0.item == tab })), t.lastActiveAt))
             }
         }
     }
     if let favorites = state.favoritesRoot(for: space) {
         for tab in tree.tabs(under: favorites) {
-            guard state.session.loaded.contains(where: { $0.item == tab }) else { continue }
             guard let t = state.displayedTab(tab, in: window), let url = t.url else { continue }
             out.append((SwitchCandidate(tab: tab, title: t.displayTitle, url: url, favicon: t.favicon, spaceTitle: nil,
                                         inCurrentSpace: true, isFocused: tab == focused,
-                                        saveLevel: saveLevel(tree, tab), isFavorite: true, customTitle: t.customTitle), t.lastActiveAt))
+                                        saveLevel: saveLevel(tree, tab), isFavorite: true, customTitle: t.customTitle,
+                                        isOpen: state.session.loaded.contains(where: { $0.item == tab })), t.lastActiveAt))
         }
     }
     if case .window = tree.scope {

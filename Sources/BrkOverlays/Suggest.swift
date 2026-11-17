@@ -103,7 +103,7 @@ public enum Suggest {
         }
         if let siteSearch { return Array(siteSearchRows(text, on: siteSearch, bar: bar).prefix(limit)) }
         if let prefix { return Array(prefixRows(prefix, text, bar: bar, appName: appName, resolve: resolve).prefix(limit)) }
-        let tabs = bar.tabs.filter { !$0.isFocused }
+        let tabs = bar.tabs.filter { !$0.isFocused && $0.isOpen }
         if text.isEmpty {
             return Array((tabs.prefix(emptyTabCap).map(switchRow) + arcRows).prefix(limit))
         }
@@ -212,7 +212,7 @@ public enum Suggest {
         }
         let named = scored.filter { $0.score >= 3 }.map(\.row), others = scored.filter { $0.score < 3 }.map(\.row)
         let where_ = OverlayCopy.newPane(side)
-        let tabs = bar.tabs.filter { !$0.isFocused }
+        let tabs = bar.tabs.filter { !$0.isFocused && $0.isOpen }
         func tabRow(_ tab: SwitchCandidate) -> Suggestion {
             Suggestion(kind: .action, title: tab.title, subtitle: where_, symbol: "globe", favicon: tab.favicon, hint: "Return", command: .commandBar(.splitTab(side, tab.tab)))
         }
@@ -226,7 +226,7 @@ public enum Suggest {
         let isAddress = url.map { $0 != engine.searchURL(rest) && !isSearch($0, for: rest) } ?? false
         let open = Suggestion(kind: .action, title: rest, subtitle: where_, symbol: isAddress ? "globe" : "magnifyingglass", favicon: nil, hint: "Return", command: .commandBar(.splitOpen(side, rest)))
         let matches = matching(tabs, needle) { [$0.title, $0.url.absoluteString] }
-        let taken = Set(bar.tabs.flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })
+        let taken = Set(bar.tabs.filter(\.isOpen).flatMap { [$0.url.absoluteString, identity($0.url, $0.title)] })
         let visited = matching(recentHistory(bar.history, excluding: taken), needle) { [$0.title, $0.url.absoluteString] }.prefix(2).map { entry in
             Suggestion(kind: .action, title: entry.title.isEmpty ? displayURL(entry.url) : entry.title, subtitle: where_, symbol: "clock", favicon: nil, hint: "Return", command: .commandBar(.splitOpen(side, entry.url.absoluteString)))
         }
@@ -491,7 +491,8 @@ public enum Suggest {
             if let built = topDomain(entry.site, rank: entry.rank) { out.append(built) }
         }
 
-        // Open tabs, then saved Pinned and Favorites without a page. A tab's last visit is when it was last switched to from
+        // Open tabs, then saved Pinned and Favorites whose page is closed, each still the tab it is (Arc has no bookmark rows:
+        // choosing one loads it in its place, issue #18), and in a Little window saved addresses. A tab's last visit is when it was last switched to from
         // this bar (Arc's `recentlySwitchedToTabs`), so the bar learns which tabs it is used for. The tab on screen ranks as
         // any tab but shows as Arc shows it, its title and address with the history clock (choosing it stays on it); an
         // address typed in full takes its place.
@@ -512,7 +513,11 @@ public enum Suggest {
             candidate.dedupKey = "document:" + ArcRanking.readable(url)
             return candidate
         }
-        for tab in matching(editsPage ? [] : bar.tabs, needle, texts: { [$0.title, $0.url.absoluteString] }).prefix(tabCandidates) {
+        let searched = editsPage ? [] : bar.tabs
+        let tabMatches = [searched.filter(\.isOpen), searched.filter { !$0.isOpen }].flatMap {
+            matching($0, needle, texts: { [$0.title, $0.url.absoluteString] }).prefix(tabCandidates)
+        }
+        for tab in tabMatches {
             var candidate = sidebarItem(tab.url, title: tab.title, customTitle: tab.customTitle)
             candidate.isFavorite = tab.isFavorite
             candidate.features[.lastNavigated] = since(bar.commandUsage[switchKey(tab.tab)]?.lastRun)
