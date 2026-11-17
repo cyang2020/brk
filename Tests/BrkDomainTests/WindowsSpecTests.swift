@@ -105,6 +105,27 @@ final class WindowsSpecTests: XCTestCase {
         XCTAssertEqual(d.current?.section, .today)
     }
 
+    /// Issue #17: a Little Arc and a blank window wear the theme of the Space "Open in" names (the standard window used
+    /// last) or that opened them, with its noise and its light/dark rule, in macOS light and dark alike. They were a
+    /// fixed light lavender-to-pink at the default noise
+    func test_littleArcAndBlankWindowWearTheirSpacesTheme() throws {
+        let d = Driver()
+        let work = d.newSpace("Work")
+        let navy = SpaceTheme(colors: [ThemePresets.drab[0]], texture: .grain, noise: 0.1, intensity: 0.3, appearance: .auto)
+        d.user(.space(.update(work, title: "Work", icon: nil, theme: navy)))
+        d.user(.window(.newBlank))
+        d.user(.window(.newLittle(url("https://example.com/little"))))
+        for scheme in [Scheme.light, .dark] {
+            let windows = project(d.state, ProjectionContext(now: d.now, calendar: Driver.calendar, systemScheme: scheme)).windows
+            let standard = try XCTUnwrap(windows[d.window]), little = try XCTUnwrap(windows.values.first { $0.kind == .little })
+            let blank = try XCTUnwrap(windows.values.first { $0.kind == .blank })
+            XCTAssertEqual(little.openInSpace, work)
+            XCTAssertEqual(standard.theme, resolveTheme(navy, systemScheme: scheme))
+            XCTAssertEqual(little.theme, standard.theme, "\(scheme)")
+            XCTAssertEqual(blank.theme, standard.theme, "\(scheme)")
+        }
+    }
+
     /// "Open in" from a Little Arc holding a second tab (a link it opened in the background) archives that tab, as
     /// closing the Little Arc does, instead of dropping it with no trace
     func test_openInArchivesTheLittleArcsOtherTabs() throws {

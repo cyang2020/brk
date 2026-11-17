@@ -53,7 +53,7 @@ extension AppState {
         policy.appearance = policy.preferences.appearance ?? WebsiteAppearance(rawValue: doc.settings.general.webAppearance.rawValue) ?? .automatic
         policy.visible = visiblePages().contains(page)
         if doc.settings.advanced.themeToCSS, let window = doc.windows[page.window],
-           let space = doc.spaces[role(of: page.item)?.space ?? window.space] {
+           let space = doc.spaces[role(of: page.item)?.space ?? themeSpace(of: page.window) ?? window.space] {
             let values = resolveTheme(space.theme, systemScheme: systemScheme).websiteValues
             // Private pages receive their own fixed neutral theme, never a public space's color.
             let c = window.kind == .incognito ? RGBA(0.2, 0.2, 0.2) : values.accent
