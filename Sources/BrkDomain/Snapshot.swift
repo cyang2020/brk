@@ -594,7 +594,7 @@ public struct CommandBarSnapshot: Sendable, Equatable, Codable {
     public var initialQuery: String
     public var tabs: [SwitchCandidate]
     public var history: [HistoryCandidate]
-    /// Saved Pinned and Favorites addresses in this profile.
+    /// Saved Pinned and Favorites addresses in this profile, for a Little window only (a standard window has them in `tabs`).
     public var bookmarks: [HistoryCandidate] = []
     public var folders: [FolderDestinationCandidate] = []
     /// Actions listed in the bar, in table order: every action with a `CommandBarListing` that does something in
@@ -723,6 +723,9 @@ public struct SwitchCandidate: Sendable, Equatable, Codable {
     public var isFavorite: Bool = false
     /// The name the user gave the tab, if any.
     public var customTitle: String? = nil
+    /// False for a Pinned or Favorites tab whose page is closed: a search lists it as the tab it is (choosing it loads it in
+    /// its place), but the recent tabs before anything is typed and the split rows list only tabs with a page.
+    public var isOpen: Bool = true
 }
 
 public struct HistoryCandidate: Sendable, Equatable, Codable {

@@ -264,18 +264,21 @@ final class SuggestWave2Tests: XCTestCase {
 }
 
 
-/// A067: saved Pinned and Favorites without a page are bookmark rows. Arc ranks them as the tabs they are (its sidebar
-/// keeps them), so a saved page whose title has the whole word leads, and Return opens its address.
-final class SuggestBookmarkTests: XCTestCase {
-    func testBookmarksRankAsSavedTabsAndOpenTheirAddress() {
-        var bar = commandBar([candidate("t0", "Fixture Home", "http://127.0.0.1:4000/", focused: true)],
+/// A067, issue #18: a saved Pinned or Favorites tab whose page is closed is the tab it is, as in Arc (no bookmark rows):
+/// a saved page whose title has the whole word leads as Switch to Tab and Return shows that tab, which loads in its place.
+/// It is no recent tab before anything is typed.
+final class SuggestClosedSavedTabTests: XCTestCase {
+    func testClosedSavedTabsAreTabRows() {
+        var saved = candidate("fav", "Bookmark Beta", "https://saved.example.com/beta", space: "Other")
+        saved.saveLevel = 1; saved.isFavorite = true; saved.isOpen = false
+        let bar = commandBar([candidate("t0", "Fixture Home", "http://127.0.0.1:4000/", focused: true), saved],
                              [visit("Beta history", "https://history.example.com/beta", 300)], actions: [])
-        bar.bookmarks = [HistoryCandidate(url: URL(string: "https://saved.example.com/beta")!, title: "Bookmark Beta", visitedAt: Instant(milliseconds: 200),
-                                          saveLevel: 1, isFavorite: true)]
         let list = suggest("beta", bar)
-        XCTAssertEqual(list.first?.kind, .bookmark, "a Favorite with the whole word leads: \(list.map(\.kind))")
-        XCTAssertEqual(list.first?.command, .commandBar(.submit("https://saved.example.com/beta")), "Return opens the saved address")
+        XCTAssertEqual(list.first?.kind, .switchToTab, "a Favorite with the whole word leads: \(list.map(\.kind))")
+        XCTAssertEqual(list.first?.hint, OverlayCopy.switchToTab)
+        XCTAssertEqual(list.first?.command, .tab(.focus(ItemID("fav"))), "Return shows the saved tab, not a new one")
         XCTAssertTrue(list.contains { $0.kind == .openTyped })
+        XCTAssertFalse(suggest("", bar).contains { $0.command == .tab(.focus(ItemID("fav"))) }, "no recent tab while its page is closed")
     }
 }
 

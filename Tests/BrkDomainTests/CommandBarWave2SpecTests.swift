@@ -74,6 +74,28 @@ final class CommandBarWave2SpecTests: XCTestCase {
         XCTAssertEqual(d.bar?.keys[.newWindow], KeyChord([.option, .command], .w), "the hint follows the user's shortcut")
     }
 
+    /// a pinned tab whose page is closed stays the tab it is (issue #18): the bar lists it among its tabs, not as an address,
+    /// and choosing it shows that pinned row and loads its page there, with no new tab
+    func test_aClosedPinnedTabIsStillATabInTheBar() throws {
+        let d = Driver()
+        let pinned = try XCTUnwrap(d.current?.id)
+        d.user(.tab(.togglePin(.focused)))
+        d.open("http://127.0.0.1:9/b")
+        d.user(.tab(.close(.item(pinned))))
+        XCTAssertEqual(d.row(pinned)?.loaded, false, "Close and Keep Pinned keeps the row and ends its page")
+        d.user(.commandBar(.open(.newTab)))
+        let bar = try XCTUnwrap(d.bar)
+        XCTAssertEqual(bar.tabs.first { $0.tab == pinned }?.isOpen, false, "listed as its tab, page closed")
+        XCTAssertTrue(bar.bookmarks.isEmpty, "a standard window lists no saved addresses: \(bar.bookmarks)")
+
+        let tabs = d.state.doc.tree.allTabs().count
+        d.user(.tab(.focus(pinned)))
+        XCTAssertEqual(d.current?.id, pinned)
+        XCTAssertEqual(d.current?.section, .pinned)
+        XCTAssertTrue(d.loadedIDs.contains(pinned), "its page loads in the pinned row")
+        XCTAssertEqual(d.state.doc.tree.allTabs().count, tabs, "no new tab")
+    }
+
     /// a new opening starts without the last opening's suggestions, and switching suggestions off drops the ones
     /// shown at the next keystroke (W2-10's second half)
     func test_staleSuggestionsAreDropped() throws {
