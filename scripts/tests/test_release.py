@@ -1,5 +1,7 @@
 """Release boundaries that prevent broken notes, downgrades, and overwritten versions."""
 import base64
+import ctypes
+import ctypes.util
 from datetime import datetime, timezone
 import json
 import os
@@ -198,6 +200,41 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(len(base64.b64decode(metadata['SUPublicEDKey'])), 32)
         self.assertTrue(metadata['SUVerifyUpdateBeforeExtraction'])
         self.assertIn('Sparkle updater', (contents / 'Resources/Help/credits.html').read_text())
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'macOS picks the localization')
+    def test_app_declares_the_engine_languages_so_chromium_follows_macos(self):
+        framework = self.root / 'BrkCore.framework'
+        for name in ('en', 'en_GB', 'en_XA', 'af_FEMININE', 'zh_CN', 'zh_TW', 'es_419'):
+            (framework / 'Resources' / (name + '.lproj')).mkdir(parents=True)
+            (framework / 'Resources' / (name + '.lproj/locale.pak')).write_bytes(b'')
+        metadata = release.language_metadata(framework)
+        self.assertEqual(metadata['CFBundleLocalizations'], ['en', 'en_GB', 'es_419', 'zh_CN', 'zh_TW'])
+        # What NSBundle.preferredLocalizations, and so Chromium's locale, resolves to for these preferences (issue #14).
+        cf = ctypes.CDLL(ctypes.util.find_library('CoreFoundation'))
+        cf.CFStringCreateWithCString.restype = cf.CFArrayCreate.restype = ctypes.c_void_p
+        cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+        cf.CFArrayCreate.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p), ctypes.c_long, ctypes.c_void_p]
+        cf.CFBundleCopyLocalizationsForPreferences.restype = cf.CFArrayGetValueAtIndex.restype = ctypes.c_void_p
+        cf.CFBundleCopyLocalizationsForPreferences.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        cf.CFArrayGetValueAtIndex.argtypes = [ctypes.c_void_p, ctypes.c_long]
+        cf.CFStringGetCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_uint32]
+        callbacks = ctypes.c_void_p.in_dll(cf, 'kCFTypeArrayCallBacks')
+
+        def strings(values):
+            items = (ctypes.c_void_p * len(values))(*(cf.CFStringCreateWithCString(None, v.encode(), 0x08000100) for v in values))
+            return cf.CFArrayCreate(None, items, len(values), ctypes.addressof(callbacks))
+
+        def chosen(preferences):
+            first = cf.CFArrayGetValueAtIndex(cf.CFBundleCopyLocalizationsForPreferences(
+                strings(metadata['CFBundleLocalizations']), strings(preferences)), 0)
+            out = ctypes.create_string_buffer(64)
+            cf.CFStringGetCString(first, out, 64, 0x08000100)
+            return out.value.decode()
+
+        self.assertEqual(chosen(['zh-Hans-CN', 'en-US']), 'zh_CN')
+        self.assertEqual(chosen(['zh-Hant-HK']), 'zh_TW')
+        self.assertEqual(chosen(['es-MX']), 'es_419')
+        self.assertEqual(chosen(['en-US']), 'en')
 
 
 if __name__ == '__main__':

@@ -21,6 +21,7 @@ public final class BrkCoreRuntime {
         try? FileManager.default.createDirectory(at: userDataDirectory, withIntermediateDirectories: true)
         // Profiles deleted in the last run go before Chromium can hold their folders, as on CEF.
         ProfileDirectories(root: userDataDirectory).deleteMarked()
+        SavedLanguageDefault(root: userDataDirectory).clearOldDefault(appLanguage: Bundle.main.preferredLocalizations.first ?? "en")
         self.userDataDirectory = userDataDirectory
         let path = Bundle.main.bundleURL.appendingPathComponent("Contents/Frameworks/BrkCore.framework/BrkCore").path
         guard let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL) else {

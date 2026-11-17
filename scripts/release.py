@@ -47,6 +47,16 @@ def updater_metadata(root, arch):
                 SUSendProfileInfo=False, SUVerifyUpdateBeforeExtraction=True)
 
 
+def language_metadata(framework):
+    """The languages BrkCore has strings for, declared by the app as Chrome's outer bundle declares them. Chromium takes its locale from
+    the app bundle's preferred localization (l10n_util::OverrideLocaleWithCocoaLocale): a bundle that declares none runs in English
+    whatever macOS prefers, and websites, extensions and Intl all see en-US. Pseudo-locales and gendered variants are left out."""
+    names = sorted(pak.parent.stem for pak in Path(framework, 'Resources').glob('*.lproj/locale.pak'))
+    names = [name for name in names if name not in ('ar_XB', 'en_XA') and not name.endswith(('_FEMININE', '_MASCULINE', '_NEUTER'))]
+    if 'en' not in names:
+        raise ValueError('BrkCore.framework has no en.lproj/locale.pak')
+    return dict(CFBundleDevelopmentRegion='en', CFBundleLocalizations=names)
+
 @dataclass(frozen=True)
 class Release:
     version: str
