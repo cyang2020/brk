@@ -94,6 +94,31 @@ final class WindowRoutingRegressionTests: XCTestCase {
         XCTAssertEqual(h.store.snapshot.windows[h.window]?.space.today.rows.count, 1)
     }
 
+    /// Issue #16: a Little Arc floated over every window of every app while it was open, so the person could not get
+    /// to another window. No browser window floats until the person turns on Stay on Top (Arc's Little Arc sits at the
+    /// normal level too), and Stay on Top still floats a Little Arc and lets it down again.
+    func test_noBrowserWindowFloatsUnlessStayOnTopIsOn() throws {
+        let h = Harness()
+        defer { h.cleanUp() }
+        h.store.start()
+        h.store.dispatch(.user(h.window, .window(.newLittle(URL(string: "https://example.com/little")!))))
+        h.store.dispatch(.user(h.window, .window(.newBlank)))
+        let ids = h.store.snapshot.windows.keys.sorted()
+        defer { for id in ids where id != h.window { h.store.windowController(id)?.window.orderOut(nil) } }
+        XCTAssertEqual(Set(ids.compactMap { h.store.snapshot.windows[$0]?.kind }), [.standard, .little, .blank])
+        for id in ids {
+            let window = try XCTUnwrap(h.store.windowController(id)?.window)
+            XCTAssertEqual(window.level, .normal, "\(h.store.snapshot.windows[id]!.kind) window floats without Stay on Top")
+            XCTAssertFalse((window as? NSPanel)?.isFloatingPanel ?? false)
+        }
+        let little = try XCTUnwrap(ids.first { h.store.snapshot.windows[$0]?.kind == .little })
+        let panel = try XCTUnwrap(h.store.windowController(little)?.window)
+        h.store.dispatch(.user(little, .window(.toggleStayOnTop)))
+        XCTAssertEqual(panel.level, .floating)
+        h.store.dispatch(.user(little, .window(.toggleStayOnTop)))
+        XCTAssertEqual(panel.level, .normal)
+    }
+
     /// Escape in the Little Arc's "Search Spaces…" picker closes the picker; the key table's Exit does not take it first.
     func test_escapeClosesTheLittleArcSpacePicker() throws {
         let h = Harness()

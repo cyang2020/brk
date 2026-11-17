@@ -22,7 +22,9 @@ import BrkUIKit
 /// first Little Arc is centered on the main screen; the next cascades by Metrics.littleArc.cascade, which the reducer
 /// decides from the last one's reported frame. A panel, as Arc's, but one that stays when the app is not active
 /// (`hidesOnDeactivate` off) and takes key status like a window, because the page and the command bar need keyboard
-/// focus.
+/// focus. It sits at the normal window level, as Arc's (its saved Little window has `stayOnTop` false and stays at
+/// level 0 behind other apps' windows): only Window > Stay on Top floats it, through the same `render` as every
+/// window. Floating it by default kept it over every window of every app (issue #16).
 @MainActor
 public final class LittleWindowController: WindowController {
     let header: LittleHeaderView
@@ -48,8 +50,6 @@ public final class LittleWindowController: WindowController {
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.hidesOnDeactivate = false
-        panel.isFloatingPanel = true
-        panel.level = .floating
         panel.becomesKeyOnlyIfNeeded = false
         panel.title = LittleArcCopy.title(page: nil)
         let dispatch: Dispatch = { command in send(.user(id, command)) }

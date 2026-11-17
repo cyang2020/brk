@@ -5409,7 +5409,7 @@
         "Sources/BrkDomain/Codec.swift",
         "Sources/BrkApp/WindowController.swift"
       ],
-      "current_behavior": "Per-window Stay on Top controls native level, reverses, defaults on Little and off on existing v3 standard windows, and reconciles fullscreen.",
+      "current_behavior": "Per-window Stay on Top controls native level, reverses, defaults off for every window, Little included (Arc saves its Little window with stayOnTop false; issue #16), and reconciles fullscreen.",
       "assessment": {
         "proposal": "docs/completion/proposals/platform.json",
         "sha256": "18084c280b088dbbcc5174f7ed50f7649260ebf63359de8cb1b4b9e01135ff6f",

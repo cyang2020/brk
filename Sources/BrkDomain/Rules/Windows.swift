@@ -153,7 +153,8 @@ extension Work {
     /// instead of covering the old one exactly; a Little Arc cascades from the last Little Arc that has reported a
     /// frame (Arc: "new windows cascade by 30"). The step is Little Arc's measured 30 for every kind until Arc's
     /// standard-window cascade is measured. Without a frame to cascade from the host centers the window at the
-    /// kind's default size. Returns its id.
+    /// kind's default size. Every kind starts at the normal window level, a Little Arc too (Arc saves its Little
+    /// window with `stayOnTop` false); Stay on Top is the person's choice. Returns its id.
     @discardableResult
     mutating func newWindow(kind: WindowKind, space: SpaceID, sidebar: (visible: Bool, width: Double), cascadingFrom origin: CGRect? = nil) -> WindowID {
         // A new standard window (a Little Arc page's window.open) takes the closed one's place for the next launch.
@@ -165,7 +166,7 @@ extension Work {
             bounds = last.offsetBy(dx: step, dy: -step)
         }
         state.doc.windows[id] = WindowDoc(id: id, kind: kind, bounds: bounds, space: space, activeBySpace: [:],
-                                          stayOnTop: kind == .little, sidebarVisible: sidebar.visible, sidebarWidth: sidebar.width)
+                                          stayOnTop: false, sidebarVisible: sidebar.visible, sidebarWidth: sidebar.width)
         ensureSession(id)
         return id
     }
